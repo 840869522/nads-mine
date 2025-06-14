@@ -1,0 +1,12 @@
+[
+  {
+    "id": "q_new_1",
+    "text": "什么是无人机的“黑匣子”？",
+    "type": "short-answer"
+  },
+  {
+    "id": "q_new_2",
+    "text": "解释RTK技术在无人机高精度定位中的作用。",
+    "type": "short-answer"
+  }
+]

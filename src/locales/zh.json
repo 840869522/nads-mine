@@ -1,0 +1,233 @@
+
+{
+  "appName": "无人机网络安全实验平台",
+  "app": {
+    "loading": "加载中..."
+  },
+  "sidebar": {
+    "dashboard": "仪表盘",
+    "personnelTestingSystem": "人员测试分系统",
+    "onlineQuiz": "在线测验",
+    "questionBankManagement": "题库管理",
+    "environmentConstructionSystem": "环境构建分系统",
+    "environmentConfiguration": "环境配置",
+    "securityUsageSystem": "安全使用分系统",
+    "securityDrill": "安全演练",
+    "toggleDarkMode": "切换暗黑模式",
+    "logout": "登出"
+  },
+  "loginPage": {
+    "title": "登录到 无人机网络安全实验平台",
+    "usernameLabel": "用户名",
+    "passwordLabel": "密码",
+    "loginButton": "登录",
+    "loggingInButton": "登录中...",
+    "adminCredentials": "管理员: admin / admin123",
+    "studentCredentials": "学生: student / student123",
+    "errorInvalidCredentials": "无效的凭据",
+    "loginFailed": "登录失败"
+  },
+  "dashboardPage": {
+    "welcome": "欢迎来到无人机网络安全实验平台, {username}!",
+    "subheading": "您的无人机攻击和防御模拟中心。选择下面的分系统开始探索。",
+    "personnelTestingSystem": "人员测试分系统",
+    "personnelTestingSystemDesc": "进行互动测验，获取AI反馈，并管理相关题库。",
+    "environmentConstructionSystem": "环境构建分系统",
+    "environmentConstructionSystemDesc": "配置网络拓扑，管理无人机节点和虚拟容器等基础设施。",
+    "securityUsageSystem": "安全使用分系统",
+    "securityUsageSystemDesc": "模拟网络攻防场景，进行红蓝对抗演练，检验安全防护能力。",
+    "goTo": "前往 {featureName} →",
+    "adminPanelTitle": "管理员面板 (概念)",
+    "adminPanelDesc": "未来的管理功能，如用户角色管理、系统设置和内容监督将在此处显示。"
+  },
+  "learningPage": {
+    "title": "学习模块：测验时间！",
+    "questionTitle": "问题 {current} / {total}",
+    "submitAnswer": "提交答案",
+    "answerSubmitted": "您的答案已提交。请查看下方评估或继续。",
+    "previous": "上一个",
+    "next": "下一个问题",
+    "finishQuiz": "完成测验",
+    "evaluatingAI": "AI评估中...",
+    "aiEvaluationUnavailable": "无法获取AI评估。您仍然可以继续。",
+    "quizResultsTitle": "测验结果",
+    "yourAnswer": "您的答案: {answer}",
+    "notAnswered": "未作答",
+    "restartQuiz": "重新开始测验",
+    "errorEvaluation": "未能从AI获取评估。",
+    "errorEvaluationDetailed": "未能从AI获取评估。错误: {error}",
+    "aiEvaluation": {
+        "title": "AI评估：",
+        "score": "分数：",
+        "explanation": "解释：",
+        "feedback": "对您答案的反馈："
+    },
+    "geminiService": {
+      "apiKeyMissingError": "AI评估目前不可用（缺少API密钥）。请检查您的设置。",
+      "apiKeyMissingFeedback": "无法连接到AI以获取反馈。",
+      "unexpectedError": "获取AI评估时发生意外错误。"
+    }
+  },
+  "scenarioPage": {
+    "title": "场景配置",
+    "addDroneNode": "添加无人机节点",
+    "infrastructureManagementTitle": "现有基础设施管理",
+    "infrastructureDroneNodesTitle": "无人机节点与容器",
+    "addInfrastructureDroneButton": "添加基础设施无人机",
+    "droneNodesTitle": "无人机 ({count})",
+    "noDroneNodes": "未配置无人机。点击“添加基础设施无人机”开始。",
+    "virtualContainersTitle": "虚拟容器 ({count})",
+    "noDockerContainers": "这些无人机没有定义Docker容器。",
+    "containerStatus": "状态: {status}",
+    "nodeCard": {
+      "id": "ID: {id}",
+      "ip": "IP: {ipAddress} (模拟)",
+      "networkConnected": "网络已连接",
+      "networkDisconnected": "网络已断开",
+      "takeOffline": "设为离线",
+      "bringOnline": "设为在线"
+    },
+    "containerCard": {
+        "node": "关联无人机: {nodeName}",
+        "unknownNode": "未知",
+        "start": "启动",
+        "stop": "停止"
+    },
+    "simulatedDisclaimer": "Docker容器管理是模拟的。操作仅更新UI状态。",
+    "infrastructureDisclaimer": "注意：基础设施无人机及其容器管理与下面的网络拓朴编辑器是分开的。拓朴编辑器用于规划抽象网络。",
+    "topologyEditor": {
+        "title": "网络拓扑编辑器",
+        "toolbarTitle": "工具栏",
+        "devicesLabel": "设备:",
+        "dragToAdd": "拖拽以添加 {deviceName}",
+        "deleteSelected": "删除选中",
+        "undo": "撤销",
+        "redo": "重做",
+        "exportTopology": "导出拓扑",
+        "importTopology": "导入拓扑",
+        "editNodeTitle": "编辑节点: {nodeLabel}",
+        "nodeLabelLabel": "节点名称 (标签)",
+        "nodeDeviceNameLabel": "设备类型/名称",
+        "nodeDockerImageLabel": "Docker 镜像",
+        "nodePortMappingsLabel": "端口映射",
+        "portMappingsPlaceholder": "例如: 80:8080, 443:8443",
+        "portMappingsInvalid": "端口映射格式无效 (例如: 80:8080 或 80:8080, 443:8443)",
+        "editEdgeTitle": "编辑连接: {sourceLabel} ↔ {targetLabel}",
+        "sourceLabel": "源: {nodeLabel} ({nodeType})",
+        "targetLabel": "目标: {nodeLabel} ({nodeType})",
+        "interfaceNameLabel": "接口名",
+        "interfaceNamePlaceholder": "例如: eth0",
+        "interfaceNameInvalid": "接口名格式无效",
+        "ipAddressLabel": "IP 地址",
+        "ipAddressPlaceholder": "例如: 10.0.0.1/24",
+        "ipAddressInvalid": "IP地址格式无效",
+        "fieldRequired": "{fieldName}不能为空",
+        "saveChanges": "保存更改",
+        "cancel": "取消",
+        "instructions": "说明：从工具栏拖动设备到画布创建节点。单击节点开始连接，再单击另一个节点完成连接。双击节点或连接进行编辑。",
+        "importErrorTitle": "导入错误",
+        "importInvalidFormat": "无效的拓扑文件格式。",
+        "importFailed": "导入拓扑失败。",
+        "deviceTypes": {
+            "container": "容器",
+            "switch": "交换机",
+            "virtual_machine": "虚拟机",
+            "nat_bridge": "NAT网桥",
+            "router": "路由器"
+        }
+    }
+  },
+  "attackDefensePage": {
+    "title": "攻防演练",
+    "startDrill": "开始演练",
+    "stopDrill": "停止演练",
+    "resetDrill": "重置演练",
+    "setupTitle": "演练设置",
+    "setupDescription": "此演示的团队和节点是自动分配的。在完整版本中，您将在此处手动分配用户和节点。",
+    "redTeamOpsTitle": "红队操作",
+    "redTeamTarget": "目标蓝队节点：",
+    "noRedTargets": "没有可攻击的在线蓝队节点。",
+    "attackNode": "攻击 {nodeName}",
+    "blueTeamOpsTitle": "蓝队操作",
+    "blueTeamDefend": "防御受损节点：",
+    "noBlueTargets": "没有受损节点可以防御。",
+    "secureNode": "保护 {nodeName}",
+    "nodeStatusOverview": "节点状态概览",
+    "drillResultsTitle": "演练结果",
+    "summary": "总结：",
+    "redScore": "红队得分: {count} 个节点被入侵。",
+    "blueScore": "蓝队得分: {count} 个节点已保护。",
+    "teamSetup": {
+        "members": "成员 ({count}):",
+        "noMembers": "未分配成员。",
+        "assignedNodes": "已分配节点 ({count}):",
+        "noNodes": "未分配节点。"
+    },
+    "logFeed": {
+        "title": "实时事件日志",
+        "noEvents": "暂无事件。开始演练以查看实时更新。",
+        "teamAction": "{team}队: {action}",
+        "target": " (目标: {target})"
+    },
+    "alerts": {
+        "assignNodesError": "开始演练前请为队伍分配节点。"
+    },
+    "simActions": {
+        "drillInitiatedRed": "演练开始。红队正在部署资产。",
+        "drillInitiatedBlue": "演练开始。蓝队高度戒备。",
+        "drillConcluded": "演练结束。",
+        "reconScan": "正在对 {targetName} ({nodeId}) 进行侦察扫描",
+        "compromised": "成功入侵 {targetName}！",
+        "attackFailed": "对 {targetName} 的攻击被检测到并失败。",
+        "intrusionDetected": "检测到对 {targetName} 的入侵尝试。正在缓解。",
+        "targetOffline": "目标 {targetName} 已离线。攻击中止。",
+        "restoreNode": "尝试恢复并保护 {targetName} ({nodeId})",
+        "nodeSecured": "{targetName} 已保护并恢复在线。"
+    }
+  },
+  "userRoles": {
+    "admin": "管理员",
+    "student": "学生",
+    "attacker": "攻击方 (红队)",
+    "defender": "防御方 (蓝队)"
+  },
+  "teamColors": {
+    "Red": "红队",
+    "Blue": "蓝队"
+  },
+  "status": {
+    "online": "在线",
+    "offline": "离线",
+    "compromised": "被入侵",
+    "under-attack": "受攻击",
+    "running": "运行中",
+    "stopped": "已停止",
+    "error": "错误"
+  },
+  "alert": {
+      "dismiss": "关闭"
+  },
+  "questions": {
+    "q1": {
+      "text": "无人机中飞行控制器的主要用途是什么？",
+      "options": {}
+    },
+    "q2": {
+      "text": "哪个频段通常用于无人机控制和视频传输？",
+      "options": {
+        "0": "2.4 GHz",
+        "1": "5.8 GHz",
+        "2": "900 MHz",
+        "3": "A和B两者皆是"
+      }
+    },
+    "q3": {
+      "text": "在无人机安全背景下解释“GPS欺骗”的概念。",
+      "options": {}
+    },
+    "q4": {
+      "text": "在无人机操作中，“BVLOS”代表什么？",
+      "options": {}
+    }
+  }
+}
