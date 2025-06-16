@@ -1,0 +1,97 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data.sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Role {
+  id          String   @id
+  name_key    String   @unique
+  name_display String
+  description String
+  users       User[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  key     String   @id
+  label   String
+  category String
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  role_id       String
+  permission_key String
+  role       Role    @relation(fields: [role_id], references: [id])
+  permission Permission @relation(fields: [permission_key], references: [key])
+
+  @@id([role_id, permission_key])
+}
+
+model User {
+  id          String   @id
+  username    String   @unique
+  password_hash String
+  email       String
+  status      String
+  role_id     String
+  created_at  DateTime
+  last_login  DateTime?
+  role        Role     @relation(fields: [role_id], references: [id])
+}
+
+model Question {
+  id     String  @id
+  text   String
+  type   String
+  options String?
+}
+
+model CourseCase {
+  id          String  @id
+  title       String
+  description String
+  category    String
+  upload_date DateTime
+  files       CourseCaseFile[]
+}
+
+model CourseCaseFile {
+  id      String  @id
+  case_id String
+  name    String
+  format  String
+  url     String
+  size    String
+  case    CourseCase @relation(fields: [case_id], references: [id])
+}
+
+model Image {
+  id          String @id
+  name        String
+  type        String
+  version     String
+  description String
+  file_name   String
+  size        String
+  upload_date DateTime
+}
+
+model Instance {
+  id          String @id
+  name        String
+  type        String
+  status      String
+  ip_address  String
+  image_name  String
+  cpu_usage   String
+  memory_usage String
+  disk_usage  String
+  uptime      String
+  node_id     String?
+  created_at  DateTime
+}
