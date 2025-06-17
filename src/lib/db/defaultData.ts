@@ -41,20 +41,18 @@ export const defaultRoles: Record<UserRole, { name: string; permissions: string[
 };
 
 export const sampleQuestions = [
-  { id: 'q1', text: '无人机中飞行控制器的主要用途是什么？', type: 'short-answer' },
+  // id 字段被完全移除
+  { text: '无人机中飞行控制器的主要用途是什么？', type: 'short-answer' },
   {
-    id: 'q2',
     text: '哪个频段通常用于无人机控制和视频传输？',
     type: 'multiple-choice',
     options: JSON.stringify(['2.4 GHz', '5.8 GHz', '900 MHz', 'A和B两者皆是'])
   },
   {
-    id: 'q3',
     text: 'GPS在无人机导航中的作用是什么？',
     type: 'short-answer'
   },
   {
-    id: 'q4',
     text: '选择安全起降区域时应考虑哪些因素？',
     type: 'short-answer'
   },

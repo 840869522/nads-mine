@@ -116,13 +116,36 @@ export async function deleteUser(id: string) {
 
 export async function getQuestions() {
   const prisma = await getPrisma();
-  const rows = await prisma.question.findMany();
+
+  // 增加 orderBy 条件，确保问题按 id 升序排列
+  const rows = await prisma.question.findMany({
+    orderBy: {
+      id: 'asc',
+    },
+  });
+
   return rows.map(r => ({
-    id: r.id,
+    id: r.id,         // 现在 r.id 的类型是 number
     text: r.text,
-    type: r.type as any,
+    type: r.type,     // 移除了不安全的 `as any`
     options: r.options ? JSON.parse(r.options) : undefined
   }));
+}
+export async function createQuestion(data: { text: string; type: string; options?: string }) {
+  const prisma = await getPrisma();
+
+  // 从传入的 data 对象中，只提取我们明确需要的字段
+  const { text, type, options } = data;
+
+  // 使用这些提取出的字段构建一个干净的 data 对象传给 Prisma
+  // 这样可以确保 id 由数据库自动生成，且不会传入任何多余的字段
+  return prisma.question.create({
+    data: {
+      text,
+      type,
+      options,
+    },
+  });
 }
 
 export async function getImages() {
