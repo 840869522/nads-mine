@@ -8,6 +8,9 @@
     use Illuminate\Validation\ValidationException;
     use Illuminate\Database\Eloquent\ModelNotFoundException;
     use Symfony\Component\HttpKernel\Exception\HttpException;
+    use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+    use Illuminate\Support\Facades\Log;
+use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 
     class Handler extends ExceptionHandler{
         /**
@@ -38,15 +41,15 @@
          *
          * @return void
          */
-        public function register()
-        {
-            $this->reportable(function (Throwable $e, $request) {
-                return $this->handleException($request, $e);
+        public function register(){
+            $this->renderable(function (Throwable $e) {
+                return $this->handleException( $e);
             });
         }
 
 
-        public function handleException($request, Throwable $e){
+        public function handleException(Throwable $e){
+            Log::debug('Exception caught: ' . get_class($e));
             // Handle AuthenticationException
             if ($e instanceof AuthenticationException) {
                 return response()->json([
@@ -75,11 +78,18 @@
             }
 
             // Handle HttpException (e.g., 403, 404, etc.)
-            if ($e instanceof HttpException) {
+            if ($e instanceof NotFoundHttpException ) {
                 return response()->json([
                     'error' => $e->getMessage() ?: 'HTTP Error',
                     'message' => 'An HTTP error occurred.',
-                ], $e->getStatusCode());
+                ], 200);
+            }
+
+            if ($e instanceof MethodNotAllowedException) {
+                return response()->json([
+                    'error' => $e->getMessage() ?: 'HTTP Error',
+                    'message' => 'An HTTP error occurred.',
+                ], 200);
             }
             
             return response()->json([
