@@ -45,6 +45,7 @@ import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
 import ExecTerminalModal from '@/components/scenario/ExecTerminalModal';
+import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -74,7 +75,7 @@ const RunningInstancesPage: React.FC = () => {
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
-    const [execModalId, setExecModalId] = useState<string | null>(null);
+    const [execModalIds, setExecModalIds] = useState<string[]>([]);
     const [showColumns, setShowColumns] = useState({
         id: true,
         imageName: true,
@@ -83,6 +84,8 @@ const RunningInstancesPage: React.FC = () => {
         memoryUsage: true,
         uptime: true,
     });
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [createModalOpen, setCreateModalOpen] = useState(false);
 
     const getStatusChipColor = (status: InstanceStatus): "success" | "warning" | "error" | "info" | "default" => {
         switch (status) {
@@ -179,8 +182,16 @@ const RunningInstancesPage: React.FC = () => {
     const fetchInstances = React.useCallback(async () => {
         if (!user) return;
         const q = `?userId=${user.id}&role=${user.role}`;
-        const data = await fetch(`/api/instances${q}`).then(res => res.json());
-        setInstances(data);
+        try {
+            const res = await fetch(`/api/instances${q}`);
+            if (!res.ok) throw new Error('fetch failed');
+            const data = await res.json();
+            setInstances(data);
+            setFetchError(null);
+        } catch {
+            setInstances([]);
+            setFetchError('无法连接到Docker后端。');
+        }
     }, [user]);
 
     useEffect(() => {
@@ -274,25 +285,7 @@ const RunningInstancesPage: React.FC = () => {
     };
 
     const handleCreateInstance = () => {
-        const newInstance: RunningInstance = {
-            id: crypto.randomUUID(),
-            name: '新实例',
-            type: 'vm',
-            status: 'starting',
-            ports: '',
-            imageName: 'temp',
-            cpuUsage: '0%',
-            memoryUsage: '0/0',
-            diskUsage: '0/0',
-            uptime: '0',
-            nodeId: null,
-            createdAt: new Date().toISOString()
-        };
-        if (!user) return;
-        const q = `?userId=${user.id}&role=${user.role}`;
-        fetch(`/api/instances${q}`, { method: 'POST', body: JSON.stringify(newInstance) }).then(() => {
-            setInstances(prev => [newInstance, ...prev]);
-        });
+        setCreateModalOpen(true);
     };
 
     const sortedAndFilteredInstances = React.useMemo(() => {
@@ -367,6 +360,11 @@ const RunningInstancesPage: React.FC = () => {
             </Menu>
 
 
+            {fetchError ? (
+                <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
+                    {fetchError}
+                </MuiAlert>
+            ) : (
             <Box component={Paper} sx={{ height: 400, width: '100%' }}>
                 <DataGrid
                     autoHeight
@@ -391,6 +389,7 @@ const RunningInstancesPage: React.FC = () => {
                     }}
                 />
             </Box>
+            )}
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Logs
@@ -401,8 +400,8 @@ const RunningInstancesPage: React.FC = () => {
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Bind mounts
                 </MenuItem>
-                <MenuItem onClick={() => { setExecModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Exec
+                <MenuItem onClick={() => { if (moreMenuAnchor.id) setExecModalIds(ids => ids.includes(moreMenuAnchor.id!) ? ids : [...ids, moreMenuAnchor.id!]); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                    Terminal
                 </MenuItem>
             </Menu>
 
@@ -429,7 +428,19 @@ const RunningInstancesPage: React.FC = () => {
             <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />
             <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />
             <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />
-            <ExecTerminalModal open={Boolean(execModalId)} containerId={execModalId} onClose={() => setExecModalId(null)} />
+            {execModalIds.map(id => (
+                <ExecTerminalModal
+                    key={id}
+                    open
+                    containerId={id}
+                    onClose={() => setExecModalIds(ids => ids.filter(i => i !== id))}
+                />
+            ))}
+            <CreateContainerModal
+                open={createModalOpen}
+                onClose={() => setCreateModalOpen(false)}
+                onCreated={fetchInstances}
+            />
         </Box>
     );
 };

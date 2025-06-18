@@ -96,13 +96,6 @@ export async function listBindMounts(id: string) {
   return info.Mounts || [];
 }
 
-export async function execInContainer(id: string, cmd: string | string[]) {
-  const container = docker.getContainer(id);
-  const command = Array.isArray(cmd) ? cmd : ['sh', '-c', cmd];
-  const exec = await container.exec({ Cmd: command, AttachStdin: false, AttachStdout: true, AttachStderr: true, Tty: false });
-  const stream = await exec.start({});
-  return stream.toString();
-}
 
 export async function getContainerStats(id: string) {
   const container = docker.getContainer(id);
@@ -132,4 +125,43 @@ export async function unpauseContainer(id: string) {
 export async function removeContainer(id: string) {
   const container = docker.getContainer(id);
   await container.remove({ force: true });
+}
+
+export interface CreateContainerOptions {
+  image: string;
+  name?: string;
+  ports?: { containerPort: string | number; hostPort?: string | number }[];
+  volumes?: { hostPath: string; containerPath: string }[];
+  env?: { key: string; value: string }[];
+  cmd?: string[];
+  labels?: Record<string, string>;
+}
+
+export async function createDockerContainer(options: CreateContainerOptions) {
+  const portBindings: Record<string, any> = {};
+  const exposedPorts: Record<string, {}> = {};
+  options.ports?.forEach(p => {
+    const key = `${p.containerPort}/tcp`;
+    exposedPorts[key] = {};
+    if (p.hostPort) {
+      portBindings[key] = [{ HostPort: String(p.hostPort) }];
+    }
+  });
+  const hostConfig: Record<string, any> = {};
+  if (Object.keys(portBindings).length) hostConfig.PortBindings = portBindings;
+  if (options.volumes && options.volumes.length) {
+    hostConfig.Binds = options.volumes.map(v => `${v.hostPath}:${v.containerPath}`);
+  }
+  const env = options.env?.map(e => `${e.key}=${e.value}`);
+  const container = await docker.createContainer({
+    Image: options.image,
+    name: options.name,
+    Cmd: options.cmd && options.cmd.length ? options.cmd : undefined,
+    Env: env,
+    ExposedPorts: Object.keys(exposedPorts).length ? exposedPorts : undefined,
+    HostConfig: Object.keys(hostConfig).length ? hostConfig : undefined,
+    Labels: options.labels,
+  });
+  await container.start();
+  return container;
 }

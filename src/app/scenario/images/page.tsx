@@ -19,6 +19,7 @@ import {
   DialogContentText,
   DialogTitle,
   Tooltip,
+  Alert as MuiAlert,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -34,11 +35,24 @@ const ImageManagementPage: React.FC = () => {
   const [editingImage, setEditingImage] = useState<ManagedImage | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<ManagedImage | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
-    fetch(`/api/images${q}`).then(res => res.json()).then(setImages);
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/images${q}`);
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        setImages(data);
+        setFetchError(null);
+      } catch {
+        setImages([]);
+        setFetchError('无法连接到Docker后端。');
+      }
+    };
+    load();
   }, [user]);
 
   const handleOpenModal = (image?: ManagedImage) => {
@@ -107,6 +121,11 @@ const ImageManagementPage: React.FC = () => {
         </Button>
       </Box>
 
+      {fetchError ? (
+        <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
+          {fetchError}
+        </MuiAlert>
+      ) : (
       <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
         <Table aria-label="镜像列表">
           <TableHead sx={{ bgcolor: 'primary.main' }}>
@@ -165,6 +184,7 @@ const ImageManagementPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+      )}
 
       <ImageFormModal
         open={isModalOpen}
