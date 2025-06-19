@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import { default as MuiGrid } from '@mui/material/Grid'; // Aliased import
 import IconButton from '@mui/material/IconButton';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -12,13 +11,13 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import CircularProgress from '@mui/material/CircularProgress';
-import MuiAlert from '@mui/material/Alert'; 
 import Chip from '@mui/material/Chip';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Select, { SelectChangeEvent } from '@mui/material/Select'; 
-import MenuItem from '@mui/material/MenuItem';
-import Tooltip from '@mui/material/Tooltip'; 
+import Tooltip from '@mui/material/Tooltip';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Collapse from '@mui/material/Collapse';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -34,20 +33,22 @@ import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
 import FileViewerModal from '@/components/coursecases/FileViewerModal';
 import PageWrapper from '@/components/layout/PageWrapper';
 
+// 每行最多显示的分类数量（包括"所有分类"）
+const MAX_CATEGORIES_PER_ROW = 7;
+
 const CourseCasesPage: React.FC = () => {
   const [courseCases, setCourseCases] = useState<CourseCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<CourseCase | null>(null);
-  
   const [isFileViewerOpen, setIsFileViewerOpen] = useState(false);
   const [viewingFile, setViewingFile] = useState<CourseCaseFile | null>(null);
-
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState<CourseCase | null>(null);
-  
   const [filterCategory, setFilterCategory] = useState<string>('');
-
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+  const [visibleCategories, setVisibleCategories] = useState<string[]>([]);
+  const [showMoreButton, setShowMoreButton] = useState(false);
 
   useEffect(() => {
     fetch('/api/course-cases')
@@ -56,6 +57,21 @@ const CourseCasesPage: React.FC = () => {
         setCourseCases(data);
         setIsLoading(false);
       });
+  }, []);
+
+  // 初始化可见分类
+  useEffect(() => {
+    // 第一行显示的分类数量（包括"所有分类"）
+    const firstRowCount = MAX_CATEGORIES_PER_ROW - 1; // 减去"所有分类"
+    
+    // 设置第一行可见的分类
+    const visible = COURSE_CASE_CATEGORIES.slice(0, firstRowCount);
+    setVisibleCategories(visible);
+    
+    // 如果有更多分类需要显示
+    if (COURSE_CASE_CATEGORIES.length > firstRowCount) {
+      setShowMoreButton(true);
+    }
   }, []);
 
   const handleOpenFormModal = (courseCase?: CourseCase) => {
@@ -82,8 +98,8 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handleOpenFileViewer = (file: CourseCaseFile) => {
-    if (!file.url && file.fileObject) { // Create Object URL on demand if not already present for newly added files
-        file.url = URL.createObjectURL(file.fileObject);
+    if (!file.url && file.fileObject) {
+      file.url = URL.createObjectURL(file.fileObject);
     }
     setViewingFile(file);
     setIsFileViewerOpen(true);
@@ -112,14 +128,10 @@ const CourseCasesPage: React.FC = () => {
         }
       });
       fetch(`/api/course-cases?id=${caseToDelete.id}`, { method: 'DELETE' }).then(() => {
-        setCourseCases(prevCases => prevCases.filter(c => c.id !== caseToDelete!.id));
+        setCourseCases(prevCases => prevCases.filter(c => c.id !== caseToDelete.id));
       });
     }
     handleCloseConfirmDialog();
-  };
-
-  const handleFilterChange = (event: SelectChangeEvent<string>) => {
-    setFilterCategory(event.target.value as string);
   };
 
   const getFileIcon = (format: CourseCaseFile['format']) => {
@@ -151,108 +163,349 @@ const CourseCasesPage: React.FC = () => {
 
   return (
     <PageWrapper>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" component="h1" gutterBottom sx={{ mb: { xs: 1, md: 0 } }}>
-          课程案例库
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center'}}>
-        <FormControl sx={{ minWidth: 200 }} size="small">
-            <InputLabel id="filter-category-label">筛选分类</InputLabel>
-            <Select
-              labelId="filter-category-label"
-              value={filterCategory}
-              label="筛选分类"
-              onChange={handleFilterChange}
-            >
-              <MenuItem value="">
-                <em>所有分类</em>
-              </MenuItem>
-              {COURSE_CASE_CATEGORIES.map(category => (
-                <MenuItem key={category} value={category}>{category}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button
-            variant="contained"
-            startIcon={<AddCircleOutlineIcon />}
-            onClick={() => handleOpenFormModal()}
-            aria-label="添加新课程案例"
-          >
-            添加案例
-          </Button>
+      {/* 紧凑型头部 */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 4,
+          p: 2,
+          bgcolor: '#f5f7fa',
+          borderRadius: 2,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+        }}
+      >
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+            课程案例库
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            随时查看和管理课程案例
+          </Typography>
         </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddCircleOutlineIcon />}
+          onClick={() => handleOpenFormModal()}
+          sx={{ 
+            fontWeight: 'bold',
+            height: 40,
+            px: 3
+          }}
+        >
+          添加案例
+        </Button>
       </Box>
 
-      {filteredCases.length === 0 && !isLoading && (
-        <MuiAlert severity="info" sx={{mt: 2}}>当前分类下没有课程案例，或题库为空。请尝试其他分类或添加新的案例。</MuiAlert>
+      {/* 分类筛选器 - 多行显示 */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'medium', color: '#1976d2' }}>
+          分类筛选
+        </Typography>
+        
+        <Box 
+          sx={{ 
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 2,
+            mb: 1
+          }}
+        >
+          <Chip
+            label="所有分类"
+            variant={filterCategory === '' ? 'filled' : 'outlined'}
+            color="primary"
+            onClick={() => setFilterCategory('')}
+            sx={{ 
+              height: 40, 
+              px: 2, 
+              fontSize: '0.9rem',
+              fontWeight: filterCategory === '' ? 'bold' : 'normal'
+            }}
+          />
+          
+          {/* 第一行显示的分类 */}
+          {visibleCategories.map(category => (
+            <Chip
+              key={category}
+              label={category}
+              variant={filterCategory === category ? 'filled' : 'outlined'}
+              color="primary"
+              onClick={() => setFilterCategory(category)}
+              sx={{ 
+                height: 40, 
+                px: 2, 
+                fontSize: '0.9rem',
+                fontWeight: filterCategory === category ? 'bold' : 'normal'
+              }}
+            />
+          ))}
+          
+          {/* 显示"更多"按钮 */}
+          {showMoreButton && !categoriesExpanded && (
+            <Button
+              variant="text"
+              color="primary"
+              endIcon={<ExpandMoreIcon />}
+              onClick={() => setCategoriesExpanded(true)}
+              sx={{ height: 40, px: 1 }}
+            >
+              更多
+            </Button>
+          )}
+        </Box>
+        
+        {/* 展开的分类区域 */}
+        <Collapse in={categoriesExpanded} timeout="auto" unmountOnExit>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
+            {COURSE_CASE_CATEGORIES.slice(visibleCategories.length).map(category => (
+              <Chip
+                key={category}
+                label={category}
+                variant={filterCategory === category ? 'filled' : 'outlined'}
+                color="primary"
+                onClick={() => setFilterCategory(category)}
+                sx={{ 
+                  height: 40, 
+                  px: 2, 
+                  fontSize: '0.9rem',
+                  fontWeight: filterCategory === category ? 'bold' : 'normal'
+                }}
+              />
+            ))}
+            
+            <Button
+              variant="text"
+              color="primary"
+              endIcon={<ExpandLessIcon />}
+              onClick={() => setCategoriesExpanded(false)}
+              sx={{ height: 40, px: 1 }}
+            >
+              收起
+            </Button>
+          </Box>
+        </Collapse>
+      </Box>
+
+      {filteredCases.length === 0 && (
+        <Box sx={{ textAlign: 'center', mt: 8 }}>
+          <img src="/no-data.svg" alt="无数据" width={120} style={{ opacity: 0.6 }} />
+          <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
+            当前筛选条件下暂无课程案例，请尝试添加或更换分类。
+          </Typography>
+        </Box>
       )}
 
-      <MuiGrid container spacing={3}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {filteredCases.map(courseCase => (
-          <MuiGrid item xs={12} sm={6} md={4} key={courseCase.id}>
-            <Box
+          <Card
+            key={courseCase.id}
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              border: '1px solid #e0e0e0',
+              borderRadius: 2,
+              boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
+              transition: 'all 0.3s ease',
+              overflow: 'hidden',
+              '&:hover': {
+                boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                transform: 'translateY(-3px)',
+                '& .action-buttons': {
+                  opacity: 1
+                }
+              }
+            }}
+          >
+            {/* 左侧：课程信息区域 */}
+            <Box sx={{ 
+              width: { xs: '100%', md: '50%' }, 
+              p: 3,
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              bgcolor: '#f9f9f9'
+            }}>
+              {/* 操作按钮 */}
+              <Box 
+                className="action-buttons"
                 sx={{
-                    bgcolor: 'background.paper',
-                    p: 2.5,
-                    borderRadius: 2,
-                    boxShadow: 3,
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'box-shadow 0.3s ease-in-out',
-                    '&:hover': { boxShadow: 6 }
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 1,
+                  mb: 1,
+                  opacity: 0,
+                  transition: 'opacity 0.3s ease'
                 }}
-            >
-              <Typography variant="h6" component="h2" gutterBottom sx={{fontWeight: 'medium'}}>
-                {courseCase.title}
-              </Typography>
-              <Chip label={courseCase.category} size="small" sx={{ mb: 1, alignSelf: 'flex-start', bgcolor: 'primary.light', color: 'primary.contrastText' }} />
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flexGrow: 1, maxHeight: '6em', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                {courseCase.description || "暂无描述"}
-              </Typography>
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 2 }}>
-                上传日期: {formatDate(courseCase.uploadDate)}
-              </Typography>
-              
-              <Box mb={2}>
-                <Typography variant="subtitle2" gutterBottom>附件:</Typography>
-                {courseCase.files.length > 0 ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, maxHeight: 100, overflowY:'auto'}}>
-                    {courseCase.files.map(file => (
-                      <Button
-                        key={file.id}
-                        size="small"
-                        variant="text"
-                        startIcon={getFileIcon(file.format)}
-                        onClick={() => handleOpenFileViewer(file)}
-                        sx={{ justifyContent: 'flex-start', textTransform: 'none', p:0.5, '&:hover': { bgcolor: 'action.hover'} }}
-                        title={`查看 ${file.name}`}
-                      >
-                        {file.name} {file.size ? `(${file.size})` : ''}
-                      </Button>
-                    ))}
-                  </Box>
-                ) : (
-                  <Typography variant="caption" color="text.secondary">无附件</Typography>
-                )}
-              </Box>
-
-              <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'flex-end', gap: 1, borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
+              >
                 <Tooltip title={`编辑案例 ${courseCase.title}`}>
-                    <IconButton size="small" onClick={() => handleOpenFormModal(courseCase)} color="primary" aria-label={`编辑案例 ${courseCase.title}`}>
-                    <EditIcon />
-                    </IconButton>
+                  <IconButton 
+                    size="small" 
+                    onClick={() => handleOpenFormModal(courseCase)} 
+                    color="primary" 
+                    sx={{ 
+                      bgcolor: 'white', 
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                      '&:hover': { bgcolor: '#e3f2fd' }
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
                 </Tooltip>
                 <Tooltip title={`删除案例 ${courseCase.title}`}>
-                    <IconButton size="small" onClick={() => handleOpenConfirmDialog(courseCase)} color="error" aria-label={`删除案例 ${courseCase.title}`}>
-                    <DeleteIcon />
-                    </IconButton>
+                  <IconButton 
+                    size="small" 
+                    onClick={() => handleOpenConfirmDialog(courseCase)} 
+                    color="error" 
+                    sx={{ 
+                      bgcolor: 'white', 
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                      '&:hover': { bgcolor: '#ffebee' }
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
                 </Tooltip>
               </Box>
+              
+              {/* 分类标签 */}
+              <Chip
+                label={courseCase.category}
+                size="small"
+                sx={{ 
+                  position: 'absolute',
+                  top: 16,
+                  left: 16,
+                  bgcolor: '#e3f2fd',
+                  color: '#1976d2',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem',
+                  zIndex: 1
+                }}
+              />
+              
+              {/* 标题和描述 */}
+              <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold', mb: 1.5, mt: 4 }}>
+                {courseCase.title}
+              </Typography>
+              
+              <Typography 
+                variant="body1" 
+                color="text.secondary" 
+                sx={{ 
+                  mb: 2.5,
+                  flexGrow: 1,
+                  lineHeight: 1.6
+                }}
+              >
+                {courseCase.description || "暂无描述"}
+              </Typography>
+              
+              {/* 元信息 */}
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 'auto',
+                pt: 2,
+                borderTop: '1px solid #f0f0f0'
+              }}>
+                <Typography variant="caption" color="text.secondary">
+                  上传日期: {formatDate(courseCase.uploadDate)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {courseCase.files.length} 个附件
+                </Typography>
+              </Box>
             </Box>
-          </MuiGrid>
+            
+            {/* 右侧：附件区域 */}
+            <Box sx={{ 
+              width: { xs: '100%', md: '50%' }, 
+              p: 3,
+              display: 'flex',
+              flexDirection: 'column',
+              bgcolor: '#f5f7fa',
+              borderTop: { xs: '1px solid #e0e0e0', md: 'none' },
+              borderLeft: { md: '1px solid #e0e0e0' }
+            }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: '#1976d2' }}>
+                附件列表
+              </Typography>
+              
+              {courseCase.files.length > 0 ? (
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                  gap: 2
+                }}>
+                  {courseCase.files.map(file => (
+                    <Card
+                      key={file.id}
+                      onClick={() => handleOpenFileViewer(file)}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        bgcolor: 'white',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                        '&:hover': {
+                          bgcolor: '#e3f2fd',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          width: 40,
+                          height: 40,
+                          bgcolor: '#e3f2fd',
+                          borderRadius: 1
+                        }}>
+                          {getFileIcon(file.format)}
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {file.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {file.size || '未知大小'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Card>
+                  ))}
+                </Box>
+              ) : (
+                <Box sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  flexGrow: 1,
+                  py: 4
+                }}>
+                  <DescriptionIcon sx={{ fontSize: 48, color: '#bdbdbd', mb: 1 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    此案例暂无附件
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Card>
         ))}
-      </MuiGrid>
+      </Box>
+
+      <Box sx={{ mt: 6, textAlign: 'center', color: 'text.secondary', fontSize: 14 }}>
+        当前共 {filteredCases.length} 个课程案例  
+      </Box>
 
       <CourseCaseFormModal
         open={isFormModalOpen}
@@ -280,7 +533,7 @@ const CourseCasesPage: React.FC = () => {
             您确定要删除课程案例 "{caseToDelete?.title}" 吗？此操作无法撤销，其关联的所有文件也将被移除。
           </DialogContentText>
         </DialogContent>
-        <DialogActions sx={{ px:3, pb:2}}>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={handleCloseConfirmDialog} variant="outlined">取消</Button>
           <Button onClick={handleDeleteCourseCase} color="error" variant="contained" autoFocus>
             删除
