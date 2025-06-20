@@ -1,58 +1,107 @@
 "use client";
-import React, { useState, useMemo} from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Typography, Box, Paper, Button, TextField, InputAdornment, Table,
     TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
-    Tooltip, TablePagination, TableSortLabel, CircularProgress
+    Tooltip, TablePagination, TableSortLabel, CircularProgress, Alert,
+    Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
 } from '@mui/material';
 import {
-    Add as AddIcon,
     Refresh as RefreshIcon,
     Search as SearchIcon,
     Delete as DeleteIcon,
     PlayCircleOutline as StartIcon
 } from '@mui/icons-material';
 
-// 1. 更新数据结构：移除 status, lastModified -> uploadDate
-interface MockScenario {
-    id: string;
+// 定义场景的数据结构
+interface Scenario {
+    id: string; // 文件名将作为ID
     name: string;
     description: string;
-    uploadDate: string; // 使用上传日期
+    uploadDate: string;
     nodeCount: number;
 }
 
-// 2. 更新模拟数据
-const mockScenarios: MockScenario[] = [
-    { id: 'scn_001', name: '城市电网关键节点攻击模拟', description: '模拟针对城市电力基础设施的网络攻击。', uploadDate: '2025-06-09', nodeCount: 12 },
-    { id: 'scn_002', name: '港口物流中心网络渗透演练', description: '测试港口自动化系统的网络安全防御能力。', uploadDate: '2025-04-18', nodeCount: 25 },
-    { id: 'scn_003', name: '基础Web服务漏洞利用场景', description: '包含常见Web漏洞（如SQL注入、XSS）的教学场景。', uploadDate: '2025-03-05', nodeCount: 8 },
-    { id: 'scn_004', name: '勒索软件攻击防御预案', description: '一个已归档的旧演练场景。', uploadDate: '2025-02-11', nodeCount: 15 },
-    { id: 'scn_005', name: '金融系统数据篡改攻防', description: '模拟针对金融交易系统的数据篡改攻击与防御。', uploadDate: '2025-01-20', nodeCount: 30 },
-];
-
 type Order = 'asc' | 'desc';
-// 更新可排序的字段
-type SortableKeys = keyof Pick<MockScenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
+type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
 const ScenarioManagementPage: React.FC = () => {
-    const [scenarios, setScenarios] = useState<MockScenario[]>(mockScenarios);
-    const [isRefreshing, setIsRefreshing] = useState(false); // <-- 新增这一行
+    const [scenarios, setScenarios] = useState<Scenario[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchText, setSearchText] = useState('');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('uploadDate');
 
+    // 1. 新增状态用于控制删除确认弹窗
+    const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const fetchScenarios = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/scenarios');
+            if (!response.ok) {
+                throw new Error('获取场景列表失败');
+            }
+            const data: Scenario[] = await response.json();
+            setScenarios(data);
+        } catch (err: any) {
+            setError(err.message || '发生未知错误');
+            setScenarios([]);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchScenarios();
+    }, [fetchScenarios]);
+
     const handleRefresh = () => {
-        setIsRefreshing(true);
-        // 模拟一个网络延迟
-        setTimeout(() => {
-            // 将场景列表重置为最原始的模拟数据 (并打乱顺序以产生刷新效果)
-            setScenarios([...mockScenarios].sort(() => Math.random() - 0.5));
-            setIsRefreshing(false);
-        }, 1000); // 延迟1秒
+        fetchScenarios();
     };
+
+    // 2. 新增处理删除相关的函数
+    const handleOpenDeleteDialog = (scenario: Scenario) => {
+        setDeleteTarget(scenario);
+    };
+
+    const handleCloseDeleteDialog = () => {
+        setDeleteTarget(null);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget) return;
+
+        setIsDeleting(true);
+        setError(null);
+        try {
+            // 向后端API发送DELETE请求，通过查询参数传递ID
+            const response = await fetch(`/api/scenarios?id=${deleteTarget.id}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '删除失败');
+            }
+
+            // 删除成功后，刷新列表
+            await fetchScenarios();
+
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsDeleting(false);
+            handleCloseDeleteDialog(); // 关闭弹窗
+        }
+    };
+
+
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -64,7 +113,6 @@ const ScenarioManagementPage: React.FC = () => {
             s.name.toLowerCase().includes(searchText.toLowerCase()) ||
             s.description.toLowerCase().includes(searchText.toLowerCase())
         );
-
         filtered.sort((a, b) => {
             const valA = a[orderBy];
             const valB = b[orderBy];
@@ -72,7 +120,6 @@ const ScenarioManagementPage: React.FC = () => {
             if (valB > valA) return order === 'asc' ? -1 : 1;
             return 0;
         });
-
         return filtered;
     }, [scenarios, searchText, order, orderBy]);
 
@@ -80,7 +127,6 @@ const ScenarioManagementPage: React.FC = () => {
 
     return (
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
-            {/* 顶部标题和操作区 */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4" component="h1" fontWeight="bold">
                     场景管理
@@ -88,24 +134,15 @@ const ScenarioManagementPage: React.FC = () => {
                 <Box>
                     <Button
                         variant="outlined"
-                        startIcon={
-                            isRefreshing ? (
-                                <CircularProgress size={20} color="inherit" />
-                            ) : (
-                                <RefreshIcon />
-                            )
-                        }
+                        startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
                         onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        sx={{ mr: 1 }}
+                        disabled={isLoading}
                     >
-                        {isRefreshing ? '刷新中...' : '刷新'}
+                        {isLoading ? '加载中...' : '刷新'}
                     </Button>
-                    <Button variant="contained" startIcon={<AddIcon />}>创建场景</Button>
                 </Box>
             </Box>
 
-            {/* 列表容器 */}
             <Paper elevation={2}>
                 <Box sx={{ p: 2 }}>
                     <TextField
@@ -119,60 +156,37 @@ const ScenarioManagementPage: React.FC = () => {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                {/* 3. 更新表头 */}
                                 <TableCell sortDirection={orderBy === 'name' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleRequestSort('name')}>
-                                        场景名称
-                                    </TableSortLabel>
+                                    <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleRequestSort('name')}>场景名称</TableSortLabel>
                                 </TableCell>
                                 <TableCell sortDirection={orderBy === 'description' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'description'} direction={orderBy === 'description' ? order : 'asc'} onClick={() => handleRequestSort('description')}>
-                                        描述
-                                    </TableSortLabel>
+                                    <TableSortLabel active={orderBy === 'description'} direction={orderBy === 'description' ? order : 'asc'} onClick={() => handleRequestSort('description')}>描述</TableSortLabel>
                                 </TableCell>
                                 <TableCell sortDirection={orderBy === 'uploadDate' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'uploadDate'} direction={orderBy === 'uploadDate' ? order : 'asc'} onClick={() => handleRequestSort('uploadDate')}>
-                                        上传日期
-                                    </TableSortLabel>
+                                    <TableSortLabel active={orderBy === 'uploadDate'} direction={orderBy === 'uploadDate' ? order : 'asc'} onClick={() => handleRequestSort('uploadDate')}>上传日期</TableSortLabel>
                                 </TableCell>
                                 <TableCell align="right">操作</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isRefreshing ? (
-                                // 1. 如果正在刷新，则显示加载中...
-                                <TableRow>
-                                    {/* colSpan={4} 因为你有“场景名称”、“描述”、“上传日期”、“操作”共4个表头列 */}
-                                    <TableCell colSpan={4} align="center" sx={{ py: 5 }}>
-                                        <CircularProgress />
-                                        <Typography sx={{ mt: 2 }} color="text.secondary">
-                                            正在刷新场景列表...
-                                        </Typography>
-                                    </TableCell>
-                                </TableRow>
+                            {isLoading ? (
+                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }} color="text.secondary">正在加载场景列表...</Typography></TableCell></TableRow>
+                            ) : error ? (
+                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Alert severity="error">{error}</Alert></TableCell></TableRow>
                             ) : paginatedScenarios.length === 0 ? (
-                                // 2. 如果刷新结束，但没有数据，则显示提示信息
-                                <TableRow>
-                                    <TableCell colSpan={4} align="center" sx={{ py: 5 }}>
-                                        <Typography color="text.secondary">
-                                            {searchText ? "没有找到匹配的场景。" : "当前题库为空，请添加新场景。"}
-                                        </Typography>
-                                    </TableCell>
-                                </TableRow>
+                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{searchText ? "没有找到匹配的场景。" : "没有可用的场景。"}</Typography></TableCell></TableRow>
                             ) : (
-                                // 3. 如果刷新结束且有数据，正常渲染列表
                                 paginatedScenarios.map((scenario) => (
                                     <TableRow key={scenario.id} hover>
                                         <TableCell sx={{ fontWeight: 'medium' }}>{scenario.name}</TableCell>
                                         <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            <Tooltip title={scenario.description} placement="top-start">
-                                                <span>{scenario.description}</span>
-                                            </Tooltip>
+                                            <Tooltip title={scenario.description} placement="top-start"><span>{scenario.description}</span></Tooltip>
                                         </TableCell>
-                                        <TableCell>{scenario.uploadDate}</TableCell>
+                                        <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
                                         <TableCell align="right">
                                             <Tooltip title="启动演练"><IconButton color="success" size="small"><StartIcon /></IconButton></Tooltip>
-                                            <Tooltip title="删除场景"><IconButton color="error" size="small"><DeleteIcon /></IconButton></Tooltip>
+                                            {/* 3. 更新删除按钮的 onClick 事件 */}
+                                            <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -187,14 +201,34 @@ const ScenarioManagementPage: React.FC = () => {
                     count={filteredAndSortedScenarios.length}
                     rowsPerPage={rowsPerPage}
                     page={page}
-                    onPageChange={(e, newPage) => setPage(newPage)}
-                    onRowsPerPageChange={(e) => {
-                        setRowsPerPage(parseInt(e.target.value, 10));
-                        setPage(0);
-                    }}
+                    onPageChange={(_e, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
                     labelRowsPerPage="每页行数:"
                 />
             </Paper>
+
+            {/* 4. 添加删除确认弹窗 */}
+            <Dialog
+                open={!!deleteTarget}
+                onClose={handleCloseDeleteDialog}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description"
+            >
+                <DialogTitle id="alert-dialog-title">
+                    确认删除场景
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="alert-dialog-description">
+                        您确定要永久删除场景 “{deleteTarget?.name}” 吗？此操作无法撤销。
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>取消</Button>
+                    <Button onClick={handleConfirmDelete} color="error" disabled={isDeleting} autoFocus>
+                        {isDeleting ? <CircularProgress size={20} /> : '确认删除'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Paper>
     );
 };

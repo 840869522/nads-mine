@@ -8,48 +8,21 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   Typography,
-  IconButton,
-  Tooltip,
   Box
 } from '@mui/material';
-import {
-  STATUS_TRANSLATIONS
-} from '@/constants';
 import Card from '@/components/ui/Card';
 import TopologyEditor from '@/components/scenario/topology/TopologyEditor';
-import { RunningInstance, InstanceStatus, TopologyNode, DeviceType } from '@/types';
-import InstanceDetailsModal from '@/components/scenario/InstanceDetailsModal';
-import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
+import { RunningInstance, InstanceStatus, TopologyNode } from '@/types';
 
-// Icons for actions & types
-import InfoIcon from '@mui/icons-material/Info';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import DeleteIcon from '@mui/icons-material/Delete';
+// Icons for types
 import ComputerIcon from '@mui/icons-material/Computer';
 import ViewInArIcon from '@mui/icons-material/ViewInAr';
 import LinkIcon from '@mui/icons-material/Link';
 import RouterIcon from '@mui/icons-material/Router';
 import DnsIcon from '@mui/icons-material/Dns'; // Using Dns as a proxy for Switch
 
-
-const getStatusChipColor = (status: InstanceStatus): "success" | "warning" | "error" | "info" | "default" => {
-  switch (status) {
-    case 'running': return 'success';
-    case 'starting':
-    case 'stopping':
-    case 'deleting':
-      return 'warning';
-    case 'stopped': return 'default';
-    case 'error': return 'error';
-    default: return 'info';
-  }
-};
-
-// The getTypeIcon function is now correct and will not cause a crash.
+// This helper function remains unchanged.
 const getTypeIcon = (type: string) => {
   const iconProps = { sx: { verticalAlign: 'middle', mr: 0.5 }, fontSize: "small" as "small" };
   switch (type) {
@@ -63,21 +36,16 @@ const getTypeIcon = (type: string) => {
 };
 
 const ScenarioPage: React.FC = () => {
+  // This state holds the list of instances for the table below the editor.
+  // It is synchronized with the editor via the callback props.
   const [instances, setInstances] = useState<RunningInstance[]>([]);
-  const [selectedInstance, setSelectedInstance] = useState<RunningInstance | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [confirmActionProps, setConfirmActionProps] = useState<{
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
 
+  // This function is passed to TopologyEditor.
+  // When a node is added inside the editor, it calls this function to notify the ScenarioPage.
+  // The page then updates its own `instances` state to keep the list in sync.
   const handleAddNode = useCallback((node: TopologyNode) => {
     const { type, id, label, config } = node;
     let instanceType: string;
-    let cpuUsage = '0%';
-    let memoryUsage = '0MB / 1GB';
     let status: InstanceStatus = 'stopped';
     let isComputeResource = false;
 
@@ -92,7 +60,7 @@ const ScenarioPage: React.FC = () => {
         break;
       case 'switch':
         instanceType = '交换机';
-        status = 'running'; // Network devices are 'running' by default
+        status = 'running';
         break;
       case 'router':
         instanceType = '路由器';
@@ -106,11 +74,6 @@ const ScenarioPage: React.FC = () => {
         instanceType = '未知设备';
     }
 
-    if (!isComputeResource) {
-      cpuUsage = '-';
-      memoryUsage = '-';
-    }
-
     const newInstance: RunningInstance = {
       id: `inst-${id}`,
       name: label,
@@ -118,8 +81,8 @@ const ScenarioPage: React.FC = () => {
       status: status,
       ports: config.portMappings || '-',
       imageName: config.dockerImage,
-      cpuUsage,
-      memoryUsage,
+      cpuUsage: isComputeResource ? '0%' : '-',
+      memoryUsage: isComputeResource ? '0MB / 1GB' : '-',
       diskUsage: isComputeResource ? '0GB / 20GB' : '-',
       uptime: '0s',
       nodeId: id,
@@ -128,10 +91,12 @@ const ScenarioPage: React.FC = () => {
     setInstances(prev => [...prev, newInstance]);
   }, []);
 
+  // This callback is passed to the editor to handle node deletions.
   const handleDeleteNode = useCallback((nodeId: string) => {
     setInstances(prev => prev.filter(inst => inst.nodeId !== nodeId));
   }, []);
 
+  // This callback is passed to the editor to handle updates to a node's configuration.
   const handleUpdateNode = useCallback((node: TopologyNode) => {
     setInstances(prev => prev.map(inst => {
       if (inst.nodeId === node.id) {
@@ -139,62 +104,15 @@ const ScenarioPage: React.FC = () => {
           ...inst,
           name: node.label,
           imageName: node.config.dockerImage,
+          ports: node.config.portMappings || '-',
         };
       }
       return inst;
     }));
   }, []);
 
-  const handleOpenDetailsModal = (instance: RunningInstance) => {
-    setSelectedInstance(instance);
-    setIsModalOpen(true);
-  };
-
-  const simulateAction = (instanceId: string, targetStatus: InstanceStatus, intermediateStatus?: InstanceStatus, delay: number = 1500) => {
-    if (intermediateStatus) {
-      setInstances(prev => prev.map(inst => inst.id === instanceId ? { ...inst, status: intermediateStatus } : inst));
-    }
-    setTimeout(() => {
-      setInstances(prev => prev.map(inst => inst.id === instanceId ? { ...inst, status: targetStatus } : inst));
-    }, intermediateStatus ? delay : 0);
-  };
-
-  const handleAction = (instance: RunningInstance, action: 'start' | 'stop' | 'restart' | 'delete') => {
-    let title = '', message = '', onConfirm = () => {
-    };
-
-    switch (action) {
-      case 'start':
-        title = `启动实例: ${instance.name}`;
-        message = `您确定要启动实例 "${instance.name}" 吗？`;
-        onConfirm = () => simulateAction(instance.id, 'running', 'starting');
-        break;
-      case 'stop':
-        title = `停止实例: ${instance.name}`;
-        message = `您确定要停止实例 "${instance.name}" 吗？`;
-        onConfirm = () => simulateAction(instance.id, 'stopped', 'stopping');
-        break;
-      case 'restart':
-        title = `重启实例: ${instance.name}`;
-        message = `您确定要重启实例 "${instance.name}" 吗？该操作会先停止再启动实例。`;
-        onConfirm = () => {
-          simulateAction(instance.id, 'starting', 'stopping', 1500);
-          setTimeout(() => simulateAction(instance.id, 'running'), 3000);
-        };
-        break;
-      case 'delete':
-        title = `删除实例: ${instance.name}`;
-        message = `此操作将仅从此列表中移除实例，您需要从拓扑编辑器中删除实际节点。要继续吗？`;
-        onConfirm = () => {
-          setInstances(prev => prev.filter(inst => inst.id !== instance.id));
-        };
-        break;
-    }
-
-    setConfirmActionProps({ title, message, onConfirm });
-    setIsConfirmDialogOpen(true);
-  }
-
+  // The rendering logic is correct.
+  // It displays a title and then the self-contained TopologyEditor component.
   return (
       <div>
         <div className="flex justify-between items-center mb-8">
@@ -203,14 +121,20 @@ const ScenarioPage: React.FC = () => {
           </Typography>
         </div>
 
-        {/* Network Topology Editor Section */}
+        {/* The TopologyEditor is now a "smart" component that handles its own state and actions
+          (like saving, undo, redo). This parent page (`ScenarioPage`) only needs to provide
+          the callback functions to keep its own instance list in sync with the editor.
+          This is a clean and effective architecture.
+        */}
         <TopologyEditor
             onAddNode={handleAddNode}
             onDeleteNode={handleDeleteNode}
             onUpdateNode={handleUpdateNode}
         />
 
-        {/* Instance List Section */}
+        {/* This table correctly displays the data from the `instances` state,
+          which is kept up-to-date by the callbacks above.
+        */}
         <Card title="场景内所有设备列表" className="my-8">
           <TableContainer component={Paper}>
             <Table aria-label="instances table">
@@ -218,141 +142,38 @@ const ScenarioPage: React.FC = () => {
                 <TableRow>
                   <TableCell>名称</TableCell>
                   <TableCell>类型</TableCell>
-                  <TableCell>状态</TableCell>
                   <TableCell>IP 地址 / 映射</TableCell>
                   <TableCell>镜像</TableCell>
-                  <TableCell>CPU</TableCell>
-                  <TableCell>内存</TableCell>
-                  <TableCell>运行时间</TableCell>
-                  <TableCell>创建于</TableCell>
-                  <TableCell align="center">操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {instances.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} align="center">
+                      <TableCell colSpan={4} align="center">
                         <Typography color="text.secondary" sx={{ p: 3 }}>
                           暂无设备。请在上面的拓扑编辑器中添加设备。
                         </Typography>
                       </TableCell>
                     </TableRow>
                 ) : (
-                    instances.map((instance) => {
-                      const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
-                      const isCompute = instance.type === '虚拟机' || instance.type === '容器';
-
-                      return (
-                          <TableRow key={instance.id} hover>
-                            <TableCell>{instance.name}</TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                {getTypeIcon(instance.type)}
-                                {instance.type}
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                  label={STATUS_TRANSLATIONS[instance.status] || instance.status}
-                                  color={getStatusChipColor(instance.status)}
-                                  size="small"
-                              />
-                            </TableCell>
-                            <TableCell>{instance.ports}</TableCell>
-                            <TableCell>{instance.imageName}</TableCell>
-                            <TableCell>{instance.cpuUsage}</TableCell>
-                            <TableCell>{instance.memoryUsage}</TableCell>
-                            <TableCell>{instance.uptime}</TableCell>
-                            <TableCell>{new Date(instance.createdAt).toLocaleDateString('zh-CN', {
-                              year: 'numeric',
-                              month: 'numeric',
-                              day: 'numeric'
-                            })}</TableCell>
-                            <TableCell align="center">
-                              <Tooltip title="详情">
-                                <IconButton onClick={() => handleOpenDetailsModal(instance)}
-                                            size="small">
-                                  <InfoIcon fontSize="small"/>
-                                </IconButton>
-                              </Tooltip>
-                              {isCompute && instance.status === 'running' && (
-                                  <>
-                                    <Tooltip title="停止">
-                                                            <span>
-                                                                <IconButton
-                                                                    onClick={() => handleAction(instance, 'stop')}
-                                                                    size="small" disabled={!isActionable}>
-                                                                    <StopIcon fontSize="small"
-                                                                              color={isActionable ? "error" : "disabled"}/>
-                                                                </IconButton>
-                                                            </span>
-                                    </Tooltip>
-                                    <Tooltip title="重启">
-                                                            <span>
-                                                                <IconButton
-                                                                    onClick={() => handleAction(instance, 'restart')}
-                                                                    size="small" disabled={!isActionable}>
-                                                                    <RestartAltIcon fontSize="small"
-                                                                                    color={isActionable ? "primary" : "disabled"}/>
-                                                                </IconButton>
-                                                            </span>
-                                    </Tooltip>
-                                  </>
-                              )}
-                              {isCompute && instance.status === 'stopped' && (
-                                  <Tooltip title="启动">
-                                                        <span>
-                                                            <IconButton
-                                                                onClick={() => handleAction(instance, 'start')}
-                                                                size="small" disabled={!isActionable}>
-                                                                <PlayArrowIcon fontSize="small"
-                                                                               color={isActionable ? "success" : "disabled"}/>
-                                                            </IconButton>
-                                                        </span>
-                                  </Tooltip>
-                              )}
-                              {isCompute && (instance.status === 'stopped' || instance.status === 'error') && (
-                                  <Tooltip title="删除 (仅列表)">
-                                                        <span>
-                                                            <IconButton
-                                                                onClick={() => handleAction(instance, 'delete')}
-                                                                size="small" disabled={!isActionable}>
-                                                                <DeleteIcon fontSize="small"
-                                                                            color={isActionable ? "error" : "disabled"}/>
-                                                            </IconButton>
-                                                        </span>
-                                  </Tooltip>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                      );
-                    })
+                    instances.map((instance) => (
+                        <TableRow key={instance.id} hover>
+                          <TableCell>{instance.name}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {getTypeIcon(instance.type)}
+                              {instance.type}
+                            </Box>
+                          </TableCell>
+                          <TableCell>{instance.ports}</TableCell>
+                          <TableCell>{instance.imageName || '-'}</TableCell>
+                        </TableRow>
+                    ))
                 )}
               </TableBody>
             </Table>
           </TableContainer>
         </Card>
-
-        {selectedInstance && (
-            <InstanceDetailsModal
-                open={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                instance={selectedInstance}
-            />
-        )}
-
-        {confirmActionProps && (
-            <ConfirmActionDialog
-                open={isConfirmDialogOpen}
-                onClose={() => setIsConfirmDialogOpen(false)}
-                title={confirmActionProps.title}
-                message={confirmActionProps.message}
-                onConfirm={() => {
-                  confirmActionProps.onConfirm();
-                  setIsConfirmDialogOpen(false);
-                }}
-            />
-        )}
       </div>
   );
 };
