@@ -14,9 +14,37 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## About Back end
-this is using laravel:9.0 build api project
+**The fllowing is some docs about laravel**
+
+- [laravel中文文档 - 目录结构](https://docs.golaravel.com/docs/9.x/structure)
+- [laravel中文文档 - 路由文件](https://docs.golaravel.com/docs/9.x/routing)
+- [laravel中文文档 - 中间件](https://docs.golaravel.com/docs/9.x/middleware)
+- [laravel中文文档 - 控制器](https://docs.golaravel.com/docs/9.x/controllers)
+- [laravel中文文档 - 请求数据](https://docs.golaravel.com/docs/9.x/requests)
+- [laravel中文文档 - 执行原生SQL](https://docs.golaravel.com/docs/9.x/database#running-queries)
+
+## About version
+
+- php >= 8.0
+
+- laravel = 9.0
+
+- other detail will show in `composer.json` or `composer.lock`
+
+
+## About how to edit
+
+- use  the fllowing command create controller file 
+```bash 
+    php artisan make:controller <driectory_name>/<controller_file_name>
+```
+- edit this file <controller_dile_name>
+- if need use model file, create model file and use <model_file_namespace>/<model_file_name> 
+- edit `routes/api/php` or `routes/web.php`
+
 ## About how to run
+
 1. composer install
 2. composer dump_autoload
 3. php artisan serve
+
