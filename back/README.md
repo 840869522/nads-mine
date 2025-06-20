@@ -19,4 +19,4 @@ this is using laravel:9.0 build api project
 ## About how to run
 1. composer install
 2. composer dump_autoload
-3. php artisan serv
+3. php artisan serve
