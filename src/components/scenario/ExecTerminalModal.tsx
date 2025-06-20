@@ -1,6 +1,13 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress, Typography } from '@mui/material';
+import { Rnd } from 'react-rnd';
+import { Box, IconButton, Paper } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import MinimizeIcon from '@mui/icons-material/Minimize';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
 
 interface ExecTerminalModalProps {
@@ -9,79 +16,181 @@ interface ExecTerminalModalProps {
   onClose: () => void;
 }
 
-const ExecTerminalModal: React.FC<ExecTerminalModalProps> = ({ open, containerId, onClose }) => {
-  const terminalRef = useRef<HTMLDivElement | null>(null);
+export default function ExecTerminalModal({ open, containerId, onClose }: ExecTerminalModalProps) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<any>();
-  const wsRef = useRef<WebSocket | null>(null);
-  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'closed'>('idle');
+  const socketRef = useRef<Socket | null>(null);
+  const dragRef = useRef<HTMLDivElement | null>(null);
+  const fitAddonRef = useRef<any>(null);
+  const [minimized, setMinimized] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [position, setPosition] = useState(() => ({
+    x:
+      typeof window !== 'undefined'
+        ? window.innerWidth / 2 - 300
+        : 0,
+    y: 80,
+  }));
+  const [size, setSize] = useState({ width: 600, height: 400 });
+  const prevRef = useRef<{ position: { x: number; y: number }; size: { width: number; height: number } } | null>(null);
 
   useEffect(() => {
+    if (!open || !containerId || !wrapperRef.current) return;
     let term: any;
     let fitAddon: any;
-    if (open && containerId && terminalRef.current) {
-      setStatus('connecting');
-      Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(([m, fit]) => {
-        const { Terminal } = m as any;
-        const { FitAddon } = fit as any;
-        fitAddon = new FitAddon();
-        term = new Terminal({ convertEol: true });
-        term.loadAddon(fitAddon);
-        term.open(terminalRef.current!);
-        fitAddon.fit();
-        termRef.current = term;
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const ws = new WebSocket(`${protocol}://${window.location.host}/api/containers/${containerId}/exec`);
-        wsRef.current = ws;
-        const sendResize = () => {
-          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-        };
-        ws.onopen = () => {
-          setStatus('connected');
-          term.focus();
-          sendResize();
-        };
-        ws.onmessage = (e) => {
-          const data = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
-          term.write(data);
-        };
-        ws.onclose = () => {
-          setStatus('closed');
-          term.writeln('\r\n[connection closed]');
-        };
-        ws.onerror = () => setStatus('closed');
-        term.onData(data => ws.send(JSON.stringify({ type: 'data', data })));
-        term.onResize(sendResize);
-        setTimeout(() => fitAddon.fit(), 0);
-      }).catch(() => setStatus('closed'));
-    }
+    const container = wrapperRef.current;
+    let cancelled = false;
+    (async () => {
+      const [{ Terminal }, { FitAddon }] = await Promise.all([
+        import('@xterm/xterm'),
+        import('@xterm/addon-fit'),
+      ]);
+      if (cancelled || !container) return;
+      container.innerHTML = '';
+      term = new Terminal({ convertEol: true });
+      fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(container);
+      fitAddon.fit();
+      termRef.current = term;
+      fitAddonRef.current = fitAddon;
+
+      const socket = io({
+        path: '/api/terminal',
+        query: { id: containerId },
+        transports: ['websocket'],
+      });
+      socketRef.current = socket;
+
+      const sendResize = () => socket.emit('resize', { cols: term.cols, rows: term.rows });
+
+      socket.on('connect', () => {
+        term.focus();
+        sendResize();
+      });
+      socket.on('output', (data: string) => {
+        term.write(data);
+      });
+      socket.on('disconnect', () => term.write('\r\n[connection closed]'));
+      socket.on('connect_error', () => term.write('\r\n[connection error]'));
+
+      term.onData((d: string) => socket.emit('input', d));
+      term.onResize(sendResize);
+    })();
+
     return () => {
-      wsRef.current?.close();
+      cancelled = true;
+      socketRef.current?.disconnect();
       termRef.current?.dispose();
-      termRef.current = undefined;
+      fitAddonRef.current = null;
+      if (container) container.innerHTML = '';
     };
   }, [open, containerId]);
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>终端</DialogTitle>
-      <DialogContent dividers>
-        <Box sx={{ position: 'relative', height: 400, bgcolor: 'black', color: 'white', p: 1 }}>
-          <Box ref={terminalRef} sx={{ position: 'absolute', inset: 0 }} />
-          {status !== 'connected' && (
-            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.6)' }}>
-              {status === 'connecting' && (<CircularProgress color="inherit" />)}
-              {status === 'closed' && (
-                <Typography variant="body2" color="white">连接已关闭</Typography>
-              )}
-            </Box>
-          )}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="outlined">关闭</Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
+  useEffect(() => {
+    if (!open || minimized) return;
+    fitAddonRef.current?.fit();
+    if (termRef.current && socketRef.current) {
+      socketRef.current.emit('resize', {
+        cols: termRef.current.cols,
+        rows: termRef.current.rows,
+      });
+    }
+  }, [size, maximized, minimized, open]);
 
-export default ExecTerminalModal;
+  if (!open) return null;
+
+  const paper = (
+    <Paper
+      sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}
+      elevation={8}
+      ref={dragRef}
+    >
+      <Box
+        className="terminal-title"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+          p: 1,
+          cursor: 'move',
+        }}
+      >
+        <Box>{containerId ? `终端 ${containerId.slice(0, 12)}` : '终端'}</Box>
+        <Box>
+          <IconButton size="small" onClick={() => setMinimized(!minimized)}>
+            {minimized ? <OpenInFullIcon fontSize="inherit" /> : <MinimizeIcon fontSize="inherit" />}
+          </IconButton>
+          {!minimized && (
+            <IconButton
+              size="small"
+              onClick={() => {
+                if (maximized) {
+                  if (prevRef.current) {
+                    setPosition(prevRef.current.position);
+                    setSize(prevRef.current.size);
+                  }
+                  setMaximized(false);
+                } else {
+                  prevRef.current = { position, size };
+                  setPosition({ x: 0, y: 0 });
+                  setSize({ width: window.innerWidth, height: window.innerHeight });
+                  setMaximized(true);
+                }
+              }}
+            >
+              {maximized ? (
+                <FullscreenExitIcon fontSize="inherit" />
+              ) : (
+                <FullscreenIcon fontSize="inherit" />
+              )}
+            </IconButton>
+          )}
+          <IconButton size="small" onClick={onClose}>
+            <CloseIcon fontSize="inherit" />
+          </IconButton>
+        </Box>
+      </Box>
+      {!minimized && (
+        <Box sx={{ flex: 1, bgcolor: 'black', position: 'relative' }}>
+          <div ref={wrapperRef} style={{ position: 'absolute', inset: 0 }} />
+        </Box>
+      )}
+    </Paper>
+  );
+
+  if (minimized) {
+    return (
+      <Box sx={{ position: 'fixed', bottom: 16, right: 16, width: 240, zIndex: 1300 }} ref={dragRef}>
+        {paper}
+      </Box>
+    );
+  }
+
+  if (maximized) {
+    return (
+      <Box sx={{ position: 'fixed', inset: 0, zIndex: 1300 }}>{paper}</Box>
+    );
+  }
+
+  return (
+    <Rnd
+      size={size}
+      position={position}
+      onDragStop={(_e, d) => setPosition({ x: d.x, y: d.y })}
+      onResizeStop={(_e, _dir, ref, _delta, pos) => {
+        setSize({ width: parseInt(ref.style.width, 10), height: parseInt(ref.style.height, 10) });
+        setPosition(pos);
+      }}
+      minWidth={300}
+      minHeight={200}
+      bounds="window"
+      dragHandleClassName="terminal-title"
+      style={{ zIndex: 1300, position: 'fixed' }}
+    >
+      {paper}
+    </Rnd>
+  );
+}

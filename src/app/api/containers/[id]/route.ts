@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { inspectContainer, getContainerLogs, listBindMounts, getContainerStats, execInContainer, startContainer, stopContainer, pauseContainer, unpauseContainer, removeContainer } from '@/lib/docker';
+import { inspectContainer, getContainerLogs, listBindMounts, getContainerStats, startContainer, stopContainer, pauseContainer, unpauseContainer, removeContainer } from '@/lib/docker';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { searchParams } = new URL(req.url);
@@ -19,14 +19,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       case 'stats':
         const stats = await getContainerStats(id);
         return NextResponse.json(stats);
-      case 'exec':
-        const cmd = searchParams.get('cmd') || 'ls';
-        const output = await execInContainer(id, cmd);
-        return NextResponse.json({ output });
-      case 'files':
-        const path = searchParams.get('path') || '/';
-        const files = await execInContainer(id, ['ls', '-al', path]);
-        return NextResponse.json({ files });
       default:
         const info = await inspectContainer(id);
         return NextResponse.json(info);

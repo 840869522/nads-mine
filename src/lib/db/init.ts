@@ -11,6 +11,8 @@ export async function getPrisma() {
   if (!prisma) {
     ensureDatabase();
     prisma = new PrismaClient();
+    await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
+    await prisma.$queryRawUnsafe('PRAGMA busy_timeout = 5000;'); // 5 s
     await seedData(prisma);
   }
   return prisma;
@@ -22,7 +24,7 @@ function ensureDatabase() {
     // Run prisma db push to create tables
     execSync('npx prisma db push --schema=./prisma/schema.prisma --skip-generate', { stdio: 'inherit' });
   } else {
-    execSync('npx prisma db push --schema=./prisma/schema.prisma --skip-generate', { stdio: 'inherit' });
+    // execSync('npx prisma db push --schema=./prisma/schema.prisma --skip-generate', { stdio: 'inherit' });
   }
 }
 
