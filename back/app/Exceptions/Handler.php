@@ -78,15 +78,9 @@ use Symfony\Component\Routing\Exception\MethodNotAllowedException;
             }
 
             // Handle HttpException (e.g., 403, 404, etc.)
-            if ($e instanceof NotFoundHttpException ) {
+            if ($e instanceof HttpException ) {
                 return response()->json([
-                    'error' => $e->getMessage() ?: 'HTTP Error',
-                    'message' => 'An HTTP error occurred.',
-                ], 200);
-            }
-
-            if ($e instanceof MethodNotAllowedException) {
-                return response()->json([
+                    "code"=> 404,
                     'error' => $e->getMessage() ?: 'HTTP Error',
                     'message' => 'An HTTP error occurred.',
                 ], 200);

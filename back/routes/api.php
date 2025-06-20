@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\users\UserController;
+use Illuminate\Contracts\Auth\UserProvider;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,4 +20,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post("/test",[UserController::class,"test"]);
+Route::prefix("user")->group(function() {
+    Route::post("/login",[UserController::class,"login"]);
+    Route::post("/test",[UserController::class,"test"]);
+});
