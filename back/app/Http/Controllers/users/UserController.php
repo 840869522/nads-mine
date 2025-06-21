@@ -29,7 +29,6 @@
         
         public function login(Request $req) {
             $reqData = $req->json()->all();
-
             return response()->json([
                 "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
                 "message"=>GlobalResponse::HTTP_STATUS_OK_MES,

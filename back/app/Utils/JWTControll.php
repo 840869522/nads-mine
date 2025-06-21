@@ -6,6 +6,9 @@
     use Firebase\JWT\Key;
     use Illuminate\Support\Facades\Log;
 
+    /**
+     * 定义JWT 生成和解析函数
+     */
     class JWTControll{
         /**
          * 根据给出的data 数据和 exp_time 过期时间，生成 jwt token 返回值包含token以及错误代码
@@ -14,7 +17,7 @@
          * @param [int] $exp_time 有效时间 默认为18000秒即为5小时
          * @return ["token"=>string,"err_code"=>int]
          */
-        public static function encodeJWT(array $data, int $exp_time = 18000, string $algo = "HS256"): array
+        public static function encodeJWT(?array $data, int $exp_time = 18000, string $algo = "HS256"): array
         {
             $issuedAt = time();
             $secretKey = env("JWT-SECRET-KEY", "default-secret-key");
@@ -43,13 +46,25 @@
          * @param string $algo 加密算法，默认为 HS256
          * @return array
          */
-        public static function decodeJWT(string $token, string $secret, string $algo = 'HS256'):?array {
+        public static function decodeJWT(?string $token, string $algo = 'HS256'):?array {
+            if( $token === null){
+                return [
+                    "data"=> null,
+                    "err" => "Invalid JWT token"
+                ];
+            }
+            $secretKey = env("JWT-SECRET-KEY", "default-secret-key");
             try {
-                $data = JWT::decode($token, new Key($secret, $algo));
-                Log::info($data);
-                return (array) $data;
+                $data = JWT::decode($token, new Key($secretKey, $algo));
+                return [
+                    "data" => (array) $data,
+                    "err" => null
+                ];
             } catch (\Exception $e) {
-                return null;
+                return [
+                    "err" => $e->getMessage(),
+                    "data" => null
+                ];
             }
         }
     }

@@ -83,7 +83,7 @@
             
             return response()->json([
                 'code' => GlobalResponse::$HTTP_STATUS_ERROR_CODE,
-                'message' => "somerthing happend error",
+                'message' => "something happend error",
             ], 200);
         }
     }

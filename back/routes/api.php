@@ -22,5 +22,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::prefix("user")->group(function() {
     Route::post("/login",[UserController::class,"login"]);
-    Route::post("/test",[UserController::class,"test"]);
+    Route::post("/test",[UserController::class,"test"])->middleware("jwtcheck");
 });
