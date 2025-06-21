@@ -8,9 +8,8 @@
     use Illuminate\Validation\ValidationException;
     use Illuminate\Database\Eloquent\ModelNotFoundException;
     use Symfony\Component\HttpKernel\Exception\HttpException;
-    use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
     use Illuminate\Support\Facades\Log;
-use Symfony\Component\Routing\Exception\MethodNotAllowedException;
+    use App\Utils\GlobalResponse;
 
     class Handler extends ExceptionHandler{
         /**
@@ -53,26 +52,23 @@ use Symfony\Component\Routing\Exception\MethodNotAllowedException;
             // Handle AuthenticationException
             if ($e instanceof AuthenticationException) {
                 return response()->json([
-                    "code" => 401,
-                    'error' => 'Unauthenticated',
-                    'message' => 'You need to be authenticated to access this resource.',
+                    "code" => GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                    'message' => GlobalResponse::HTTP_STATUS_ERROR_MES,
                 ], 200);
             }
 
             // Handle ValidationException
             if ($e instanceof ValidationException) {
                 return response()->json([
-                    "code" => 422,
-                    'error' => 'Validation Failed',
-                    'message' => $e->errors(),
+                    "code" => GlobalResponse::$HTTP_REQUEST_ERROR_MES,
+                    'message' => GlobalResponse::HTTP_STATUS_ERROR_MES,
                 ], 200);
             }
 
             // Handle ModelNotFoundException
             if ($e instanceof ModelNotFoundException) {
                 return response()->json([
-                    "code" => 404,
-                    'error' => 'Resource Not Found',
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                     'message' => 'The requested resource was not found on the server.',
                 ], 200);
             }
@@ -80,14 +76,13 @@ use Symfony\Component\Routing\Exception\MethodNotAllowedException;
             // Handle HttpException (e.g., 403, 404, etc.)
             if ($e instanceof HttpException ) {
                 return response()->json([
-                    "code"=> 404,
-                    'error' => $e->getMessage() ?: 'HTTP Error',
-                    'message' => 'An HTTP error occurred.',
+                    "code"=> GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'message' => $e->getMessage() ?: 'HTTP Error',
                 ], 200);
             }
             
             return response()->json([
-                'code' => 400,
+                'code' => GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 'message' => "somerthing happend error",
             ], 200);
         }
