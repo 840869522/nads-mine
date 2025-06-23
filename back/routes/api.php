@@ -3,7 +3,7 @@
     use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\RoleController;
-    use App\Http\Controllers\Users\PrimissionController;
+    use App\Http\Controllers\Users\PermissionController;
 
     /*
     |--------------------------------------------------------------------------
@@ -24,8 +24,8 @@
         Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck");
     });
     Route::prefix("primission")->group(function() {
-        Route::post("/all",[PrimissionController::class,"getAllPrimission"])->middleware("jwtcheck:get-all-user");
+        Route::post("/all",[PermissionController::class,"getAllPermission"])->middleware("jwtcheck:get-all-user");
         // Route::
     });
-    
+
 ?>

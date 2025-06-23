@@ -2,15 +2,15 @@
     namespace App\Http\Controllers\Users;
 
     use App\Http\Controllers\Controller;
-    use App\Models\PrimissionModel;
+    use App\Models\PermissionModel;
     use App\Utils\GlobalResponse;
     use Exception;
     use Illuminate\Http\Request;
 
-    class PrimissionController extends Controller {
+    class PermissionController extends Controller {
 
-        public function getAllPrimission() {
-            $modelRes = PrimissionModel::getAllPrimission();
+        public function getAllPermission() {
+            $modelRes = PermissionModel::getAllPermission();
             if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
@@ -25,11 +25,11 @@
         }
 
 
-        public function getPrimissionById(Request $res) {
+        public function getPermissionById(Request $res) {
             $reqData = $res->json()->all();
             try {
                 $id = $reqData["id"];
-                $modelRes = PrimissionModel::getPrimissionById($id);
+                $modelRes = PermissionModel::getPermissionById($id);
                 if ($modelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
                     return response()->json([
                         "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,

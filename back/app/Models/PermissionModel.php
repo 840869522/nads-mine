@@ -8,12 +8,12 @@
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Database\QueryException;
 
-    class PrimissionModel extends Model {
+    class PermissionModel extends Model {
 
         protected $table = "permissions";
 
 
-        public static function getAllPrimission():?array {
+        public static function getAllPermission():?array {
             try {
                 $sql = "SELECT * FROM `permissions`";
                 $res  = db::select($sql);
@@ -30,7 +30,7 @@
         }
 
 
-        public static function getPrimissionById(?string $id) {
+        public static function getPermissionById(?string $id) {
             try {
                 $sql =  "SELECT * FROM `permissions` WHERE `id` = ?";
                 $res = db::selectOne($sql,[$id]);
