@@ -1,9 +1,9 @@
 <?php
 
-    use Illuminate\Http\Request;
     use Illuminate\Support\Facades\Route;
-    use App\Http\Controllers\users\UserController;
-    use Illuminate\Contracts\Auth\UserProvider;
+    use App\Http\Controllers\Users\UserController;
+    use App\Http\Controllers\Users\RoleController;
+    use App\Http\Controllers\Users\PrimissionController;
 
     /*
     |--------------------------------------------------------------------------
@@ -16,11 +16,16 @@
     |
     */
     
-
     Route::prefix("user")->group(function() {
         Route::post("/login",[UserController::class,"login"]);
         Route::post("/all",[UserController::class,"getAllUser"])->middleware(["jwtcheck:get-all-user"]);
     });
-
-
+    Route::prefix("role")->group(function(){
+        Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck");
+    });
+    Route::prefix("primission")->group(function() {
+        Route::post("/all",[PrimissionController::class,"getAllPrimission"])->middleware("jwtcheck:get-all-user");
+        // Route::
+    });
+    
 ?>

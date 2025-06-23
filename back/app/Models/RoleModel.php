@@ -3,18 +3,18 @@
     namespace App\Models;
 
     use Illuminate\Database\Eloquent\Model;
-    use Illuminate\Support\Facades\DB;
+    use Illuminate\Support\Facades\DB as db;
     use Illuminate\Database\QueryException;
 
     use App\Utils\GlobalResponse;
-    
-    class Role extends Model {
-        protected string $table = "";
+
+    class RoleModel extends Model {
+        protected $table = "role";
 
         public static function getAllRole() :?array {
             try {
-                $sql = "SELECT * FROM `role`";
-                $res = DB::select($sql);
+                $sql = "SELECT * FROM `roles`";
+                $res = db::select($sql);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>$res
@@ -28,14 +28,18 @@
         }
 
 
-        public static function getRoleById() :?array {
+        public static function getRoleById(?string $id) :?array {
             try {
+                $sql = "SELECT * FROM  `role` WHERE `id` = ?";
+                $res = db::selectOne($sql,[$id]);
                 return [
-                    
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data"=>$res
                 ];
             }catch (QueryException $e) {
                 return [
-
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+                    "data" => $e->getMessage()
                 ];
             }
         }

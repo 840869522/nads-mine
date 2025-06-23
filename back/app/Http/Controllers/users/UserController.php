@@ -1,14 +1,13 @@
 <?php
 
-    namespace App\Http\Controllers\users;
+    namespace App\Http\Controllers\Users;
 
     use App\Http\Controllers\Controller;
     use Illuminate\Http\Request;
-    use Illuminate\Support\Facades\Validator;
     use App\Models\UserModel;
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
-
+    use Exception;
 
     class UserController extends Controller{
 
@@ -31,6 +30,15 @@
         
         public function login(Request $req) {
             $reqData = $req->json()->all();
+            try {
+                $username = $reqData["username"];
+                $pwd = $reqData["password"];
+            }catch(Exception $e) {
+                return response()->json([
+                    'code'=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
             $modelRes = UserModel::getUserByName($reqData['username']);
             if ($modelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return [
