@@ -13,9 +13,10 @@ class JWTCheckMiddleware{
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response | \Illuminate\Http\RedirectResponse)  $next
+     * @param  string $primission
      * @return \Illuminate\Http\Response | \Illuminate\Http\RedirectResponse
      */
-    public function handle(Request $request, Closure $next){
+    public function handle(Request $request, Closure $next, $primiision){
         $auth = $request->header("Authorization",null);
         $jwtRes =  JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {
@@ -26,6 +27,16 @@ class JWTCheckMiddleware{
         }
         $request->merge([
             "token_data"=>$jwtRes["data"]
+        ]);
+        if (!in_array($primiision, $jwtRes["data"]["permission"])){
+            return response()->json([
+                'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+            ]);
+        }
+        $request->attributes->add([
+            "user_permissions" =>$jwtRes["data"]["permission"],
+            "user_roles" => $jwtRes['data']['role'],
         ]);
         return $next($request);
     }
