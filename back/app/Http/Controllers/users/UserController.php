@@ -5,18 +5,20 @@
     use App\Http\Controllers\Controller;
     use Illuminate\Http\Request;
     use Illuminate\Support\Facades\Validator;
-    use App\Models\User;
+    use App\Models\UserModel;
     use App\Utils\GlobalResponse;
+    use App\Utils\JWTControll;
 
 
     class UserController extends Controller{
-        public function test() {
-            $res = User::getAllUser();
+
+        public function getAllUser() {
+            $res = UserModel::getAllUser();
             if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "mes" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" => $res['data']
+                    "data" => $res['data'] 
                 ]);
             else{
                 return response()->json([
@@ -29,10 +31,39 @@
         
         public function login(Request $req) {
             $reqData = $req->json()->all();
+            $modelRes = UserModel::getUserByName($reqData['username']);
+            if ($modelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                return [
+                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message"=>GlobalResponse::$DATABASE_ERROR_MES,
+                ];
+            }
+            $user = $modelRes["data"];
+            if ($user->password != $reqData["password"]){
+                return response()->json([
+                    "code"=>GlobalResponse::$USER_LOGIN_ERROR_CODE,
+                    "message"=>GlobalResponse::$USER_LOGIN_FAILED_MES,
+                ]);
+            }
+            $primissions = UserModel::getUserPrimissions($user->id);
+            $jwtRes = JWTControll::encodeJWT([
+                "id" => $user->id,
+                "role" => $user->role_id,
+                "permission" => array_map(function($item){return $item->name;},$primissions["data"])
+            ]);
+            if ($jwtRes["err"] != null) {
+                return response()->json([
+                    "code"=>GlobalResponse::$USER_LOGIN_ERROR_CODE,
+                    "message"=>GlobalResponse::$USER_LOGIN_FAILED_MES,
+                ]);
+            }
             return response()->json([
                 "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
-                "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
-                "data"=>$reqData
+                "message"=>GlobalResponse::$USER_LOGIN_SUCCESS_MES,
+                "data"=>[
+                    "token"=>$jwtRes['token'],
+                    "id"=> $user->id
+                ]
             ]);
         }
 

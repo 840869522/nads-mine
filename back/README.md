@@ -36,12 +36,12 @@ Laravel is accessible, powerful, and provides tools required for large, robust a
 
 - use  the fllowing command create controller file 
 ```bash 
-    php artisan make:controller <driectory_name>/<controller_file_name>
+php artisan make:controller <driectory_name>/<controller_file_name>
 ```
 - edit this file <controller_dile_name>
 - if need use model file, create model file and 
 ```php
-    use <model_file_namespace>\<model_file_name>;
+use <model_file_namespace>\<model_file_name>;
 ```
 - edit `routes/api.php` or `routes/web.php`
 
