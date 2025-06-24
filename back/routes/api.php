@@ -35,3 +35,23 @@ Route::prefix('scenarios')->group(function () {
     Route::delete('/', [ScenarioController::class, 'destroy']);
 });
 
+
+Route::prefix('images')->group(function () {
+    Route::get('/', [\App\Http\Controllers\ImagesController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\ImagesController::class, 'store']);
+    Route::put('/', [\App\Http\Controllers\ImagesController::class, 'update']);
+    Route::delete('/', [\App\Http\Controllers\ImagesController::class, 'destroy']);
+});
+
+Route::prefix('instances')->group(function () {
+    Route::get('/', [\App\Http\Controllers\InstancesController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\InstancesController::class, 'store']);
+    Route::put('/', [\App\Http\Controllers\InstancesController::class, 'update']);
+    Route::delete('/', [\App\Http\Controllers\InstancesController::class, 'destroy']);
+});
+
+Route::prefix('containers')->group(function () {
+    Route::post('/', [\App\Http\Controllers\ContainersController::class, 'store']);
+    Route::post('/{id}', [\App\Http\Controllers\ContainersController::class, 'action']);
+    Route::get('/{id}/logs', [\App\Http\Controllers\ContainersController::class, 'logs']);
+});
