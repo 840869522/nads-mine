@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress, List, ListItem, ListItemText } from '@mui/material';
 
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+
 interface BindMountsModalProps {
   open: boolean;
   containerId: string | null;
@@ -14,7 +16,7 @@ const BindMountsModal: React.FC<BindMountsModalProps> = ({ open, containerId, on
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`/api/containers/${containerId}?action=binds`)
+      fetch(`${API_BASE}/api/containers/${containerId}?action=binds`)
         .then(res => res.json())
         .then(setMounts)
         .finally(() => setLoading(false));

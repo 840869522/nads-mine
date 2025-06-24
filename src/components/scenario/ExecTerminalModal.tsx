@@ -10,6 +10,8 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
 
+const TERM_WS = process.env.NEXT_PUBLIC_TERMINAL_WS || 'ws://localhost:8080';
+
 interface ExecTerminalModalProps {
   open: boolean;
   containerId: string | null;
@@ -55,8 +57,7 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
       termRef.current = term;
       fitAddonRef.current = fitAddon;
 
-      const socket = io({
-        path: '/api/terminal',
+      const socket = io(TERM_WS, {
         query: { id: containerId },
         transports: ['websocket'],
       });

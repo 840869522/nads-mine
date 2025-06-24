@@ -21,6 +21,8 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+
 interface CreateContainerModalProps {
   open: boolean;
   onClose: () => void;
@@ -39,7 +41,7 @@ export default function CreateContainerModal({ open, onClose, onCreated }: Creat
 
   useEffect(() => {
     if (open && user) {
-      fetch(`/api/images?userId=${user.id}&role=${user.role}`)
+      fetch(`${API_BASE}/api/images?userId=${user.id}&role=${user.role}`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -79,7 +81,7 @@ export default function CreateContainerModal({ open, onClose, onCreated }: Creat
 
   const handleSubmit = async () => {
     if (!user || !image) return;
-    await fetch('/api/containers', {
+    await fetch(`${API_BASE}/api/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
