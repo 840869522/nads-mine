@@ -36,7 +36,7 @@
         public static string $HTTP_USER_NOT_RIGHT_MES  = "你没有相关操作的权限";
         public static string $HTTP_REQUEST_ERROR_MES  = "请求参数出错";
         public static string $DATABASE_ERROR_MES  = "something happened error";
-        public static string $USERLOGIN_SUCCESS_MES  = self::HTTP_STATUS_OK_MES;
+        public static string $USER_LOGIN_SUCCESS_MES  = self::HTTP_STATUS_OK_MES;
         public static string $USER_LOGIN_IS_DEL_MES  = "账户被限制，请联系系统管理员";
         public static string $USER_LOGIN_FAILED_MES  = self::HTTP_STATUS_ERROR_MES;
         public static string $HTTP_ROUTER_NOT_FOUND_MES  = "NOT FOUND";

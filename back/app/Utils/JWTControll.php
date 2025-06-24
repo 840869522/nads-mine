@@ -13,21 +13,21 @@
         /**
          * 根据给出的data 数据和 exp_time 过期时间，生成 jwt token 返回值包含token以及错误代码
          *
-         * @param [any] $data
-         * @param [int] $exp_time 有效时间 默认为18000秒即为5小时
-         * @return ["token"=>string,"err_code"=>int]
+         * @param array|null $data 
+         * @param integer $exp_time 有效时间 默认为18000秒 即5小时
+         * @param string $algo
+         * @return array ["token","err"]
          */
-        public static function encodeJWT(?array $data, int $exp_time = 18000, string $algo = "HS256"): array
-        {
+        public static function encodeJWT(?array $data, int $exp_time = 18000, string $algo = "HS256"): array{
             $issuedAt = time();
             $secretKey = env("JWT-SECRET-KEY", "default-secret-key");
             $payload = array_merge([
-                "iat" => $issuedAt,
                 /** 签发时间 */
-                "exp" => $exp_time,
+                "iat" => $issuedAt,
                 /** 有效时间 */
-                'nbf' => $issuedAt
+                "exp" => $issuedAt + $exp_time,
                 /** 生效时间 */
+                'nbf' => $issuedAt
             ], $data);
 
             $token = JWT::encode($payload, $secretKey, $algo);
