@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\users\UserController;
 use Illuminate\Contracts\Auth\UserProvider;
-
+use App\Http\Controllers\scenario\ScenarioController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -24,3 +24,14 @@ Route::prefix("user")->group(function() {
     Route::post("/login",[UserController::class,"login"]);
     Route::post("/test",[UserController::class,"test"])->middleware("jwtcheck");
 });
+
+
+Route::prefix('scenarios')->group(function () {
+    // GET /api/scenarios - 获取所有场景列表
+    Route::get('/', [ScenarioController::class, 'index']);
+    // POST /api/scenarios - 创建一个新场景 (这个您已经有了)
+    Route::post('/', [ScenarioController::class, 'store']);
+    // DELETE /api/scenarios - 删除一个指定场景
+    Route::delete('/', [ScenarioController::class, 'destroy']);
+});
+

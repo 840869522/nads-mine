@@ -89,29 +89,42 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({ onAddNode, onDeleteNode
 
     // 4. 新的 handleConfirmSave 函数负责处理API请求
     const handleConfirmSave = async (name: string, description: string) => {
+        // 准备拓扑数据和载荷 (payload) 的逻辑保持不变
         const topologyData: TopologyData = { nodes, edges };
         const payload = {
             name,
             description,
-            createdAt: new Date().toISOString(), // 自动添加创建日期
+            createdAt: new Date().toISOString(),
             topology: topologyData
         };
 
         try {
-            const response = await fetch('/api/scenarios', {
+            // --- 主要修改点在这里 ---
+            // 将 URL 修改为您的 Laravel 后端的完整地址
+            const response = await fetch('http://127.0.0.1:8000/api/scenarios', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json', // 明确希望接收 JSON 响应
+                },
                 body: JSON.stringify(payload),
             });
+
+            // 处理响应的逻辑保持不变
             if (!response.ok) {
-                throw new Error(`服务器错误: ${response.statusText}`);
+                // 尝试解析后端返回的错误信息
+                const errorData = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`服务器错误: ${errorData.message || response.statusText}`);
             }
-            alert('拓扑场景已成功保存到服务器！');
+
+            const result = await response.json();
+            console.log('后端返回成功信息:', result);
+            alert(result.message || '拓扑场景已成功保存到服务器！');
+
         } catch (error) {
             console.error('保存场景时出错:', error);
-            alert('保存失败，请查看浏览器控制台获取详细信息。');
+            alert(`保存失败: ${error.message}`);
         }
-        // 不需要关闭弹窗，弹窗组件自己会处理
     };
 
 
