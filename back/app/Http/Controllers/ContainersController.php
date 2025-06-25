@@ -28,6 +28,10 @@ class ContainersController extends Controller
                 $this->docker->startContainer($id); break;
             case 'stop':
                 $this->docker->stopContainer($id); break;
+            case 'pause':
+                $this->docker->pauseContainer($id); break;
+            case 'unpause':
+                $this->docker->unpauseContainer($id); break;
             case 'delete':
                 $this->docker->removeContainer($id); break;
         }
@@ -38,5 +42,15 @@ class ContainersController extends Controller
     {
         $logs = $this->docker->containerLogs($id);
         return response()->json(['logs'=>$logs]);
+    }
+
+    public function inspect(string $id)
+    {
+        return response()->json($this->docker->inspectContainer($id));
+    }
+
+    public function binds(string $id)
+    {
+        return response()->json($this->docker->listBindMounts($id));
     }
 }
