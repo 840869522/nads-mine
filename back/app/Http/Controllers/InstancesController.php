@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Services\DockerService;
+use App\Services\DockerCliService;
 
 class InstancesController extends Controller
 {
-    private DockerService $docker;
+    private DockerCliService $docker;
 
-    public function __construct(DockerService $docker)
+    public function __construct(DockerCliService $docker)
     {
         $this->docker = $docker;
     }
