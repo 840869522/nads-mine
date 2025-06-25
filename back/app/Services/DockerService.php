@@ -12,21 +12,44 @@ class DockerService
 
     public function __construct()
     {
-        $host = getenv('DOCKER_HOST');
-        if (!$host) {
-            $host = DIRECTORY_SEPARATOR === '\\'
-                ? 'tcp://127.0.0.1:2375'
-                : 'unix:///var/run/docker.sock';
+        $this->docker = $this->initDocker();
+    }
+
+    private function initDocker(): Docker
+    {
+        $candidates = [];
+        if ($env = getenv('DOCKER_HOST')) {
+            $candidates[] = $env;
         }
 
-        if (str_starts_with($host, 'unix://') && !in_array('unix', stream_get_transports())) {
-            $host = 'tcp://127.0.0.1:2375';
+        if (DIRECTORY_SEPARATOR === '\\') {
+            // Windows systems may expose Docker via named pipe or TCP
+            $candidates[] = 'npipe:////./pipe/docker_engine';
+            $candidates[] = 'tcp://127.0.0.1:2375';
+        } else {
+            $candidates[] = 'unix:///var/run/docker.sock';
+            $candidates[] = 'tcp://127.0.0.1:2375';
         }
 
-        putenv('DOCKER_HOST=' . $host);
+        foreach ($candidates as $host) {
+            if (str_starts_with($host, 'unix://') && !in_array('unix', stream_get_transports())) {
+                continue;
+            }
+            try {
+                putenv('DOCKER_HOST=' . $host);
+                $client = DockerClientFactory::createFromEnv();
+                $docker = Docker::create($client);
+                // simple request to verify connectivity
+                $docker->systemPing();
+                return $docker;
+            } catch (\Throwable $e) {
+                // try next candidate
+            }
+        }
 
+        // last resort - still create a client with default config
         $client = DockerClientFactory::createFromEnv();
-        $this->docker = Docker::create($client);
+        return Docker::create($client);
     }
 
     private function arr(mixed $value): array
@@ -51,16 +74,52 @@ class DockerService
         return $default;
     }
 
+    private function cliContainers(): array
+    {
+        $out = [];
+        @exec('docker ps -a --format "{{json .}}"', $out);
+        $result = [];
+        foreach ($out as $line) {
+            $data = json_decode($line, true);
+            if (is_array($data)) {
+                $result[] = $data;
+            }
+        }
+        return $result;
+    }
+
+    private function cliImages(): array
+    {
+        $out = [];
+        @exec('docker images --format "{{json .}}"', $out);
+        $result = [];
+        foreach ($out as $line) {
+            $data = json_decode($line, true);
+            if (is_array($data)) {
+                $result[] = $data;
+            }
+        }
+        return $result;
+    }
+
     public function listContainers(): array
     {
-        $raw = $this->docker->containerList(['all' => true]);
-        return $this->arr($raw);
+        try {
+            $raw = $this->docker->containerList(['all' => true]);
+            return $this->arr($raw);
+        } catch (\Throwable $e) {
+            return $this->cliContainers();
+        }
     }
 
     public function listImages(): array
     {
-        $raw = $this->docker->imageList(['all' => true]);
-        return $this->arr($raw);
+        try {
+            $raw = $this->docker->imageList(['all' => true]);
+            return $this->arr($raw);
+        } catch (\Throwable $e) {
+            return $this->cliImages();
+        }
     }
 
     public function listContainersNormalized(): array
@@ -69,14 +128,22 @@ class DockerService
         $result = [];
         foreach ($containers as $c) {
             $c = $this->arr($c);
-            $portsInfo = (array)$this->field($c, ['Ports', 'ports'], []);
+            $portsInfo = $this->field($c, ['Ports', 'ports'], []);
             $ports = [];
-            foreach ($portsInfo as $p) {
-                $p = $this->arr($p);
-                $priv = $this->field($p, ['PrivatePort', 'privatePort']);
-                $pub  = $this->field($p, ['PublicPort', 'publicPort']);
-                if ($priv === null) continue;
-                $ports[] = $pub !== null ? "$priv->$pub" : (string)$priv;
+            if (is_array($portsInfo)) {
+                foreach ($portsInfo as $p) {
+                    $p = $this->arr($p);
+                    if (is_array($p)) {
+                        $priv = $this->field($p, ['PrivatePort', 'privatePort']);
+                        $pub  = $this->field($p, ['PublicPort', 'publicPort']);
+                        if ($priv === null) continue;
+                        $ports[] = $pub !== null ? "$priv->$pub" : (string)$priv;
+                    } else {
+                        $ports[] = (string)$p;
+                    }
+                }
+            } elseif ($portsInfo) {
+                $ports[] = (string)$portsInfo;
             }
             $state = (string)$this->field($c, ['State', 'state'], '');
             $status = match ($state) {
@@ -111,11 +178,29 @@ class DockerService
         foreach ($images as $img) {
             $img = $this->arr($img);
             $tags = (array)$this->field($img, ['RepoTags', 'repoTags', 'RepoTag'], []);
+            if (!$tags && isset($img['Repository'])) {
+                $repo = $img['Repository'] ?: '<none>';
+                $tagName = $img['Tag'] ?? 'latest';
+                $tags[] = $repo . ':' . $tagName;
+            }
             $tag = $tags[0] ?? '<none>:latest';
             [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
             $labels = (array)$this->field($img, ['Labels', 'labels'], []);
             $description = $labels['description'] ?? '';
-            $size = (int)$this->field($img, ['Size', 'size'], 0);
+            $sizeStr = $this->field($img, ['Size', 'size'], 0);
+            if (!is_numeric($sizeStr)) {
+                $num = floatval($sizeStr);
+                if (stripos($sizeStr, 'GB') !== false) {
+                    $num *= 1024 * 1024 * 1024;
+                } elseif (stripos($sizeStr, 'MB') !== false) {
+                    $num *= 1024 * 1024;
+                } elseif (stripos($sizeStr, 'kB') !== false) {
+                    $num *= 1024;
+                }
+                $size = (int)$num;
+            } else {
+                $size = (int)$sizeStr;
+            }
             $created = (int)$this->field($img, ['Created', 'created'], time());
             $id = $this->field($img, ['Id', 'ID', 'id', 'Digest']);
             $result[] = [
