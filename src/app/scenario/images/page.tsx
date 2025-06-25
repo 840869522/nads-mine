@@ -28,7 +28,7 @@ import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_BASE = "http://localhost:8000";
 
 const ImageManagementPage: React.FC = () => {
   const { user } = useAuth();

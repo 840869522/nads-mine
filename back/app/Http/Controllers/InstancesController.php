@@ -3,37 +3,66 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Instance;
-use Illuminate\Support\Str;
+use App\Services\DockerService;
 
 class InstancesController extends Controller
 {
+    private DockerService $docker;
+
+    public function __construct(DockerService $docker)
+    {
+        $this->docker = $docker;
+    }
+
     public function index()
     {
-        return response()->json(Instance::all());
+        $list = $this->docker->listContainers();
+        $data = [];
+        foreach ($list as $c) {
+            $ports = [];
+            if (!empty($c['Ports'])) {
+                foreach ($c['Ports'] as $p) {
+                    $ports[] = isset($p['PublicPort'])
+                        ? $p['PrivatePort'] . '->' . $p['PublicPort']
+                        : (string)$p['PrivatePort'];
+                }
+            }
+            $state = $c['State'] ?? '';
+            $status = match ($state) {
+                'running' => 'running',
+                'paused'  => 'paused',
+                'created', 'exited', 'dead' => 'stopped',
+                default => 'error',
+            };
+            $data[] = [
+                'id' => $c['Id'],
+                'name' => ltrim($c['Names'][0] ?? substr($c['Id'],0,12), '/'),
+                'type' => 'container',
+                'status' => $status,
+                'ports' => implode(', ', $ports),
+                'imageName' => $c['Image'],
+                'cpuUsage' => '-',
+                'memoryUsage' => '-',
+                'diskUsage' => '-',
+                'uptime' => $c['Status'] ?? '',
+                'createdAt' => date('c', $c['Created'] ?? time()),
+            ];
+        }
+        return response()->json($data);
     }
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        $data['id'] = Str::uuid()->toString();
-        Instance::create($data);
-        return response()->json(['ok' => true, 'id' => $data['id']]);
+        return response()->json(['ok' => true]);
     }
 
     public function update(Request $request)
     {
-        $data = $request->all();
-        $inst = Instance::findOrFail($data['id']);
-        $inst->fill($data);
-        $inst->save();
         return response()->json(['ok' => true]);
     }
 
     public function destroy(Request $request)
     {
-        $id = $request->query('id');
-        if ($id) Instance::where('id', $id)->delete();
         return response()->json(['ok' => true]);
     }
 }

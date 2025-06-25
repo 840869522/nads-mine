@@ -20,7 +20,7 @@ import {
     MenuItem,
 } from '@mui/material';
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_BASE = "http://localhost:8000";
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';

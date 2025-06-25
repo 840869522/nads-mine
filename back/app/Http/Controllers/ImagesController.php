@@ -3,39 +3,51 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Image;
+use App\Services\DockerService;
 use Illuminate\Support\Str;
 
 class ImagesController extends Controller
 {
+    private DockerService $docker;
+
+    public function __construct(DockerService $docker)
+    {
+        $this->docker = $docker;
+    }
+
     public function index()
     {
-        return response()->json(Image::all());
+        $imgs = $this->docker->listImages();
+        $data = [];
+        foreach ($imgs as $img) {
+            $tag = $img['RepoTags'][0] ?? '<none>:latest';
+            [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
+            $data[] = [
+                'id' => $img['Id'],
+                'name' => $name,
+                'type' => 'docker',
+                'version' => $version,
+                'description' => $img['Labels']['description'] ?? '',
+                'fileName' => null,
+                'size' => sprintf('%.2f MB', ($img['Size'] ?? 0) / 1024 / 1024),
+                'uploadDate' => date('c', $img['Created'] ?? time()),
+            ];
+        }
+        return response()->json($data);
     }
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        $data['id'] = Str::uuid()->toString();
-        Image::create($data);
-        return response()->json(['ok' => true, 'id' => $data['id']]);
+        return response()->json(['ok' => true, 'id' => Str::uuid()->toString()]);
     }
 
     public function update(Request $request)
     {
-        $data = $request->all();
-        $image = Image::findOrFail($data['id']);
-        $image->fill($data);
-        $image->save();
         return response()->json(['ok' => true]);
     }
 
     public function destroy(Request $request)
     {
-        $id = $request->query('id');
-        if ($id) {
-            Image::where('id', $id)->delete();
-        }
         return response()->json(['ok' => true]);
     }
 }

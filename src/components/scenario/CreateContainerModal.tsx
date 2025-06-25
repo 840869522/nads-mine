@@ -21,7 +21,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_BASE = "http://localhost:8000";
 
 interface CreateContainerModalProps {
   open: boolean;
