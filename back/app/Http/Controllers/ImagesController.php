@@ -20,10 +20,13 @@ class ImagesController extends Controller
         $imgs = $this->docker->listImages();
         $data = [];
         foreach ($imgs as $img) {
+            if (is_object($img)) {
+                $img = json_decode(json_encode($img), true);
+            }
             $tag = $img['RepoTags'][0] ?? '<none>:latest';
             [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
             $data[] = [
-                'id' => $img['Id'],
+                'id' => $img['Id'] ?? '',
                 'name' => $name,
                 'type' => 'docker',
                 'version' => $version,

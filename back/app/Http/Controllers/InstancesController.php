@@ -19,6 +19,9 @@ class InstancesController extends Controller
         $list = $this->docker->listContainers();
         $data = [];
         foreach ($list as $c) {
+            if (is_object($c)) {
+                $c = json_decode(json_encode($c), true);
+            }
             $ports = [];
             if (!empty($c['Ports'])) {
                 foreach ($c['Ports'] as $p) {
