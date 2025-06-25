@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress } from '@mui/material';
 
+const API_BASE = "http://localhost:8000";
+
 interface ContainerInspectModalProps {
   open: boolean;
   containerId: string | null;
@@ -14,7 +16,7 @@ const ContainerInspectModal: React.FC<ContainerInspectModalProps> = ({ open, con
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`/api/containers/${containerId}?action=inspect`)
+      fetch(`${API_BASE}/api/containers/${containerId}?action=inspect`)
         .then(res => res.json())
         .then(setData)
         .finally(() => setLoading(false));

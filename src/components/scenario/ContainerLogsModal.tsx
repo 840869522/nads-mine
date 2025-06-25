@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress } from '@mui/material';
 
+const API_BASE = "http://localhost:8000";
+
 interface ContainerLogsModalProps {
   open: boolean;
   containerId: string | null;
@@ -14,7 +16,7 @@ const ContainerLogsModal: React.FC<ContainerLogsModalProps> = ({ open, container
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`/api/containers/${containerId}?action=logs`)
+      fetch(`${API_BASE}/api/containers/${containerId}?action=logs`)
         .then(res => res.json())
         .then(data => setLogs(data.logs || ''))
         .finally(() => setLoading(false));

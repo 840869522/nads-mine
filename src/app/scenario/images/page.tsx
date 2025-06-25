@@ -28,6 +28,8 @@ import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import { useAuth } from '@/hooks/useAuth';
 
+const API_BASE = "http://localhost:8000";
+
 const ImageManagementPage: React.FC = () => {
   const { user } = useAuth();
   const [images, setImages] = useState<ManagedImage[]>([]);
@@ -42,7 +44,7 @@ const ImageManagementPage: React.FC = () => {
     const q = `?userId=${user.id}&role=${user.role}`;
     const load = async () => {
       try {
-        const res = await fetch(`/api/images${q}`);
+        const res = await fetch(`${API_BASE}/api/images${q}`);
         if (!res.ok) throw new Error('fetch failed');
         const data = await res.json();
         setImages(data);
@@ -69,11 +71,11 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     if (editingImage) {
-      fetch(`/api/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
+      fetch(`${API_BASE}/api/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
         setImages(prevImages => prevImages.map(img => (img.id === image.id ? image : img)));
       });
     } else {
-      fetch(`/api/images${q}`, { method: 'POST', body: JSON.stringify(image) })
+      fetch(`${API_BASE}/api/images${q}`, { method: 'POST', body: JSON.stringify(image) })
         .then(res => res.json())
         .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
     }
@@ -94,7 +96,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     if (imageToDelete) {
       const q = `?userId=${user.id}&role=${user.role}&id=${imageToDelete.id}`;
-      fetch(`/api/images${q}`, { method: 'DELETE' }).then(() => {
+      fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' }).then(() => {
         setImages(prevImages => prevImages.filter(img => img.id !== imageToDelete.id));
       });
     }
