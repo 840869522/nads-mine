@@ -10,9 +10,12 @@ import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
     Delete as DeleteIcon,
-    PlayCircleOutline as StartIcon
+    PlayCircleOutline as StartIcon,
+    Edit as EditIcon,
+    Add as AddIcon
 } from '@mui/icons-material';
-
+// import Link from "next/link";
+import ScenarioEditorDialog from './ScenarioEditorDialog'; // 假设新组件与此文件在同一目录
 // 定义场景的数据结构
 interface Scenario {
     id: string; // 文件名将作为ID
@@ -38,12 +41,12 @@ const ScenarioManagementPage: React.FC = () => {
     // 1. 新增状态用于控制删除确认弹窗
     const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-
+    const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
     const fetchScenarios = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/scenarios');
+            const response = await fetch('http://127.0.0.1:8000/api/scenarios');
             if (!response.ok) {
                 throw new Error('获取场景列表失败');
             }
@@ -60,7 +63,10 @@ const ScenarioManagementPage: React.FC = () => {
     useEffect(() => {
         fetchScenarios();
     }, [fetchScenarios]);
-
+    const handleSaveSuccess = () => {
+        setCreateDialogOpen(false);
+        fetchScenarios();
+    };
     const handleRefresh = () => {
         fetchScenarios();
     };
@@ -81,7 +87,7 @@ const ScenarioManagementPage: React.FC = () => {
         setError(null);
         try {
             // 向后端API发送DELETE请求，通过查询参数传递ID
-            const response = await fetch(`/api/scenarios?id=${deleteTarget.id}`, {
+            const response = await fetch(`http://127.0.0.1:8000/api/scenarios?id=${deleteTarget.id}`, {
                 method: 'DELETE',
             });
 
@@ -101,7 +107,11 @@ const ScenarioManagementPage: React.FC = () => {
         }
     };
 
-
+    // 新增一个临时的编辑处理函数
+    const handleEditScenario = (scenario: Scenario) => {
+        console.log('准备编辑场景:', scenario);
+        // TODO: 将来这里会打开编辑弹窗
+    };
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -131,7 +141,8 @@ const ScenarioManagementPage: React.FC = () => {
                 <Typography variant="h4" component="h1" fontWeight="bold">
                     场景管理
                 </Typography>
-                <Box>
+                {/* 将两个按钮放在一个flex容器中，用gap设置间距 */}
+                <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                         variant="outlined"
                         startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
@@ -139,6 +150,16 @@ const ScenarioManagementPage: React.FC = () => {
                         disabled={isLoading}
                     >
                         {isLoading ? '加载中...' : '刷新'}
+                    </Button>
+
+                    {/* ▼▼▼ 新增的创建场景按钮 ▼▼▼ */}
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<AddIcon />}
+                        onClick={() => setCreateDialogOpen(true)} // 点击按钮时，将状态设为 true 以打开弹窗
+                    >
+                        创建场景
                     </Button>
                 </Box>
             </Box>
@@ -187,6 +208,11 @@ const ScenarioManagementPage: React.FC = () => {
                                             <Tooltip title="启动演练"><IconButton color="success" size="small"><StartIcon /></IconButton></Tooltip>
                                             {/* 3. 更新删除按钮的 onClick 事件 */}
                                             <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
+                                            <Tooltip title="编辑场景">
+                                                <IconButton color="primary" size="small" onClick={() => handleEditScenario(scenario)}>
+                                                    <EditIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -229,6 +255,11 @@ const ScenarioManagementPage: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+            <ScenarioEditorDialog
+                open={isCreateDialogOpen}
+                onClose={() => setCreateDialogOpen(false)}
+                onSaveSuccess={handleSaveSuccess}
+            />
         </Paper>
     );
 };
