@@ -30,12 +30,14 @@ class DockerService
 
     public function listContainers(): array
     {
-        return $this->docker->containerList(['all' => true]);
+        $list = $this->docker->containerList(['all' => true]);
+        return json_decode(json_encode($list), true);
     }
 
     public function listImages(): array
     {
-        return $this->docker->imageList(['all' => true]);
+        $list = $this->docker->imageList(['all' => true]);
+        return json_decode(json_encode($list), true);
     }
 
     public function createContainer(array $options)

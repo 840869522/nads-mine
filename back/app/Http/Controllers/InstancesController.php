@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Services\DockerService;
+use Illuminate\Support\Str;
 
 class InstancesController extends Controller
 {
@@ -38,8 +39,8 @@ class InstancesController extends Controller
                 default => 'error',
             };
             $data[] = [
-                'id' => $c['Id'],
-                'name' => ltrim($c['Names'][0] ?? substr($c['Id'],0,12), '/'),
+                'id' => $c['Id'] ?? $c['id'] ?? Str::uuid()->toString(),
+                'name' => ltrim($c['Names'][0] ?? substr(($c['Id'] ?? ''),0,12), '/'),
                 'type' => 'container',
                 'status' => $status,
                 'ports' => implode(', ', $ports),
