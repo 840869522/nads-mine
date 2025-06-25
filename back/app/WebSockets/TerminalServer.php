@@ -17,8 +17,11 @@ class TerminalServer implements MessageComponentInterface
             $conn->close();
             return;
         }
-        $process = new Process(['docker','exec','-it',$containerId,'/bin/sh']);
-        $process->setPty(true);
+        $cmd = ['docker', 'exec', '-it', $containerId, '/bin/sh'];
+        $process = new Process($cmd);
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $process->setPty(true);
+        }
         $process->start();
         $this->clients[$conn->resourceId] = [$conn,$process];
     }

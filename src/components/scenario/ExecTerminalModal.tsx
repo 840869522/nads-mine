@@ -10,7 +10,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
 
-const TERM_WS = process.env.NEXT_PUBLIC_TERMINAL_WS || 'ws://localhost:8080';
+const TERM_WS = 'ws://localhost:8080';
 
 interface ExecTerminalModalProps {
   open: boolean;
