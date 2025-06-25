@@ -44,7 +44,7 @@ class InstancesController extends Controller
                 'type' => 'container',
                 'status' => $status,
                 'ports' => implode(', ', $ports),
-                'imageName' => $c['Image'],
+                'imageName' => $c['Image'] ?? '',
                 'cpuUsage' => '-',
                 'memoryUsage' => '-',
                 'diskUsage' => '-',
