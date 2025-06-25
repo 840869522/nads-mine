@@ -7,7 +7,7 @@ import MinimizeIcon from '@mui/icons-material/Minimize';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import { io, Socket } from 'socket.io-client';
+
 import '@xterm/xterm/css/xterm.css';
 
 const TERM_WS = 'ws://localhost:8080';
@@ -21,7 +21,7 @@ interface ExecTerminalModalProps {
 export default function ExecTerminalModal({ open, containerId, onClose }: ExecTerminalModalProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<any>();
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const dragRef = useRef<HTMLDivElement | null>(null);
   const fitAddonRef = useRef<any>(null);
   const [minimized, setMinimized] = useState(false);
@@ -57,31 +57,28 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
       termRef.current = term;
       fitAddonRef.current = fitAddon;
 
-      const socket = io(TERM_WS, {
-        query: { id: containerId },
-        transports: ['websocket'],
-      });
-      socketRef.current = socket;
+      const ws = new WebSocket(`${TERM_WS}?id=${containerId}`);
+      socketRef.current = ws;
 
-      const sendResize = () => socket.emit('resize', { cols: term.cols, rows: term.rows });
+      const sendResize = () => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
 
-      socket.on('connect', () => {
+      ws.onopen = () => {
         term.focus();
         sendResize();
-      });
-      socket.on('output', (data: string) => {
-        term.write(data);
-      });
-      socket.on('disconnect', () => term.write('\r\n[connection closed]'));
-      socket.on('connect_error', () => term.write('\r\n[connection error]'));
+      };
+      ws.onmessage = (e) => {
+        term.write(e.data);
+      };
+      ws.onclose = () => term.write('\r\n[connection closed]');
+      ws.onerror = () => term.write('\r\n[connection error]');
 
-      term.onData((d: string) => socket.emit('input', d));
+      term.onData((d: string) => ws.send(JSON.stringify({ type: 'input', data: d })));
       term.onResize(sendResize);
     })();
 
     return () => {
       cancelled = true;
-      socketRef.current?.disconnect();
+      socketRef.current?.close();
       termRef.current?.dispose();
       fitAddonRef.current = null;
       if (container) container.innerHTML = '';
@@ -92,10 +89,13 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
     if (!open || minimized) return;
     fitAddonRef.current?.fit();
     if (termRef.current && socketRef.current) {
-      socketRef.current.emit('resize', {
-        cols: termRef.current.cols,
-        rows: termRef.current.rows,
-      });
+      socketRef.current.send(
+        JSON.stringify({
+          type: 'resize',
+          cols: termRef.current.cols,
+          rows: termRef.current.rows,
+        })
+      );
     }
   }, [size, maximized, minimized, open]);
 
