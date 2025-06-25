@@ -16,7 +16,7 @@ const ContainerInspectModal: React.FC<ContainerInspectModalProps> = ({ open, con
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`${API_BASE}/api/containers/${containerId}?action=inspect`)
+      fetch(`${API_BASE}/api/containers/${containerId}/inspect`)
         .then(res => res.json())
         .then(setData)
         .finally(() => setLoading(false));

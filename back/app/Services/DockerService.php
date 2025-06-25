@@ -73,4 +73,25 @@ class DockerService
         }
         return $output;
     }
+
+    public function inspectContainer(string $id): array
+    {
+        return $this->docker->containerInspect($id);
+    }
+
+    public function listBindMounts(string $id): array
+    {
+        $info = $this->inspectContainer($id);
+        return $info['Mounts'] ?? [];
+    }
+
+    public function pauseContainer(string $id)
+    {
+        $this->docker->containerPause($id);
+    }
+
+    public function unpauseContainer(string $id)
+    {
+        $this->docker->containerUnpause($id);
+    }
 }
