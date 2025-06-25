@@ -4,6 +4,7 @@ namespace App\Services;
 use Docker\Docker;
 use Docker\DockerClientFactory;
 use Docker\API\Model\ContainersCreatePostBody;
+use Docker\API\Client as DockerClient;
 
 class DockerService
 {
@@ -59,5 +60,15 @@ class DockerService
             $output .= $chunk;
         }
         return $output;
+    }
+
+    public function containerStats(string $id)
+    {
+        return $this->docker->containerStats($id, ['stream' => false, 'one-shot' => true]);
+    }
+
+    public function containerInspect(string $id)
+    {
+        return $this->docker->containerInspect($id);
     }
 }
