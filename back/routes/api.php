@@ -23,7 +23,7 @@
     Route::prefix("role")->group(function(){
         Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck");
     });
-    Route::prefix("primission")->group(function() {
+    Route::prefix("permission")->group(function() {
         Route::post("/all",[PermissionController::class,"getAllPermission"])->middleware("jwtcheck:get-all-user");
         // Route::
     });

@@ -4,7 +4,7 @@
 
     use App\Http\Controllers\Controller;
     use App\Models\RoleModel;
-use App\Utils\GlobalResponse;
+    use App\Utils\GlobalResponse;
 
     class RoleController extends Controller {
 

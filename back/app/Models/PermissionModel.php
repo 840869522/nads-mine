@@ -3,7 +3,7 @@
 
 
     use App\Utils\GlobalResponse;
-    
+    use Exception;
     use Illuminate\Support\Facades\DB as db;
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Database\QueryException;
@@ -42,6 +42,17 @@
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE,
                     "data" => $e->getMessage()
+                ];
+            }
+        }
+
+        public static function updatePermission(string $id, $data):? array {
+            try {
+                return null;
+            }catch (Exception $e) {
+                return [
+                    "code"=> GlobalResponse::$DATABASE_ERROR_CODE,
+                    "message"=> $e->getMessage()
                 ];
             }
         }
