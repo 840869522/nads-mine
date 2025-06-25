@@ -25,8 +25,12 @@ class ImagesController extends Controller
             }
             $tag = $img['RepoTags'][0] ?? '<none>:latest';
             [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
+            $id = $img['Id'] ?? $img['id'] ?? null;
+            if (!$id && isset($img['Digest'])) {
+                $id = $img['Digest'];
+            }
             $data[] = [
-                'id' => $img['Id'] ?? '',
+                'id' => $id ?: Str::uuid()->toString(),
                 'name' => $name,
                 'type' => 'docker',
                 'version' => $version,
