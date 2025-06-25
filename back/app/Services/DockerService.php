@@ -4,6 +4,7 @@ namespace App\Services;
 use Docker\Docker;
 use Docker\DockerClientFactory;
 use Docker\API\Model\ContainersCreatePostBody;
+use Illuminate\Support\Str;
 
 class DockerService
 {
@@ -28,16 +29,107 @@ class DockerService
         $this->docker = Docker::create($client);
     }
 
+    private function arr(mixed $value): array
+    {
+        if (is_array($value)) return $value;
+        return json_decode(json_encode($value), true) ?: [];
+    }
+
+    private function field(array $arr, array $keys, $default = null)
+    {
+        foreach ($keys as $k) {
+            if (array_key_exists($k, $arr)) {
+                return $arr[$k];
+            }
+            $lk = strtolower($k);
+            foreach ($arr as $ak => $av) {
+                if (strtolower($ak) === $lk) {
+                    return $av;
+                }
+            }
+        }
+        return $default;
+    }
+
     public function listContainers(): array
     {
-        $list = $this->docker->containerList(['all' => true]);
-        return json_decode(json_encode($list), true);
+        $raw = $this->docker->containerList(['all' => true]);
+        return $this->arr($raw);
     }
 
     public function listImages(): array
     {
-        $list = $this->docker->imageList(['all' => true]);
-        return json_decode(json_encode($list), true);
+        $raw = $this->docker->imageList(['all' => true]);
+        return $this->arr($raw);
+    }
+
+    public function listContainersNormalized(): array
+    {
+        $containers = $this->listContainers();
+        $result = [];
+        foreach ($containers as $c) {
+            $c = $this->arr($c);
+            $portsInfo = (array)$this->field($c, ['Ports', 'ports'], []);
+            $ports = [];
+            foreach ($portsInfo as $p) {
+                $p = $this->arr($p);
+                $priv = $this->field($p, ['PrivatePort', 'privatePort']);
+                $pub  = $this->field($p, ['PublicPort', 'publicPort']);
+                if ($priv === null) continue;
+                $ports[] = $pub !== null ? "$priv->$pub" : (string)$priv;
+            }
+            $state = (string)$this->field($c, ['State', 'state'], '');
+            $status = match ($state) {
+                'running' => 'running',
+                'paused' => 'paused',
+                'created', 'exited', 'dead' => 'stopped',
+                default => 'error',
+            };
+            $cid = $this->field($c, ['Id', 'ID', 'id']);
+            $names = (array)$this->field($c, ['Names', 'names'], []);
+            $result[] = [
+                'id' => $cid ? substr($cid, 0, 12) : Str::uuid()->toString(),
+                'name' => ltrim($names[0] ?? ($cid ? substr($cid, 0, 12) : ''), '/'),
+                'type' => 'container',
+                'status' => $status,
+                'ports' => implode(', ', $ports),
+                'imageName' => (string)$this->field($c, ['Image', 'image', 'ImageName', 'imageName'], ''),
+                'cpuUsage' => '-',
+                'memoryUsage' => '-',
+                'diskUsage' => '-',
+                'uptime' => (string)$this->field($c, ['Status', 'status'], ''),
+                'createdAt' => date('c', (int)$this->field($c, ['Created', 'created'], time())),
+            ];
+        }
+        return $result;
+    }
+
+    public function listImagesNormalized(): array
+    {
+        $images = $this->listImages();
+        $result = [];
+        foreach ($images as $img) {
+            $img = $this->arr($img);
+            $tags = (array)$this->field($img, ['RepoTags', 'repoTags', 'RepoTag'], []);
+            $tag = $tags[0] ?? '<none>:latest';
+            [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
+            $labels = (array)$this->field($img, ['Labels', 'labels'], []);
+            $description = $labels['description'] ?? '';
+            $size = (int)$this->field($img, ['Size', 'size'], 0);
+            $created = (int)$this->field($img, ['Created', 'created'], time());
+            $id = $this->field($img, ['Id', 'ID', 'id', 'Digest']);
+            $result[] = [
+                'id' => $id ?: Str::uuid()->toString(),
+                'name' => $name,
+                'type' => 'docker',
+                'version' => $version,
+                'description' => $description,
+                'fileName' => null,
+                'size' => sprintf('%.2f MB', $size / 1024 / 1024),
+                'uploadDate' => date('c', $created),
+            ];
+        }
+        return $result;
     }
 
     public function createContainer(array $options)
