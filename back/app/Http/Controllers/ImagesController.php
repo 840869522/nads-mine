@@ -23,21 +23,32 @@ class ImagesController extends Controller
             if (is_object($img)) {
                 $img = json_decode(json_encode($img), true);
             }
-            $tag = $img['RepoTags'][0] ?? '<none>:latest';
+
+            $get = function(array $arr, array $keys, $default = null) {
+                foreach ($keys as $k) {
+                    if (isset($arr[$k])) return $arr[$k];
+                    $lk = strtolower($k);
+                    foreach ($arr as $ak => $av) {
+                        if (strtolower($ak) === $lk) return $av;
+                    }
+                }
+                return $default;
+            };
+
+            $tags = (array)$get($img, ['RepoTags', 'repoTags', 'RepoTag'], []);
+            $tag = $tags[0] ?? '<none>:latest';
             [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
-            $id = $img['Id'] ?? $img['id'] ?? null;
-            if (!$id && isset($img['Digest'])) {
-                $id = $img['Digest'];
-            }
+            $id = $get($img, ['Id', 'ID', 'id', 'Digest']);
+
             $data[] = [
                 'id' => $id ?: Str::uuid()->toString(),
                 'name' => $name,
                 'type' => 'docker',
                 'version' => $version,
-                'description' => $img['Labels']['description'] ?? '',
+                'description' => (string)$get($img, ['Labels', 'labels'], [])['description'] ?? '',
                 'fileName' => null,
-                'size' => sprintf('%.2f MB', ($img['Size'] ?? 0) / 1024 / 1024),
-                'uploadDate' => date('c', $img['Created'] ?? time()),
+                'size' => sprintf('%.2f MB', ((int)$get($img, ['Size', 'size'], 0)) / 1024 / 1024),
+                'uploadDate' => date('c', (int)$get($img, ['Created', 'created'], time())),
             ];
         }
         return response()->json($data);
