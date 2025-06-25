@@ -11,6 +11,19 @@ class DockerService
 
     public function __construct()
     {
+        $host = getenv('DOCKER_HOST');
+        if (!$host) {
+            $host = DIRECTORY_SEPARATOR === '\\'
+                ? 'tcp://127.0.0.1:2375'
+                : 'unix:///var/run/docker.sock';
+        }
+
+        if (str_starts_with($host, 'unix://') && !in_array('unix', stream_get_transports())) {
+            $host = 'tcp://127.0.0.1:2375';
+        }
+
+        putenv('DOCKER_HOST=' . $host);
+
         $client = DockerClientFactory::createFromEnv();
         $this->docker = Docker::create($client);
     }
