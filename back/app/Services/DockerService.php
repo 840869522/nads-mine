@@ -69,10 +69,9 @@ class DockerService
             }
         }
 
-        $exposedPorts = new \ArrayObject();
+        $exposedPorts = [];
         if (!empty($options['ports']) && is_array($options['ports'])) {
-            $portBindings = new \ArrayObject();
-
+            $portBindings = [];
             foreach ($options['ports'] as $port) {
                 if (empty($port['containerPort'])) {
                     continue;
@@ -84,8 +83,6 @@ class DockerService
                 }
 
                 $protoPort = $cPort . '/tcp';
-                $exposedPorts[$protoPort] = new \stdClass();
-
                 $binding = new PortBinding();
 
                 if (!empty($port['hostPort'])) {
@@ -95,16 +92,16 @@ class DockerService
                     }
                 }
 
-                $binding->setHostIp('0.0.0.0');
-                $portBindings[$protoPort] = [$binding];
+                $portBindings[$protoPort][] = $binding;
+                $exposedPorts[$protoPort] = new ContainerConfigExposedPortsItem();
             }
 
-            if ($portBindings->count() > 0) {
+            if ($portBindings) {
                 $hostConfig->setPortBindings($portBindings);
             }
         }
 
-        if ($exposedPorts->count() > 0) {
+        if ($exposedPorts) {
             $config->setExposedPorts($exposedPorts);
         }
 
