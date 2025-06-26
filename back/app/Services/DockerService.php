@@ -15,7 +15,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 
 class DockerService
 {
-    private $docker;
+    public $docker;
 
     public function __construct()
     {

@@ -68,7 +68,7 @@ const RunningInstancesPage: React.FC = () => {
     } | null>(null);
 
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(5);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState('');
     const [showRunningOnly, setShowRunningOnly] = useState(false);
     const [rowSelectionModel, setRowSelectionModel] = useState<{ type: 'include' | 'exclude'; ids: Set<string> }>({ type: 'include', ids: new Set() });

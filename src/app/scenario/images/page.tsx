@@ -51,7 +51,7 @@ const ImageManagementPage: React.FC = () => {
   const [createModalImage, setCreateModalImage] = useState<string | null>(null);
 
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumns, setShowColumns] = useState({ size: true, uploadDate: true });
   const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);

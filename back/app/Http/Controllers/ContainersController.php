@@ -56,7 +56,12 @@ class ContainersController extends Controller
 
     public function inspect(string $id)
     {
-        return response()->json($this->docker->containerInspect($id));
+        logger()->info("Inspecting container: $id");
+        $res = $this->docker->docker->ContainerInspect($id,[],'response');
+        $raw  = (string) $res->getBody();                 // 纯 JSON 字符串
+        $data = json_decode($raw, true);                  // 可选：转数组// 对象
+        logger()->info('Container info', $data);
+        return response()->json($data);
     }
 
     public function binds(string $id)

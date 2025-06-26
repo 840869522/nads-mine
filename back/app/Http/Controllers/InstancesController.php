@@ -68,10 +68,10 @@ class InstancesController extends Controller
                     $bindings = $detail->getHostConfig()->getPortBindings();
 
                     // 打印 inspect 得到的原始端口数据结构
-                    logger()->debug('INSPECT port bindings', [
+                    /*logger()->debug('INSPECT port bindings', [
                         'container' => $info->getId(),
                         'ports' => $bindings
-                    ]);
+                    ]);*/
 
                     foreach ($bindings ?? [] as $portKey => $bindingList) {
                         foreach ($bindingList ?? [] as $b) {
