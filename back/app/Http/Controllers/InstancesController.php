@@ -16,6 +16,16 @@ class InstancesController extends Controller
         $this->docker = $docker;
     }
 
+    private function mapStatus(?string $state): string
+    {
+        return match ($state) {
+            'running' => 'running',
+            'paused' => 'paused',
+            'created', 'exited', 'dead' => 'stopped',
+            default => 'error',
+        };
+    }
+
     public function index(Request $request)
     {
         $role = $request->query('role', 'student');
@@ -50,7 +60,7 @@ class InstancesController extends Controller
                 'id' => $info->getId(),
                 'name' => ltrim($info->getNames()[0] ?? substr($info->getId(),0,12), '/'),
                 'type' => 'container',
-                'status' => $info->getState() ?? 'error',
+                'status' => $this->mapStatus($info->getState()),
                 'ports' => implode(', ', $ports),
                 'imageName' => $info->getImage(),
                 'cpuUsage' => sprintf('%.1f%%', $cpuPercent),

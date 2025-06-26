@@ -12,7 +12,10 @@ class DockerService
 
     public function __construct()
     {
-        $client = DockerClientFactory::createFromEnv();
+        $socket = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
+            ? 'npipe:////./pipe/docker_engine'
+            : 'unix:///var/run/docker.sock';
+        $client = DockerClientFactory::create(['remote_socket' => $socket]);
         $this->docker = Docker::create($client);
     }
 
@@ -47,6 +50,16 @@ class DockerService
         $this->docker->containerStop($id);
     }
 
+    public function pauseContainer(string $id)
+    {
+        $this->docker->containerPause($id);
+    }
+
+    public function unpauseContainer(string $id)
+    {
+        $this->docker->containerUnpause($id);
+    }
+
     public function removeContainer(string $id)
     {
         $this->docker->containerDelete($id, ['force' => true]);
@@ -70,5 +83,11 @@ class DockerService
     public function containerInspect(string $id)
     {
         return $this->docker->containerInspect($id);
+    }
+
+    public function listBindMounts(string $id): array
+    {
+        $info = $this->containerInspect($id);
+        return $info->getMounts() ?? [];
     }
 }

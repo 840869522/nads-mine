@@ -28,15 +28,24 @@ class ContainersController extends Controller
                 $this->docker->startContainer($id); break;
             case 'stop':
                 $this->docker->stopContainer($id); break;
+            case 'pause':
+                $this->docker->pauseContainer($id); break;
+            case 'unpause':
+                $this->docker->unpauseContainer($id); break;
             case 'delete':
                 $this->docker->removeContainer($id); break;
         }
         return response()->json(['ok'=>true]);
     }
 
-    public function logs(string $id)
+    public function get(Request $request, string $id)
     {
-        $logs = $this->docker->containerLogs($id);
-        return response()->json(['logs'=>$logs]);
+        $action = $request->query('action');
+        return match ($action) {
+            'logs' => response()->json(['logs' => $this->docker->containerLogs($id)]),
+            'inspect' => response()->json($this->docker->containerInspect($id)),
+            'binds' => response()->json($this->docker->listBindMounts($id)),
+            default => response()->json(['error' => 'unknown action'], 400),
+        };
     }
 }
