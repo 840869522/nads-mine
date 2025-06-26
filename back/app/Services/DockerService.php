@@ -11,18 +11,14 @@ class DockerService
 
     public function __construct()
     {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            $host = getenv('DOCKER_HOST') ?: 'tcp://localhost:2375';
-            $config = ClientConfig::forHttp($host);
+        $host = getenv('DOCKER_HOST') ?: '';
+
+        if ($host === '' || str_starts_with($host, 'unix://') || str_starts_with($host, '/')) {
+            $socket = $host ?: '/var/run/docker.sock';
+            $this->client = DockerClient::createUnix(str_replace('unix://', '', $socket));
         } else {
-            $socket = getenv('DOCKER_HOST');
-            if ($socket && str_starts_with($socket, 'tcp://')) {
-                $config = ClientConfig::forHttp($socket);
-            } else {
-                $config = ClientConfig::forUnixSocket($socket ?: '/var/run/docker.sock');
-            }
+            $this->client = DockerClient::createTcp($host);
         }
-        $this->client = DockerClient::create($config);
     }
 
     public function listContainers(): array
@@ -43,30 +39,39 @@ class DockerService
             $config->setName($options['name']);
         }
 
+        if (!empty($options['creatorId'])) {
+            $config->addLabel('creatorId', $options['creatorId']);
+        }
+
         if (!empty($options['cmd']) && is_array($options['cmd'])) {
             $config->setCmd($options['cmd']);
         }
 
         if (!empty($options['env']) && is_array($options['env'])) {
             foreach ($options['env'] as $env) {
-                if (!empty($env['key'])) {
-                    $config->addEnv($env['key'], (string)($env['value'] ?? ''));
+                $key = $env['key'] ?? '';
+                if ($key !== '') {
+                    $config->addEnv($key, (string) ($env['value'] ?? ''));
                 }
             }
         }
 
         if (!empty($options['volumes']) && is_array($options['volumes'])) {
             foreach ($options['volumes'] as $vol) {
-                if (!empty($vol['hostPath']) && !empty($vol['containerPath'])) {
-                    $config->addVolume($vol['hostPath'], $vol['containerPath']);
+                $host = $vol['hostPath'] ?? '';
+                $container = $vol['containerPath'] ?? '';
+                if ($host !== '' && $container !== '') {
+                    $config->addVolume($host, $container);
                 }
             }
         }
 
         if (!empty($options['ports']) && is_array($options['ports'])) {
             foreach ($options['ports'] as $p) {
-                if (!empty($p['hostPort']) && !empty($p['containerPort'])) {
-                    $config->addPort((int)$p['hostPort'], (int)$p['containerPort']);
+                $h = $p['hostPort'] ?? null;
+                $c = $p['containerPort'] ?? null;
+                if ($h !== null && $c !== null) {
+                    $config->addPort((int) $h, (int) $c);
                 }
             }
         }
@@ -108,7 +113,11 @@ class DockerService
 
     public function containerLogs(string $id, int $tail = 200): string
     {
-        $logs = $this->client->container()->logs($id, ['stdout' => true, 'stderr' => true, 'tail' => (string)$tail]);
+        $logs = $this->client->container()->logs($id, [
+            'stdout' => true,
+            'stderr' => true,
+            'tail' => (string) $tail,
+        ]);
         return implode("\n", $logs);
     }
 

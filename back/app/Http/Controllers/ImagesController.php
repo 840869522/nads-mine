@@ -16,6 +16,9 @@ class ImagesController extends Controller
         $this->docker = $docker;
     }
 
+    /**
+     * List Docker images
+     */
     public function index(Request $request)
     {
         $role = $request->query('role', 'student');
@@ -40,9 +43,13 @@ class ImagesController extends Controller
                 'uploadDate' => isset($img['Created']) ? date('c', $img['Created']) : date('c'),
             ];
         }
+
         return response()->json($result);
     }
 
+    /**
+     * Create a new image record
+     */
     public function store(Request $request)
     {
         $data = $request->all();
@@ -51,6 +58,9 @@ class ImagesController extends Controller
         return response()->json(['ok' => true, 'id' => $data['id']]);
     }
 
+    /**
+     * Update image metadata
+     */
     public function update(Request $request)
     {
         $data = $request->all();
@@ -60,12 +70,16 @@ class ImagesController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Delete an image record
+     */
     public function destroy(Request $request)
     {
         $id = $request->query('id');
         if ($id) {
             Image::where('id', $id)->delete();
         }
+
         return response()->json(['ok' => true]);
     }
 }

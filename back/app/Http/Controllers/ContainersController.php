@@ -7,40 +7,56 @@ use App\Services\DockerService;
 
 class ContainersController extends Controller
 {
-    private $docker;
+    private DockerService $docker;
 
     public function __construct(DockerService $docker)
     {
         $this->docker = $docker;
     }
 
+    /**
+     * Create a new Docker container
+     */
     public function store(Request $request)
     {
         $id = $this->docker->createContainer($request->all());
         return response()->json(['id' => $id]);
     }
 
+    /**
+     * Execute an action on a container (start/stop/delete)
+     */
     public function action(Request $request, string $id)
     {
         $action = $request->query('action');
         switch ($action) {
             case 'start':
-                $this->docker->startContainer($id); break;
+                $this->docker->startContainer($id);
+                break;
             case 'stop':
-                $this->docker->stopContainer($id); break;
+                $this->docker->stopContainer($id);
+                break;
             case 'pause':
-                $this->docker->pauseContainer($id); break;
+                $this->docker->pauseContainer($id);
+                break;
             case 'unpause':
-                $this->docker->unpauseContainer($id); break;
+                $this->docker->unpauseContainer($id);
+                break;
             case 'delete':
-                $this->docker->removeContainer($id); break;
+                $this->docker->removeContainer($id);
+                break;
         }
-        return response()->json(['ok'=>true]);
+
+        return response()->json(['ok' => true]);
     }
 
+    /**
+     * Retrieve information about a container
+     */
     public function get(Request $request, string $id)
     {
         $action = $request->query('action');
+
         return match ($action) {
             'logs' => response()->json(['logs' => $this->docker->containerLogs($id)]),
             'inspect' => response()->json($this->docker->containerInspect($id)),
