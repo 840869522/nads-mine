@@ -129,7 +129,12 @@ class DockerService
 
     public function containerLogs(string $id, int $tail = 200): string
     {
-        $stream = $this->docker->containerLogs($id, ['stdout' => true, 'stderr' => true, 'tail' => $tail]);
+        // docker-php expects the tail option as string
+        $stream = $this->docker->containerLogs($id, [
+            'stdout' => true,
+            'stderr' => true,
+            'tail'   => (string) $tail,
+        ]);
         $output = '';
         foreach ($stream->getBody()->getIterator() as $chunk) {
             $output .= $chunk;
