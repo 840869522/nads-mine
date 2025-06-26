@@ -6,6 +6,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.0",
+        "beluga-php/docker-php": "^1.45",
         "cboden/ratchet": "^0.4.4",
         "firebase/php-jwt": "^6.11",
         "fruitcake/laravel-cors": "^2.0.5",
@@ -13,8 +14,7 @@
         "laravel/framework": "^9.0",
         "laravel/sanctum": "^2.14",
         "laravel/tinker": "^2.7",
-        "maxlcoder/laravel-dm8": "^1.1",
-        "sangezar/docker-php-client": "^1.0"
+        "maxlcoder/laravel-dm8": "^1.1"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

@@ -51,7 +51,7 @@ class ContainersController extends Controller
 
     public function inspect(string $id)
     {
-        return response()->json($this->docker->containerInspect($id));
+        return response()->json($this->docker->inspectContainer($id));
     }
 
     public function binds(string $id)

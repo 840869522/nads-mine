@@ -34,44 +34,42 @@ class InstancesController extends Controller
         $containers = $this->docker->listContainers();
         $result = [];
         foreach ($containers as $info) {
-            $labels = $info['Labels'] ?? [];
+            $labels = $info->getLabels() ?? [];
             if ($role !== 'admin' && ($labels['creatorId'] ?? null) !== $userId) {
                 continue;
             }
             try {
-                $stats = $this->docker->containerStats($info['Id']);
-                $cpuDelta = ($stats['cpu_stats']['cpu_usage']['total_usage'] ?? 0) - ($stats['precpu_stats']['cpu_usage']['total_usage'] ?? 0);
-                $sysDelta = ($stats['cpu_stats']['system_cpu_usage'] ?? 0) - ($stats['precpu_stats']['system_cpu_usage'] ?? 0);
-                $cpus = $stats['cpu_stats']['online_cpus'] ?? (is_array($stats['cpu_stats']['cpu_usage']['percpu_usage'] ?? null) ? count($stats['cpu_stats']['cpu_usage']['percpu_usage']) : 1);
+                $stats = $this->docker->containerStats($info->getId());
+                $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
+                $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
+                $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
                 $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
-                $memUsage = $stats['memory_stats']['usage'] ?? 0;
-                $memLimit = $stats['memory_stats']['limit'] ?? 0;
+                $memUsage = $stats->memory_stats->usage ?? 0;
+                $memLimit = $stats->memory_stats->limit ?? 0;
             } catch (\Exception $e) {
                 $cpuPercent = 0;
                 $memUsage = 0;
                 $memLimit = 0;
             }
             $ports = [];
-            foreach ($info['Ports'] ?? [] as $p) {
-                $private = $p['PrivatePort'] ?? null;
-                $public = $p['PublicPort'] ?? null;
-                if ($private !== null) {
-                    $ports[] = $public ? "$private->$public" : (string)$private;
-                }
+            foreach ($info->getPorts() ?? [] as $p) {
+                $private = $p->getPrivatePort();
+                $public = $p->getPublicPort();
+                $ports[] = $public ? "$private->$public" : "$private";
             }
             $result[] = [
-                'id' => $info['Id'],
-                'name' => ltrim($info['Names'][0] ?? substr($info['Id'],0,12), '/'),
+                'id' => $info->getId(),
+                'name' => ltrim($info->getNames()[0] ?? substr($info->getId(),0,12), '/'),
                 'type' => 'container',
-                'status' => $this->mapStatus($info['State'] ?? null),
+                'status' => $this->mapStatus($info->getState()),
                 'ports' => implode(', ', $ports),
-                'imageName' => $info['Image'] ?? '',
+                'imageName' => $info->getImage(),
                 'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
                 'memoryUsage' => sprintf('%.1fMB/%.1fMB', $memUsage/1024/1024, $memLimit/1024/1024),
                 'diskUsage' => '-',
-                'uptime' => $info['Status'] ?? '',
+                'uptime' => $info->getStatus() ?? '',
                 'nodeId' => null,
-                'createdAt' => isset($info['Created']) ? date('c', $info['Created']) : date('c'),
+                'createdAt' => date('c', $info->getCreated() ?? time()),
             ];
         }
         return response()->json($result);

@@ -23,21 +23,21 @@ class ImagesController extends Controller
         $images = $this->docker->listImages();
         $result = [];
         foreach ($images as $img) {
-            $labels = $img['Labels'] ?? [];
+            $labels = $img->getLabels() ?? [];
             if ($role !== 'admin' && ($labels['creatorId'] ?? null) !== $userId) {
                 continue;
             }
-            $tag = $img['RepoTags'][0] ?? '<none>';
+            $tag = $img->getRepoTags()[0] ?? '<none>';
             [$name, $version] = array_pad(explode(':', $tag, 2), 2, 'latest');
             $result[] = [
-                'id' => $img['Id'] ?? '',
+                'id' => $img->getId(),
                 'name' => $name,
                 'type' => 'docker',
                 'version' => $version,
                 'description' => $labels['description'] ?? '',
                 'fileName' => null,
-                'size' => sprintf('%.2f MB', ($img['Size'] ?? 0) / 1024 / 1024),
-                'uploadDate' => isset($img['Created']) ? date('c', $img['Created']) : date('c'),
+                'size' => sprintf('%.2f MB', ($img->getSize() ?? 0) / 1024 / 1024),
+                'uploadDate' => date('c', $img->getCreated() ?? time()),
             ];
         }
         return response()->json($result);
