@@ -5,46 +5,50 @@
     use Illuminate\Database\QueryException;
     use Illuminate\Support\Facades\DB as db;
     use App\Utils\GlobalResponse;
+    use Exception;
+    use Illuminate\Support\Facades\Log;
 
     class UserModel extends Model{
 
         protected  $table = "platform_user";
 
-        public static function getAllUser():array {
+        public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             try {
-                $user = db::select('select * from user');
+                $offset = ($page - 1 ) * $pagesize;
+                $sql = "SELECT user_id,user_name,email FROM `c_USERS`  LIMIT ? OFFSET ?";
+                $user = db::select($sql, [$pagesize, $offset]);
                 return [
                     "data"=>$user,
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch(QueryException $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
-                    "data"=> $e->getMessage(),
-                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
         }
 
-        public static function getUserByName(string $name) : ?array {
+        public static function getUserByName(string $name) : array {
+            $sql = "SELECT * FROM `c_USERS` WHERE user_name = ?";
             try {
-                $res = db::selectOne("select * from user where username = ?",[$name]);
-                // $sql = 
+                $res = db::selectOne($sql,[$name]);
                 return [
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data" => $res
                 ];
             }catch (QueryException $e) {
+                Log::info('[DATAABSE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
-                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
-                    "data" => $e->getMessage()
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
         }
 
-        public static function getUserPrimissions (string $id) : ?array {
+        public static function getUserPrimissions (string $id) : array {
             try {
                 db::beginTransaction();
-                $sql = "SELECT p.name FROM user AS u LEFT JOIN role_has_permissions AS rp ON rp.role_id = u.role_id LEFT JOIN permissions AS p ON p.id = rp.permission_id WHERE u.id = ?";
+                $sql = "SELECT DISTINCT  cper.name FROM `c_USERS_ROLES` AS cur JOIN `c_ROLES_PERMISSIONS` AS crp  ON cur.role_id = crp.role_id JOIN `c_PERMISSIONS` AS cper ON crp.permission_id = cper.id WHERE cur.user_name = ?" ;
                 $res = db::select($sql,[$id]);
                 db::commit();
                 return [
@@ -52,52 +56,106 @@
                     "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch (QueryException $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
-                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
-                    "data" => $e->getMessage()
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
         }
 
-        public static function getUserById() :?array {
-            return null;
-        }
-
-
-        public static function updateUserById(string $id, ?array $data) :?array {
-            return null;
-        }
-
-        public static function deleteLogicUserById(string $id) :?array{
-            if (!$id) {
+        public static function getUserById(string $id) :array {
+            $sql = "SELECT * FROM `c_USERS` WHERE user_id = ?";
+            try {
+                $res = db::selectOne($sql,[$id]);
                 return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                    "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data" => $res,
+                ];
+            }catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=> GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
-            return null;
         }
 
-        public static function deleteUserById (string $id) :?array {
-            if (!$id)
-                return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
-                ];
-            db::beginTransaction();
-            $res = db::delete("delete * from platoform_user where id = ?",[$id]);
-            if ($res) {
-                db::commit();
-                return [
-                    "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE,
-                ];
-            }else{
+        public static function insertNewUser(array $data) :array {
+            try {
+                $sql = "INSERT INTO `c_USERS`(usernmae, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
+                db::beginTransaction();
+                $res = db::insert($sql,[]);
+                if ($res){
+                    db::commit();
+                    return [
+                        'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    ];
+                }
                 db::rollBack();
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
+            }catch(Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
+                ];
             }
         }
 
 
+        public static function updateUserById(string $id, array $data) :array {
+            $sql = "UPDATE `c_USERS` SET email = ?,password = ?, update_at = NOW() WHERE user_id = ?";
+            try {
+                db::beginTransaction();
+                $res = db::update($sql,[$data['email'],$data['password'],$id]);
+                if ($res){
+                    db::commit();
+                    return [
+                        'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    ];
+                }
+                db::rollBack();
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }catch(Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
+        }
+
+
+        public static function deleteUserById (string $id) :array {
+            $sql = "DELETE * FROM `c_USERS` WHERE id = ?";
+            $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
+            try {
+                if (!$id)
+                    return [
+                        "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
+                    ];
+                db::beginTransaction();
+                $res = db::delete($sql,[$id]);
+                $res_user_role = db::delete($sql_user_role,[$id]);
+                if ($res && $res_user_role) {
+                    db::commit();
+                    return [
+                        "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    ];
+                }else{
+                    db::rollBack();
+                    return [
+                        "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                    ];
+                }
+            }catch(Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
+        }
 
     }
 

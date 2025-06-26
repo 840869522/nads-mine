@@ -11,13 +11,21 @@
 
     class UserController extends Controller{
 
-        public function getAllUser() {
-            $res = UserModel::getAllUser();
+        public function getAllUser(Request $req) {
+            $reqData =  $req->json()->all();
+            try {
+                $page = $reqData["page"];
+                $pagesize = $reqData["pagesize"];
+            }catch (Exception $_) {
+                $page = 1;
+                $pagesize = 10;
+            }
+            $res = UserModel::getAllUser($page,$pagesize);
             if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "mes" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" => $res['data'] 
+                    "data" => $res['data']
                 ]);
             else{
                 return response()->json([
@@ -39,7 +47,7 @@
                     "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            $modelRes = UserModel::getUserByName($reqData['username']);
+            $modelRes = UserModel::getUserByName($username);
             if ($modelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return [
                     "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
@@ -47,16 +55,16 @@
                 ];
             }
             $user = $modelRes["data"];
-            if ($user->password != $reqData["password"]){
+            if ($user->password != $pwd){
                 return response()->json([
                     "code"=>GlobalResponse::$USER_LOGIN_ERROR_CODE,
                     "message"=>GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            $primissions = UserModel::getUserPrimissions($user->id);
+            $primissions = UserModel::getUserPrimissions($user->user_name);
             $jwtRes = JWTControll::encodeJWT([
-                "id" => $user->id,
-                "role" => $user->role_id,
+                "id" => $user->user_id,
+                // "role" => $user->role_id,
                 "permission" => array_map(function($item){return $item->name;},$primissions["data"])
             ]);
             if ($jwtRes["err"] != null) {
@@ -70,7 +78,7 @@
                 "message"=>GlobalResponse::$USER_LOGIN_SUCCESS_MES,
                 "data"=>[
                     "token"=>$jwtRes['token'],
-                    "id"=> $user->id
+                    "id"=> $user->user_id
                 ]
             ]);
         }
