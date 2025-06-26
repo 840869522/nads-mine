@@ -35,7 +35,7 @@ class InstancesController extends Controller
         $result = [];
         foreach ($containers as $info) {
             $labels = $info['Labels'] ?? [];
-            if ($role !== 'admin' && ($labels['creatorId'] ?? null) !== $userId) {
+            if ($role !== 'admin' && isset($labels['creatorId']) && $labels['creatorId'] !== $userId) {
                 continue;
             }
 
