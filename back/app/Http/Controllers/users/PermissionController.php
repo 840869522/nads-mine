@@ -2,7 +2,7 @@
     namespace App\Http\Controllers\Users;
 
     use App\Http\Controllers\Controller;
-    use App\Models\PermissionModel;
+    use App\Models\Users\PermissionModel;
     use App\Utils\GlobalResponse;
     use Exception;
     use Illuminate\Http\Request;

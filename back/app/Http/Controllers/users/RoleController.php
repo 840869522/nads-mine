@@ -3,7 +3,7 @@
     namespace App\Http\Controllers\Users;
 
     use App\Http\Controllers\Controller;
-    use App\Models\RoleModel;
+    use App\Models\Users\RoleModel;
     use App\Utils\GlobalResponse;
     use Illuminate\Http\Request;
     use Exception;

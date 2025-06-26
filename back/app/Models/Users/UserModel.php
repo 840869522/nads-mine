@@ -1,6 +1,6 @@
 <?php
 
-    namespace App\Models;
+    namespace App\Models\Users;
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Database\QueryException;
     use Illuminate\Support\Facades\DB as db;

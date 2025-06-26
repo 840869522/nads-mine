@@ -4,7 +4,7 @@
 
     use App\Http\Controllers\Controller;
     use Illuminate\Http\Request;
-    use App\Models\UserModel;
+    use App\Models\Users\UserModel;
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;

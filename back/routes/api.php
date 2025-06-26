@@ -1,12 +1,11 @@
 <?php
 
-    use Illuminate\Http\Request;
+
     use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
-use App\Models\PermissionModel;
 
     /*
     |--------------------------------------------------------------------------
