@@ -38,10 +38,15 @@ class ContainersController extends Controller
         return response()->json(['ok'=>true]);
     }
 
-    public function logs(string $id)
+    public function get(Request $request, string $id)
     {
-        $logs = $this->docker->containerLogs($id);
-        return response()->json(['logs'=>$logs]);
+        $action = $request->query('action');
+        return match ($action) {
+            'logs' => response()->json(['logs' => $this->docker->containerLogs($id)]),
+            'inspect' => response()->json($this->docker->containerInspect($id)),
+            'binds' => response()->json($this->docker->listBindMounts($id)),
+            default => response()->json(['error' => 'unknown action'], 400),
+        };
     }
 
     public function inspect(string $id)

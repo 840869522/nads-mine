@@ -53,7 +53,5 @@ Route::prefix('instances')->group(function () {
 Route::prefix('containers')->group(function () {
     Route::post('/', [\App\Http\Controllers\ContainersController::class, 'store']);
     Route::post('/{id}', [\App\Http\Controllers\ContainersController::class, 'action']);
-    Route::get('/{id}/logs', [\App\Http\Controllers\ContainersController::class, 'logs']);
-    Route::get('/{id}/inspect', [\App\Http\Controllers\ContainersController::class, 'inspect']);
-    Route::get('/{id}/binds', [\App\Http\Controllers\ContainersController::class, 'binds']);
+    Route::get('/{id}', [\App\Http\Controllers\ContainersController::class, 'get']);
 });
