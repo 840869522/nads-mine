@@ -96,7 +96,12 @@ class DockerService
             $config->setHostConfig($hostConfig);
         }
 
-        $container = $this->docker->containerCreate($config, ['name' => $options['name'] ?? null]);
+        $query = [];
+        if (!empty($options['name'])) {
+            $query['name'] = (string) $options['name'];
+        }
+
+        $container = $this->docker->containerCreate($config, $query);
         $this->docker->containerStart($container->getId());
 
         return $container->getId();
