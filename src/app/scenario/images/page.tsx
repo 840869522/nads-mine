@@ -35,7 +35,7 @@ import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
-
+import dayjs from 'dayjs';
 const API_BASE = "http://localhost:8000";
 
 const ImageManagementPage: React.FC = () => {
@@ -132,24 +132,6 @@ const ImageManagementPage: React.FC = () => {
     setSearchTerm(event.target.value.toLowerCase());
     setPage(0);
   };
-  
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const attempt = (str: string) => {
-      const d = new Date(str);
-      return isNaN(d.getTime()) ? null : d;
-    };
-    const date =
-      attempt(dateString) ||
-      attempt(dateString.replace(/([+-]\d{2}):(\d{2})$/, '$1$2'));
-    return date
-      ? date.toLocaleDateString('zh-CN', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-      : dateString;
-  };
 
   const columns: GridColDef[] = React.useMemo(() => [
     { field: 'name', headerName: '名称', flex: 1 },
@@ -157,7 +139,12 @@ const ImageManagementPage: React.FC = () => {
     { field: 'version', headerName: '版本', flex: 1 },
     { field: 'description', headerName: '描述', flex: 1 },
     { field: 'size', headerName: '大小', flex: 1, hide: !showColumns.size },
-    { field: 'uploadDate', headerName: '上传日期', flex: 1, hide: !showColumns.uploadDate, valueFormatter: ({ value }) => formatDate(value as string) },
+    { field: 'uploadDate', headerName: '上传日期', flex: 1, hide: !showColumns.uploadDate,
+      valueFormatter: (params) => {
+        console.log('value =>', params);     // 会是 undefined 吗？
+        return dayjs(params).format('YYYY年M月D日');
+      }
+    },
     {
       field: 'actions',
       headerName: '操作',
