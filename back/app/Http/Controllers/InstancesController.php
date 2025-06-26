@@ -38,13 +38,12 @@ class InstancesController extends Controller
             if ($role !== 'admin' && ($labels['creatorId'] ?? null) !== $userId) {
                 continue;
             }
-
             try {
                 $stats = $this->docker->containerStats($info['Id']);
-                $cpuTotal = ($stats['cpu_stats']['cpu_usage']['total_usage'] ?? 0) - ($stats['precpu_stats']['cpu_usage']['total_usage'] ?? 0);
-                $sysTotal = ($stats['cpu_stats']['system_cpu_usage'] ?? 0) - ($stats['precpu_stats']['system_cpu_usage'] ?? 0);
+                $cpuDelta = ($stats['cpu_stats']['cpu_usage']['total_usage'] ?? 0) - ($stats['precpu_stats']['cpu_usage']['total_usage'] ?? 0);
+                $sysDelta = ($stats['cpu_stats']['system_cpu_usage'] ?? 0) - ($stats['precpu_stats']['system_cpu_usage'] ?? 0);
                 $cpus = $stats['cpu_stats']['online_cpus'] ?? (is_array($stats['cpu_stats']['cpu_usage']['percpu_usage'] ?? null) ? count($stats['cpu_stats']['cpu_usage']['percpu_usage']) : 1);
-                $cpuPercent = $sysTotal > 0 ? ($cpuTotal / $sysTotal) * $cpus * 100 : 0;
+                $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
                 $memUsage = $stats['memory_stats']['usage'] ?? 0;
                 $memLimit = $stats['memory_stats']['limit'] ?? 0;
             } catch (\Exception $e) {
@@ -57,7 +56,7 @@ class InstancesController extends Controller
                 $private = $p['PrivatePort'] ?? null;
                 $public = $p['PublicPort'] ?? null;
                 if ($private !== null) {
-                    $ports[] = $public ? "$private->$public" : (string) $private;
+                    $ports[] = $public ? "$private->$public" : (string)$private;
                 }
             }
             $result[] = [
