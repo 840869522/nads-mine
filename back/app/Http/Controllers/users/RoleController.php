@@ -10,6 +10,7 @@
 
     class RoleController extends Controller {
 
+        
         public function getAllRole(Request $req) {
             $reqData = $req->json()->all();
             try {
