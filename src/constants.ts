@@ -205,6 +205,7 @@ export const STATUS_TRANSLATIONS: Record<DroneNode['status'] | DockerContainer['
   'under-attack': "受攻击",
   'running': "运行中",
   'stopped': "已停止",
+  'paused': "已暂停",
   'error': "错误",
   'starting': "启动中",
   'stopping': "停止中",
