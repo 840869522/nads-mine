@@ -22,6 +22,7 @@ class InstancesController extends Controller
             'running' => 'running',
             'paused' => 'paused',
             'created', 'exited', 'dead' => 'stopped',
+            'restarting' => 'starting',
             default => 'error',
         };
     }
