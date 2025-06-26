@@ -49,9 +49,14 @@ class ContainersController extends Controller
         };
     }
 
+    public function logs(string $id)
+    {
+        return response()->json(['logs' => $this->docker->containerLogs($id)]);
+    }
+
     public function inspect(string $id)
     {
-        return response()->json($this->docker->inspectContainer($id));
+        return response()->json($this->docker->containerInspect($id));
     }
 
     public function binds(string $id)

@@ -3,8 +3,8 @@ namespace App\WebSockets;
 
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
-use Symfony\Component\Process\Process;
 use React\EventLoop\Loop;
+use App\Services\DockerService;
 
 class TerminalServer implements MessageComponentInterface
 {
@@ -18,47 +18,36 @@ class TerminalServer implements MessageComponentInterface
             $conn->close();
             return;
         }
-        $cmd = ['docker', 'exec', '-it', $containerId, '/bin/sh'];
-        $process = new Process($cmd);
-        if (DIRECTORY_SEPARATOR !== '\\') {
-            $process->setPty(true);
-        }
-        $process->start();
-        $timer = Loop::addPeriodicTimer(0.1, function() use ($conn, $process) {
-            if (!$process->isRunning()) {
+        $docker = new DockerService();
+        $stream = $docker->attachTerminal($containerId);
+
+        $timer = Loop::addPeriodicTimer(0.1, function() use ($conn, $stream) {
+            $out = $stream->read(0, 200000);
+            if ($out === null) {
+                $conn->close();
                 return;
             }
-            $out = $process->getIncrementalOutput() . $process->getIncrementalErrorOutput();
-            if ($out !== '') {
+            if ($out !== false && $out !== '') {
                 $conn->send($out);
             }
         });
-        $this->clients[$conn->resourceId] = [$conn, $process, $timer];
+
+        $this->clients[$conn->resourceId] = [$conn, $stream, $timer];
     }
 
     public function onMessage(ConnectionInterface $from, $msg)
     {
-        [$conn, $process, $timer] = $this->clients[$from->resourceId];
-        if (!$process->isRunning()) {
-            return;
-        }
+        [$conn, $stream, $timer] = $this->clients[$from->resourceId];
         $data = json_decode($msg, true);
         if (isset($data['type']) && $data['type'] === 'input') {
-            $process->getInput()->write($data['data']);
-        } elseif (isset($data['type']) && $data['type'] === 'resize') {
-            // ignore for now
-        } else {
-            $process->getInput()->write($msg);
+            $stream->write($data['data']);
         }
     }
 
     public function onClose(ConnectionInterface $conn)
     {
-        [$c, $process, $timer] = $this->clients[$conn->resourceId];
+        [$c, $stream, $timer] = $this->clients[$conn->resourceId];
         Loop::cancelTimer($timer);
-        if ($process->isRunning()) {
-            $process->stop(0);
-        }
         unset($this->clients[$conn->resourceId]);
     }
 

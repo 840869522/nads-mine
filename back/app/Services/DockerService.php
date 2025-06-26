@@ -47,6 +47,11 @@ class DockerService
         $cfg = new ContainersCreatePostBody();
         $cfg->setImage($options['image']);
         $cfg->setTty(true);
+        // allow attaching a terminal later
+        $cfg->setOpenStdin(true);
+        $cfg->setAttachStdin(true);
+        $cfg->setAttachStdout(true);
+        $cfg->setAttachStderr(true);
 
         // --- ENV & CMD ---
         if (!empty($options['cmd'])) {
@@ -146,5 +151,15 @@ class DockerService
     {
         $info = $this->containerInspect($id);
         return $info->getMounts() ?? [];
+    }
+
+    public function attachTerminal(string $id)
+    {
+        return $this->docker->containerAttachWebsocket($id, [
+            'stream' => true,
+            'stdin'  => true,
+            'stdout' => true,
+            'stderr' => true,
+        ]);
     }
 }
