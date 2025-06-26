@@ -153,7 +153,13 @@ const ImageManagementPage: React.FC = () => {
       renderCell: (params) => {
         const image = params.row as ManagedImage;
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',   // 水平居中
+            alignItems: 'center',       // 垂直居中
+            width: '90%',
+            height: '100%',             // 撑满单元格
+          }}>
             <Tooltip title="启动">
               <IconButton onClick={() => handleStart(image)} size="small">
                 <PlayArrowIcon fontSize="small" color="success" />
