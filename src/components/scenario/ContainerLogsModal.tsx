@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress } from '@mui/material';
+import React, { useEffect, useRef, useState } from 'react';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box } from '@mui/material';
 
-const API_BASE = "http://localhost:8000";
+const LOG_WS = 'ws://localhost:8080';
 
 interface ContainerLogsModalProps {
   open: boolean;
@@ -11,31 +11,24 @@ interface ContainerLogsModalProps {
 
 const ContainerLogsModal: React.FC<ContainerLogsModalProps> = ({ open, containerId, onClose }) => {
   const [logs, setLogs] = useState('');
-  const [loading, setLoading] = useState(false);
+  const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (open && containerId) {
-      setLoading(true);
-      fetch(`${API_BASE}/api/containers/${containerId}/logs`)
-        .then(res => res.json())
-        .then(data => setLogs(data.logs || ''))
-        .finally(() => setLoading(false));
-    }
+    if (!open || !containerId) return;
+    setLogs('');
+    const ws = new WebSocket(`${LOG_WS}?mode=logs&id=${containerId}`);
+    socketRef.current = ws;
+    ws.onmessage = e => setLogs(l => l + e.data);
+    return () => ws.close();
   }, [open, containerId]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>容器日志</DialogTitle>
       <DialogContent dividers>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Box component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-            {logs || '无日志'}
-          </Box>
-        )}
+        <Box component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+          {logs || '无日志'}
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="outlined">关闭</Button>

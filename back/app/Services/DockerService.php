@@ -167,4 +167,14 @@ class DockerService
             'stderr' => true,
         ]);
     }
+
+    public function attachLogs(string $id)
+    {
+        return $this->docker->containerAttachWebsocket($id, [
+            'stream' => true,
+            'stdout' => true,
+            'stderr' => true,
+            'logs'   => true,
+        ]);
+    }
 }

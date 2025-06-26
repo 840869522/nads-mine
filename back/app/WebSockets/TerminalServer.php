@@ -18,8 +18,11 @@ class TerminalServer implements MessageComponentInterface
             $conn->close();
             return;
         }
+        $mode = $query['mode'] ?? 'terminal';
         $docker = new DockerService();
-        $stream = $docker->attachTerminal($containerId);
+        $stream = $mode === 'logs'
+            ? $docker->attachLogs($containerId)
+            : $docker->attachTerminal($containerId);
 
         $timer = Loop::addPeriodicTimer(0.1, function() use ($conn, $stream) {
             $out = $stream->read(0, 200000);
@@ -32,21 +35,23 @@ class TerminalServer implements MessageComponentInterface
             }
         });
 
-        $this->clients[$conn->resourceId] = [$conn, $stream, $timer];
+        $this->clients[$conn->resourceId] = [$conn, $stream, $timer, $mode];
     }
 
     public function onMessage(ConnectionInterface $from, $msg)
     {
-        [$conn, $stream, $timer] = $this->clients[$from->resourceId];
-        $data = json_decode($msg, true);
-        if (isset($data['type']) && $data['type'] === 'input') {
-            $stream->write($data['data']);
+        [$conn, $stream, $timer, $mode] = $this->clients[$from->resourceId];
+        if ($mode === 'terminal') {
+            $data = json_decode($msg, true);
+            if (isset($data['type']) && $data['type'] === 'input') {
+                $stream->write($data['data']);
+            }
         }
     }
 
     public function onClose(ConnectionInterface $conn)
     {
-        [$c, $stream, $timer] = $this->clients[$conn->resourceId];
+        [$c, $stream, $timer, $mode] = $this->clients[$conn->resourceId];
         Loop::cancelTimer($timer);
         unset($this->clients[$conn->resourceId]);
     }
