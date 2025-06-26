@@ -1,21 +1,20 @@
 <?php
 namespace App\WebSockets;
 
-use Ratchet\MessageComponentInterface;
-use Ratchet\ConnectionInterface;
-use React\EventLoop\Loop;
+use Workerman\Connection\TcpConnection;
+use Workerman\Lib\Timer;
 use App\Services\DockerService;
 
-class TerminalServer implements MessageComponentInterface
+class TerminalServer
 {
-    protected $clients = [];
+    protected array $clients = [];
 
-    public function onOpen(ConnectionInterface $conn)
+    public function onWebSocketConnect(TcpConnection $connection): void
     {
-        parse_str($conn->httpRequest->getUri()->getQuery(), $query);
+        $query = $_GET;
         $containerId = $query['id'] ?? null;
         if (!$containerId) {
-            $conn->close();
+            $connection->close();
             return;
         }
         $mode = $query['mode'] ?? 'terminal';
@@ -23,25 +22,23 @@ class TerminalServer implements MessageComponentInterface
         $stream = $mode === 'logs'
             ? $docker->attachLogs($containerId)
             : $docker->attachTerminal($containerId);
-
-        $timer = Loop::addPeriodicTimer(0.1, function() use ($conn, $stream) {
+        $timer = Timer::add(0.1, function() use ($connection, $stream) {
             $out = $stream->read(0, 200000);
             if ($out === null) {
-                $conn->close();
+                $connection->close();
                 return;
             }
             if ($out !== false && $out !== '') {
-                $conn->send($out);
+                $connection->send($out);
             }
         });
-
-        $this->clients[$conn->resourceId] = [$conn, $stream, $timer, $mode];
+        $this->clients[$connection->id] = [$stream, $timer, $mode];
     }
 
-    public function onMessage(ConnectionInterface $from, $msg)
+    public function onMessage(TcpConnection $connection, string $msg): void
     {
-        [$conn, $stream, $timer, $mode] = $this->clients[$from->resourceId];
-        if ($mode === 'terminal') {
+        [$stream, $_timer, $mode] = $this->clients[$connection->id] ?? [null, null, null];
+        if ($mode === 'terminal' && $stream) {
             $data = json_decode($msg, true);
             if (isset($data['type']) && $data['type'] === 'input') {
                 $stream->write($data['data']);
@@ -49,15 +46,17 @@ class TerminalServer implements MessageComponentInterface
         }
     }
 
-    public function onClose(ConnectionInterface $conn)
+    public function onClose(TcpConnection $connection): void
     {
-        [$c, $stream, $timer, $mode] = $this->clients[$conn->resourceId];
-        Loop::cancelTimer($timer);
-        unset($this->clients[$conn->resourceId]);
+        [$stream, $timer] = $this->clients[$connection->id] ?? [null, null];
+        if ($timer) {
+            Timer::del($timer);
+        }
+        unset($this->clients[$connection->id]);
     }
 
-    public function onError(ConnectionInterface $conn, \Exception $e)
+    public function onError(TcpConnection $connection, \Exception $e): void
     {
-        $conn->close();
+        $connection->close();
     }
 }

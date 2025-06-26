@@ -1,18 +1,16 @@
 <?php
 require __DIR__.'/vendor/autoload.php';
 
-use Ratchet\Server\IoServer;
-use Ratchet\Http\HttpServer;
-use Ratchet\WebSocket\WsServer;
+use Workerman\Worker;
 use App\WebSockets\TerminalServer;
 
-$server = IoServer::factory(
-    new HttpServer(
-        new WsServer(
-            new TerminalServer()
-        )
-    ),
-    8080
-);
+$terminal = new TerminalServer();
 
-$server->run();
+$worker = new Worker('websocket://0.0.0.0:8080');
+
+$worker->onWebSocketConnect = [$terminal, 'onWebSocketConnect'];
+$worker->onMessage           = [$terminal, 'onMessage'];
+$worker->onClose             = [$terminal, 'onClose'];
+$worker->onError             = [$terminal, 'onError'];
+
+Worker::runAll();
