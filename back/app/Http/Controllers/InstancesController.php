@@ -51,12 +51,41 @@ class InstancesController extends Controller
                 $memUsage = 0;
                 $memLimit = 0;
             }
+
             $ports = [];
+
+            // 尝试通过 listContainers() 提取端口（常规路径）
             foreach ($info->getPorts() ?? [] as $p) {
                 $private = $p->getPrivatePort();
-                $public = $p->getPublicPort();
-                $ports[] = $public ? "$private->$public" : "$private";
+                $public  = $p->getPublicPort();
+                $ports[] = $public ? "{$public}:{$private}" : "{$private}";
             }
+
+            // 如果 list 中没端口，fallback 到 inspect
+            if (empty($ports)) {
+                try {
+                    $detail = $this->docker->containerInspect($info->getId());
+                    $bindings = $detail->getHostConfig()->getPortBindings();
+
+                    // 打印 inspect 得到的原始端口数据结构
+                    logger()->debug('INSPECT port bindings', [
+                        'container' => $info->getId(),
+                        'ports' => $bindings
+                    ]);
+
+                    foreach ($bindings ?? [] as $portKey => $bindingList) {
+                        foreach ($bindingList ?? [] as $b) {
+                            $hostPort = $b->getHostPort();
+                            $hostIp   = $b->getHostIp();
+                            $private  = strtok($portKey, '/');
+                            $ports[]  = "{$hostPort}:{$private}";
+                        }
+                    }
+                } catch (\Exception $e) {
+                    logger()->error('INSPECT failed: '.$e->getMessage(), ['id' => $info->getId()]);
+                }
+            }
+
             $result[] = [
                 'id' => $info->getId(),
                 'name' => ltrim($info->getNames()[0] ?? substr($info->getId(),0,12), '/'),

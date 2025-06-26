@@ -14,7 +14,8 @@
         "laravel/framework": "^9.0",
         "laravel/sanctum": "^2.14",
         "laravel/tinker": "^2.7",
-        "maxlcoder/laravel-dm8": "^1.1"
+        "maxlcoder/laravel-dm8": "^1.1",
+        "symfony/property-access": "^7.3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

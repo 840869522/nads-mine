@@ -1,12 +1,17 @@
 <?php
 namespace App\Services;
 
+use Docker\API\Exception\ContainerCreateBadRequestException;
 use Docker\Docker;
 use Docker\DockerClientFactory;
 use Docker\API\Model\ContainersCreatePostBody;
 use Docker\API\Model\HostConfig;
 use Docker\API\Model\PortBinding;
 use Docker\API\Model\ContainerConfigExposedPortsItem;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
+use Symfony\Component\Serializer\SerializerInterface;
 
 class DockerService
 {
@@ -14,6 +19,7 @@ class DockerService
 
     public function __construct()
     {
+
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $socket = getenv('DOCKER_HOST') ?: 'tcp://localhost:2375';
         } else {
@@ -33,88 +39,59 @@ class DockerService
         return $this->docker->imageList(['all' => true]);
     }
 
-    public function createContainer(array $options)
+    public function createContainer(array $options): string
     {
-        $config = new ContainersCreatePostBody();
-        $config->setImage($options['image']);
+        // 0. 打印最初的 options
+        logger()->debug('DOCKER: options', $options);
 
-        if (!empty($options['cmd']) && is_array($options['cmd'])) {
-            $config->setCmd($options['cmd']);
+        $cfg = new ContainersCreatePostBody();
+        $cfg->setImage($options['image']);
+        $cfg->setTty(true);
+
+        // --- ENV & CMD ---
+        if (!empty($options['cmd'])) {
+            $cfg->setCmd($options['cmd']);
+            logger()->debug('DOCKER: cmd', $options['cmd']);
         }
 
-        if (!empty($options['env']) && is_array($options['env'])) {
-            $envList = [];
-            foreach ($options['env'] as $env) {
-                if (isset($env['key'])) {
-                    $value = $env['value'] ?? '';
-                    $envList[] = $env['key'] . '=' . $value;
-                }
+        if (!empty($options['env'])) {
+            $envList = array_map(
+                fn($e) => "{$e['key']}=" . ($e['value'] ?? ''),
+                $options['env']
+            );
+            $cfg->setEnv($envList);
+            logger()->debug('DOCKER: envList', $envList);
+        }
+
+        /* ---------- HostConfig / PortBindings ---------- */
+        $hostCfg   = new HostConfig();
+        $bindings  = [];
+
+        foreach ($options['ports'] ?? [] as $p) {
+            $cPort = (int)($p['containerPort'] ?? 0);
+            $hPort = (int)($p['hostPort']     ?? 0);
+            if ($cPort < 1 || $cPort > 65535 || $hPort < 1 || $hPort > 65535) {
+                continue;                     // 跳过非法端口
             }
-            if ($envList) {
-                $config->setEnv($envList);
-            }
+            $key = $cPort.'/tcp';
+
+            $bind = new PortBinding();
+            $bind->setHostPort((string)$hPort);
+            $bind->setHostIp('0.0.0.0');             // 空串，避免序列化成 null
+            $bindings[$key][] = $bind;
         }
 
-        $hostConfig = new HostConfig();
-
-        if (!empty($options['volumes']) && is_array($options['volumes'])) {
-            $binds = [];
-            foreach ($options['volumes'] as $vol) {
-                if (!empty($vol['hostPath']) && !empty($vol['containerPath'])) {
-                    $binds[] = $vol['hostPath'] . ':' . $vol['containerPath'];
-                }
-            }
-            if ($binds) {
-                $hostConfig->setBinds($binds);
-            }
+        // 只要有映射，就写进 HostConfig
+        if ($bindings) {
+            $hostCfg->setPortBindings($bindings);
+            $cfg->setHostConfig($hostCfg);
         }
 
-        $exposedPorts = [];
-        if (!empty($options['ports']) && is_array($options['ports'])) {
-            $portBindings = [];
-            foreach ($options['ports'] as $port) {
-                if (empty($port['containerPort'])) {
-                    continue;
-                }
-
-                $cPort = (int) $port['containerPort'];
-                if ($cPort <= 0 || $cPort > 65535) {
-                    continue;
-                }
-
-                $protoPort = $cPort . '/tcp';
-                $binding = new PortBinding();
-
-                if (!empty($port['hostPort'])) {
-                    $hPort = (int) $port['hostPort'];
-                    if ($hPort > 0 && $hPort <= 65535) {
-                        $binding->setHostPort((string) $hPort);
-                    }
-                }
-
-                $portBindings[$protoPort][] = $binding;
-                $exposedPorts[$protoPort] = new ContainerConfigExposedPortsItem();
-            }
-
-            if ($portBindings) {
-                $hostConfig->setPortBindings($portBindings);
-            }
-        }
-
-        if ($exposedPorts) {
-            $config->setExposedPorts($exposedPorts);
-        }
-
-        if ($hostConfig->isInitialized('binds') || $hostConfig->isInitialized('portBindings')) {
-            $config->setHostConfig($hostConfig);
-        }
-
-        $query = [];
-        if (!empty($options['name'])) {
-            $query['name'] = (string) $options['name'];
-        }
-
-        $container = $this->docker->containerCreate($config, $query);
+        /* ---------- 创建并启动 ---------- */
+        $container = $this->docker->containerCreate(
+            $cfg,
+            empty($options['name']) ? [] : ['name' => $options['name']]
+        );
         $this->docker->containerStart($container->getId());
 
         return $container->getId();
