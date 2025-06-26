@@ -135,10 +135,20 @@ const ImageManagementPage: React.FC = () => {
   
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
-    const normalized = dateString.replace(/([+-]\d{2}):(\d{2})$/, '$1$2');
-    const d = new Date(normalized);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+    const attempt = (str: string) => {
+      const d = new Date(str);
+      return isNaN(d.getTime()) ? null : d;
+    };
+    const date =
+      attempt(dateString) ||
+      attempt(dateString.replace(/([+-]\d{2}):(\d{2})$/, '$1$2'));
+    return date
+      ? date.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : dateString;
   };
 
   const columns: GridColDef[] = React.useMemo(() => [
