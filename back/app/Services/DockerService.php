@@ -73,16 +73,29 @@ class DockerService
         if (!empty($options['ports']) && is_array($options['ports'])) {
             $portBindings = [];
             foreach ($options['ports'] as $port) {
-                if (!empty($port['containerPort'])) {
-                    $protoPort = $port['containerPort'] . '/tcp';
-                    $binding = new PortBinding();
-                    if (!empty($port['hostPort'])) {
-                        $binding->setHostPort((string) $port['hostPort']);
-                    }
-                    $portBindings[$protoPort][] = $binding;
-                    $exposedPorts[$protoPort] = new ContainerConfigExposedPortsItem();
+                if (empty($port['containerPort'])) {
+                    continue;
                 }
+
+                $cPort = (int) $port['containerPort'];
+                if ($cPort <= 0 || $cPort > 65535) {
+                    continue;
+                }
+
+                $protoPort = $cPort . '/tcp';
+                $binding = new PortBinding();
+
+                if (!empty($port['hostPort'])) {
+                    $hPort = (int) $port['hostPort'];
+                    if ($hPort > 0 && $hPort <= 65535) {
+                        $binding->setHostPort((string) $hPort);
+                    }
+                }
+
+                $portBindings[$protoPort][] = $binding;
+                $exposedPorts[$protoPort] = new ContainerConfigExposedPortsItem();
             }
+
             if ($portBindings) {
                 $hostConfig->setPortBindings($portBindings);
             }
