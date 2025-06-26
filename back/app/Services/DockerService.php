@@ -4,6 +4,9 @@ namespace App\Services;
 use Docker\Docker;
 use Docker\DockerClientFactory;
 use Docker\API\Model\ContainersCreatePostBody;
+use Docker\API\Model\HostConfig;
+use Docker\API\Model\PortBinding;
+use Docker\API\Model\ContainerConfigExposedPortsItem;
 
 class DockerService
 {
@@ -34,10 +37,68 @@ class DockerService
     {
         $config = new ContainersCreatePostBody();
         $config->setImage($options['image']);
-        if (isset($options['cmd'])) $config->setCmd($options['cmd']);
-        if (isset($options['env'])) $config->setEnv($options['env']);
+
+        if (!empty($options['cmd']) && is_array($options['cmd'])) {
+            $config->setCmd($options['cmd']);
+        }
+
+        if (!empty($options['env']) && is_array($options['env'])) {
+            $envList = [];
+            foreach ($options['env'] as $env) {
+                if (isset($env['key'])) {
+                    $value = $env['value'] ?? '';
+                    $envList[] = $env['key'] . '=' . $value;
+                }
+            }
+            if ($envList) {
+                $config->setEnv($envList);
+            }
+        }
+
+        $hostConfig = new HostConfig();
+
+        if (!empty($options['volumes']) && is_array($options['volumes'])) {
+            $binds = [];
+            foreach ($options['volumes'] as $vol) {
+                if (!empty($vol['hostPath']) && !empty($vol['containerPath'])) {
+                    $binds[] = $vol['hostPath'] . ':' . $vol['containerPath'];
+                }
+            }
+            if ($binds) {
+                $hostConfig->setBinds($binds);
+            }
+        }
+
+        $exposedPorts = [];
+        if (!empty($options['ports']) && is_array($options['ports'])) {
+            $portBindings = [];
+            foreach ($options['ports'] as $port) {
+                if (!empty($port['containerPort'])) {
+                    $protoPort = $port['containerPort'] . '/tcp';
+                    $binding = new PortBinding();
+                    if (!empty($port['hostPort'])) {
+                        $binding->setHostPort((string) $port['hostPort']);
+                    }
+                    $portBindings[$protoPort][] = $binding;
+                    $exposedPorts[$protoPort] = new ContainerConfigExposedPortsItem();
+                }
+            }
+            if ($portBindings) {
+                $hostConfig->setPortBindings($portBindings);
+            }
+        }
+
+        if ($exposedPorts) {
+            $config->setExposedPorts($exposedPorts);
+        }
+
+        if ($hostConfig->isInitialized('binds') || $hostConfig->isInitialized('portBindings')) {
+            $config->setHostConfig($hostConfig);
+        }
+
         $container = $this->docker->containerCreate($config, ['name' => $options['name'] ?? null]);
         $this->docker->containerStart($container->getId());
+
         return $container->getId();
     }
 
