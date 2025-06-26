@@ -4,7 +4,6 @@ namespace App\Services;
 use Docker\Docker;
 use Docker\DockerClientFactory;
 use Docker\API\Model\ContainersCreatePostBody;
-use Docker\API\Client as DockerClient;
 
 class DockerService
 {
@@ -12,9 +11,11 @@ class DockerService
 
     public function __construct()
     {
-        $socket = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
-            ? 'npipe:////./pipe/docker_engine'
-            : 'unix:///var/run/docker.sock';
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            $socket = getenv('DOCKER_HOST') ?: 'tcp://localhost:2375';
+        } else {
+            $socket = getenv('DOCKER_HOST') ?: 'unix:///var/run/docker.sock';
+        }
         $client = DockerClientFactory::create(['remote_socket' => $socket]);
         $this->docker = Docker::create($client);
     }
