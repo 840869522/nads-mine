@@ -137,7 +137,7 @@
                     ];
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);
-                $res_user_role = db::delete($sql_user_role,[$id]);
+                $res_user_role = db::delete($sql_user_role, [$id]);
                 if ($res && $res_user_role) {
                     db::commit();
                     return [
