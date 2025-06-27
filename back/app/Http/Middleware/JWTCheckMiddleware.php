@@ -36,10 +36,6 @@ class JWTCheckMiddleware{
                 ]);
             }
         }
-        // $request->attributes->add([
-        //     "user_permissions" =>$jwtRes["data"]["permission"],
-        //     "user_roles" => $jwtRes['data']['role'],
-        // ]);
         return $next($request);
     }
 }

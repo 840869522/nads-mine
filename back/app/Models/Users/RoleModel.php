@@ -47,11 +47,11 @@
             }
         }
 
-        public static function grantRole2User (string $role_id,string $permission_id):array {
+        public static function grantRole2User (string $role_id,string $user_id):array {
             $sql = "INSERT INTO c_USERS_ROLES VALUES(?,?)";
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$role_id,$permission_id]);
+                $res = db::insert($sql,[$user_id,$role_id]);
                 if($res) {
                     db::commit();
                     return [
@@ -72,7 +72,7 @@
         }
 
         public static function revokeRoleFromUser(string $role_id,string $permission_id):array {
-            $sql = "DELETE FROM c_USERS_ROLES WHERE role_id = ? and permission_id = ?";
+            $sql = "DELETE FROM c_USERS_ROLES WHERE role_id = ? and user_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$role_id,$permission_id]);

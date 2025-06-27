@@ -48,7 +48,7 @@
         public static function getUserPrimissions (string $id) : array {
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT  cper.name FROM `c_USERS_ROLES` AS cur JOIN `c_ROLES_PERMISSIONS` AS crp  ON cur.role_id = crp.role_id JOIN `c_PERMISSIONS` AS cper ON crp.permission_id = cper.id WHERE cur.user_name = ?" ;
+                $sql = "SELECT DISTINCT  cper.name FROM `c_USERS_ROLES` AS cur JOIN `c_ROLES_PERMISSIONS` AS crp  ON cur.role_id = crp.role_id JOIN `c_PERMISSIONS` AS cper ON crp.permission_id = cper.id WHERE cur.user_id = ?" ;
                 $res = db::select($sql,[$id]);
                 db::commit();
                 return [
@@ -64,9 +64,9 @@
         }
 
         public static function getUserById(string $id) :array {
-            $sql = "SELECT * FROM `c_USERS` WHERE user_id = ?";
+            $sql = "SELECT * FROM `c_USERS` WHERE user_id = ? OR user_name = ?";
             try {
-                $res = db::selectOne($sql,[$id]);
+                $res = db::selectOne($sql,[$id,$id]);
                 return [
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data" => $res,
@@ -81,9 +81,9 @@
 
         public static function insertNewUser(array $data) :array {
             try {
-                $sql = "INSERT INTO `c_USERS`(usernmae, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_USERS`(user_name, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
                 db::beginTransaction();
-                $res = db::insert($sql,[]);
+                $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
                     db::commit();
                     return [

@@ -21,7 +21,11 @@
 
     Route::prefix("user")->group(function() {
         Route::post("/login",[UserController::class,"login"]);
+        Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
         Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
+        Route::post("/new",[UserController::class,"insertNewUser"]);
+        Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
+        Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
     });
     
     Route::prefix("role")->group(function(){
@@ -30,8 +34,8 @@
         Route::post("/new",[RoleController::class,"newRole"])->middleware("jwtcheck:edit-roles");
         Route::post("/update",[RoleController::class, "updateRole"])->middleware("jwtcheck:edit-roles");
         Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
-        Route::post("/grant", [PermissionController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
-        Route::post("/revoke", [PermissionController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
+        Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
+        Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
     });
 
     Route::prefix("permission")->group(function() {

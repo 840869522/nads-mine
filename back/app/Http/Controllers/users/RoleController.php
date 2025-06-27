@@ -10,7 +10,7 @@
 
     class RoleController extends Controller {
 
-        
+
         public function getAllRole(Request $req) {
             $reqData = $req->json()->all();
             try {
@@ -139,7 +139,8 @@
                 $id = $reqData['id'];
             }catch (Exception $_) {
                 return [
-                    "code"=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE
+                    "code"=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ];
             }
             $modelRes = RoleModel::updateRoleById($id,$data);

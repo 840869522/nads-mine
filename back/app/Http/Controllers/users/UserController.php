@@ -11,85 +11,209 @@
 
     class UserController extends Controller{
 
-        public function getAllUser(Request $req) {
+        public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {
                 $page = $reqData["page"];
                 $pagesize = $reqData["pagesize"];
-            }catch (Exception $_) {
+            } catch (Exception $_) {
                 $page = 1;
                 $pagesize = 10;
             }
-            $res = UserModel::getAllUser($page,$pagesize);
-            if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+            $modelRes = UserModel::getAllUser($page, $pagesize);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
-                    "mes" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" => $res['data']
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => $modelRes['data']
                 ]);
-            else{
+            else {
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                    "mes" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
                     "data" => null
                 ]);
             }
         }
-        
-        public function login(Request $req) {
-            $reqData = $req->json()->all();
+
+        public function getUserById(Request $req){
+            $reqData =  $req->json()->all();
             try {
-                $username = $reqData["username"];
-                $pwd = $reqData["password"];
-            }catch(Exception $e) {
+                $id = $reqData["id"];
+            } catch (Exception $_) {
                 return response()->json([
                     'code'=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                     "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
+            $modelRes = UserModel::getUserById($id);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => $modelRes['data']
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "data" => null
+                ]);
+            }
+        }
+
+
+        public function login(Request $req){
+            $reqData = $req->json()->all();
+            try {
+                $username = $reqData["username"];
+                $pwd = $reqData["password"];
+            } catch (Exception $_) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
             $modelRes = UserModel::getUserByName($username);
             if ($modelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return [
-                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                    "message"=>GlobalResponse::$DATABASE_ERROR_MES,
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
                 ];
             }
             $user = $modelRes["data"];
-            if ($user->password != $pwd){
+            if ($user->password != $pwd) {
                 return response()->json([
-                    "code"=>GlobalResponse::$USER_LOGIN_ERROR_CODE,
-                    "message"=>GlobalResponse::$USER_LOGIN_FAILED_MES,
+                    "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
+                    "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
             $primissions = UserModel::getUserPrimissions($user->user_name);
             $jwtRes = JWTControll::encodeJWT([
                 "id" => $user->user_id,
                 // "role" => $user->role_id,
-                "permission" => array_map(function($item){return $item->name;},$primissions["data"])
+                "permission" => array_map(function ($item) {
+                    return $item->name;
+                }, $primissions["data"])
             ]);
             if ($jwtRes["err"] != null) {
                 return response()->json([
-                    "code"=>GlobalResponse::$USER_LOGIN_ERROR_CODE,
-                    "message"=>GlobalResponse::$USER_LOGIN_FAILED_MES,
+                    "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
+                    "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
             return response()->json([
-                "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
-                "message"=>GlobalResponse::$USER_LOGIN_SUCCESS_MES,
-                "data"=>[
-                    "token"=>$jwtRes['token'],
-                    "id"=> $user->user_id
+                "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,
+                "data" => [
+                    "token" => $jwtRes['token'],
+                    "id" => $user->user_id
                 ]
             ]);
         }
 
+
+        public function insertNewUser(Request $req) {
+            $reqData = $req->json()->all();
+            try {
+                $data = $reqData["data"];
+            } catch (Exception $_) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            $modelRes = UserModel::insertNewUser($data);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+        }
+
         public function updateUserPassword(Request $req) {
-            
+            $reqData = $req->json()->all();
+            $token_data  = $req->input("token_data");
+            try {
+                $id = $reqData["id"];
+                $data = $reqData["data"];
+            } catch (Exception $_) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            $modelRes = UserModel::updateUserById($id, $data);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
         }
 
-        public function updateUserInfo(Request $req) {
 
+        public function updateUserInfo(Request $req){
+            $reqData = $req->json()->all();
+            try {
+                $id = $reqData["id"];
+                $data = $reqData["data"];
+            } catch (Exception $_) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            $modelRes = UserModel::updateUserById($id, $data);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
         }
+
+
+        public function deleteUser(Request $req){
+            $reqData = $req->json()->all();
+            try {
+                $id = $reqData["id"];
+            } catch (Exception $_) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            $modelRes = UserModel::deleteUserById($id);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+        }
+
 
     }
 ?>
