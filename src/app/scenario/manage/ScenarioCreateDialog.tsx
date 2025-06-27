@@ -1,4 +1,4 @@
-// file: ScenarioEditorDialog.tsx
+// file: ScenarioCreateDialog.tsx
 "use client";
 import React, { useState, useCallback } from 'react';
 import {
@@ -14,19 +14,21 @@ import TopologyEditor from '@/components/scenario/topology/TopologyEditor';
 import { RunningInstance, InstanceStatus, TopologyNode } from '@/types';
 
 // 定义这个弹窗组件需要接收的属性(props)
-interface ScenarioEditorDialogProps {
+interface ScenarioCreateDialogProps {
     open: boolean;
     onClose: () => void;
     onSaveSuccess: () => void;
 }
 
-const ScenarioEditorDialog: React.FC<ScenarioEditorDialogProps> = ({ open, onClose}) => {
-    // ▼▼▼ 以下是从 ScenarioPage.tsx 搬运过来的逻辑 ▼▼▼
+const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClose}) => {
 
-    // 这个 state 现在属于弹窗组件，用于和编辑器交互
     const [_instances, setInstances] = useState<RunningInstance[]>([]);
 
-    // 这些回调函数也一并搬运过来
+    // handleAddNode: 当用户在编辑器中添加了一个新节点时，TopologyEditor会调用此函数。函数内部：
+    // 接收代表新节点的node对象。
+    // 使用switch语句根据节点类型（type）判断它是虚拟机、容器还是网络设备。
+    // 创建一个符合RunningInstance接口的新对象，填充好ID、名称、状态、默认资源用量等信息。
+    // 通过setInstances将这个新实例添加到_instances状态数组中，触发界面更新。
     const handleAddNode = useCallback((node: TopologyNode) => {
         const { type, id, label, config } = node;
         let instanceType: string;
@@ -50,10 +52,12 @@ const ScenarioEditorDialog: React.FC<ScenarioEditorDialogProps> = ({ open, onClo
         setInstances(prev => [...prev, newInstance]);
     }, []);
 
+    // handleDeleteNode: 当用户在编辑器中删除了一个节点时，此函数被调用。它通过filter方法从_instances数组中移除与nodeId匹配的实例。
     const handleDeleteNode = useCallback((nodeId: string) => {
         setInstances(prev => prev.filter(inst => inst.nodeId !== nodeId));
     }, []);
 
+    // handleUpdateNode: 当用户在编辑器中修改了一个节点的属性（如名称）时，此函数被调用。它通过map方法遍历_instances数组，找到匹配的实例并更新其信息。
     const handleUpdateNode = useCallback((node: TopologyNode) => {
         setInstances(prev => prev.map(inst => {
             if (inst.nodeId === node.id) {
@@ -62,8 +66,6 @@ const ScenarioEditorDialog: React.FC<ScenarioEditorDialogProps> = ({ open, onClo
             return inst;
         }));
     }, []);
-
-    // ▲▲▲ 搬运逻辑结束 ▲▲▲
 
     return (
         <Dialog
@@ -81,18 +83,18 @@ const ScenarioEditorDialog: React.FC<ScenarioEditorDialogProps> = ({ open, onClo
             </DialogTitle>
             <DialogContent dividers sx={{ p: 0, overflow: 'hidden' }}>
                 {/*
-          将拓扑编辑器嵌入到弹窗内容中, 并把所有需要的 props 传递给它。
-          我们还把 onClose 和 onSaveSuccess 传递下去，以便编辑器内部的按钮可以调用它们。
-        */}
+                  将拓扑编辑器嵌入到弹窗内容中, 并把所有需要的 props 传递给它。
+                  我们还把 onClose 和 onSaveSuccess 传递下去，以便编辑器内部的按钮可以调用它们。
+                */}
                 <TopologyEditor
                     onAddNode={handleAddNode}
                     onDeleteNode={handleDeleteNode}
-                    onUpdateNode={handleUpdateNode}
-
-                />
+                    onUpdateNode={handleUpdateNode} onSaveSuccess={function (): void {
+                    throw new Error('Function not implemented.');
+                }}                />
             </DialogContent>
         </Dialog>
     );
 };
 
-export default ScenarioEditorDialog;
+export default ScenarioCreateDialog;

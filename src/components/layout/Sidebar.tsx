@@ -100,7 +100,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       label: "安全实验分系统", // Renamed from "安全使用分系统"
       icon: ShieldCheckIcon,
       children: [
-        { to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
+        {to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
+        {to: "/drill/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
       ]
     },
     {
