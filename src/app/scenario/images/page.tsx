@@ -188,7 +188,7 @@ const ImageManagementPage: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h4" component="h1">镜像管理</Typography>
+          <Typography variant="h4" component="h1">容器镜像管理</Typography>
           <TextField
             variant="outlined"
             placeholder="搜索镜像..."

@@ -306,7 +306,7 @@ const RunningInstancesPage: React.FC = () => {
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                    <Typography variant="h4" component="h1">实例管理</Typography>
+                    <Typography variant="h4" component="h1">容器实例管理</Typography>
                     <TextField
                         variant="outlined"
                         placeholder="搜索容器 (名称, ID, 镜像)..."

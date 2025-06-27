@@ -67,7 +67,14 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     if (currentPath.startsWith('/learn')) initialOpenMenus["人员测试分系统"] = true;
     if (currentPath.startsWith('/scenario')) initialOpenMenus["环境构建分系统"] = true;
     if (currentPath.startsWith('/drill')) initialOpenMenus["安全实验分系统"] = true; // Updated key
-    if (currentPath.startsWith('/admin') || currentPath.startsWith('/scenario/images') || currentPath.startsWith('/scenario/instances') ) initialOpenMenus["基础支撑分系统"] = true; // Updated to open if viewing moved items
+    if (
+      currentPath.startsWith('/admin') ||
+      currentPath.startsWith('/scenario/images') ||
+      currentPath.startsWith('/scenario/instances') ||
+      currentPath.startsWith('/scenario/vm-images') ||
+      currentPath.startsWith('/scenario/vm-instances')
+    )
+      initialOpenMenus["基础支撑分系统"] = true; // Updated to open if viewing moved items
     return initialOpenMenus;
   });
 
@@ -111,8 +118,10 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'ADMIN_USERS_MANAGE' },
         { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'ADMIN_ROLES_MANAGE' },
-        { to: "/scenario/images", label: "镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' }, // Moved here
-        { to: "/scenario/instances", label: "实例管理", icon: CommandLineIcon, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' } // Moved here
+        { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' }, // Moved here and renamed
+        { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }, // Moved here and renamed
+        { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' },
+        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }
       ]
     },
   ];
