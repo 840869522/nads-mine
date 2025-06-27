@@ -46,7 +46,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
-import ExecTerminalModal from '@/components/scenario/ExecTerminalModal';
+import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -77,7 +77,7 @@ const RunningInstancesPage: React.FC = () => {
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
-    const [execModalIds, setExecModalIds] = useState<string[]>([]);
+    const { openTerminal } = useExecTerminal();
     const [showColumns, setShowColumns] = useState({
         id: true,
         imageName: true,
@@ -402,7 +402,7 @@ const RunningInstancesPage: React.FC = () => {
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Bind mounts
                 </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) setExecModalIds(ids => ids.includes(moreMenuAnchor.id!) ? ids : [...ids, moreMenuAnchor.id!]); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Terminal
                 </MenuItem>
             </Menu>
@@ -430,14 +430,6 @@ const RunningInstancesPage: React.FC = () => {
             <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />
             <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />
             <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />
-            {execModalIds.map(id => (
-                <ExecTerminalModal
-                    key={id}
-                    open
-                    containerId={id}
-                    onClose={() => setExecModalIds(ids => ids.filter(i => i !== id))}
-                />
-            ))}
             <CreateContainerModal
                 open={createModalOpen}
                 onClose={() => setCreateModalOpen(false)}

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
-import { Box, IconButton, Paper } from '@mui/material';
+import { Box, IconButton, Paper, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import MinimizeIcon from '@mui/icons-material/Minimize';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
@@ -17,6 +17,7 @@ interface ExecTerminalModalProps {
 }
 
 export default function ExecTerminalModal({ open, containerId, onClose }: ExecTerminalModalProps) {
+  const theme = useTheme();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<any>();
   const socketRef = useRef<Socket | null>(null);
@@ -102,7 +103,14 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
 
   const paper = (
       <Paper
-          sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            height: '100%',
+            borderRadius: 2,
+            bgcolor: theme.palette.background.paper,
+          }}
           elevation={8}
           ref={dragRef}
       >
@@ -115,7 +123,11 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
               bgcolor: 'primary.main',
               color: 'primary.contrastText',
               p: 1,
+              pl: 2,
+              pr: 1,
               cursor: 'move',
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
             }}
         >
           <Box>{containerId ? `终端 ${containerId.slice(0, 12)}` : '终端'}</Box>
@@ -154,7 +166,7 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
           </Box>
         </Box>
         {!minimized && (
-            <Box sx={{ flex: 1, bgcolor: 'black', position: 'relative' }}>
+            <Box sx={{ flex: 1, bgcolor: 'black', position: 'relative', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}>
               <div ref={wrapperRef} style={{ position: 'absolute', inset: 0 }} />
             </Box>
         )}
