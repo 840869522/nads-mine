@@ -141,7 +141,6 @@ const ImageManagementPage: React.FC = () => {
     { field: 'size', headerName: '大小', flex: 1, hide: !showColumns.size },
     { field: 'uploadDate', headerName: '上传日期', flex: 1, hide: !showColumns.uploadDate,
       valueFormatter: (params) => {
-        console.log('value =>', params);     // 会是 undefined 吗？
         return dayjs(params).format('YYYY年M月D日');
       }
     },
