@@ -22,6 +22,8 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/admin/roles', key: 'ADMIN_ROLES_MANAGE' },
   { prefix: '/scenario/images', key: 'SCENARIO_IMAGES_MANAGE' },
   { prefix: '/scenario/instances', key: 'SCENARIO_INSTANCES_MANAGE' },
+  { prefix: '/scenario/vm-images', key: 'SCENARIO_IMAGES_MANAGE' },
+  { prefix: '/scenario/vm-instances', key: 'SCENARIO_INSTANCES_MANAGE' },
 ];
 
 export default function AppContent({ children }: { children: React.ReactNode }) {

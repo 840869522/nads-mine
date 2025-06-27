@@ -19,6 +19,8 @@ import {
     Menu,
     MenuItem,
 } from '@mui/material';
+
+const API_BASE = "http://localhost:8000";
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -44,7 +46,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
-import ExecTerminalModal from '@/components/scenario/ExecTerminalModal';
+import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -66,7 +68,7 @@ const RunningInstancesPage: React.FC = () => {
     } | null>(null);
 
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(5);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState('');
     const [showRunningOnly, setShowRunningOnly] = useState(false);
     const [rowSelectionModel, setRowSelectionModel] = useState<{ type: 'include' | 'exclude'; ids: Set<string> }>({ type: 'include', ids: new Set() });
@@ -75,7 +77,7 @@ const RunningInstancesPage: React.FC = () => {
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
-    const [execModalIds, setExecModalIds] = useState<string[]>([]);
+    const { openTerminal } = useExecTerminal();
     const [showColumns, setShowColumns] = useState({
         id: true,
         imageName: true,
@@ -183,7 +185,7 @@ const RunningInstancesPage: React.FC = () => {
         if (!user) return;
         const q = `?userId=${user.id}&role=${user.role}`;
         try {
-            const res = await fetch(`/api/instances${q}`);
+            const res = await fetch(`${API_BASE}/api/instances${q}`);
             if (!res.ok) throw new Error('fetch failed');
             const data = await res.json();
             setInstances(data);
@@ -233,7 +235,7 @@ const RunningInstancesPage: React.FC = () => {
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 const action = instance.status === 'paused' ? 'unpause' : 'start';
-                await fetch(`/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
+                await fetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -246,7 +248,7 @@ const RunningInstancesPage: React.FC = () => {
             title: `停止实例: ${instance.name}`,
             message: `您确定要停止实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`/api/containers/${instance.id}?action=stop`, { method: 'POST' });
+                await fetch(`${API_BASE}/api/containers/${instance.id}?action=stop`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -259,7 +261,7 @@ const RunningInstancesPage: React.FC = () => {
             title: `暂停实例: ${instance.name}`,
             message: `您确定要暂停实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`/api/containers/${instance.id}?action=pause`, { method: 'POST' });
+                await fetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -272,10 +274,10 @@ const RunningInstancesPage: React.FC = () => {
             title: `删除实例: ${instance.name}`,
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
-                await fetch(`/api/containers/${instance.id}?action=delete`, { method: 'POST' });
+                await fetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
                 if (user) {
                     const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
-                    await fetch(`/api/instances${q}`, { method: 'DELETE' });
+                    await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
                 fetchInstances();
             },
@@ -304,7 +306,7 @@ const RunningInstancesPage: React.FC = () => {
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                    <Typography variant="h4" component="h1">实例管理</Typography>
+                    <Typography variant="h4" component="h1">容器实例管理</Typography>
                     <TextField
                         variant="outlined"
                         placeholder="搜索容器 (名称, ID, 镜像)..."
@@ -400,7 +402,7 @@ const RunningInstancesPage: React.FC = () => {
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Bind mounts
                 </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) setExecModalIds(ids => ids.includes(moreMenuAnchor.id!) ? ids : [...ids, moreMenuAnchor.id!]); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Terminal
                 </MenuItem>
             </Menu>
@@ -428,14 +430,6 @@ const RunningInstancesPage: React.FC = () => {
             <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />
             <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />
             <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />
-            {execModalIds.map(id => (
-                <ExecTerminalModal
-                    key={id}
-                    open
-                    containerId={id}
-                    onClose={() => setExecModalIds(ids => ids.filter(i => i !== id))}
-                />
-            ))}
             <CreateContainerModal
                 open={createModalOpen}
                 onClose={() => setCreateModalOpen(false)}

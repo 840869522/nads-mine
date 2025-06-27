@@ -25,3 +25,6 @@ dist-ssr
 .next
 data.sqlite
 prisma/data.sqlite
+/prisma/data.sqlite-shm
+/prisma/data.sqlite-wal
+/package-lock.json

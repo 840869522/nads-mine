@@ -21,13 +21,20 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 
+const API_BASE = "http://localhost:8000";
+
 interface CreateContainerModalProps {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  /**
+   * When provided, the image field will be fixed to this value and
+   * the image selection dropdown will be hidden.
+   */
+  fixedImage?: string;
 }
 
-export default function CreateContainerModal({ open, onClose, onCreated }: CreateContainerModalProps) {
+export default function CreateContainerModal({ open, onClose, onCreated, fixedImage }: CreateContainerModalProps) {
   const { user } = useAuth();
   const [images, setImages] = useState<ManagedImage[]>([]);
   const [image, setImage] = useState('');
@@ -38,12 +45,16 @@ export default function CreateContainerModal({ open, onClose, onCreated }: Creat
   const [cmd, setCmd] = useState('');
 
   useEffect(() => {
-    if (open && user) {
-      fetch(`/api/images?userId=${user.id}&role=${user.role}`)
+    if (!open) return;
+    if (fixedImage) {
+      setImage(fixedImage);
+      setImages([]);
+    } else if (user) {
+      fetch(`${API_BASE}/api/images?userId=${user.id}&role=${user.role}`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
-  }, [open, user]);
+  }, [open, user, fixedImage]);
 
   const resetState = () => {
     setImage('');
@@ -79,7 +90,7 @@ export default function CreateContainerModal({ open, onClose, onCreated }: Creat
 
   const handleSubmit = async () => {
     if (!user || !image) return;
-    await fetch('/api/containers', {
+    await fetch(`${API_BASE}/api/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -101,19 +112,23 @@ export default function CreateContainerModal({ open, onClose, onCreated }: Creat
       <DialogTitle>创建实例</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <FormControl fullWidth>
-            <InputLabel id="image-select-label">镜像</InputLabel>
-            <Select
-              labelId="image-select-label"
-              value={image}
-              label="镜像"
-              onChange={e => setImage(e.target.value)}
-            >
-              {images.map(img => (
-                <MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {fixedImage ? (
+            <TextField label="镜像" value={image} fullWidth disabled />
+          ) : (
+            <FormControl fullWidth>
+              <InputLabel id="image-select-label">镜像</InputLabel>
+              <Select
+                labelId="image-select-label"
+                value={image}
+                label="镜像"
+                onChange={e => setImage(e.target.value)}
+              >
+                {images.map(img => (
+                  <MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
           <TextField label="容器名称" value={name} onChange={e => setName(e.target.value)} fullWidth />
           <Box>
             <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
