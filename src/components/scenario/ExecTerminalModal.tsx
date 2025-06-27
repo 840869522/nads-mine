@@ -25,6 +25,7 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
   const fitAddonRef = useRef<any>(null);
   const [minimized, setMinimized] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  const prevMinRef = useRef<{ position: { x: number; y: number }; size: { width: number; height: number } } | null>(null);
   const [position, setPosition] = useState(() => ({
     x:
         typeof window !== 'undefined'
@@ -132,7 +133,23 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
         >
           <Box>{containerId ? `终端 ${containerId.slice(0, 12)}` : '终端'}</Box>
           <Box>
-            <IconButton size="small" onClick={() => setMinimized(!minimized)}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                if (minimized) {
+                  if (prevMinRef.current) {
+                    setPosition(prevMinRef.current.position);
+                    setSize(prevMinRef.current.size);
+                  }
+                  setMinimized(false);
+                } else {
+                  prevMinRef.current = { position, size };
+                  setPosition({ x: window.innerWidth - 260, y: window.innerHeight - 56 });
+                  setSize({ width: 240, height: 40 });
+                  setMinimized(true);
+                }
+              }}
+            >
               {minimized ? <OpenInFullIcon fontSize="inherit" /> : <MinimizeIcon fontSize="inherit" />}
             </IconButton>
             {!minimized && (
@@ -165,27 +182,20 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
             </IconButton>
           </Box>
         </Box>
-        {!minimized && (
-            <Box sx={{ flex: 1, bgcolor: 'black', position: 'relative', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}>
-              <div ref={wrapperRef} style={{ position: 'absolute', inset: 0 }} />
-            </Box>
-        )}
+        <Box
+            sx={{
+              flex: 1,
+              bgcolor: 'black',
+              position: 'relative',
+              borderBottomLeftRadius: 8,
+              borderBottomRightRadius: 8,
+              display: minimized ? 'none' : 'block',
+            }}
+        >
+          <div ref={wrapperRef} style={{ position: 'absolute', inset: 0 }} />
+        </Box>
       </Paper>
   );
-
-  if (minimized) {
-    return (
-        <Box sx={{ position: 'fixed', bottom: 16, right: 16, width: 240, zIndex: 1300 }} ref={dragRef}>
-          {paper}
-        </Box>
-    );
-  }
-
-  if (maximized) {
-    return (
-        <Box sx={{ position: 'fixed', inset: 0, zIndex: 1300 }}>{paper}</Box>
-    );
-  }
 
   return (
       <Rnd
@@ -200,6 +210,8 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
           minHeight={200}
           bounds="window"
           dragHandleClassName="terminal-title"
+          enableResizing={!minimized && !maximized}
+          disableDragging={maximized}
           style={{ zIndex: 1300, position: 'fixed' }}
       >
         {paper}
