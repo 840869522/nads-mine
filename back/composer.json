@@ -6,13 +6,16 @@
     "license": "MIT",
     "require": {
         "php": "^8.0",
+        "beluga-php/docker-php": "^1.45",
+        "workerman/workerman": "^4.1",
         "firebase/php-jwt": "^6.11",
         "fruitcake/laravel-cors": "^2.0.5",
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^9.0",
         "laravel/sanctum": "^2.14",
         "laravel/tinker": "^2.7",
-        "maxlcoder/laravel-dm8": "^1.1"
+        "maxlcoder/laravel-dm8": "^1.1",
+        "symfony/property-access": "^7.3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
@@ -57,7 +60,10 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     },
     "minimum-stability": "dev",
     "prefer-stable": true
