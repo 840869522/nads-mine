@@ -206,8 +206,8 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
             setSize({ width: parseInt(ref.style.width, 10), height: parseInt(ref.style.height, 10) });
             setPosition(pos);
           }}
-          minWidth={300}
-          minHeight={200}
+          minWidth={minimized ? 240 : 300}
+          minHeight={minimized ? 40 : 200}
           bounds="window"
           dragHandleClassName="terminal-title"
           enableResizing={!minimized && !maximized}
