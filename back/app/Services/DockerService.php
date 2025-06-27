@@ -127,21 +127,6 @@ class DockerService
         $this->docker->containerDelete($id, ['force' => true]);
     }
 
-    public function containerLogs(string $id, int $tail = 200): string
-    {
-        // docker-php expects the tail option as string
-        $stream = $this->docker->containerLogs($id, [
-            'stdout' => true,
-            'stderr' => true,
-            'tail'   => (string) $tail,
-        ]);
-        $output = '';
-        foreach ($stream->getBody()->getIterator() as $chunk) {
-            $output .= $chunk;
-        }
-        return $output;
-    }
-
     public function containerStats(string $id)
     {
         return $this->docker->containerStats($id, ['stream' => false, 'one-shot' => true]);
@@ -160,6 +145,7 @@ class DockerService
 
     public function attachTerminal(string $id)
     {
+        logger()->debug("DOCKER: attachTerminal {$id}");
         return $this->docker->containerAttachWebsocket($id, [
             'stream' => true,
             'stdin'  => true,
