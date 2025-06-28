@@ -18,6 +18,14 @@
     |
     */
 
+    /**
+     * 管理员账户：admin
+     * 密码：  admin123 hash sha256加密后为：240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+     * 
+     * 测试用户： test_12
+     * 测试用户密码： test123 hash sha256 加密后为： ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae
+     * 
+     */
 
     Route::prefix("user")->group(function() {
         Route::post("/login",[UserController::class,"login"]);
