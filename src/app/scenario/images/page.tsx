@@ -36,7 +36,7 @@ import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
-const API_BASE = "http://localhost:8000";
+const API_BASE = '/api/php';
 
 const ImageManagementPage: React.FC = () => {
   const { user } = useAuth();
@@ -60,7 +60,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     try {
-      const res = await fetch(`${API_BASE}/api/images`);
+      const res = await fetch(`${API_BASE}/images${q}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setImages(data);
@@ -87,11 +87,11 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     if (editingImage) {
-      fetch(`${API_BASE}/api/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
+      fetch(`${API_BASE}/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
         setImages(prevImages => prevImages.map(img => (img.id === image.id ? image : img)));
       });
     } else {
-      fetch(`${API_BASE}/api/images${q}`, { method: 'POST', body: JSON.stringify(image) })
+      fetch(`${API_BASE}/images${q}`, { method: 'POST', body: JSON.stringify(image) })
         .then(res => res.json())
         .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
     }
@@ -108,14 +108,12 @@ const ImageManagementPage: React.FC = () => {
     setIsConfirmDialogOpen(false);
   };
 
-  const handleDeleteImage = () => {
-    if (!user) return;
-    if (imageToDelete) {
-      const q = `?userId=${user.id}&role=${user.role}&id=${imageToDelete.id}`;
-      fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' }).then(() => {
-        setImages(prevImages => prevImages.filter(img => img.id !== imageToDelete.id));
-      });
-    }
+  const handleDeleteImage = async () => {
+    if (!user || !imageToDelete) return;
+    const id = imageToDelete.id;
+    const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
+    await fetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
+    await fetchImages();
     handleCloseConfirmDialog();
   };
 
