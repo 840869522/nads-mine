@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Docker;
 
 use Illuminate\Http\Request;
 use App\Services\DockerService;
-use App\Models\Image;
+use App\Models\Docker\Image;
 use Illuminate\Support\Str;
 
 class ImagesController extends Controller

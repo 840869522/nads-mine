@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Docker;
 
 use Illuminate\Http\Request;
 use App\Services\DockerService;
-use App\Models\Instance;
+use App\Models\Docker\Instance;
 use Illuminate\Support\Str;
 
 class InstancesController extends Controller

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Docker;
 
 use Illuminate\Http\Request;
 use App\Services\DockerService;
@@ -14,7 +14,7 @@ class ContainersController extends Controller
         $this->docker = $docker;
     }
 
-    public function store(Request $request)
+    public function create(Request $request)
     {
         $userId = $request->token_data['id'] ?? null;
         $id = $this->docker->createContainer($request->all(), $userId);

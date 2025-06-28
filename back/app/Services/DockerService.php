@@ -8,7 +8,7 @@ use Docker\API\Model\ContainersCreatePostBody;
 use Docker\API\Model\HostConfig;
 use Docker\API\Model\PortBinding;
 use Docker\API\Model\ContainerConfigExposedPortsItem;
-use App\Models\DockerInstanceModel;
+use App\Models\Docker\DockerInstanceModel;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
@@ -102,7 +102,7 @@ class DockerService
 
         // 保存容器信息到数据库
         if ($userId) {
-            \App\Models\DockerInstanceModel::insertInstance([
+            \App\Models\Docker\DockerInstanceModel::insertInstance([
                 'instance_id' => $container->getId(),
                 'user_id'     => $userId,
                 'name'        => $options['name'] ?? null,

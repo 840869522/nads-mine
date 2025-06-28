@@ -1,5 +1,5 @@
 <?php
-namespace App\Models;
+namespace App\Models\Docker;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
