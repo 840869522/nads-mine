@@ -16,7 +16,8 @@ class ContainersController extends Controller
 
     public function store(Request $request)
     {
-        $id = $this->docker->createContainer($request->all());
+        $userId = $request->token_data['id'] ?? null;
+        $id = $this->docker->createContainer($request->all(), $userId);
         return response()->json(['id' => $id]);
     }
 

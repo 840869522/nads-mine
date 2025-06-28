@@ -8,6 +8,7 @@ use Docker\API\Model\ContainersCreatePostBody;
 use Docker\API\Model\HostConfig;
 use Docker\API\Model\PortBinding;
 use Docker\API\Model\ContainerConfigExposedPortsItem;
+use App\Models\DockerInstanceModel;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
@@ -39,7 +40,7 @@ class DockerService
         return $this->docker->imageList(['all' => true]);
     }
 
-    public function createContainer(array $options): string
+    public function createContainer(array $options, ?string $userId = null): string
     {
         // 0. 打印最初的 options
         logger()->debug('DOCKER: options', $options);
@@ -98,6 +99,19 @@ class DockerService
             empty($options['name']) ? [] : ['name' => $options['name']]
         );
         $this->docker->containerStart($container->getId());
+
+        // 保存容器信息到数据库
+        if ($userId) {
+            \App\Models\DockerInstanceModel::insertInstance([
+                'instance_id' => $container->getId(),
+                'user_id'     => $userId,
+                'name'        => $options['name'] ?? null,
+                'image'       => $options['image'],
+                'cmd'         => empty($options['cmd']) ? null : json_encode($options['cmd']),
+                'env'         => empty($options['env']) ? null : json_encode($options['env']),
+                'ports'       => empty($options['ports']) ? null : json_encode($options['ports'])
+            ]);
+        }
 
         return $container->getId();
     }

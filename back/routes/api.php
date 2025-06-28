@@ -69,7 +69,7 @@
     });
 
     Route::prefix('containers')->group(function () {
-        Route::post('/', [\App\Http\Controllers\ContainersController::class, 'store']);
+        Route::post('/', [\App\Http\Controllers\ContainersController::class, 'store'])->middleware('jwtcheck');
         Route::post('/{id}', [\App\Http\Controllers\ContainersController::class, 'action']);
         Route::get('/{id}', [\App\Http\Controllers\ContainersController::class, 'get']);
         Route::get('/{id}/logs', [\App\Http\Controllers\ContainersController::class, 'logs']);
