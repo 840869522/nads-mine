@@ -8,6 +8,7 @@ use Docker\API\Model\ContainersCreatePostBody;
 use Docker\API\Model\HostConfig;
 use Docker\API\Model\PortBinding;
 use Docker\API\Model\ContainerConfigExposedPortsItem;
+use App\Models\Docker\DockerInstanceModel;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
@@ -21,8 +22,10 @@ class DockerService
     {
 
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            logger()->debug("windows dockerd detect");
             $socket = getenv('DOCKER_HOST') ?: 'tcp://localhost:2375';
         } else {
+            logger()->debug("linux dockerd detect");
             $socket = getenv('DOCKER_HOST') ?: 'unix:///var/run/docker.sock';
         }
         $client = DockerClientFactory::create(['remote_socket' => $socket]);
@@ -39,7 +42,7 @@ class DockerService
         return $this->docker->imageList(['all' => true]);
     }
 
-    public function createContainer(array $options): string
+    public function createContainer(array $options, ?string $userId = null): string
     {
         // 0. 打印最初的 options
         logger()->debug('DOCKER: options', $options);
@@ -99,6 +102,19 @@ class DockerService
         );
         $this->docker->containerStart($container->getId());
 
+        // 保存容器信息到数据库
+        if ($userId) {
+            \App\Models\Docker\DockerInstanceModel::insertInstance([
+                'instance_id' => $container->getId(),
+                'user_id'     => $userId,
+                'name'        => $options['name'] ?? null,
+                'image'       => $options['image'],
+                'cmd'         => empty($options['cmd']) ? null : json_encode($options['cmd']),
+                'env'         => empty($options['env']) ? null : json_encode($options['env']),
+                'ports'       => empty($options['ports']) ? null : json_encode($options['ports'])
+            ]);
+        }
+
         return $container->getId();
     }
 
@@ -127,6 +143,11 @@ class DockerService
         $this->docker->containerDelete($id, ['force' => true]);
     }
 
+    public function removeImage(string $id)
+    {
+        $this->docker->imageDelete($id, ['force' => true]);
+    }
+
     public function containerStats(string $id)
     {
         return $this->docker->containerStats($id, ['stream' => false, 'one-shot' => true]);
@@ -143,24 +164,4 @@ class DockerService
         return $info->getMounts() ?? [];
     }
 
-    public function attachTerminal(string $id)
-    {
-        logger()->debug("DOCKER: attachTerminal {$id}");
-        return $this->docker->containerAttachWebsocket($id, [
-            'stream' => true,
-            'stdin'  => true,
-            'stdout' => true,
-            'stderr' => true,
-        ]);
-    }
-
-    public function attachLogs(string $id)
-    {
-        return $this->docker->containerAttachWebsocket($id, [
-            'stream' => true,
-            'stdout' => true,
-            'stderr' => true,
-            'logs'   => true,
-        ]);
-    }
 }

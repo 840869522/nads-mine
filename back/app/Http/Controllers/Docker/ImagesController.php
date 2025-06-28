@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Docker;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\DockerService;
-use App\Models\Image;
+use App\Models\Docker\Image;
 use Illuminate\Support\Str;
 
 class ImagesController extends Controller
@@ -64,6 +65,11 @@ class ImagesController extends Controller
     {
         $id = $request->query('id');
         if ($id) {
+            try {
+                $this->docker->removeImage($id);
+            } catch (\Throwable $e) {
+                logger()->error('Failed to remove docker image', ['error' => $e->getMessage()]);
+            }
             Image::where('id', $id)->delete();
         }
         return response()->json(['ok' => true]);

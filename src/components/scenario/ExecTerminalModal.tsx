@@ -19,7 +19,7 @@ interface ExecTerminalModalProps {
 export default function ExecTerminalModal({ open, containerId, onClose }: ExecTerminalModalProps) {
   const theme = useTheme();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const termRef = useRef<any>();
+  const termRef = useRef<any>(null);
   const socketRef = useRef<Socket | null>(null);
   const dragRef = useRef<HTMLDivElement | null>(null);
   const fitAddonRef = useRef<any>(null);
