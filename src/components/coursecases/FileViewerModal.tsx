@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -8,12 +7,11 @@ import {
   Button,
   Box,
   Typography,
-  Link as MuiLink,
   IconButton,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'; // Import for new tab icon
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CourseCaseFile } from '../../types';
 
 interface FileViewerModalProps {
@@ -23,11 +21,36 @@ interface FileViewerModalProps {
 }
 
 const FileViewerModal: React.FC<FileViewerModalProps> = ({ open, onClose, file }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && file?.url) {
+      setIsLoading(true);
+      setError(null);
+      fetch(file.url)
+        .then(res => {
+          if (!res.ok) throw new Error('无法加载文件');
+          setIsLoading(false);
+        })
+        .catch(() => {
+          setError('无法加载文件，请检查文件是否存在');
+          setIsLoading(false);
+        });
+    }
+  }, [open, file]);
+
   if (!file) return null;
 
   const renderFileContent = () => {
+    if (isLoading) {
+      return <Typography sx={{ p: 3 }}>加载中...</Typography>;
+    }
+    if (error) {
+      return <Typography color="error" sx={{ p: 3 }}>{error}</Typography>;
+    }
     if (!file.url) {
-        return <Typography color="error" sx={{p:3}}>文件URL无效或丢失，无法预览。</Typography>;
+      return <Typography color="error" sx={{ p: 3 }}>文件URL无效或丢失，无法预览。</Typography>;
     }
     switch (file.format) {
       case 'pdf':
@@ -40,7 +63,7 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ open, onClose, file }
               由于浏览器安全设置，PDF 文件可能无法在此直接显示。请点击下方按钮在新标签页中打开查看。
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              文件名: {file.name}
+              文件名: {file.name} | 大小: {(file.size / (1024 * 1024)).toFixed(2)} MB
             </Typography>
             <Button
               variant="contained"
@@ -55,19 +78,46 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ open, onClose, file }
           </Box>
         );
       case 'mp4':
-      case 'avi': // AVI might not be supported by all browsers with <video>
+      case 'avi':
         return (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2, bgcolor: 'common.black' }}>
             <video
               controls
               autoPlay
               src={file.url}
-              style={{ maxWidth: '100%', maxHeight: '75vh', outline: 'none' }}
-              onError={(e) => console.error('Video playback error:', e)}
+              style={{ maxWidth: '100%', maxHeight: '70vh', outline: 'none' }}
+              onError={(e) => setError('视频播放失败')}
             >
               您的浏览器不支持视频标签。
-              {file.format === 'avi' && <Typography variant="caption" color="warning.main" display="block" mt={1}>.avi 格式可能无法在所有浏览器中直接播放。</Typography>}
+              {file.format === 'avi' && (
+                <Typography variant="caption" color="warning.main" display="block" mt={1}>
+                  .avi 格式可能无法在所有浏览器中直接播放。
+                </Typography>
+              )}
             </video>
+          </Box>
+        );
+      case 'image':
+        return (
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <img
+              src={file.url}
+              alt={file.name}
+              style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+              onError={() => setError('图片加载失败')}
+            />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              文件名: {file.name} | 大小: {(file.size / (1024 * 1024)).toFixed(2)} MB
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              href={file.url}
+              download={file.name}
+              sx={{ mt: 2 }}
+            >
+              下载图片
+            </Button>
           </Box>
         );
       case 'pptx':
@@ -82,7 +132,7 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ open, onClose, file }
               文件名: {file.name}
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              大小: {file.size || '未知'}
+              大小: {(file.size / (1024 * 1024)).toFixed(2)} MB
             </Typography>
             <Button
               variant="contained"
@@ -90,50 +140,47 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ open, onClose, file }
               href={file.url}
               download={file.name}
               sx={{ mt: 2 }}
-              target="_blank" // Good practice for blob URLs too
-              rel="noopener noreferrer" // Security for target="_blank"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               下载文件
             </Button>
-             <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 2 }}>
-                提示：如果下载未开始，请尝试右键点击按钮并选择“链接另存为...”。
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 2 }}>
+              提示：如果下载未开始，请尝试右键点击按钮并选择“链接另存为...”。
             </Typography>
           </Box>
         );
       default:
-        return <Typography sx={{p:3}}>未知或不支持的文件格式。</Typography>;
+        return <Typography sx={{ p: 3 }}>未知或不支持的文件格式。</Typography>;
     }
   };
 
   return (
-    <Dialog 
-        open={open} 
-        onClose={onClose} 
-        maxWidth={file.format === 'mp4' || file.format === 'avi' ? 'lg' : 'sm'} // PDF now uses 'sm'
-        fullWidth
-        PaperProps={{ sx: { minHeight: file.format === 'mp4' || file.format === 'avi' ? '85vh' : 'auto', display:'flex', flexDirection:'column' } }}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={file.format === 'mp4' || file.format === 'avi' ? 'lg' : 'md'}
+      fullWidth
+      PaperProps={{ sx: { minHeight: file.format === 'mp4' || file.format === 'avi' ? '70vh' : 'auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column' } }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="h6" component="span" noWrap sx={{maxWidth: 'calc(100% - 48px)'}}>
+        <Typography variant="h6" component="span" noWrap sx={{ maxWidth: 'calc(100% - 48px)' }}>
           {file.name}
         </Typography>
         <IconButton
           aria-label="close"
           onClick={onClose}
-          sx={{
-            color: (theme) => theme.palette.grey[500],
-          }}
+          sx={{ color: (theme) => theme.palette.grey[500] }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ p: (file.format === 'mp4' || file.format === 'avi' ? 0 : 2), flexGrow:1, overflowY: 'auto' }}>
+      <DialogContent sx={{ p: (file.format === 'mp4' || file.format === 'avi' ? 0 : 2), flexGrow: 1, overflowY: 'auto' }}>
         {renderFileContent()}
       </DialogContent>
-      {/* Conditionally render DialogActions for non-video/non-pdf-iframe types */}
       {(file.format !== 'mp4' && file.format !== 'avi') && (
-        <DialogActions sx={{borderTop: 1, borderColor: 'divider', p:2}}>
-            <Button onClick={onClose} variant="outlined">关闭</Button>
+        <DialogActions sx={{ borderTop: 1, borderColor: 'divider', p: 2 }}>
+          <Button onClick={onClose} variant="outlined">关闭</Button>
         </DialogActions>
       )}
     </Dialog>
