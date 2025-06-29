@@ -63,7 +63,7 @@ class InstancesController extends Controller
             }
 
             // 如果 list 中没端口，fallback 到 inspect
-            if (empty($ports)) {
+            if (true) {
                 try {
                     $detail = $this->docker->containerInspect($info->getId());
                     $bindings = $detail->getHostConfig()->getPortBindings();

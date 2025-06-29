@@ -134,8 +134,8 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
             <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
             {ports.map((p, idx) => (
               <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }} />
                 <TextField label="主机端口" size="small" value={p.hostPort} onChange={e => handlePortChange(idx, 'hostPort', e.target.value)} sx={{ flex: 1 }} />
+                <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }} />
                 <IconButton onClick={() => handleRemovePort(idx)} size="small"><RemoveCircleOutlineIcon /></IconButton>
               </Box>
             ))}
