@@ -15,7 +15,7 @@
 
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;
-            $sql = "SELECT * FROM `c_ROLES` LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
             try {  
                 $res = db::select($sql,[$pagesize,$offset]);
                 return [
@@ -33,7 +33,7 @@
 
         public static function getRoleById(?string $id) :array {
             try {
-                $sql = "SELECT * FROM  `c_ROLES` WHERE `id` = ?";
+                $sql = "SELECT * FROM  `c_roles` WHERE `id` = ?";
                 $res = db::selectOne($sql,[$id]);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -48,7 +48,7 @@
         }
 
         public static function grantRole2User (string $role_id,string $user_id):array {
-            $sql = "INSERT INTO c_USERS_ROLES VALUES(?,?)";
+            $sql = "INSERT INTO c_users_roles VALUES(?,?)";
             try {
                 db::beginTransaction();
                 $res = db::insert($sql,[$user_id,$role_id]);
@@ -72,7 +72,7 @@
         }
 
         public static function revokeRoleFromUser(string $role_id,string $permission_id):array {
-            $sql = "DELETE FROM c_USERS_ROLES WHERE role_id = ? and user_id = ?";
+            $sql = "DELETE FROM c_users_roles WHERE role_id = ? and user_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$role_id,$permission_id]);
@@ -97,7 +97,7 @@
 
 
         public static function insertNewRole(?array $data) :array {
-            $sql = "INSERT INTO c_ROLES(id,name,create_at,update_at) VALUES(?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_roles(id,name,create_at,update_at) VALUES(?,?,NOW(),NOW())";
             try {
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['id'],$data['name']]);
@@ -120,7 +120,7 @@
         }
 
         public static function updateRoleById(string $id,?array $data) :array {
-            $sql = "UPDATE c_ROLES SET name = ?,update_at = NOW() WHERE id = ?";
+            $sql = "UPDATE c_roles SET name = ?,update_at = NOW() WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);
@@ -143,7 +143,7 @@
         }
 
         public static function deleteRoleById(string $id):array {
-            $sql = "DELETE FROM c_ROLES WHERE id = ?";
+            $sql = "DELETE FROM c_roles WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);

@@ -64,6 +64,7 @@
             return response()->json(['message' => '删除成功']);
         }
         public function store(Request $request){
+            $toke_data = $request->input('token_data');
             $request->validate([
                 'course_name' => 'required|string',
                 'category_id' => 'required|exists:c_COURSE_CATEGORIES,category_id',
@@ -75,7 +76,7 @@
                 'course_name' => $request->course_name,
                 'description' => $request->description,
                 'category_id' => $request->category_id,
-                'user_id' => auth()->id() ?? 1, // 临时默认用户ID
+                'user_id' => $token_data['id'] ?? 1, // 临时默认用户ID
             ]);
 
             if ($request->hasFile('files')) {

@@ -15,7 +15,7 @@
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             try {
                 $offset = ($page - 1 ) * $pagesize;
-                $sql = "SELECT user_id,user_name,email FROM `c_USERS`  LIMIT ? OFFSET ?";
+                $sql = "SELECT user_id,user_name,email FROM `c_users`  LIMIT ? OFFSET ?";
                 $user = db::select($sql, [$pagesize, $offset]);
                 return [
                     "data"=>$user,
@@ -30,7 +30,7 @@
         }
 
         public static function getUserByName(string $name) : array {
-            $sql = "SELECT * FROM `c_USERS` WHERE user_name = ?";
+            $sql = "SELECT * FROM `c_users` WHERE user_name = ?";
             try {
                 $res = db::selectOne($sql,[$name]);
                 return [
@@ -48,7 +48,7 @@
         public static function getUserPrimissions (string $id) : array {
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT  cper.name FROM `c_USERS_ROLES` AS cur JOIN `c_ROLES_PERMISSIONS` AS crp  ON cur.role_id = crp.role_id JOIN `c_PERMISSIONS` AS cper ON crp.permission_id = cper.id WHERE cur.user_id = ?" ;
+                $sql = "SELECT DISTINCT  cper.label FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.role_id = crp.role_id JOIN `c_permisssions` AS cper ON crp.permission_id = cper.id WHERE cur.user_id = ?" ;
                 $res = db::select($sql,[$id]);
                 db::commit();
                 return [
@@ -64,7 +64,7 @@
         }
 
         public static function getUserById(string $id) :array {
-            $sql = "SELECT * FROM `c_USERS` WHERE user_id = ? OR user_name = ?";
+            $sql = "SELECT * FROM `c_users` WHERE user_id = ? OR user_name = ?";
             try {
                 $res = db::selectOne($sql,[$id,$id]);
                 return [
@@ -81,7 +81,7 @@
 
         public static function insertNewUser(array $data) :array {
             try {
-                $sql = "INSERT INTO `c_USERS`(user_name, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(user_name, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
@@ -104,7 +104,7 @@
 
 
         public static function updateUserById(string $id, array $data) :array {
-            $sql = "UPDATE `c_USERS` SET email = ?,password = ?, update_at = NOW() WHERE user_id = ?";
+            $sql = "UPDATE `c_users` SET email = ?,password = ?, update_at = NOW() WHERE user_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['email'],$data['password'],$id]);
@@ -128,7 +128,7 @@
 
 
         public static function deleteUserById (string $id) :array {
-            $sql = "DELETE * FROM `c_USERS` WHERE id = ?";
+            $sql = "DELETE * FROM `c_users` WHERE id = ?";
             $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
             try {
                 if (!$id)

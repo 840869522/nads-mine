@@ -17,7 +17,7 @@
         public static function getAllPermission(int $page = 1,int $pagesize = 10):?array {
             try {
                 $offset = ( $page - 1) *$pagesize;
-                $sql = "SELECT * FROM `c_PERMISSIONS` LIMIT ? OFFSET ?";
+                $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
                 $res  = db::select($sql,[$pagesize,$offset]);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -34,7 +34,7 @@
 
         public static function getPermissionById(?string $id) {
             try {
-                $sql =  "SELECT * FROM `c_PERMISSIONS` WHERE `id` = ?";
+                $sql =  "SELECT * FROM `c_permissions` WHERE `id` = ?";
                 $res = db::selectOne($sql,[$id]);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -49,7 +49,7 @@
         }
 
         public static function grantPermission2Role (string $role_id,string $permission_id):array {
-            $sql = "INSERT INTO c_ROLES_PERMISSIONS VALUES(?,?)";
+            $sql = "INSERT INTO c_roles_permissions VALUES(?,?)";
             try {
                 db::beginTransaction();
                 $res = db::insert($sql,[$role_id,$permission_id]);
@@ -73,7 +73,7 @@
         }
 
         public static function revokePermissionFromRole(string $role_id,string $permission_id):array {
-            $sql = "DELETE FROM c_ROLES_PERMISSIONS WHERE role_id = ? and permission_id = ?";
+            $sql = "DELETE FROM c_roles_permissions WHERE role_id = ? and permission_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$role_id,$permission_id]);
@@ -97,7 +97,7 @@
         }
 
         public static function insertNewPermission(array $data) : array {
-            $sql = "INSERT INTO c_PERMISSIONS VALUES(?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_permissions VALUES(?,?,NOW(),NOW())";
             try {
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['id'],$data["name"]]);
@@ -122,7 +122,7 @@
 
         
         public static function updatePermission(string $id,array $data):array {
-            $sql = "UPDATE `c_PERMISSIONS` SET name= ?,update_at =NOW() WHERE id = ?";
+            $sql = "UPDATE `c_permissions` SET label= ?,update_at =NOW() WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);
@@ -145,7 +145,7 @@
         }
 
         public static function deletePermission(string $id) :array {
-            $sql = "DELETE * FROM  c_PERMISSIONS WHERE id = ?";
+            $sql = "DELETE * FROM  c_permissions WHERE id = ?";
             $sql_role_permissions = "DELETE * FROM c_ROLES_PERMISSIONS WHERE permission_id = ? ";
             try {
                 db::beginTransaction();

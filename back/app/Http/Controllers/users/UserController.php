@@ -90,10 +90,10 @@
             }
             $primissions = UserModel::getUserPrimissions($user->user_name);
             $jwtRes = JWTControll::encodeJWT([
-                "id" => $user->user_id,
+                "id" => $user->id,
                 // "role" => $user->role_id,
                 "permission" => array_map(function ($item) {
-                    return $item->name;
+                    return $item->label;
                 }, $primissions["data"])
             ]);
             if ($jwtRes["err"] != null) {
@@ -107,7 +107,7 @@
                 "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,
                 "data" => [
                     "token" => $jwtRes['token'],
-                    "id" => $user->user_id
+                    "id" => $user->id
                 ]
             ]);
         }
