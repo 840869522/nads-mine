@@ -10,6 +10,7 @@
     use App\Http\Controllers\ImagesController;
     use App\Http\Controllers\InstancesController;
     use App\Http\Controllers\ContainersController;
+use App\Models\Users\PermissionModel;
 
     /*
     |--------------------------------------------------------------------------
@@ -34,6 +35,7 @@
     Route::prefix("user")->group(function() {
         Route::post("/login",[UserController::class,"login"]);
         Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
+        Route::post("/search",[UserController::class,"searchUser"])->middleware("jwtcheck:get-all-users");
         Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
         Route::post("/new",[UserController::class,"insertNewUser"]);
         Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
@@ -43,6 +45,7 @@
     Route::prefix("role")->group(function(){
         Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
         Route::post("/id",[RoleController::class,"getRoleById"]);
+        Route::post("/search",[RoleController::class,"searchRole"])->middleware("jwtcheck:get-all-roles");
         Route::post("/new",[RoleController::class,"newRole"])->middleware("jwtcheck:edit-roles");
         Route::post("/update",[RoleController::class, "updateRole"])->middleware("jwtcheck:edit-roles");
         Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
@@ -53,6 +56,8 @@
     Route::prefix('permission')->group(function () {
         Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
         Route::post('/id', [PermissionController::class, 'getPermissionById']);
+        Route::post("/search",[PermissionController::class,"searchPermission"])->middleware("jwtcheck:get-all-permissions");
+        Route::post("/role",[PermissionController::class,"getPermissionsByRoleId"])->middleware("jwtcheck:get-all-permissions");
         Route::post('/new', [PermissionController::class, 'newPermission'])->middleware('jwtcheck:edit-permissions');
         Route::post('/update', [PermissionController::class, 'updatePermission'])->middleware('jwtcheck:edit-permissions');
         Route::post('/delete', [PermissionController::class, 'deletePermission'])->middleware('jwtcheck:edit-permissions');

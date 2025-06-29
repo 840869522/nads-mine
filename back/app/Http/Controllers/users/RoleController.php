@@ -59,6 +59,33 @@
             ]);
         }
 
+        public function searchRole(Request $req){
+            $reqData =  $req->json()->all();
+            try {
+                $page = $reqData["page"];
+                $pagesize = $reqData["pagesize"];
+                $name = $reqData['name'];
+            } catch (Exception $_) {
+                $page = 1;
+                $pagesize = 10;
+                $name = $reqData['name'];
+            }
+            $modelRes = RoleModel::searchRoleByName($name, $page, $pagesize);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => $modelRes['data']
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "data" => null
+                ]);
+            }
+        }
+
         public function grantRoles2User(Request $req){
             $reqData = $req->json()->all();
             try {

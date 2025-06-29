@@ -15,7 +15,7 @@
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             try {
                 $offset = ($page - 1 ) * $pagesize;
-                $sql = "SELECT user_id,user_name,email FROM `c_users`  LIMIT ? OFFSET ?";
+                $sql = "SELECT id,user_name,email,status,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
                 $user = db::select($sql, [$pagesize, $offset]);
                 return [
                     "data"=>$user,
@@ -27,6 +27,23 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
+        }
+
+        public static function searchUserByName(string $name, int $page=1, int $pagesize=10):array {
+            $sql = "SELECT id,user_name,email,status,last_login,create_at,update_at FROM `c_users` WHERE `user_name` LIKE ? LIMIT ? OFFSET ?";
+            $offset = ($page - 1) * $pagesize;
+            try {
+                $user = db::select($sql, ['%'.$name.'%',$pagesize, $offset]);
+                return [
+                    "data"=>$user,
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                ];
+            }catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            } 
         }
 
         public static function getUserByName(string $name) : array {
@@ -48,7 +65,7 @@
         public static function getUserPrimissions (string $id) : array {
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT  cper.label FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.role_id = crp.role_id JOIN `c_permisssions` AS cper ON crp.permission_id = cper.id WHERE cur.user_id = ?" ;
+                $sql = "SELECT DISTINCT cper.label FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.role_id = crp.role_id JOIN `c_permissions` AS cper ON crp.permission_id = cper.id WHERE cur.user_id = ?" ;
                 $res = db::select($sql,[$id]);
                 db::commit();
                 return [
@@ -155,6 +172,11 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
+        }
+
+        public static function updateUserLastLogin(int $id) {
+            $sql = "UPDATE c_users SET last_login = NOW() WHERE id = ?";
+            db::update($sql,[$id]);
         }
 
     }

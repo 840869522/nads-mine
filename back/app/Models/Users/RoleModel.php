@@ -47,6 +47,23 @@
             }
         }
 
+        public static function searchRoleByName(string $name, int $page = 1,int $pagesize=10) :array {
+            $sql = "SELECT * FROM `c_roles` WHERE name_key LIKE ? OR name_display LIKE ? LIMIT ? OFFSET ?";
+            $offset = ($page - 1) * $pagesize;
+            try {
+                $user = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
+                return [
+                    "data"=>$user,
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                ];
+            }catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            } 
+        }
+
         public static function grantRole2User (string $role_id,string $user_id):array {
             $sql = "INSERT INTO c_users_roles VALUES(?,?)";
             try {
@@ -97,10 +114,10 @@
 
 
         public static function insertNewRole(?array $data) :array {
-            $sql = "INSERT INTO c_roles(id,name,create_at,update_at) VALUES(?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_roles(id,name_key,name_display,description,create_at,update_at) VALUES(?,?,?,?,NOW(),NOW())";
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$data['id'],$data['name']]);
+                $res = db::insert($sql,[$data['id'],$data['name'],$data['name_display'],$data['description']]);
                 if ($res) {
                     db::commit();
                     return [
@@ -120,7 +137,7 @@
         }
 
         public static function updateRoleById(string $id,?array $data) :array {
-            $sql = "UPDATE c_roles SET name = ?,update_at = NOW() WHERE id = ?";
+            $sql = "UPDATE c_roles SET name_key = ?,name_display = ?,description = ?,update_at = NOW() WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);

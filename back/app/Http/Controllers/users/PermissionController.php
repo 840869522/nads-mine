@@ -57,6 +57,56 @@
             }
         }
 
+        public function searchPermission(Request $req){
+            $reqData =  $req->json()->all();
+            try {
+                $page = $reqData["page"];
+                $pagesize = $reqData["pagesize"];
+                $name = $reqData['name'];
+            } catch (Exception $_) {
+                $page = 1;
+                $pagesize = 10;
+                $name = $reqData['name'];
+            }
+            $modelRes = PermissionModel::searchPermissionByName($name, $page, $pagesize);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => $modelRes['data']
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "data" => null
+                ]);
+            }
+        }
+
+        public function getPermissionsByRoleId(Request $req) {
+            $reqData = $req->json()->all();
+            try {
+                $role_id = $reqData['role_id'];
+            }catch (Exception $e) {
+                return response()->json([
+                    "code"=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            $modelRes = PermissionModel::getPermissionsByRoleId($role_id);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                return response()->json([
+                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message"=>GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+            return response()->json([
+                "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
+                'data'=>$modelRes["data"]
+            ]);
+        }
 
         public function grantPermission2Role(Request $req){
             $reqData = $req->json()->all();
@@ -81,6 +131,7 @@
                 "message"=>GlobalResponse::HTTP_STATUS_OK_MES
             ]);
         }
+
 
         public function revokePermissionFromRole(Request $req){
             $reqData = $req->json()->all();
