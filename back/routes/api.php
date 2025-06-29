@@ -64,6 +64,13 @@
         Route::get('/', [ScenarioController::class, 'index']);
         Route::post('/', [ScenarioController::class, 'store']);
         Route::delete('/', [ScenarioController::class, 'destroy']);
+        // PUT /api/scenarios/{scenario} - 更新一个指定的场景Add commentMore actions
+        // 我们使用 {scenario} 作为参数，Laravel 可以自动通过ID找到对应的模型实例 (Route Model Binding)
+        Route::put('/{scenario}', [ScenarioController::class, 'update']);
+
+
+        Route::get('/{scenario}', [ScenarioController::class, 'update']);
+
     });
 
     Route::prefix('images')->group(function () {
