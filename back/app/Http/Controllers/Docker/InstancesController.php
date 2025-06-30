@@ -105,22 +105,6 @@ class InstancesController extends Controller
         return response()->json($result);
     }
 
-    public function store(Request $request)
-    {
-        $data = $request->all();
-        $data['id'] = Str::uuid()->toString();
-        Instance::create($data);
-        return response()->json(['ok' => true, 'id' => $data['id']]);
-    }
-
-    public function update(Request $request)
-    {
-        $data = $request->all();
-        $inst = Instance::findOrFail($data['id']);
-        $inst->fill($data);
-        $inst->save();
-        return response()->json(['ok' => true]);
-    }
 
     public function destroy(Request $request)
     {

@@ -65,6 +65,11 @@ class ImagesController extends Controller
     {
         $id = $request->query('id');
         if ($id) {
+            try {
+                $this->docker->removeImage($id);
+            } catch (\Throwable $e) {
+                logger()->error('Failed to remove docker image', ['error' => $e->getMessage()]);
+            }
             Image::where('id', $id)->delete();
         }
         return response()->json(['ok' => true]);

@@ -141,6 +141,11 @@ class DockerService
         $this->docker->containerDelete($id, ['force' => true]);
     }
 
+    public function removeImage(string $id)
+    {
+        $this->docker->imageDelete($id, ['force' => true]);
+    }
+
     public function containerStats(string $id)
     {
         return $this->docker->containerStats($id, ['stream' => false, 'one-shot' => true]);
@@ -157,24 +162,4 @@ class DockerService
         return $info->getMounts() ?? [];
     }
 
-    public function attachTerminal(string $id)
-    {
-        logger()->debug("DOCKER: attachTerminal {$id}");
-        return $this->docker->containerAttachWebsocket($id, [
-            'stream' => true,
-            'stdin'  => true,
-            'stdout' => true,
-            'stderr' => true,
-        ]);
-    }
-
-    public function attachLogs(string $id)
-    {
-        return $this->docker->containerAttachWebsocket($id, [
-            'stream' => true,
-            'stdout' => true,
-            'stderr' => true,
-            'logs'   => true,
-        ]);
-    }
 }

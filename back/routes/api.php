@@ -63,8 +63,6 @@
 
     Route::prefix('instances')->group(function () {
         Route::get('/', [\App\Http\Controllers\Docker\InstancesController::class, 'index']);
-        Route::post('/', [\App\Http\Controllers\Docker\InstancesController::class, 'store']);
-        Route::put('/', [\App\Http\Controllers\Docker\InstancesController::class, 'update']);
         Route::delete('/', [\App\Http\Controllers\Docker\InstancesController::class, 'destroy']);
     });
 
@@ -72,9 +70,7 @@
         Route::post('/', [\App\Http\Controllers\Docker\ContainersController::class, 'create']);
         Route::post('/{id}', [\App\Http\Controllers\Docker\ContainersController::class, 'action']);
         Route::get('/{id}', [\App\Http\Controllers\Docker\ContainersController::class, 'get']);
-        Route::get('/{id}/logs', [\App\Http\Controllers\Docker\ContainersController::class, 'logs']);
         Route::get('/{id}/inspect', [\App\Http\Controllers\Docker\ContainersController::class, 'inspect']);
-        Route::get('/{id}/binds', [\App\Http\Controllers\Docker\ContainersController::class, 'binds']);
     });
 
 ?>

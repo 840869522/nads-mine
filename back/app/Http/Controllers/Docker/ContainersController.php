@@ -45,15 +45,9 @@ class ContainersController extends Controller
         $action = $request->query('action');
         return match ($action) {
             'logs' => response()->json(['logs' => $this->docker->containerLogs($id)]),
-            'inspect' => response()->json($this->docker->containerInspect($id)),
             'binds' => response()->json($this->docker->listBindMounts($id)),
             default => response()->json(['error' => 'unknown action'], 400),
         };
-    }
-
-    public function logs(string $id)
-    {
-        return response()->json(['logs' => $this->docker->containerLogs($id)]);
     }
 
     public function inspect(string $id)
@@ -64,10 +58,5 @@ class ContainersController extends Controller
         $data = json_decode($raw, true);                  // 可选：转数组// 对象
         logger()->info('Container info', $data);
         return response()->json($data);
-    }
-
-    public function binds(string $id)
-    {
-        return response()->json($this->docker->listBindMounts($id));
     }
 }
