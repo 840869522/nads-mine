@@ -1,5 +1,6 @@
 <?php
 
+
     use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
@@ -13,7 +14,7 @@
     use App\Http\Controllers\Course\CourseController;
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
-    
+
 
     /*
     |--------------------------------------------------------------------------
@@ -112,20 +113,20 @@
             // 获取所有队伍列表
             // GET /api/ad/team
             Route::get('/', [TeamController::class, 'index']);
-        
+
             // 创建一个新队伍
             // POST /api/ad/team
             Route::post('/', [TeamController::class, 'store']);
-        
+
             // 获取单个队伍的详细信息
             // GET /api/ad/team/{team}
             // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
             Route::get('/{team}', [TeamController::class, 'show']);
-        
+
             // 更新一个已存在的队伍
             // PUT /api/ad/team/{team}
             Route::put('/{team}', [TeamController::class, 'update']);
-        
+
             // 删除一个队伍
             // DELETE /api/ad/team/{team}
             Route::delete('/{team}', [TeamController::class, 'destroy']);
@@ -144,14 +145,14 @@
             Route::delete('/{id}',[CourseController::class,'destroy'])->middleware('can:delete-courses')->name('courses.destroy');
             Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('can:manage-courses')->name('courses.addUser');
         })->middleware('jwtcheck');
-    
+
         Route::prefix('categories')->group(function(){
             Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
             Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
             Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
             Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
         })->middleware('jwtcheck:study_');
-    
+
         Route::prefix('courses/{courseId}/resources')->group(function () {
             Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
             Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
