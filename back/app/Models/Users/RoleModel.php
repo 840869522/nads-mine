@@ -16,11 +16,14 @@
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;
             $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(name_key) AS count FROM `c_roles`";
             try {  
                 $res = db::select($sql,[$pagesize,$offset]);
+                $count = db::select($sql_count);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
-                    "data"=>$res
+                    "data"=>$res,
+                    "count"=> $count[0]->count
                 ];
             }catch (QueryException $e) {
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());

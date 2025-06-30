@@ -25,7 +25,10 @@
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "message" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" => $modelRes['data']
+                    "data" =>[ 
+                        'data' =>$modelRes['data'],
+                        'count'=> $modelRes['count']
+                    ] 
                 ]);
             else {
                 return response()->json([

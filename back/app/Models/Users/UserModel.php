@@ -13,12 +13,15 @@
         protected  $table = "platform_user";
 
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
+            $offset = ($page - 1 ) * $pagesize;
+            $sql = "SELECT id,user_name,email,status,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(id) AS count FROM `c_users`";
             try {
-                $offset = ($page - 1 ) * $pagesize;
-                $sql = "SELECT id,user_name,email,status,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
                 $user = db::select($sql, [$pagesize, $offset]);
+                $count = db::select($sql_count);
                 return [
                     "data"=>$user,
+                    "count" =>$count[0]->count,
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch(QueryException $e) {

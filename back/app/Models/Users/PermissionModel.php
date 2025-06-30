@@ -15,13 +15,16 @@
 
 
         public static function getAllPermission(int $page = 1,int $pagesize = 10):?array {
+            $offset = ( $page - 1) *$pagesize;
+            $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(id) AS count FROM `c_permissions`";
             try {
-                $offset = ( $page - 1) *$pagesize;
-                $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
                 $res  = db::select($sql,[$pagesize,$offset]);
+                $count = db::selectOne($sql_count);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
-                    "data" => $res
+                    "data" => $res,
+                    "count"=>$count->count
                 ];
             }catch (QueryException $e) {
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
