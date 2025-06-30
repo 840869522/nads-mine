@@ -68,10 +68,12 @@ export type DeviceType =
   | 'nat_bridge' 
   | 'router';
 
+//场景node编辑
 export interface NodeConfig {
   deviceName: string;
   dockerImage: string;
-  portMappings: string; 
+  portMappings: string;
+  env?: string; // <--- 新增此行，设为可选
 }
 
 export interface TopologyNode {

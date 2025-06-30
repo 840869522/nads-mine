@@ -113,7 +113,43 @@ const ScenarioManagementPage: React.FC = () => {
             handleCloseDeleteDialog(); // 关闭弹窗
         }
     };
+    // 启动场景
+    const handleStartDrill = async (scenario: Scenario) => {
+        // 为了更好的用户体验，可以考虑添加一个行内加载状态
+        // 此处为了简化，我们先用 alert 提示
+        console.log(`正在尝试启动场景: ${scenario.name}`);
 
+        // 可以弹出一个确认框，防止误操作
+        if (!window.confirm(`您确定要启动场景 “${scenario.name}” 的演练吗？`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/scenarios/${scenario.id}/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                // 如果后端返回错误，抛出错误信息
+                throw new Error(result.message || '启动失败');
+            }
+
+            // 成功时，显示后端返回的成功信息
+            alert(result.message);
+            // 你也可以在这里做其他操作，比如跳转到演练监控页面等
+
+        } catch (err: any) {
+            // 失败时，显示错误弹窗
+            setError(err.message || '发生未知网络错误');
+            alert(`启动失败: ${err.message}`);
+        }
+    };
     // 新增一个临时的编辑处理函数
     const handleEditScenario = (scenario: Scenario) => {
         setEditingScenario(scenario);
@@ -212,7 +248,12 @@ const ScenarioManagementPage: React.FC = () => {
                                         </TableCell>
                                         <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
                                         <TableCell align="right">
-                                            <Tooltip title="启动演练"><IconButton color="success" size="small"><StartIcon /></IconButton></Tooltip>
+                                            <Tooltip title="启动演练">
+                                                {/* 在这里添加 onClick 事件 */}
+                                                <IconButton color="success" size="small" onClick={() => handleStartDrill(scenario)}>
+                                                    <StartIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {/* 3. 更新删除按钮的 onClick 事件 */}
                                             <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
                                             <Tooltip title="编辑场景">
