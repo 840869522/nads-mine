@@ -280,7 +280,7 @@ const RunningInstancesPage: React.FC = () => {
                     const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
                     await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
-                setInstances(prev => prev.filter(i => i.id !== id));
+                fetchInstances();
             },
             instanceName: instance.name
         });

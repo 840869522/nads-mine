@@ -108,13 +108,12 @@ const ImageManagementPage: React.FC = () => {
     setIsConfirmDialogOpen(false);
   };
 
-  const handleDeleteImage = () => {
+  const handleDeleteImage = async () => {
     if (!user || !imageToDelete) return;
     const id = imageToDelete.id;
     const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
-    fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' }).then(() => {
-      setImages(prevImages => prevImages.filter(img => img.id !== id));
-    });
+    await fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' });
+    await fetchImages();
     handleCloseConfirmDialog();
   };
 
