@@ -10,7 +10,6 @@
     use App\Http\Controllers\ImagesController;
     use App\Http\Controllers\InstancesController;
     use App\Http\Controllers\ContainersController;
-use App\Models\Users\PermissionModel;
 
     /*
     |--------------------------------------------------------------------------
