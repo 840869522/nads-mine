@@ -274,12 +274,13 @@ const RunningInstancesPage: React.FC = () => {
             title: `删除实例: ${instance.name}`,
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
+                const id = instance.id;
+                await fetch(`${API_BASE}/api/containers/${id}?action=delete`, { method: 'POST' });
                 if (user) {
-                    const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
+                    const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
                     await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
-                fetchInstances();
+                setInstances(prev => prev.filter(i => i.id !== id));
             },
             instanceName: instance.name
         });

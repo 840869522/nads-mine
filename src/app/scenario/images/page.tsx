@@ -109,13 +109,12 @@ const ImageManagementPage: React.FC = () => {
   };
 
   const handleDeleteImage = () => {
-    if (!user) return;
-    if (imageToDelete) {
-      const q = `?userId=${user.id}&role=${user.role}&id=${imageToDelete.id}`;
-      fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' }).then(() => {
-        setImages(prevImages => prevImages.filter(img => img.id !== imageToDelete.id));
-      });
-    }
+    if (!user || !imageToDelete) return;
+    const id = imageToDelete.id;
+    const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
+    fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' }).then(() => {
+      setImages(prevImages => prevImages.filter(img => img.id !== id));
+    });
     handleCloseConfirmDialog();
   };
 
