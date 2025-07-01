@@ -4,6 +4,9 @@ from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from datetime import datetime, timedelta
 import random
+import platform
+import os
+# import libvirt # Uncomment when libvirt is actually used and installed
 
 app = FastAPI(
     title="VM Management API",
@@ -577,10 +580,94 @@ async def list_vm_events(
 # 3. Run from the project root: uvicorn backend.main:app --reload --port 8000
 #    (or from backend folder: uvicorn main:app --reload --port 8000)
 
+# --- Libvirt Connection Framework ---
+LIBVIRT_CONNECTION = None
+
+def get_libvirt_connection():
+    """Attempts to establish a libvirt connection based on the OS."""
+    global libvirt # Make sure to use the global import if it's conditional
+    try:
+        import libvirt # Try importing here, so it's only required if this function is called
+    except ImportError:
+        print("Libvirt-python library not found. Please install it to connect to libvirt.")
+        return None
+
+    system = platform.system()
+    conn = None
+    uri = None
+
+    if system == "Linux":
+        uri = "qemu:///system"
+        print(f"Detected Linux system. Attempting local libvirt connection: {uri}")
+        try:
+            conn = libvirt.open(uri)
+        except libvirt.libvirtError as e:
+            print(f"Failed to connect to local libvirt (Linux): {e}")
+            if os.getenv("WSL_DISTRO_NAME"):
+                print("Running inside WSL, but local connection failed. Ensure libvirtd service is active and configured.")
+            conn = None
+    elif system == "Windows":
+        wsl_ip = os.getenv("WSL_LIBVIRT_IP")
+        if not wsl_ip:
+            print("Windows system: WSL_LIBVIRT_IP environment variable not set. Cannot connect to WSL libvirt.")
+            # Optionally, attempt to dynamically get WSL IP here if desired, as discussed previously.
+            # For now, we rely on the environment variable.
+            return None
+
+        uri = f"qemu+tcp://{wsl_ip}:16509/system" # Default libvirt TCP port
+        print(f"Detected Windows system. Attempting to connect to WSL libvirt via TCP: {uri}")
+        try:
+            conn = libvirt.open(uri)
+        except libvirt.libvirtError as e:
+            print(f"Failed to connect to WSL libvirt via TCP (Windows): {e}")
+            conn = None
+    else:
+        print(f"Unsupported OS for libvirt connection: {system}")
+        return None
+
+    if conn is None:
+        print("Failed to establish libvirt connection. API will use mock data or operate in a limited mode.")
+    else:
+        print("Successfully connected to libvirt service.")
+    return conn
+
+@app.on_event("startup")
+async def startup_event():
+    global LIBVIRT_CONNECTION
+    print("FastAPI application starting up. Attempting to initialize libvirt connection...")
+    LIBVIRT_CONNECTION = get_libvirt_connection()
+    if LIBVIRT_CONNECTION:
+        try:
+            hostname = LIBVIRT_CONNECTION.getHostname()
+            print(f"Libvirt connection successful. Hostname: {hostname}")
+        except Exception as e: # Catch potential errors if connection drops immediately
+            print(f"Libvirt connection established but failed to get hostname: {e}")
+            LIBVIRT_CONNECTION = None # Reset if post-connection check fails
+            print("Reverted to no Libvirt connection due to post-connection check failure.")
+    else:
+        print("Libvirt connection failed during startup. Backend will use mock data.")
+        print("Ensure libvirt service is running and configured correctly.")
+        print("- On Linux/WSL: Check 'sudo systemctl status libvirtd' or 'sudo service libvirtd status'.")
+        print("- On Windows (for WSL connection): Set WSL_LIBVIRT_IP and ensure WSL's libvirtd listens on TCP.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global LIBVIRT_CONNECTION
+    if LIBVIRT_CONNECTION:
+        print("FastAPI application shutting down. Closing libvirt connection...")
+        try:
+            LIBVIRT_CONNECTION.close()
+            print("Libvirt connection closed.")
+        except Exception as e: # Use generic Exception for libvirt.libvirtError if import is conditional
+            print(f"Error closing libvirt connection: {e}")
+        LIBVIRT_CONNECTION = None
+
+# --- End Libvirt Connection Framework ---
+
 if __name__ == "__main__":
     import uvicorn
-    # This is for development testing only if you run `python backend/main.py`
-    # Production should use `uvicorn backend.main:app ...`
+    # This is for development testing only if you run `python src/main.py`
+    # Production should use `uvicorn src.main:app ...`
     print("Starting Uvicorn server on http://127.0.0.1:8000")
-    print("This is for direct execution testing. For development, use: uvicorn backend.main:app --reload --port 8000")
+    print("This is for direct execution testing. For development, use: uvicorn src.main:app --reload --port 8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
