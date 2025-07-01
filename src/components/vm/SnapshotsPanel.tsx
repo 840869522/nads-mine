@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Box, Button, Card, CardContent, Dialog, DialogActions,
-  DialogContent, DialogTitle, Grid, IconButton, Stack, TextField,
+  DialogContent, DialogTitle, Grid, Stack, TextField,
   Toolbar, Typography
 } from '@mui/material'
 import {
@@ -9,7 +9,7 @@ import {
   Delete as DeleteIcon,
   Restore as RestoreIcon
 } from '@mui/icons-material'
-import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView'
+import { TreeView } from '@mui/x-tree-view'
 import { TreeItem } from '@mui/x-tree-view/TreeItem'
 
 interface Snapshot {
@@ -41,11 +41,11 @@ export default function SnapshotsPanel() {
         </Toolbar>
       </Grid>
       <Grid item xs={4} sx={{ height: 'calc(100% - 56px)' }}>
-        <SimpleTreeView defaultCollapseIcon={<RestoreIcon />} defaultExpandIcon={<RestoreIcon />}> 
+        <TreeView defaultCollapseIcon={<RestoreIcon />} defaultExpandIcon={<RestoreIcon />}> 
           {mock.map(s => (
             <TreeItem itemId={s.id} key={s.id} label={`${s.name} (${s.created})`} onClick={() => setCurrent(s)} />
           ))}
-        </SimpleTreeView>
+        </TreeView>
       </Grid>
       <Grid item xs={8}>
         {current && (
