@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import {
   Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography, Paper, Grid,
-  Select, MenuItem, FormControl, InputLabel, Toolbar
+  Select, MenuItem, FormControl, InputLabel, Toolbar, SelectChangeEvent // Added SelectChangeEvent
 } from '@mui/material';
 import {
   TimelineOutlined as ChartIcon,
-  CpuChipOutline as CpuIcon, // Using a generic CPU icon from a library like MDI would be better
+  // CpuChipOutline as CpuIcon,
   MemoryOutlined as MemoryIcon,
-  HarddiskOutline as DiskIcon, // Placeholder, mdi/Harddisk
-  LanOutlined as NetworkIcon, // Placeholder, mdi/Lan
+  // HarddiskOutline as DiskIcon,
+  // LanOutlined as NetworkIcon,
   DownloadOutlined as DownloadIcon,
   RefreshOutlined as RefreshIcon,
-} from '@mui/icons-material'; // Note: CpuChipOutline, HarddiskOutline, LanOutlined are not standard MUI icons. Will use placeholders or similar standard icons.
+} from '@mui/icons-material';
 
 // For placeholder icons if specific ones aren't in @mui/icons-material
 import DnsIcon from '@mui/icons-material/Dns'; // CPU
@@ -28,8 +28,8 @@ interface ChartConfig {
 const chartConfigs: ChartConfig[] = [
   { title: 'CPU Usage', icon: <DnsIcon />, unit: '%', type: 'LineChart' },
   { title: 'Memory Usage', icon: <MemoryIcon />, unit: 'MB', type: 'AreaChart' },
-  { title: 'Disk Throughput', icon: <StorageIcon />, unit: 'MBps', type: 'BarChart' }, // R/W
-  { title: 'Network Throughput', icon: <NetworkCheckIcon />, unit: 'Mbps', type: 'LineChart' }, // RX/TX
+  { title: 'Disk Throughput', icon: <StorageIcon />, unit: 'MBps', type: 'BarChart' },
+  { title: 'Network Throughput', icon: <NetworkCheckIcon />, unit: 'Mbps', type: 'LineChart' },
 ];
 
 const timeRanges = [
@@ -56,13 +56,12 @@ export default function PerformancePanel() {
     }
   };
 
-  const handleRefreshIntervalChange = (event: any) // Using `any` for SelectChangeEvent type for simplicity here
-  ) => {
+  // Moved comment to a more appropriate place and used SelectChangeEvent
+  const handleRefreshIntervalChange = (event: SelectChangeEvent<string>) => {
     setRefreshInterval(event.target.value as string);
   };
 
   const handleExportCsv = () => {
-    // Mock action
     alert(`Exporting CSV for ${timeRange} with ${refreshInterval} refresh (mock action)`);
   };
 
@@ -81,7 +80,7 @@ export default function PerformancePanel() {
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'grey.50',
-          minHeight: 150, // Ensure a minimum height for chart area
+          minHeight: 150,
         }}
       >
         <Typography variant="caption" color="text.secondary">
@@ -118,7 +117,7 @@ export default function PerformancePanel() {
                 labelId="refresh-interval-label"
                 label="Refresh"
                 value={refreshInterval}
-                onChange={handleRefreshIntervalChange}
+                onChange={handleRefreshIntervalChange} // Corrected: No 'any' type here
                 startAdornment={<RefreshIcon fontSize="small" sx={{mr:0.5, color: 'action.active'}}/>}
               >
                 {refreshIntervals.map(ri => (
