@@ -129,7 +129,7 @@ export default function VmPage() {
 
             {/* Details */}
             {current && (
-                <Box component={Paper} sx={{ mt: 3, p: 2, display: 'flex', flexDirection: 'column', height: '50vh', boxShadow: 3, overflow: 'auto' }}>
+                <Box component={Paper} sx={{ mt: 3, p: 2, display: 'flex', flexDirection: 'column', minHeight: '50vh', boxShadow: 3, overflow: 'auto' }}>
                     {/* Actions bar */}
                     <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                         {stateIcon(current.state)}
