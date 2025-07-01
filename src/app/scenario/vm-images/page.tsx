@@ -32,6 +32,7 @@ import {
     Search as SearchIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
+import dayjs from "dayjs"
 
 interface VmImage {
     id: string
@@ -194,20 +195,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     }
 
     const columns = useMemo<GridColDef[]>(() => [
-        {
-            field: 'name',
-            headerName: '镜像名称',
-            flex: 1,
-            minWidth: 180,
-            renderCell: params => (
-                <Box>
-                    <Typography variant="subtitle2">{params.row.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        {params.row.description}
-                    </Typography>
-                </Box>
-            ),
-        },
+        { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
+        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'version', headerName: '版本', width: 120 },
         { field: 'osType', headerName: '操作系统', width: 120 },
         { field: 'architecture', headerName: '架构', width: 120 },
@@ -222,10 +211,10 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         },
         {
             field: 'uploadDate',
-            headerName: '上传时间',
+            headerName: '上传日期',
             flex: 1,
             minWidth: 160,
-            valueFormatter: params => new Date(params.value as string).toLocaleString('zh-CN'),
+            valueFormatter: params => dayjs(params.value as string).format('YYYY年M月D日'),
         },
         {
             field: 'actions',

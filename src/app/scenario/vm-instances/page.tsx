@@ -76,13 +76,13 @@ export default function VmPage() {
     /* ----- 列定义 ----- */
     const columns = React.useMemo<GridColDef[]>(() => [
         { field: "state", headerName: "", width: 40, renderCell: p => stateIcon(p.row.state) },
-        { field: "name", headerName: "Name", minWidth: 160, flex: 1 },
-        { field: "hostNode", headerName: "Node", minWidth: 120 },
-        { field: "pool", headerName: "Pool", minWidth: 120 },
+        { field: "name", headerName: "名称", minWidth: 160, flex: 1 },
+        { field: "hostNode", headerName: "宿主机", minWidth: 120 },
+        { field: "pool", headerName: "存储池", minWidth: 120 },
         { field: "vcpu", headerName: "vCPU", width: 80 },
-        { field: "vmem", headerName: "RAM (MB)", width: 100 },
+        { field: "vmem", headerName: "内存 (MB)", width: 100 },
         { field: "ip", headerName: "IP", minWidth: 140 },
-        { field: "uptime", headerName: "Uptime", minWidth: 120 },
+        { field: "uptime", headerName: "运行时间", minWidth: 120 },
     ], [])
 
     const theme = useTheme();
