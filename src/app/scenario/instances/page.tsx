@@ -368,7 +368,7 @@ const RunningInstancesPage: React.FC = () => {
                     {fetchError}
                 </MuiAlert>
             ) : (
-            <Box component={Paper} sx={{ height: 400, width: '100%' }}>
+            <Box component={Paper} sx={{ boxShadow: 3 }}>
                 <DataGrid
                     autoHeight
                     checkboxSelection
