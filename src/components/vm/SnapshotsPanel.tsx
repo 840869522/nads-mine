@@ -9,8 +9,8 @@ import {
   Delete as DeleteIcon,
   Restore as RestoreIcon
 } from '@mui/icons-material'
-import TreeView from '@mui/lab/TreeView'
-import TreeItem from '@mui/lab/TreeItem'
+import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView'
+import { TreeItem } from '@mui/x-tree-view/TreeItem'
 
 interface Snapshot {
   id: string
@@ -41,11 +41,11 @@ export default function SnapshotsPanel() {
         </Toolbar>
       </Grid>
       <Grid item xs={4} sx={{ height: 'calc(100% - 56px)' }}>
-        <TreeView defaultCollapseIcon={<RestoreIcon />} defaultExpandIcon={<RestoreIcon />}>
+        <SimpleTreeView defaultCollapseIcon={<RestoreIcon />} defaultExpandIcon={<RestoreIcon />}> 
           {mock.map(s => (
             <TreeItem nodeId={s.id} key={s.id} label={`${s.name} (${s.created})`} onClick={() => setCurrent(s)} />
           ))}
-        </TreeView>
+        </SimpleTreeView>
       </Grid>
       <Grid item xs={8}>
         {current && (
