@@ -25,6 +25,12 @@ import {
     KeyboardArrowDown as ArrowDownIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
+import OverviewPanel from "@/components/vm/OverviewPanel"
+import SnapshotsPanel from "@/components/vm/SnapshotsPanel"
+import StoragePanel from "@/components/vm/StoragePanel"
+import NetworkPanel from "@/components/vm/NetworkPanel"
+import PerformancePanel from "@/components/vm/PerformancePanel"
+import EventsPanel from "@/components/vm/EventsPanel"
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -182,31 +188,12 @@ export default function VmPage() {
 
                     {/* Panels */}
                     <Box sx={{ flex: 1, p: 2 }}>
-                        {tab === 0 && (
-                            <Grid container spacing={3}>
-                                <Grid item xs={4}>
-                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                        基本信息
-                                    </Typography>
-                                    <Box sx={{ fontSize: 14, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                                        <span>Host Node: {current.hostNode}</span>
-                                        <span>Pool: {current.pool}</span>
-                                        <span>vCPU: {current.vcpu}</span>
-                                        <span>vRAM: {current.vmem} MB</span>
-                                        {current.ip && <span>IP: {current.ip}</span>}
-                                    </Box>
-                                </Grid>
-
-                                {/* 其他概览块（可填充 CPU/MEM 仪表、磁盘利用等） */}
-                            </Grid>
-                        )}
-
-                        {/* 其它标签占位 */}
-                        {tab !== 0 && (
-                            <Typography color="text.secondary">
-                                {["Snapshots", "Storage", "Network", "Performance", "Events"][tab - 1]} 页面待实现…
-                            </Typography>
-                        )}
+                        {tab === 0 && <OverviewPanel />}
+                        {tab === 1 && <SnapshotsPanel />}
+                        {tab === 2 && <StoragePanel />}
+                        {tab === 3 && <NetworkPanel />}
+                        {tab === 4 && <PerformancePanel />}
+                        {tab === 5 && <EventsPanel />}
                     </Box>
                 </Box>
             )}
