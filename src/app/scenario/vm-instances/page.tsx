@@ -2,16 +2,12 @@
 
 import * as React from "react"
 import {
-    Box, Button, Divider, Grid, Menu, MenuItem,
+    Box, Button, Divider, Menu, MenuItem,
     Tabs, Tab, TextField, Typography, InputAdornment,
     Paper, useTheme,
 } from "@mui/material"
 import {
     Search as SearchIcon,
-    Computer as ComputerIcon,
-    Memory as MemoryIcon,
-    Storage as StorageIcon,
-    NetworkCheck as NetworkIcon,
     CheckCircle as CheckCircleIcon,
     Warning as WarningIcon,
     Error as ErrorIcon,

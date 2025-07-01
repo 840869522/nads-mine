@@ -32,21 +32,21 @@ export default function SnapshotsPanel() {
 
   return (
     <Grid container spacing={2} sx={{ height: '100%' }}>
-      <Grid item size={12}>
+      <Grid size={12}>
         <Toolbar disableGutters sx={{ mb: 1 }}>
           <Button startIcon={<AddIcon />} onClick={() => setOpen(true)}>创建快照</Button>
           <Button startIcon={<RestoreIcon />} disabled sx={{ ml: 2 }}>还原</Button>
           <Button startIcon={<DeleteIcon />} disabled sx={{ ml: 2 }}>删除</Button>
         </Toolbar>
       </Grid>
-      <Grid item size={4} sx={{ height: 'calc(100% - 56px)' }}>
+      <Grid size={4} sx={{ height: 'calc(100% - 56px)' }}>
         <SimpleTreeView slots={{ collapseIcon: RestoreIcon, expandIcon: RestoreIcon }}>
           {mock.map(s => (
             <TreeItem itemId={s.id} key={s.id} label={`${s.name} (${s.created})`} onClick={() => setCurrent(s)} />
           ))}
         </SimpleTreeView>
       </Grid>
-      <Grid item size={8}>
+      <Grid size={8}>
         {current && (
           <Card variant="outlined">
             <CardContent>

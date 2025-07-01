@@ -1,15 +1,7 @@
 import React from 'react'
 import {
-  Box, Button, CircularProgress, Grid, IconButton, Stack, Typography
+  Box, CircularProgress, Grid, Stack, Typography
 } from '@mui/material'
-import {
-  PlayArrow as StartIcon,
-  Pause as PauseIcon,
-  Stop as StopIcon,
-  RestartAlt as RebootIcon,
-  PowerSettingsNew as ForceIcon,
-  DesktopWindows as ConsoleIcon
-} from '@mui/icons-material'
 
 export default function OverviewPanel() {
   const info = {
@@ -40,7 +32,7 @@ export default function OverviewPanel() {
     <Stack spacing={2}>
 
       <Grid container spacing={3}>
-        <Grid item size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>基本信息</Typography>
           <Stack spacing={0.5} sx={{ fontSize: 14 }}>
             <span>Host Node: {info.hostNode}</span>
@@ -52,7 +44,7 @@ export default function OverviewPanel() {
             <span>Uptime: {info.uptime}</span>
           </Stack>
         </Grid>
-        <Grid item size={{ xs: 12, md: 8 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>实时用量</Typography>
           <Stack direction="row" spacing={3}>
             <MiniGauge label="CPU" value={usage.cpu} />
