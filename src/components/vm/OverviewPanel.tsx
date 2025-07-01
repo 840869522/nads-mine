@@ -38,17 +38,6 @@ export default function OverviewPanel() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={1} alignItems="center">
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          <StartIcon color="success" sx={{ verticalAlign: 'middle', mr: 1 }} /> demo-vm
-        </Typography>
-        <IconButton size="small" color="primary"><StartIcon /></IconButton>
-        <IconButton size="small" color="primary"><PauseIcon /></IconButton>
-        <IconButton size="small" color="primary"><StopIcon /></IconButton>
-        <IconButton size="small" color="primary"><RebootIcon /></IconButton>
-        <IconButton size="small" color="error"><ForceIcon /></IconButton>
-        <Button size="small" variant="outlined" startIcon={<ConsoleIcon />}>Console</Button>
-      </Stack>
 
       <Grid container spacing={3}>
         <Grid item size={{ xs: 12, md: 4 }}>
