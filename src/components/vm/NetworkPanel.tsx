@@ -18,7 +18,7 @@ import {
   DeveloperBoardOutlined as PciIcon,
   PowerSettingsNewOutlined as StatusActiveIcon,
   PowerOffOutlined as StatusInactiveIcon,
-  VlanOutlined as VlanIcon,
+  HubOutlined as VlanIcon, // Corrected: Replaced placeholder VlanIcon with HubOutlined
   ReportProblemOutlined as EmptyIcon
 } from '@mui/icons-material';
 
@@ -100,7 +100,7 @@ export default function NetworkPanel() {
   };
 
   const NicFormFields: React.FC<{nicData: Partial<VirtualNic>, onChange: (field: keyof VirtualNic, value: any) => void}> = ({ nicData, onChange}) => (
-     <Stack spacing={2.5} sx={{mt:1, p:2}}> {/* Added p:2 to form fields area */}
+     <Stack spacing={2.5} sx={{mt:1, p:2}}>
         <FormControl fullWidth size="small">
           <InputLabel>Network Bridge</InputLabel>
           <Select label="Network Bridge" value={nicData.bridge || ''} onChange={(e) => onChange('bridge', e.target.value)}>
@@ -156,9 +156,9 @@ export default function NetworkPanel() {
         </Table>
       </TableContainer>
 
-      <Drawer anchor="right" open={editDrawerOpen} onClose={() => setEditDrawerOpen(false)} PaperProps={{sx: {width: 360, display: 'flex', flexDirection: 'column'}}}> {/* Flex column for drawer content */}
+      <Drawer anchor="right" open={editDrawerOpen} onClose={() => setEditDrawerOpen(false)} PaperProps={{sx: {width: 360, display: 'flex', flexDirection: 'column'}}}>
         <Box sx={{p: 2, borderBottom: '1px solid #eee'}}><Typography variant="h6" gutterBottom sx={{mb:0}}>Edit vNIC: {editingNic?.mac}</Typography></Box>
-        <Box sx={{flexGrow:1, overflowY: 'auto'}}> {/* Scrollable form area */}
+        <Box sx={{flexGrow:1, overflowY: 'auto'}}>
           {editingNic && (<NicFormFields nicData={editingNic} onChange={(field, value) => setEditingNic(prev => prev ? {...prev, [field]: value} : null)}/>)}
         </Box>
         <Box sx={{p:2, borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end'}}>
