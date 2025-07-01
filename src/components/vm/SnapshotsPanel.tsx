@@ -66,12 +66,11 @@ export default function SnapshotsPanel() {
 
   const handleDeleteSnapshot = () => {
     if (!selectedSnapshotId) return;
-    setSnapshots(prev => prev.filter(s => s.id !== selectedSnapshotId));
-    // Logic to also delete children or re-parent would be needed in a real app
+
     const childrenOfSelected = snapshots.filter(s => s.parentId === selectedSnapshotId);
     if (childrenOfSelected.length > 0) {
         alert(`Snapshot "${selectedSnapshot?.name}" has children. Deleting them as well (mock behavior). A real app might offer re-parenting or prevent deletion.`);
-        const idsToDelete = [selectedSnapshotId, ...childrenOfSelected.map(c => c.id)]; // Simple cascade mock
+        const idsToDelete = [selectedSnapshotId, ...childrenOfSelected.map(c => c.id)];
         setSnapshots(prev => prev.filter(s => !idsToDelete.includes(s.id)));
     } else {
         setSnapshots(prev => prev.filter(s => s.id !== selectedSnapshotId));
@@ -87,20 +86,20 @@ export default function SnapshotsPanel() {
   const buildTree = (parentId: string | null = null): JSX.Element[] => {
     return snapshots
       .filter(snapshot => snapshot.parentId === parentId)
-      .sort((a,b) => new Date(a.created).getTime() - new Date(b.created).getTime()) // Sort by creation time
+      .sort((a,b) => new Date(a.created).getTime() - new Date(b.created).getTime())
       .map(snapshot => (
         <TreeItem
           key={snapshot.id}
           itemId={snapshot.id}
-          label={`${snapshot.name} (${new Date(snapshot.created).toLocaleDateString()})`} // Simpler date
-          onClick={() => setSelectedSnapshotId(snapshot.id)}
+          label={`${snapshot.name} (${new Date(snapshot.created).toLocaleDateString()})`}
+          onClick={() => setSelectedSnapshotId(snapshot.id)} // Keep onClick for selection, SimpleTreeView handles item selection state
         >
           {buildTree(snapshot.id)}
         </TreeItem>
       ));
   };
 
-  const treeItems = useMemo(() => buildTree(null), [snapshots]); // Memoize tree items
+  const treeItems = useMemo(() => buildTree(null), [snapshots]);
 
   return (
     <Stack spacing={2} sx={{ height: '100%' }}>
@@ -111,11 +110,16 @@ export default function SnapshotsPanel() {
       </Toolbar>
 
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
-        <Grid item xs={12} md={4} sx={{ height: 'calc(100% - 40px)', display:'flex', flexDirection:'column' }}> {/* Adjusted height */}
+        <Grid item xs={12} md={4} sx={{ height: 'calc(100% - 40px)', display:'flex', flexDirection:'column' }}>
           <Paper variant="outlined" sx={{ p: 1.5, flexGrow:1, display:'flex', flexDirection:'column',  overflowY: 'auto' }}>
             <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb:1 }}><TreeIcon sx={{ mr: 1 }} /> Snapshots</Typography>
             {snapshots.length > 0 ? (
-                <SimpleTreeView defaultCollapseIcon={<ExpandMoreIcon />} defaultExpandIcon={<ChevronRightIcon />} selectedItems={selectedSnapshotId} onSelectedItemsChange={(_, itemId) => setSelectedSnapshotId(itemId as string | null)} sx={{ flexGrow: 1 }}>
+                <SimpleTreeView
+                  slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }} // Corrected: Use slots prop
+                  selectedItems={selectedSnapshotId}
+                  onSelectedItemsChange={(_, itemId) => setSelectedSnapshotId(itemId as string | null)}
+                  sx={{ flexGrow: 1 }}
+                >
                 {treeItems}
                 </SimpleTreeView>
             ) : (
