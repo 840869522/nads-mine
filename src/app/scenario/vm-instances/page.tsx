@@ -68,6 +68,8 @@ export default function VmPage() {
     const [rows] = React.useState(MOCK)
     const [current, setCurrent] = React.useState<VmInstance | null>(rows[0] ?? null)
     const [search, setSearch] = React.useState("")
+    const [page, setPage] = React.useState(0)
+    const [rowsPerPage, setRowsPerPage] = React.useState(10)
     const [tab, setTab] = React.useState(0)
     const [actionAnchor, setActionAnchor] = React.useState<null | HTMLElement>(null)
 
@@ -105,15 +107,17 @@ export default function VmPage() {
                 </Box>
             </Box>
 
-            <Box component={Paper} sx={{ boxShadow: 3 }}>
+            <Box component={Paper} sx={{ boxShadow: 3, height: '50vh', display: 'flex', flexDirection: 'column' }}>
                 <DataGrid
-                    autoHeight
                     rows={rows.filter(r => r.name.toLowerCase().includes(search.toLowerCase()))}
                     columns={columns}
                     density="compact"
-                    hideFooter
+                    pageSizeOptions={[5, 10, 25]}
+                    paginationModel={{ pageSize: rowsPerPage, page }}
+                    onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
                     onRowClick={p => setCurrent(p.row)}
                     sx={{
+                        height: '100%',
                         '& .MuiDataGrid-columnHeaders': {
                             bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
                         },
@@ -123,7 +127,7 @@ export default function VmPage() {
 
             {/* Details */}
             {current && (
-                <Box component={Paper} sx={{ mt: 3, p: 2, display: 'flex', flexDirection: 'column' }}>
+                <Box component={Paper} sx={{ mt: 3, p: 2, display: 'flex', flexDirection: 'column', height: '50vh', boxShadow: 3, overflow: 'auto' }}>
                     {/* Actions bar */}
                     <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                         {stateIcon(current.state)}

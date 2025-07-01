@@ -1,17 +1,10 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
     Box,
     Typography,
     Button,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Paper,
     IconButton,
     Chip,
@@ -27,6 +20,7 @@ import {
     Select,
     Alert,
     Tooltip,
+    useTheme,
 } from "@mui/material"
 import {
     Add as AddIcon,
@@ -37,6 +31,7 @@ import {
     Computer as ComputerIcon,
     Search as SearchIcon,
 } from "@mui/icons-material"
+import { DataGrid, GridColDef } from "@mui/x-data-grid"
 
 interface VmImage {
     id: string
@@ -156,12 +151,15 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         handleCloseDialog()
     }
 
-const [search, setSearch] = useState('')
-const filteredImages = images.filter(img =>
-    img.name.toLowerCase().includes(search.toLowerCase()) ||
-    img.version.toLowerCase().includes(search.toLowerCase()) ||
-    img.description.toLowerCase().includes(search.toLowerCase())
-)
+    const theme = useTheme()
+    const [search, setSearch] = useState('')
+    const [page, setPage] = useState(0)
+    const [rowsPerPage, setRowsPerPage] = useState(10)
+    const filteredImages = images.filter(img =>
+        img.name.toLowerCase().includes(search.toLowerCase()) ||
+        img.version.toLowerCase().includes(search.toLowerCase()) ||
+        img.description.toLowerCase().includes(search.toLowerCase())
+    )
 
     const handleDelete = (id: string) => {
         if (confirm("确定要删除这个虚拟机镜像吗？")) {
@@ -195,6 +193,67 @@ const filteredImages = images.filter(img =>
         }
     }
 
+    const columns = useMemo<GridColDef[]>(() => [
+        {
+            field: 'name',
+            headerName: '镜像名称',
+            flex: 1,
+            minWidth: 180,
+            renderCell: params => (
+                <Box>
+                    <Typography variant="subtitle2">{params.row.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {params.row.description}
+                    </Typography>
+                </Box>
+            ),
+        },
+        { field: 'version', headerName: '版本', width: 120 },
+        { field: 'osType', headerName: '操作系统', width: 120 },
+        { field: 'architecture', headerName: '架构', width: 120 },
+        { field: 'size', headerName: '大小', width: 120 },
+        {
+            field: 'status',
+            headerName: '状态',
+            width: 120,
+            renderCell: params => (
+                <Chip label={getStatusText(params.row.status)} color={getStatusColor(params.row.status)} size="small" />
+            ),
+        },
+        {
+            field: 'uploadDate',
+            headerName: '上传时间',
+            flex: 1,
+            minWidth: 160,
+            valueFormatter: params => new Date(params.value as string).toLocaleString('zh-CN'),
+        },
+        {
+            field: 'actions',
+            headerName: '操作',
+            sortable: false,
+            width: 140,
+            renderCell: params => (
+                <Box>
+                    <Tooltip title="查看详情">
+                        <IconButton size="small">
+                            <ViewIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="编辑">
+                        <IconButton size="small" onClick={() => handleOpenDialog(params.row)}>
+                            <EditIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="删除">
+                        <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+                            <DeleteIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+            ),
+        },
+    ], [images])
+
     return (
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -218,59 +277,17 @@ const filteredImages = images.filter(img =>
                 </Button>
             </Box>
 
-            <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>镜像名称</TableCell>
-                            <TableCell>版本</TableCell>
-                            <TableCell>操作系统</TableCell>
-                            <TableCell>架构</TableCell>
-                            <TableCell>大小</TableCell>
-                            <TableCell>状态</TableCell>
-                            <TableCell>上传时间</TableCell>
-                            <TableCell>操作</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {filteredImages.map((image) => (
-                            <TableRow key={image.id}>
-                                <TableCell>
-                                    <Typography variant="subtitle2">{image.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {image.description}
-                                    </Typography>
-                                </TableCell>
-                                <TableCell>{image.version}</TableCell>
-                                <TableCell>{image.osType}</TableCell>
-                                <TableCell>{image.architecture}</TableCell>
-                                <TableCell>{image.size}</TableCell>
-                                <TableCell>
-                                    <Chip label={getStatusText(image.status)} color={getStatusColor(image.status)} size="small" />
-                                </TableCell>
-                                <TableCell>{new Date(image.uploadDate).toLocaleString("zh-CN")}</TableCell>
-                                <TableCell>
-                                    <Tooltip title="查看详情">
-                                        <IconButton size="small">
-                                            <ViewIcon />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="编辑">
-                                        <IconButton size="small" onClick={() => handleOpenDialog(image)}>
-                                            <EditIcon />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="删除">
-                                        <IconButton size="small" onClick={() => handleDelete(image.id)}>
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </Tooltip>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+            <Box component={Paper} sx={{ boxShadow: 3 }}>
+                <DataGrid
+                    autoHeight
+                    rows={filteredImages}
+                    columns={columns}
+                    pageSizeOptions={[5, 10, 25]}
+                    paginationModel={{ pageSize: rowsPerPage, page }}
+                    onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
+                    sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }}
+                />
+            </Box>
 
             {/* 添加/编辑镜像对话框 */}
             <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
