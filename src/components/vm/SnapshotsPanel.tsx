@@ -43,7 +43,7 @@ export default function SnapshotsPanel() {
       <Grid item xs={4} sx={{ height: 'calc(100% - 56px)' }}>
         <SimpleTreeView defaultCollapseIcon={<RestoreIcon />} defaultExpandIcon={<RestoreIcon />}> 
           {mock.map(s => (
-            <TreeItem nodeId={s.id} key={s.id} label={`${s.name} (${s.created})`} onClick={() => setCurrent(s)} />
+            <TreeItem itemId={s.id} key={s.id} label={`${s.name} (${s.created})`} onClick={() => setCurrent(s)} />
           ))}
         </SimpleTreeView>
       </Grid>
