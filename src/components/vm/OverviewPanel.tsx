@@ -51,7 +51,7 @@ export default function OverviewPanel() {
       </Stack>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
+        <Grid item size={{ xs: 12, md: 4 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>基本信息</Typography>
           <Stack spacing={0.5} sx={{ fontSize: 14 }}>
             <span>Host Node: {info.hostNode}</span>
@@ -63,7 +63,7 @@ export default function OverviewPanel() {
             <span>Uptime: {info.uptime}</span>
           </Stack>
         </Grid>
-        <Grid item xs={12} md={8}>
+        <Grid item size={{ xs: 12, md: 8 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>实时用量</Typography>
           <Stack direction="row" spacing={3}>
             <MiniGauge label="CPU" value={usage.cpu} />
