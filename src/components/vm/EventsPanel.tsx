@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  Box, Button, MenuItem, Select, Stack, Table, TableBody, TableCell,
+  Alert, Box, Button, CircularProgress, MenuItem, Select, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TextField, Toolbar, Typography, Paper, Chip,
-  FormControl, InputLabel, Switch, FormControlLabel
+  FormControl, InputLabel, Switch, FormControlLabel, Skeleton, SelectChangeEvent
 } from '@mui/material';
 import {
   FilterListOutlined as FilterIcon,
@@ -14,28 +14,22 @@ import {
   DeleteSweepOutlined as ClearIcon,
   SearchOutlined as KeywordIcon,
   AccessTimeOutlined as TimeWindowIcon,
-  LiveTvOutlined as LiveTailIconOff, // Placeholder for live tail
-  SensorsOutlined as LiveTailIconOn // Placeholder for live tail
+  // LiveTvOutlined as LiveTailIconOff, // Placeholder for live tail
+  // SensorsOutlined as LiveTailIconOn // Placeholder for live tail
 } from '@mui/icons-material';
+
+const API_BASE_URL = '/api/vm'; // Updated
+const VM_ID = "test-vm"; // Placeholder VM ID
 
 type EventLevel = 'info' | 'warning' | 'error' | 'debug';
 
 interface EventLog {
   id: string;
-  timestamp: Date;
+  timestamp: string; // ISO String from backend
   level: EventLevel;
   message: string;
   details?: Record<string, any>;
 }
-
-const initialEvents: EventLog[] = [
-  { id: 'evt1', timestamp: new Date(Date.now() - 3600000 * 2), level: 'info', message: 'VM Guest OS booted successfully.', details: { source: 'kernel' } },
-  { id: 'evt2', timestamp: new Date(Date.now() - 3000000), level: 'debug', message: 'Network interface eth0 link up.', details: { speed: '1000Mbps' } },
-  { id: 'evt3', timestamp: new Date(Date.now() - 1800000), level: 'warning', message: 'High CPU utilization detected.', details: { usage: '92%', threshold: '90%' } },
-  { id: 'evt4', timestamp: new Date(Date.now() - 600000), level: 'info', message: 'Snapshot "backup_daily" created.', details: { user: 'admin' } },
-  { id: 'evt5', timestamp: new Date(Date.now() - 300000), level: 'error', message: 'Failed to attach storage volume "data_vol_03".', details: { reason: 'Volume not found' } },
-  { id: 'evt6', timestamp: new Date(Date.now() - 60000), level: 'info', message: 'User "jdoe" connected via VNC.', details: { ip: '192.168.1.105' } },
-];
 
 const eventLevels: EventLevel[] = ['info', 'warning', 'error', 'debug'];
 const timeWindowOptions = [
@@ -47,52 +41,68 @@ const timeWindowOptions = [
 
 
 export default function EventsPanel() {
-  const [events, setEvents] = useState<EventLog[]>(initialEvents);
+  const [events, setEvents] = useState<EventLog[]>([]);
   const [filterLevel, setFilterLevel] = useState<EventLevel | 'all'>('all');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterTimeWindow, setFilterTimeWindow] = useState(timeWindowOptions[0].value);
-  const [liveTail, setLiveTail] = useState(false);
+  const [liveTail, setLiveTail] = useState(false); // Mock behavior for now
 
-  const filteredEvents = useMemo(() => {
-    let result = events;
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalFetchedEvents, setTotalFetchedEvents] = useState(0);
 
-    if (filterLevel !== 'all') {
-      result = result.filter(e => e.level === filterLevel);
+
+  const fetchEvents = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const queryParams = new URLSearchParams();
+    if (filterLevel !== 'all') queryParams.append('level', filterLevel);
+    if (filterKeyword.trim()) queryParams.append('keyword', filterKeyword.trim());
+    if (filterTimeWindow !== 'all') queryParams.append('time_window', filterTimeWindow);
+    // queryParams.append('limit', '200'); // Example limit
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/events?${queryParams.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch events: ${response.status} ${response.statusText}`);
+      }
+      const data: EventLog[] = await response.json();
+      setEvents(data); // API returns already sorted and filtered data
+      setTotalFetchedEvents(data.length); // Assuming API returns all matching, not just a page
+    } catch (err: any) {
+      setError(err.message || 'An unknown error occurred while fetching events.');
+      setEvents([]);
+      setTotalFetchedEvents(0);
+    } finally {
+      setIsLoading(false);
     }
+  }, [filterLevel, filterKeyword, filterTimeWindow]); // Dependencies for re-fetching
 
-    if (filterKeyword.trim() !== '') {
-      const lowerKeyword = filterKeyword.toLowerCase();
-      result = result.filter(e =>
-        e.message.toLowerCase().includes(lowerKeyword) ||
-        (e.details && JSON.stringify(e.details).toLowerCase().includes(lowerKeyword))
-      );
-    }
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
 
-    if (filterTimeWindow !== 'all') {
-        const now = Date.now();
-        let startTime = 0;
-        if (filterTimeWindow === '1h') startTime = now - 3600000;
-        else if (filterTimeWindow === '6h') startTime = now - 3600000 * 6;
-        else if (filterTimeWindow === '24h') startTime = now - 3600000 * 24;
-        result = result.filter(e => e.timestamp.getTime() >= startTime);
-    }
-
-    return result.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()); // Show newest first
-  }, [events, filterLevel, filterKeyword, filterTimeWindow]);
+  // The backend API is now responsible for filtering, so local `filteredEvents` useMemo is less critical
+  // but can be kept if frontend-side sub-filtering or sorting (e.g. by timestamp if API doesn't guarantee) is needed.
+  // For now, the API is assumed to return sorted data.
 
   const handleClearLogs = () => {
-    setEvents([]);
+    // This would be an API call if supported. For now, it's a mock.
+    alert('Clear Logs (mock action) - This feature would typically require backend support.');
+    // setEvents([]); // If we were managing local state primarily
   };
 
   const handleExportCsv = () => {
-    alert(`Exporting ${filteredEvents.length} events to CSV (mock action)`);
+    alert(`Exporting ${events.length} events to CSV (mock action)`);
   };
 
   const toggleLiveTail = (event: React.ChangeEvent<HTMLInputElement>) => {
     setLiveTail(event.target.checked);
     if(event.target.checked) {
-        // Mock: In a real app, you might subscribe to an event stream here
-        console.log("Live tail enabled (mock)");
+        console.log("Live tail enabled (mock - would require WebSocket or long polling)");
+        // In a real app, you might subscribe to an event stream here
+        // and potentially disable manual refresh/filters or merge live events
     } else {
         console.log("Live tail disabled (mock)");
     }
@@ -100,10 +110,10 @@ export default function EventsPanel() {
 
   const getLevelChipColor = (level: EventLevel): "success" | "warning" | "error" | "info" | "default" => {
     switch(level) {
-        case 'info': return 'success'; // Or 'info' if you prefer blue
+        case 'info': return 'success';
         case 'warning': return 'warning';
         case 'error': return 'error';
-        case 'debug': return 'info'; // Often blue or grey
+        case 'debug': return 'info';
         default: return 'default';
     }
   }
@@ -120,7 +130,8 @@ export default function EventsPanel() {
           <Select
             label="Level"
             value={filterLevel}
-            onChange={e => setFilterLevel(e.target.value as EventLevel | 'all')}
+            onChange={(e: SelectChangeEvent<EventLevel | 'all'>) => setFilterLevel(e.target.value as EventLevel | 'all')}
+            disabled={isLoading || liveTail}
           >
             <MenuItem value="all">All Levels</MenuItem>
             {eventLevels.map(lvl => <MenuItem key={lvl} value={lvl}>{lvl.charAt(0).toUpperCase() + lvl.slice(1)}</MenuItem>)}
@@ -131,6 +142,7 @@ export default function EventsPanel() {
           placeholder="Keyword search..."
           value={filterKeyword}
           onChange={e => setFilterKeyword(e.target.value)}
+          disabled={isLoading || liveTail}
           InputProps={{
             startAdornment: <KeywordIcon fontSize="small" sx={{mr:0.5, color: 'action.active'}}/>
           }}
@@ -141,7 +153,8 @@ export default function EventsPanel() {
           <Select
             label="Time Window"
             value={filterTimeWindow}
-            onChange={e => setFilterTimeWindow(e.target.value)}
+            onChange={(e: SelectChangeEvent<string>) => setFilterTimeWindow(e.target.value)}
+            disabled={isLoading || liveTail}
             startAdornment={<TimeWindowIcon fontSize="small" sx={{mr:0.5, color: 'action.active'}}/>}
           >
             {timeWindowOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
@@ -151,20 +164,22 @@ export default function EventsPanel() {
         <Box sx={{ flexGrow: 1, minWidth: '10px' }} /> {/* Spacer */}
 
         <FormControlLabel
-            control={<Switch checked={liveTail} onChange={toggleLiveTail} size="small" />}
+            control={<Switch checked={liveTail} onChange={toggleLiveTail} size="small" disabled={isLoading} />}
             labelPlacement="start"
             label={<Typography variant="body2" sx={{mr:0.5}}>Live Tail</Typography>}
             sx={{mr:1}}
         />
-        <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCsv}>
+        <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCsv} disabled={isLoading || events.length === 0}>
           Export CSV
         </Button>
-        <Button size="small" variant="outlined" color="error" startIcon={<ClearIcon />} onClick={handleClearLogs}>
+        <Button size="small" variant="outlined" color="error" startIcon={<ClearIcon />} onClick={handleClearLogs} disabled={isLoading || events.length === 0}>
           Clear Log
         </Button>
       </Toolbar>
 
-      <TableContainer sx={{ maxHeight: 600 }}> {/* Limit height for scroll */}
+      {error && <Alert severity="error" onClose={() => setError(null)} sx={{m:1}}>{error}</Alert>}
+
+      <TableContainer sx={{ maxHeight: 600 }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
@@ -174,9 +189,17 @@ export default function EventsPanel() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredEvents.length > 0 ? filteredEvents.map(e => (
+            {isLoading ? (
+                Array.from(new Array(5)).map((_, index) => (
+                    <TableRow key={`skel-event-${index}`}>
+                        <TableCell><Skeleton /></TableCell>
+                        <TableCell><Skeleton /></TableCell>
+                        <TableCell><Skeleton /></TableCell>
+                    </TableRow>
+                ))
+            ) : events.length > 0 ? events.map(e => (
               <TableRow key={e.id} hover>
-                <TableCell>{e.timestamp.toLocaleString()}</TableCell>
+                <TableCell>{new Date(e.timestamp).toLocaleString()}</TableCell>
                 <TableCell>
                   <Chip label={e.level.toUpperCase()} color={getLevelChipColor(e.level)} size="small" variant="filled" sx={{fontWeight:'medium'}}/>
                 </TableCell>
@@ -200,9 +223,14 @@ export default function EventsPanel() {
           </TableBody>
         </Table>
       </TableContainer>
-      {filteredEvents.length > 0 && (
+      {!isLoading && events.length > 0 && (
          <Box sx={{p:1, textAlign: 'right', borderTop: '1px solid #eee'}}>
-            <Typography variant="caption">Displaying {filteredEvents.length} of {events.length} total events.</Typography>
+            <Typography variant="caption">Displaying {events.length} events (Total matching: {totalFetchedEvents})</Typography>
+        </Box>
+      )}
+       {!isLoading && events.length === 0 && !error && (
+         <Box sx={{p:1, textAlign: 'right', borderTop: '1px solid #eee'}}>
+            <Typography variant="caption">No events to display.</Typography>
         </Box>
       )}
     </Paper>

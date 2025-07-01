@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-  Box, Button, Card, CardContent, Dialog, DialogActions,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, Grid, Stack, TextField,
-  Toolbar, Typography, IconButton, Paper
+  Toolbar, Typography, Paper, Skeleton
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -17,73 +17,152 @@ import {
   ChevronRight as ChevronRightIcon,
   ReportProblemOutlined as EmptyIcon
 } from '@mui/icons-material';
-import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
+import { SimpleTreeView, TreeItem, TreeViewBasePayload } from '@mui/x-tree-view'; // Added TreeViewBasePayload
+
+const API_BASE_URL = '/api/vm'; // Updated
+const VM_ID = "test-vm"; // Placeholder VM ID
+
 
 interface Snapshot {
   id: string;
   name: string;
   description?: string;
-  created: string;
+  created: string; // Should be ISO string from backend
   parentId?: string | null;
-  size: string;
-  xml: string;
+  size_mb: number; // Changed from string to number
+  xml?: string;
 }
 
-const initialSnapshots: Snapshot[] = [
-  { id: 'snap1', name: 'Base Installation', created: '2024-06-01 10:00', parentId: null, size: '500MB', xml: '<snapshot><name>Base Installation</name></snapshot>' },
-  { id: 'snap2', name: 'Updated System', created: '2024-06-05 14:30', parentId: 'snap1', size: '200MB', xml: '<snapshot><name>Updated System</name></snapshot>' },
-  { id: 'snap3', name: 'Testing Build #123', created: '2024-06-10 09:15', parentId: 'snap2', size: '150MB', xml: '<snapshot><name>Testing Build #123</name></snapshot>' },
-  { id: 'snap4', name: 'Pre-Upgrade State', created: '2024-06-08 11:00', parentId: 'snap1', size: '180MB', xml: '<snapshot><name>Pre-Upgrade State</name></snapshot>' },
-];
-
 export default function SnapshotsPanel() {
-  const [snapshots, setSnapshots] = useState<Snapshot[]>(initialSnapshots);
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(initialSnapshots.length > 0 ? initialSnapshots[0].id : null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newSnapshotName, setNewSnapshotName] = useState('');
   const [newSnapshotDescription, setNewSnapshotDescription] = useState('');
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState(false);
+
+
+  const fetchSnapshots = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch snapshots: ${response.status} ${response.statusText}`);
+      }
+      const data: Snapshot[] = await response.json();
+      setSnapshots(data);
+      if (data.length > 0 && !selectedSnapshotId) {
+         // Select the newest snapshot by default if nothing is selected
+        const sortedSnaps = [...data].sort((a,b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+        setSelectedSnapshotId(sortedSnaps[0].id);
+      } else if (data.length === 0) {
+        setSelectedSnapshotId(null);
+      }
+    } catch (err: any) {
+      setError(err.message || 'An unknown error occurred while fetching snapshots.');
+      setSnapshots([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedSnapshotId]); // Add selectedSnapshotId to dependencies if it influences initial selection logic
+
+  useEffect(() => {
+    fetchSnapshots();
+  }, [fetchSnapshots]);
+
 
   const selectedSnapshot = useMemo(() => {
     return snapshots.find(s => s.id === selectedSnapshotId) || null;
   }, [snapshots, selectedSnapshotId]);
 
-  const handleCreateSnapshot = () => {
+  const handleCreateSnapshot = async () => {
     if (!newSnapshotName.trim()) {
       alert('Snapshot name cannot be empty.');
       return;
     }
-    const newSnapshot: Snapshot = {
-      id: `snap${Date.now()}`, name: newSnapshotName, description: newSnapshotDescription,
-      created: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      parentId: selectedSnapshotId,
-      size: `${Math.floor(Math.random() * 300) + 50}MB`,
-      xml: `<snapshot><name>${newSnapshotName}</name><description>${newSnapshotDescription}</description></snapshot>`,
-    };
-    setSnapshots(prev => [...prev, newSnapshot]);
-    setNewSnapshotName(''); setNewSnapshotDescription('');
-    setCreateDialogOpen(false); setSelectedSnapshotId(newSnapshot.id);
-  };
-
-  const handleDeleteSnapshot = () => {
-    if (!selectedSnapshotId) return;
-
-    const childrenOfSelected = snapshots.filter(s => s.parentId === selectedSnapshotId);
-    if (childrenOfSelected.length > 0) {
-        alert(`Snapshot "${selectedSnapshot?.name}" has children. Deleting them as well (mock behavior). A real app might offer re-parenting or prevent deletion.`);
-        const idsToDelete = [selectedSnapshotId, ...childrenOfSelected.map(c => c.id)];
-        setSnapshots(prev => prev.filter(s => !idsToDelete.includes(s.id)));
-    } else {
-        setSnapshots(prev => prev.filter(s => s.id !== selectedSnapshotId));
+    setActionInProgress(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newSnapshotName, description: newSnapshotDescription }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({detail: `Failed to create snapshot: ${response.status}`}));
+        throw new Error(errData.detail || `HTTP error ${response.status}`);
+      }
+      // const newSnapshot: Snapshot = await response.json(); // Backend returns the created snapshot
+      await fetchSnapshots(); // Refetch all snapshots to get the new one in the tree
+      setNewSnapshotName('');
+      setNewSnapshotDescription('');
+      setCreateDialogOpen(false);
+      // setSelectedSnapshotId(newSnapshot.id); // Let fetchSnapshots handle selection or select manually
+    } catch (err: any) {
+      setError(err.message || 'Failed to create snapshot.');
+    } finally {
+      setActionInProgress(false);
     }
-    setSelectedSnapshotId(null);
   };
 
-  const handleRestoreSnapshot = () => {
+  const handleDeleteSnapshot = async () => {
+    if (!selectedSnapshotId) return;
+    setActionInProgress(true);
+    setError(null);
+    const snapNameToDelete = selectedSnapshot?.name;
+    if (!window.confirm(`Are you sure you want to delete snapshot "${snapNameToDelete}"? This may also delete its children.`)) {
+        setActionInProgress(false);
+        return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots/${selectedSnapshotId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok && response.status !== 204) { // 204 is also a success (No Content)
+        const errData = await response.json().catch(() => ({detail: `Failed to delete snapshot: ${response.status}`}));
+        throw new Error(errData.detail || `HTTP error ${response.status}`);
+      }
+      setSelectedSnapshotId(null); // Deselect
+      await fetchSnapshots(); // Refetch
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete snapshot.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleRestoreSnapshot = async () => {
     if (!selectedSnapshot) return;
-    alert(`Restoring to snapshot: "${selectedSnapshot.name}" (mock action)`);
+    setActionInProgress(true);
+    setError(null);
+    if (!window.confirm(`Are you sure you want to restore to snapshot "${selectedSnapshot.name}"? The VM will be rebooted.`)) {
+        setActionInProgress(false);
+        return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots/${selectedSnapshot.id}/revert`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({detail: `Failed to revert snapshot: ${response.status}`}));
+        throw new Error(errData.detail || `HTTP error ${response.status}`);
+      }
+      alert(`Restoring to snapshot: "${selectedSnapshot.name}" initiated. VM may reboot.`);
+      // Optionally, you might want to refetch VM overview data or other relevant state
+      await fetchSnapshots(); // Re-fetch snapshots, though they shouldn't change
+    } catch (err: any) {
+      setError(err.message || 'Failed to revert to snapshot.');
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
-  const buildTree = (parentId: string | null = null): JSX.Element[] => {
+
+  const buildTree = useCallback((parentId: string | null = null): JSX.Element[] => {
     return snapshots
       .filter(snapshot => snapshot.parentId === parentId)
       .sort((a,b) => new Date(a.created).getTime() - new Date(b.created).getTime())
@@ -92,32 +171,47 @@ export default function SnapshotsPanel() {
           key={snapshot.id}
           itemId={snapshot.id}
           label={`${snapshot.name} (${new Date(snapshot.created).toLocaleDateString()})`}
-          onClick={() => setSelectedSnapshotId(snapshot.id)} // Keep onClick for selection, SimpleTreeView handles item selection state
         >
           {buildTree(snapshot.id)}
         </TreeItem>
       ));
+  }, [snapshots]);
+
+  const treeItems = useMemo(() => buildTree(null), [buildTree]);
+
+  const handleSelectedItemsChange = (event: React.SyntheticEvent, itemId: string | string[] | null, payload: TreeViewBasePayload) => {
+    if (typeof itemId === 'string') {
+        setSelectedSnapshotId(itemId);
+    } else if (Array.isArray(itemId) && itemId.length > 0) {
+        setSelectedSnapshotId(itemId[0]); // If multiSelect is somehow enabled, take the first
+    } else {
+        setSelectedSnapshotId(null);
+    }
   };
 
-  const treeItems = useMemo(() => buildTree(null), [snapshots]);
 
   return (
     <Stack spacing={2} sx={{ height: '100%' }}>
       <Toolbar disableGutters variant="dense">
-        <Button startIcon={<AddIcon />} onClick={() => setCreateDialogOpen(true)} variant="outlined" size="small">Create Snapshot</Button>
-        <Button startIcon={<RestoreIcon />} onClick={handleRestoreSnapshot} disabled={!selectedSnapshot} sx={{ ml: 1 }} variant="outlined" size="small">Restore</Button>
-        <Button startIcon={<DeleteIcon />} onClick={handleDeleteSnapshot} disabled={!selectedSnapshot} color="error" sx={{ ml: 1 }} variant="outlined" size="small">Delete</Button>
+        <Button startIcon={<AddIcon />} onClick={() => setCreateDialogOpen(true)} variant="outlined" size="small" disabled={actionInProgress}>Create Snapshot</Button>
+        <Button startIcon={<RestoreIcon />} onClick={handleRestoreSnapshot} disabled={!selectedSnapshot || actionInProgress} sx={{ ml: 1 }} variant="outlined" size="small">Restore</Button>
+        <Button startIcon={<DeleteIcon />} onClick={handleDeleteSnapshot} disabled={!selectedSnapshot || actionInProgress} color="error" sx={{ ml: 1 }} variant="outlined" size="small">Delete</Button>
+        {actionInProgress && <CircularProgress size={24} sx={{ml: 2}} />}
       </Toolbar>
 
+      {error && <Alert severity="error" onClose={() => setError(null)} sx={{mb:1}}>{error}</Alert>}
+
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
-        <Grid item xs={12} md={4} sx={{ height: 'calc(100% - 40px)', display:'flex', flexDirection:'column' }}>
+        <Grid item xs={12} md={4} sx={{ minHeight: 300, display:'flex', flexDirection:'column' }}>
           <Paper variant="outlined" sx={{ p: 1.5, flexGrow:1, display:'flex', flexDirection:'column',  overflowY: 'auto' }}>
             <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb:1 }}><TreeIcon sx={{ mr: 1 }} /> Snapshots</Typography>
-            {snapshots.length > 0 ? (
+            {isLoading ? (
+                <Stack spacing={1}><Skeleton variant="text" /><Skeleton variant="text" /><Skeleton variant="text" /></Stack>
+            ) : snapshots.length > 0 ? (
                 <SimpleTreeView
-                  slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }} // Corrected: Use slots prop
+                  slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }}
                   selectedItems={selectedSnapshotId}
-                  onSelectedItemsChange={(_, itemId) => setSelectedSnapshotId(itemId as string | null)}
+                  onSelectedItemsChange={handleSelectedItemsChange}
                   sx={{ flexGrow: 1 }}
                 >
                 {treeItems}
@@ -133,23 +227,29 @@ export default function SnapshotsPanel() {
         </Grid>
 
         <Grid item xs={12} md={8}>
-          {selectedSnapshot ? (
+          {isLoading && !selectedSnapshot ? (
+             <Paper variant="outlined" sx={{ p: 2, height: '100%' }}><Skeleton variant="rectangular" height="100%" /></Paper>
+          ): selectedSnapshot ? (
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #ddd', pb:1, mb:1.5 }}>{selectedSnapshot.name}</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2"><CalendarIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Created:</strong> {new Date(selectedSnapshot.created).toLocaleString()}</Typography>
                 <Typography variant="body2"><DescriptionIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Description:</strong> {selectedSnapshot.description || 'N/A'}</Typography>
                 <Typography variant="body2"><TreeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Parent:</strong> {snapshots.find(s => s.id === selectedSnapshot.parentId)?.name || 'None (Base)'}</Typography>
-                <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size}</Typography>
-                <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
-                <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto' }}><pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{selectedSnapshot.xml}</pre></Box>
+                <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb} MB</Typography>
+                {selectedSnapshot.xml && <>
+                  <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
+                  <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                    {selectedSnapshot.xml}
+                  </Box>
+                </>}
               </Stack>
             </Paper>
           ) : (
-            <Paper variant="outlined" sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column' }}>
+            <Paper variant="outlined" sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', minHeight: 200 }}>
               <EmptyIcon sx={{fontSize: 40, color: 'grey.400', mb:1}}/>
-              <Typography variant="h6" color="text.secondary">No Snapshot Selected</Typography>
-              <Typography color="text.secondary">Select a snapshot from the tree to view its details.</Typography>
+              <Typography variant="h6" color="text.secondary">{snapshots.length > 0 ? "No Snapshot Selected" : "No Snapshots Found"}</Typography>
+              <Typography color="text.secondary">{snapshots.length > 0 ? "Select a snapshot from the tree to view its details." : "Create a snapshot to get started."}</Typography>
             </Paper>
           )}
         </Grid>
@@ -158,10 +258,15 @@ export default function SnapshotsPanel() {
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Create New Snapshot</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{mt:1}}>
-            <TextField autoFocus label="Snapshot Name" fullWidth size="small" value={newSnapshotName} onChange={(e) => setNewSnapshotName(e.target.value)}/>
-            <TextField label="Description (Optional)" fullWidth size="small" multiline rows={3} value={newSnapshotDescription} onChange={(e) => setNewSnapshotDescription(e.target.value)}/>
+            <TextField autoFocus label="Snapshot Name" fullWidth size="small" value={newSnapshotName} onChange={(e) => setNewSnapshotName(e.target.value)} disabled={actionInProgress}/>
+            <TextField label="Description (Optional)" fullWidth size="small" multiline rows={3} value={newSnapshotDescription} onChange={(e) => setNewSnapshotDescription(e.target.value)} disabled={actionInProgress}/>
         </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button><Button onClick={handleCreateSnapshot} variant="contained">Create</Button></DialogActions>
+        <DialogActions>
+            <Button onClick={() => setCreateDialogOpen(false)} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={handleCreateSnapshot} variant="contained" disabled={actionInProgress || !newSnapshotName.trim()}>
+                {actionInProgress ? <CircularProgress size={20}/> : "Create"}
+            </Button>
+        </DialogActions>
       </Dialog>
     </Stack>
   );
