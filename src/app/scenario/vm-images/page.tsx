@@ -20,6 +20,7 @@ import {
     DialogContent,
     DialogActions,
     TextField,
+    InputAdornment,
     MenuItem,
     FormControl,
     InputLabel,
@@ -34,6 +35,7 @@ import {
     Visibility as ViewIcon,
     CloudUpload as UploadIcon,
     Computer as ComputerIcon,
+    Search as SearchIcon,
 } from "@mui/icons-material"
 
 interface VmImage {
@@ -60,7 +62,7 @@ const VmImageManagementPage: React.FC = () => {
         architecture: "x86_64" as const,
         description: "",
     })
-    const [selectedFile, setSelectedFile] = useState<File | null>(null)
+const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     // 模拟数据
     useEffect(() => {
@@ -154,6 +156,13 @@ const VmImageManagementPage: React.FC = () => {
         handleCloseDialog()
     }
 
+const [search, setSearch] = useState('')
+const filteredImages = images.filter(img =>
+    img.name.toLowerCase().includes(search.toLowerCase()) ||
+    img.version.toLowerCase().includes(search.toLowerCase()) ||
+    img.description.toLowerCase().includes(search.toLowerCase())
+)
+
     const handleDelete = (id: string) => {
         if (confirm("确定要删除这个虚拟机镜像吗？")) {
             setImages((prev) => prev.filter((img) => img.id !== id))
@@ -188,17 +197,28 @@ const VmImageManagementPage: React.FC = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-                <Typography variant="h4" component="h1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <ComputerIcon />
-                    虚拟机镜像管理
-                </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Typography variant="h4" component="h1">虚拟机镜像管理</Typography>
+                    <TextField
+                        variant="outlined"
+                        placeholder="搜索镜像..."
+                        onChange={(e)=>setSearch(e.target.value)}
+                        size="small"
+                        InputProps={{ startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon />
+                            </InputAdornment>
+                        )}}
+                        sx={{ width: { xs: '100%', sm: 260 } }}
+                    />
+                </Box>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
                     添加镜像
                 </Button>
             </Box>
 
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
                 <Table>
                     <TableHead>
                         <TableRow>
@@ -213,7 +233,7 @@ const VmImageManagementPage: React.FC = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {images.map((image) => (
+                        {filteredImages.map((image) => (
                             <TableRow key={image.id}>
                                 <TableCell>
                                     <Typography variant="subtitle2">{image.name}</Typography>

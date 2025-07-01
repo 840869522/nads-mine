@@ -4,6 +4,7 @@ import * as React from "react"
 import {
     Box, Button, Divider, Grid, Menu, MenuItem,
     Tabs, Tab, TextField, Typography, InputAdornment,
+    Paper, useTheme,
 } from "@mui/material"
 import {
     Search as SearchIcon,
@@ -82,69 +83,66 @@ export default function VmPage() {
         { field: "uptime", headerName: "Uptime", minWidth: 120 },
     ], [])
 
+    const theme = useTheme();
     return (
-        <Box sx={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            {/* Header */}
-            <Box sx={{ px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
-                <ComputerIcon sx={{ color: "grey.100" }} />
-                <Typography variant="h6" sx={{ color: "grey.100" }}>
-                    VM 管理
-                </Typography>
-                <TextField
-                    size="small"
-                    placeholder="Search VM"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Typography variant="h4" component="h1">虚拟机实例管理</Typography>
+                    <TextField
+                        variant="outlined"
+                        placeholder="搜索虚拟机..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        size="small"
+                        InputProps={{ startAdornment: (
                             <InputAdornment position="start">
-                                <SearchIcon sx={{ color: "grey.500" }} />
+                                <SearchIcon />
                             </InputAdornment>
-                        ),
-                        sx: { bgcolor: "#1e1e1e", color: "white" },
-                    }}
-                    sx={{ ml: "auto", width: 260 }}
-                />
+                        )}}
+                        sx={{ width: { xs: '100%', sm: 260 } }}
+                    />
+                </Box>
             </Box>
 
-            {/* Grid */}
-            <Box sx={{ flex: 1, overflow: "hidden" }}>
+            <Box component={Paper} sx={{ boxShadow: 3 }}>
                 <DataGrid
+                    autoHeight
                     rows={rows.filter(r => r.name.toLowerCase().includes(search.toLowerCase()))}
                     columns={columns}
                     density="compact"
                     hideFooter
                     onRowClick={p => setCurrent(p.row)}
                     sx={{
-                        border: 0,
-                        "& .MuiDataGrid-columnHeaders": { bgcolor: "#111", color: "grey.300" },
-                        "& .MuiDataGrid-cell": { borderBottom: "1px solid #222", color: "grey.100" },
+                        '& .MuiDataGrid-columnHeaders': {
+                            bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+                        },
                     }}
                 />
             </Box>
 
             {/* Details */}
             {current && (
-                <Box sx={{ minHeight: "50vh", borderTop: "1px solid #333", display: "flex", flexDirection: "column" }}>
+                <Box component={Paper} sx={{ mt: 3, p: 2, display: 'flex', flexDirection: 'column' }}>
                     {/* Actions bar */}
-                    <Box sx={{ px: 2, py: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                         {stateIcon(current.state)}
-                        <Typography sx={{ color: "grey.100", mr: 2 }}>{current.name}</Typography>
+                        <Typography sx={{ mr: 2 }}>{current.name}</Typography>
 
                         {current.state === "running" ? (
                             <>
-                                <Button size="small" startIcon={<PauseIcon />} sx={{ color: "grey.200" }}>
+                                <Button size="small" startIcon={<PauseIcon />}>
                                     Pause
                                 </Button>
-                                <Button size="small" startIcon={<StopIcon />} sx={{ color: "grey.200" }}>
+                                <Button size="small" startIcon={<StopIcon />}>
                                     Shutdown
                                 </Button>
-                                <Button size="small" startIcon={<ResetIcon />} sx={{ color: "grey.200" }}>
+                                <Button size="small" startIcon={<ResetIcon />}>
                                     Reboot
                                 </Button>
                             </>
                         ) : (
-                            <Button size="small" startIcon={<StartIcon />} sx={{ color: "grey.200" }}>
+                            <Button size="small" startIcon={<StartIcon />}>
                                 Start
                             </Button>
                         )}
@@ -152,7 +150,7 @@ export default function VmPage() {
                         <Button
                             size="small"
                             variant="outlined"
-                            sx={{ color: "white", borderColor: "grey.600", ml: "auto" }}
+                            sx={{ ml: 'auto' }}
                             startIcon={<ConsoleIcon />}
                         >
                             Console
@@ -162,7 +160,6 @@ export default function VmPage() {
                             variant="outlined"
                             endIcon={<ArrowDownIcon />}
                             onClick={e => setActionAnchor(e.currentTarget)}
-                            sx={{ color: "white", borderColor: "grey.600" }}
                         >
                             More
                         </Button>
@@ -172,12 +169,7 @@ export default function VmPage() {
                     <Tabs
                         value={tab}
                         onChange={(_, v) => setTab(v)}
-                        sx={{
-                            "& .MuiTab-root": { color: "grey.500", minHeight: 36 },
-                            "& .Mui-selected": { color: "skyblue" },
-                            borderBottom: "1px solid #222",
-                            pl: 2,
-                        }}
+                        sx={{ borderBottom: 1, borderColor: 'divider', pl: 2 }}
                     >
                         {["Overview", "Snapshots", "Storage", "Network", "Performance", "Events"].map(l => (
                             <Tab key={l} label={l.toUpperCase()} />
@@ -189,10 +181,10 @@ export default function VmPage() {
                         {tab === 0 && (
                             <Grid container spacing={3}>
                                 <Grid item xs={4}>
-                                    <Typography variant="subtitle2" sx={{ color: "grey.100", mb: 1 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                         基本信息
                                     </Typography>
-                                    <Box sx={{ color: "grey.300", fontSize: 14, display: "flex", flexDirection: "column", gap: 0.75 }}>
+                                    <Box sx={{ fontSize: 14, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                                         <span>Host Node: {current.hostNode}</span>
                                         <span>Pool: {current.pool}</span>
                                         <span>vCPU: {current.vcpu}</span>
@@ -207,7 +199,7 @@ export default function VmPage() {
 
                         {/* 其它标签占位 */}
                         {tab !== 0 && (
-                            <Typography sx={{ color: "grey.400" }}>
+                            <Typography color="text.secondary">
                                 {["Snapshots", "Storage", "Network", "Performance", "Events"][tab - 1]} 页面待实现…
                             </Typography>
                         )}
@@ -220,13 +212,12 @@ export default function VmPage() {
                 anchorEl={actionAnchor}
                 open={Boolean(actionAnchor)}
                 onClose={() => setActionAnchor(null)}
-                PaperProps={{ sx: { bgcolor: "#2a2a2a", color: "grey.100" } }}
             >
                 <MenuItem onClick={() => setActionAnchor(null)}>
                     <SnapshotIcon fontSize="small" sx={{ mr: 1 }} />
                     创建快照
                 </MenuItem>
-                <Divider sx={{ bgcolor: "grey.700" }} />
+                <Divider />
                 <MenuItem onClick={() => setActionAnchor(null)}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
                     VNC / SPICE 控制台
