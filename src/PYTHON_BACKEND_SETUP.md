@@ -27,22 +27,22 @@
 
 2.  **安装 Python 依赖项**:
     *   Python 依赖项列在 `src/requirements.txt` 文件中。
-    *   **推荐使用虚拟环境**: 虽然 `server.js` 现在直接调用 `python src/main.py`，不再依赖于从特定 `.venv` 路径查找 `uvicorn` 可执行文件，但为您的 Python 项目使用虚拟环境仍然是管理依赖项的最佳实践。
-        *   在项目根目录 (与 `src` 同级) 创建虚拟环境：
+    *   **必须使用虚拟环境**: 为了确保 `server.js` 能够正确启动 Python 后端，您**必须**在项目的**根目录**下创建一个名为 `.venv` 的 Python 虚拟环境，并将所有 Python 依赖项安装到此环境中。
+        *   在项目根目录 (与 `src` 文件夹同级的位置) 打开 WSL 终端，然后执行：
             ```bash
             python3 -m venv .venv
-            # (Windows 上可能用: python -m venv .venv)
             ```
+            *(如果您的系统默认 `python` 指向 Python 3，也可以使用 `python -m venv .venv`)*
         *   激活虚拟环境：
-            *   macOS/Linux: `source .venv/bin/activate`
-            *   Windows (Git Bash): `source .venv/Scripts/activate`
-            *   Windows (CMD): `.venv\Scripts\activate.bat`
-    *   **安装包**: 无论是否使用虚拟环境，请确保在将要执行 `src/main.py` 的 Python 环境中安装依赖：
+            ```bash
+            source .venv/bin/activate
+            ```
+            激活后，您的终端提示符通常会显示 `(.venv)`。
+    *   **安装 Python 依赖包**: 激活虚拟环境后，安装 `src/requirements.txt` 中列出的所有依赖项：
         ```bash
         pip install -r src/requirements.txt
         ```
-        这将安装 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要真实 Libvirt 连接) 等。
-        *如果您不使用虚拟环境，这些包将安装到您的全局或用户 Python站点包中。*
+        这将确保 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要) 等库安装到 `.venv` 虚拟环境中。`server.js` (在Linux/WSL环境下) 会配置为使用此特定虚拟环境中的 Python 解释器。
 
 3.  **Node.js 服务器依赖项检查 (`http-proxy-middleware`)**:
     主 Node.js 服务器 (`src/server.js`) 使用 `http-proxy-middleware` 将 API 请求代理到 Python 后端。此 Node.js 依赖项应在 `src/package.json` (或项目根目录的 `package.json`) 中列出并已安装。如果缺失，请导航到包含相应 `package.json` 的目录并运行：
@@ -75,14 +75,18 @@
 
 ## 运行后端
 
-Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start` 从项目根目录) 自动作为子进程启动。`server.js` 会执行 `python src/main.py` (或 `python3 src/main.py`)，而 `src/main.py` 内部使用 `uvicorn.run()` 来启动 FastAPI 服务。
+Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start` 从项目根目录) 自动作为子进程启动。
+当在 Linux/WSL 环境下运行时，`server.js` 会：
+1.  定位到项目根目录下的 `.venv/bin/python3` 解释器。
+2.  使用此解释器执行 `src` 目录下的 `main.py` 脚本 (即 `PROJECT_ROOT/.venv/bin/python3 main.py`，但工作目录会设置为 `PROJECT_ROOT/src`)。
+3.  `src/main.py` 内部通过 `uvicorn.run()` 启动 FastAPI 服务。
 
 Node.js 服务器将会：
-*   通过运行 `python src/main.py` (在WSL环境中) 启动 FastAPI/Uvicorn 服务，该服务将监听端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
+*   通过上述方式启动 FastAPI/Uvicorn 服务，该服务将监听端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
 *   将对 `/api/vm/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的此端口。
 
 启动 `src/server.js` 时，请检查控制台输出，以获取指示 FastAPI 服务器状态的消息。
-如果您想单独测试 Python 后端（不通过 Node.js 代理），您可以直接在已安装依赖的 Python 环境中 (在 WSL 内部) 运行：
+如果您想单独测试 Python 后端（不通过 Node.js 代理），请确保您已激活项目根目录的 `.venv` 虚拟环境，然后从项目根目录运行：
 ```bash
 # 确保你在 src 目录的父目录下，或者调整路径
 python src/main.py

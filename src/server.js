@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch'; // Renamed to avoid conflict
 import { spawn as childProcessSpawn } from 'child_process'; // For launching FastAPI
 import { createProxyMiddleware } from 'http-proxy-middleware';
-// import path from 'path'; // No longer needed for uvicorn executable path
+import path from 'path'; // Ensure path is imported
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -30,19 +30,22 @@ app.prepare().then(() => {
   }
 
   if (canRunPythonBackend) {
-    console.log('Attempting to start FastAPI server...');
-    const scriptPath = 'src/main.py'; // This should be the path relative to cwd
-    const effectiveCwd = process.cwd();
+    // pythonExecutable is already 'python3' if we are in this block.
+    // Now, construct the path to python3 *inside* the .venv
+    pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
+    const scriptToRun = 'main.py'; // The script to run, relative to the new CWD
+    const scriptCwd = path.join(process.cwd(), 'src'); // The CWD for the Python script
 
-    console.log(`[NodeJS Debug] Effective CWD for Python spawn: ${effectiveCwd}`);
-    console.log(`[NodeJS Debug] Python executable: ${pythonExecutable}`);
-    console.log(`[NodeJS Debug] Script path argument: ${scriptPath}`);
-    console.log(`[NodeJS] Attempting to execute: ${pythonExecutable} ${scriptPath} (from CWD: ${effectiveCwd})`);
+    console.log(`[NodeJS] Attempting to start FastAPI server using venv Python.`);
+    console.log(`[NodeJS Debug] Python executable (from .venv): ${pythonExecutable}`);
+    console.log(`[NodeJS Debug] Script to run: ${scriptToRun}`);
+    console.log(`[NodeJS Debug] Script CWD: ${scriptCwd}`);
+    console.log(`[NodeJS] Executing: ${pythonExecutable} ${scriptToRun} (from CWD: ${scriptCwd})`);
 
     fastApiProcess = childProcessSpawn( // Assign to the outer scope variable
       pythonExecutable,
-      [scriptPath], // Argument is the script to run
-      { stdio: 'pipe', cwd: effectiveCwd } // Run from project root
+      [scriptToRun],
+      { stdio: 'pipe', cwd: scriptCwd } // Set CWD for the python script to 'src'
     );
 
     fastApiProcess.stdout.on('data', (data) => {
