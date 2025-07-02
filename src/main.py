@@ -666,8 +666,14 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
-    # This is for development testing only if you run `python src/main.py`
-    # Production should use `uvicorn src.main:app ...`
-    print("Starting Uvicorn server on http://127.0.0.1:8000")
-    print("This is for direct execution testing. For development, use: uvicorn src.main:app --reload --port 8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # Ensure PYTHON_API_PORT from server.js (default 8000) is used if main.py is run directly.
+    # However, when spawned by server.js, server.js controls the port uvicorn *should* listen on.
+    # For direct execution (python src/main.py), we'll use a common default.
+    # The uvicorn.run() call here is primarily for when this script is executed directly.
+    # When server.js runs this script, these specific host/port values are less critical
+    # as server.js *expects* it to be on PYTHON_API_PORT.
+    # For consistency, we'll use 0.0.0.0 and a default port.
+
+    configured_port = int(os.getenv("PYTHON_API_PORT", "8000"))
+    print(f"Attempting to start Uvicorn programmatically on host 0.0.0.0, port {configured_port}")
+    uvicorn.run(app, host="0.0.0.0", port=configured_port, log_level="info")

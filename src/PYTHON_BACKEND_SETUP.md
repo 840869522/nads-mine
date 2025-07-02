@@ -18,47 +18,31 @@
 
 ## 安装步骤
 
-1.  **导航到项目的 `src` 目录**:
-    打开您的终端，并切换到本项目的 `src` 目录，Python 后端文件 (`main.py`, `requirements.txt`) 位于此处。
-    ```bash
-    cd path/to/your/project/src
-    # 或者，如果您在项目根目录：
-    # cd src
-    ```
+1.  **确保 Python 环境**:
+    *   您的系统需要一个 Python 环境 (推荐 Python 3.8+)。
+    *   `python` (Windows) 或 `python3` (Linux/macOS 通常) 命令应在您的终端 PATH 中可用。
+    *   `pip` (Python 包安装器) 也应可用。
 
-2.  **创建虚拟环境 (推荐)**:
-    强烈建议使用虚拟环境来管理项目特定的依赖项。这将您的项目的 Python 包与全局 Python 安装隔离开来。
-
-    *   创建虚拟环境 (例如，命名为 `.venv`):
+2.  **安装 Python 依赖项**:
+    *   Python 依赖项列在 `src/requirements.txt` 文件中。
+    *   **推荐使用虚拟环境**: 虽然 `server.js` 现在直接调用 `python src/main.py`，不再依赖于从特定 `.venv` 路径查找 `uvicorn` 可执行文件，但为您的 Python 项目使用虚拟环境仍然是管理依赖项的最佳实践。
+        *   在项目根目录 (与 `src` 同级) 创建虚拟环境：
+            ```bash
+            python3 -m venv .venv
+            # (Windows 上可能用: python -m venv .venv)
+            ```
+        *   激活虚拟环境：
+            *   macOS/Linux: `source .venv/bin/activate`
+            *   Windows (Git Bash): `source .venv/Scripts/activate`
+            *   Windows (CMD): `.venv\Scripts\activate.bat`
+    *   **安装包**: 无论是否使用虚拟环境，请确保在将要执行 `src/main.py` 的 Python 环境中安装依赖：
         ```bash
-        python3 -m venv .venv
+        pip install -r src/requirements.txt
         ```
-        (如果 `python3` 命令无效，请尝试使用 `python`)
+        这将安装 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要真实 Libvirt 连接) 等。
+        *如果您不使用虚拟环境，这些包将安装到您的全局或用户 Python站点包中。*
 
-    *   激活虚拟环境:
-        *   在 macOS 和 Linux 上:
-            ```bash
-            source .venv/bin/activate
-            ```
-        *   在 Windows (Git Bash 或类似工具) 上:
-            ```bash
-            source .venv/Scripts/activate
-            ```
-        *   在 Windows (命令提示符) 上:
-            ```bash
-            .venv\Scripts\activate.bat
-            ```
-        您的终端提示符现在应指示虚拟环境已激活 (例如，`(.venv) your-prompt$`)。
-
-3.  **安装依赖项**:
-    激活虚拟环境后，安装 `src` 目录中 `requirements.txt` 文件列出的所需 Python 包。
-    ```bash
-    pip install -r requirements.txt
-    ```
-    这将安装 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要真实 Libvirt 连接) 等库。
-    *注意: 如果您仅使用 mock 数据，`libvirt-python` 可能不是必需的，或者在 `requirements.txt` 中被注释掉了。如需连接到真实的 libvirt 守护进程，请确保它已安装，并且在 Linux 系统上可能需要 libvirt 开发头文件。*
-
-4.  **Node.js 服务器依赖项检查 (`http-proxy-middleware`)**:
+3.  **Node.js 服务器依赖项检查 (`http-proxy-middleware`)**:
     主 Node.js 服务器 (`src/server.js`) 使用 `http-proxy-middleware` 将 API 请求代理到 Python 后端。此 Node.js 依赖项应在 `src/package.json` (或项目根目录的 `package.json`) 中列出并已安装。如果缺失，请导航到包含相应 `package.json` 的目录并运行：
     ```bash
     npm install http-proxy-middleware
@@ -132,21 +116,30 @@
 
 ## 运行后端
 
-您 **不需要** 手动运行 `uvicorn src.main:app --host 0.0.0.0 --port 8000`。
-Python FastAPI 后端会在您运行前端/Node.js 应用 (例如，通过 `npm start` 或 `yarn start` 从包含主 `package.json` 的目录，可能是项目根目录或 `src/`) 时，由主 Node.js 服务器 (`src/server.js`) 自动作为子进程启动。
+Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start`) 自动作为子进程启动。`server.js` 会执行 `python src/main.py` (或 `python3 src/main.py`)，而 `src/main.py` 内部使用 `uvicorn.run()` 来启动 FastAPI 服务。
 
 Node.js 服务器将会：
-*   在端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口) 上为 `src/main.py` 启动 Uvicorn 服务器。
-*   将对 `/api/vm/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的端口 8000。
+*   通过运行 `python src/main.py` 启动 FastAPI/Uvicorn 服务，该服务将监听端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
+*   将对 `/api/vm/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的此端口。
 
 启动 `src/server.js` 时，请检查控制台输出，以获取指示 FastAPI 服务器状态的消息。
+如果您想单独测试 Python 后端（不通过 Node.js 代理），您可以直接在已安装依赖的 Python 环境中运行：
+```bash
+python src/main.py
+# 或者 python3 src/main.py
+```
+这将直接在 `0.0.0.0:8000` (或 `PYTHON_API_PORT` 指定的端口) 上启动 FastAPI 服务。
 
 ## 故障排除
 
-*   **命令 `uvicorn` 未找到 (当 `server.js` 尝试运行时)**:
-    *   确保在 `src` 目录内创建了虚拟环境 (`.venv`)，并且通过 `pip install -r requirements.txt` 正确地将 `uvicorn` 安装到了该环境中。
-    *   `server.js` 脚本尝试直接运行 `uvicorn`。如果您的系统 PATH 或虚拟环境设置不允许 `server.js` (一个 Node 进程) 从 `server.js` 本身 *未* 运行于其中的已激活 Python venv 中找到 `uvicorn`，您可能需要调整 `server.js` 中的 `childProcessSpawn` 命令以使用 `.venv/bin/uvicorn` (Linux/macOS) 或 `.venv\Scripts\uvicorn.exe` (Windows) 的绝对路径，或者确保运行 `server.js` 的环境的 PATH 中包含 `.venv/bin` (或 `Scripts`) 目录。
-    *   一个更简单的开发方法可能是在运行 `npm start` 以启动 `server.js` *之前*，在终端中激活 Python 虚拟环境。这通常会使 `uvicorn` 在子进程的 PATH 中可用。
+*   **命令 `python` 或 `python3` 未找到 (当 `server.js` 尝试运行时)**:
+    *   确保 `python` (Windows) 或 `python3` (Linux/macOS) 在您运行 `npm start` 的终端的系统 PATH 中。
+    *   如果您使用了虚拟环境，直接从 `server.js` 启动 Python 脚本通常不需要预先激活该虚拟环境，因为 `server.js` 会调用系统级的 `python` 或 `python3`。重要的是，这个被调用的 `python`/`python3` 实例能够访问到 `src/requirements.txt` 中安装的包（即这些包要么全局安装，要么安装在 `server.js` 执行时 `python` 命令所指向的环境中）。
+    *   如果坚持在特定虚拟环境下运行 Python 脚本，您需要在 `server.js` 中指定虚拟环境内 Python解释器的绝对路径，或者在启动 `server.js` 前确保该虚拟环境已被激活，并且其 `python` 解释器是默认的。
+
+*   **Python 模块未找到 (例如 `No module named 'fastapi'` 或 `No module named 'uvicorn'`)**:
+    *   这表示 `src/requirements.txt` 中的依赖项没有安装到 `server.js` 调用 `python src/main.py` 时所使用的 Python 环境中。
+    *   请返回 “安装 Python 依赖项” 部分，确保在正确的 Python 环境中执行了 `pip install -r src/requirements.txt`。
 
 *   **代理错误**:
     *   通过查看 `server.js` 的控制台输出来检查 FastAPI 服务器 (Python) 是否已正确启动。

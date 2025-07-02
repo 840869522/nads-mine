@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch'; // Renamed to avoid conflict
 import { spawn as childProcessSpawn } from 'child_process'; // For launching FastAPI
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import path from 'path'; // Added path import
+// import path from 'path'; // No longer needed for uvicorn executable path
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -18,19 +18,17 @@ app.prepare().then(() => {
   // Start the FastAPI server
   console.log('Attempting to start FastAPI server...');
   // Ensure main.py is executable or called via python interpreter
-  // Use src.main:app to correctly reference the app object within main.py in src/
-  const isWindows = process.platform === 'win32';
-  const venvPath = path.join(process.cwd(), '.venv'); // Assuming .venv is in project root
-  const uvicornExecutable = isWindows
-    ? path.join(venvPath, 'Scripts', 'uvicorn.exe')
-    : path.join(venvPath, 'bin', 'uvicorn');
+  // Node.js will now execute the Python script directly.
+  // Python script itself (main.py) will run uvicorn.run().
+  const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3'; // Common convention
+  const scriptPath = 'src/main.py'; // Path relative to project root
 
-  console.log(`[NodeJS] Attempting to use uvicorn executable at: ${uvicornExecutable}`);
+  console.log(`[NodeJS] Attempting to execute Python script: ${pythonExecutable} ${scriptPath}`);
 
   const fastApiProcess = childProcessSpawn(
-    uvicornExecutable, // Use dynamically determined path
-    ['main:app', '--host', '0.0.0.0', '--port', String(PYTHON_API_PORT)],
-    { stdio: 'pipe', cwd: 'src' } // Keep cwd as 'src' for 'main:app'
+    pythonExecutable,
+    [scriptPath], // Argument is the script to run
+    { stdio: 'pipe', cwd: process.cwd() } // Run from project root
   );
 
   fastApiProcess.stdout.on('data', (data) => {
