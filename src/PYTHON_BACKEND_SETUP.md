@@ -55,33 +55,35 @@
 
 如果您的开发环境是 Windows，并且希望 Python 后端 (在 Windows 上通过 `server.js` 启动) 连接到在 WSL (Windows Subsystem for Linux) 内部运行的 Libvirt 服务，您需要进行以下配置：
 
-1.  **在 WSL 内部配置 `libvirtd` 监听 TCP**:
-    *   编辑 WSL 中 Libvirt 的主配置文件，通常位于 `/etc/libvirt/libvirtd.conf` (或某些发行版可能是 `/usr/local/etc/libvirt/libvirtd.conf` 等)。
+1.  **在 WSL 内部启用 Libvirt TCP Socket 监听 (推荐方法)**:
+    *   现代 systemd-based Linux 发行版 (通常 WSL2 使用这类发行版，如 Ubuntu) 通过 systemd socket activation 来管理服务监听。这通常比直接编辑 `libvirtd.conf` 中的 `listen_tcp` 更简洁。
+    *   打开 WSL 终端，执行以下命令以启用并立即启动 Libvirt TCP socket：
+        ```bash
+        sudo systemctl enable --now libvirtd-tcp.socket
+        ```
+        *注意：具体的 socket 单元名称可能是 `libvirtd-tcp.socket` (专门用于无加密 TCP) 或 `libvirtd.socket` (一个通用的 socket，其行为可能取决于 `libvirtd.conf` 中的其他设置)。对于无加密的 TCP，`libvirtd-tcp.socket` 通常是正确的。如果此命令失败，您可以尝试 `sudo systemctl enable --now libvirtd.socket`，然后检查它是否在 TCP 端口 16509 上监听。*
+    *   此方法通常会自动处理监听地址和默认端口 (16509)，无需在 `libvirtd.conf` 中设置 `listen_tcp = 1` 或 `tcp_port`。
+
+2.  **配置认证 (`auth_tcp`)**:
+    *   **重要**: 即便使用 socket activation，认证方式仍需在 Libvirt 配置文件中指定。
+    *   编辑 WSL 中的 `/etc/libvirt/libvirtd.conf`:
         ```bash
         sudo nano /etc/libvirt/libvirtd.conf
         ```
-    *   确保以下行存在并且未被注释，按如下设置：
+    *   确保 `auth_tcp` 设置为 `"none"` (用于开发环境，不安全) 或 `"sasl"` (更安全，但需要额外配置 SASL)。**为方便本地开发，我们这里使用 "none"**:
         ```ini
-        listen_tls = 0
-        listen_tcp = 1
-        auth_tcp = "none"  # 警告：这为了开发方便禁用了认证。对于生产环境，应考虑 "sasl" 或其他安全认证机制。
-        tcp_port = "16509" # Libvirt 默认的 TCP 端口
+        # 找到或添加此行
+        auth_tcp = "none"
         ```
-    *   根据您的发行版，可能还需要修改 `libvirtd` 的服务启动选项，以使其监听。编辑 `/etc/default/libvirtd` (Debian/Ubuntu) 或 `/etc/sysconfig/libvirtd` (RHEL/CentOS/Fedora)。
-        在 `libvirtd_opts` 或类似变量中添加 `-l` 或 `--listen` 标志。例如：
+        *警告：`auth_tcp = "none"` 会允许任何能够通过网络访问此端口的客户端无密码连接到 Libvirt。这仅适用于受信任的本地开发网络环境。*
+    *   如果修改了 `libvirtd.conf`，你需要重启 `libvirtd` 服务以使更改生效：
         ```bash
-        # /etc/default/libvirtd (示例)
-        libvirtd_opts="-d -l"
+        sudo systemctl restart libvirtd.service
+        # 或者简单地 sudo systemctl restart libvirtd
         ```
-        如果该文件不存在或配置方式不同，请查阅您 WSL 发行版的特定文档。
-    *   保存更改并重启 WSL 中的 `libvirtd` 服务：
-        ```bash
-        sudo systemctl restart libvirtd
-        # 或者，如果 systemctl 不可用/不适用:
-        # sudo service libvirtd restart
-        ```
+        (注意：如果仅启用了 socket 而 `libvirtd.service` 本身未运行，它会在第一个 TCP 连接到达时由 systemd 自动启动。但如果更改了 `libvirtd.conf`，重启服务是确保配置加载的好习惯。)
 
-2.  **获取 WSL 实例的 IP 地址**:
+3.  **获取 WSL 实例的 IP 地址**:
     Python 后端 (在 Windows 上运行时) 需要知道 WSL 实例的 IP 地址才能通过 TCP 连接。
     *   在 WSL 终端中，运行以下命令之一来查找 IP 地址：
         ```bash
