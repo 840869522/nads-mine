@@ -20,8 +20,8 @@ app.prepare().then(() => {
   // Use src.main:app to correctly reference the app object within main.py in src/
   const fastApiProcess = childProcessSpawn(
     'uvicorn',
-    ['src.main:app', '--host', '0.0.0.0', '--port', String(PYTHON_API_PORT)],
-    { stdio: 'pipe', cwd: process.cwd() } // Run from project root
+    ['main:app', '--host', '0.0.0.0', '--port', String(PYTHON_API_PORT)], // Changed 'src.main:app' to 'main:app'
+    { stdio: 'pipe', cwd: 'src' } // Changed cwd to 'src'
   );
 
   fastApiProcess.stdout.on('data', (data) => {
@@ -58,6 +58,7 @@ app.prepare().then(() => {
 
 
   // Proxy middleware for /api/vm requests
+  console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL); // Added for debugging
   const apiProxy = createProxyMiddleware('/api/vm', {
     target: FASTAPI_TARGET_URL,
     changeOrigin: true, // Recommended for virtual hosted sites
