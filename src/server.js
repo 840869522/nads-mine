@@ -34,18 +34,16 @@ app.prepare().then(() => {
     // Now, construct the path to python3 *inside* the .venv
     pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
     const scriptToRun = 'main.py'; // The script to run, relative to the new CWD
-    const scriptCwd = path.join(process.cwd(), 'src'); // The CWD for the Python script
 
     console.log(`[NodeJS] Attempting to start FastAPI server using venv Python.`);
     console.log(`[NodeJS Debug] Python executable (from .venv): ${pythonExecutable}`);
     console.log(`[NodeJS Debug] Script to run: ${scriptToRun}`);
-    console.log(`[NodeJS Debug] Script CWD: ${scriptCwd}`);
-    console.log(`[NodeJS] Executing: ${pythonExecutable} ${scriptToRun} (from CWD: ${scriptCwd})`);
+    console.log(`[NodeJS] Executing: ${pythonExecutable} ${scriptToRun}`);
 
     fastApiProcess = childProcessSpawn( // Assign to the outer scope variable
       pythonExecutable,
       [scriptToRun],
-      { stdio: 'pipe', cwd: scriptCwd } // Set CWD for the python script to 'src'
+      { stdio: 'pipe' } // Set CWD for the python script to 'src'
     );
 
     fastApiProcess.stdout.on('data', (data) => {

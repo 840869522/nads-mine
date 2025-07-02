@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import random
 import platform
 import os
-# import libvirt # Uncomment when libvirt is actually used and installed
+import libvirt # Uncomment when libvirt is actually used and installed
 from enum import Enum # Added for EventLogLevel
 from contextlib import asynccontextmanager # Added for lifespan manager
 
@@ -14,14 +14,6 @@ from contextlib import asynccontextmanager # Added for lifespan manager
 LIBVIRT_CONNECTION = None
 
 def get_libvirt_connection():
-    """Attempts to establish a libvirt connection based on the OS."""
-    global libvirt # Make sure to use the global import if it's conditional
-    try:
-        import libvirt # Try importing here, so it's only required if this function is called
-    except ImportError:
-        print("Libvirt-python library not found. Please install it to connect to libvirt.")
-        return None
-
     conn = None
     uri = "qemu:///system" # Assuming development is now directly within WSL or a Linux environment
 

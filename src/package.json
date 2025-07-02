@@ -25,6 +25,7 @@
     "better-sqlite3": "^9.0.0",
     "dayjs": "^1.11.13",
     "dockerode": "^4.0.7",
+    "http-proxy-middleware": "^3.0.5",
     "next": "^15.0.0",
     "nextjs": "^0.0.3",
     "react": "^19.1.0",
