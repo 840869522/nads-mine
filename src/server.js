@@ -10,7 +10,7 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 8000;
+const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 9000;
 const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1'; // Use 127.0.0.1 for proxy target
 const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
 
