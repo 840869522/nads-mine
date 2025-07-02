@@ -2,6 +2,8 @@
 
 本文档概述了为 VM 管理 API 设置 Python 后端环境所需的步骤。Node.js 服务器 (`src/server.js`) 负责自动启动此 Python 后端。
 
+**重要提示：此项目的 Python 后端配置主要为在 WSL (Windows Subsystem for Linux) 或原生 Linux 环境下运行和开发而设计。当 `server.js` 在这些环境中执行时，它会尝试启动 Python 后端。如果在其他操作系统 (如直接在 Windows 上运行 Node.js，而非通过 WSL) 上运行 `server.js`，Python 后端将不会启动，依赖于它的 API 功能 (如 `/api/vm/*`) 将不可用，并会返回 503 服务不可用错误。**
+
 ## 先决条件
 
 1.  **Python 3.8+**:

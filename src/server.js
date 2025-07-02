@@ -15,60 +15,71 @@ const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1'; // Use 127.0
 const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
 
 app.prepare().then(() => {
-  // Start the FastAPI server
-  console.log('Attempting to start FastAPI server...');
-  // Ensure main.py is executable or called via python interpreter
-  // Node.js will now execute the Python script directly.
-  // Python script itself (main.py) will run uvicorn.run().
-  const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3'; // Common convention
-  const scriptPath = 'src/main.py'; // Path relative to project root
+  let pythonExecutable;
+  let canRunPythonBackend = false;
+  let fastApiProcess = null; // Declare fastApiProcess here to be accessible in cleanup and for checks
 
-  console.log(`[NodeJS] Attempting to execute Python script: ${pythonExecutable} ${scriptPath}`);
+  if (process.platform === 'linux') { // WSL typically reports 'linux'
+    pythonExecutable = 'python3';
+    canRunPythonBackend = true;
+    console.log('[NodeJS] Detected Linux (or WSL) platform. Using "python3" to start FastAPI backend.');
+  } else {
+    console.warn(`[NodeJS] WARNING: Current platform is '${process.platform}'.`);
+    console.warn('[NodeJS] The Python backend is configured for Libvirt on Linux/WSL (uses local Unix socket).');
+    console.warn('[NodeJS] Python backend will NOT be started on this platform. API calls to /api/vm/* will return 503.');
+  }
 
-  const fastApiProcess = childProcessSpawn(
-    pythonExecutable,
-    [scriptPath], // Argument is the script to run
-    { stdio: 'pipe', cwd: process.cwd() } // Run from project root
-  );
+  if (canRunPythonBackend) {
+    console.log('Attempting to start FastAPI server...');
+    const scriptPath = 'src/main.py'; // Path relative to project root
+    console.log(`[NodeJS] Attempting to execute Python script: ${pythonExecutable} ${scriptPath}`);
 
-  fastApiProcess.stdout.on('data', (data) => {
-    console.log(`[FastAPI STDOUT]: ${data.toString().trim()}`);
-  });
+    fastApiProcess = childProcessSpawn( // Assign to the outer scope variable
+      pythonExecutable,
+      [scriptPath], // Argument is the script to run
+      { stdio: 'pipe', cwd: process.cwd() } // Run from project root
+    );
 
-  fastApiProcess.stderr.on('data', (data) => {
-    console.error(`[FastAPI STDERR]: ${data.toString().trim()}`);
-  });
+    fastApiProcess.stdout.on('data', (data) => {
+      console.log(`[FastAPI STDOUT]: ${data.toString().trim()}`);
+    });
 
-  fastApiProcess.on('close', (code) => {
-    console.log(`FastAPI server process closed with code ${code}`);
-    if (code !== 0 && !fastApiProcess.killed) {
-        console.error('FastAPI server exited unexpectedly. Check logs.');
-        // Optionally, attempt to restart or notify admin
-    }
-  });
+    fastApiProcess.stderr.on('data', (data) => {
+      console.error(`[FastAPI STDERR]: ${data.toString().trim()}`);
+    });
 
-  fastApiProcess.on('error', (err) => {
-    console.error('Failed to start FastAPI server:', err);
-    // process.exit(1); // Optional: exit if FastAPI fails to start
-  });
+    fastApiProcess.on('close', (code) => {
+      console.log(`FastAPI server process closed with code ${code}`);
+      // Check if fastApiProcess exists before accessing killed, as it might not have been initialized if canRunPythonBackend was false
+      if (code !== 0 && fastApiProcess && !fastApiProcess.killed) {
+          console.error('FastAPI server exited unexpectedly. Check logs.');
+      }
+    });
 
-  // Graceful shutdown for FastAPI process
-  const cleanupFastApi = () => {
-    console.log('Shutting down FastAPI server...');
-    if (!fastApiProcess.killed) {
-        fastApiProcess.kill('SIGINT'); // Or 'SIGTERM'
-    }
-  };
-  process.on('SIGINT', cleanupFastApi);
-  process.on('SIGTERM', cleanupFastApi);
-  process.on('exit', cleanupFastApi);
+    fastApiProcess.on('error', (err) => {
+      console.error('Failed to start FastAPI server process:', err);
+    });
 
+    // Graceful shutdown for FastAPI process
+    const cleanupFastApi = () => {
+      // Check if fastApiProcess was initialized and not already killed
+      if (fastApiProcess && !fastApiProcess.killed) {
+          console.log('Attempting to shut down FastAPI server...');
+          fastApiProcess.kill('SIGINT'); // Or 'SIGTERM'
+      }
+    };
+    process.on('SIGINT', cleanupFastApi);
+    process.on('SIGTERM', cleanupFastApi);
+    process.on('exit', cleanupFastApi);
+  } else {
+    console.log('[NodeJS] Python backend startup skipped due to incompatible platform.');
+  }
 
   // Proxy middleware for /api/vm requests
-  console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL); // Added for debugging
-  const apiProxy = createProxyMiddleware({ // Changed: Removed the first '/api/vm' argument
+  console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL);
+  const apiProxy = createProxyMiddleware({
     target: FASTAPI_TARGET_URL,
-    changeOrigin: true, // Recommended for virtual hosted sites
+    changeOrigin: true,
     pathRewrite: { '^/api/vm': '/api/vm' }, // Keep /api/vm in the path to FastAPI
     logLevel: dev ? 'debug' : 'info', // More logs in development
     onError: (err, req, res) => {
@@ -87,24 +98,26 @@ app.prepare().then(() => {
   });
 
   const httpServer = createServer((req, res) => {
-    // Check if the request path starts with /api/vm for proxying
     if (req.url && req.url.startsWith('/api/vm')) {
-      return apiProxy(req, res, (err) => { // Pass a callback to handle errors from the proxy itself
-        if (err) {
-            console.error('Error in proxy middleware execution:', err);
-            if (!res.headersSent) {
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('Proxy middleware error.');
-            }
-        } else {
-            // This block should ideally not be reached if proxy handles the request
-            // or if an error occurs and is handled by the proxy's onError.
-            // If it is reached, it means the proxy decided not to handle it,
-            // which shouldn't happen for a path it's configured for.
-            // Fallback to Next.js handler if proxy doesn't handle it for some reason.
+      if (canRunPythonBackend) { // Only proxy if backend is supposed to be running
+        return apiProxy(req, res, (err) => {
+          if (err) {
+              console.error('Error in proxy middleware execution:', err);
+              if (!res.headersSent) {
+                  res.writeHead(500, { 'Content-Type': 'text/plain' });
+                  res.end('Proxy middleware error.');
+              }
+          } else {
+            // Fallback to Next.js handler if proxy doesn't fully handle (should not happen for matched path)
             return handle(req, res);
-        }
-      });
+          }
+        });
+      } else {
+        // Python backend is not running on this platform, return 503 Service Unavailable
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Python backend service (for /api/vm) is unavailable on this platform.' }));
+        return;
+      }
     }
     // Default to Next.js handler for other requests
     return handle(req, res);
