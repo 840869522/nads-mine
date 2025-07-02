@@ -31,13 +31,18 @@ app.prepare().then(() => {
 
   if (canRunPythonBackend) {
     console.log('Attempting to start FastAPI server...');
-    const scriptPath = 'src/main.py'; // Path relative to project root
-    console.log(`[NodeJS] Attempting to execute Python script: ${pythonExecutable} ${scriptPath}`);
+    const scriptPath = 'src/main.py'; // This should be the path relative to cwd
+    const effectiveCwd = process.cwd();
+
+    console.log(`[NodeJS Debug] Effective CWD for Python spawn: ${effectiveCwd}`);
+    console.log(`[NodeJS Debug] Python executable: ${pythonExecutable}`);
+    console.log(`[NodeJS Debug] Script path argument: ${scriptPath}`);
+    console.log(`[NodeJS] Attempting to execute: ${pythonExecutable} ${scriptPath} (from CWD: ${effectiveCwd})`);
 
     fastApiProcess = childProcessSpawn( // Assign to the outer scope variable
       pythonExecutable,
       [scriptPath], // Argument is the script to run
-      { stdio: 'pipe', cwd: process.cwd() } // Run from project root
+      { stdio: 'pipe', cwd: effectiveCwd } // Run from project root
     );
 
     fastApiProcess.stdout.on('data', (data) => {

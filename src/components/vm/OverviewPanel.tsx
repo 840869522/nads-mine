@@ -99,7 +99,7 @@ export default function OverviewPanel() {
               <KeyValueListItem label="Host Node" value={overviewData?.hostNode} isLoading={isLoading} />
               <KeyValueListItem label="Pool" value={overviewData?.pool} isLoading={isLoading} />
               <KeyValueListItem label="vCPU Count" value={overviewData?.vcpu?.count} isLoading={isLoading} />
-              <KeyValueListItem label="vRAM Total" value={overviewData ? `${overviewData.vram.total_mb} MB` : undefined} isLoading={isLoading} />
+              <KeyValueListItem label="vRAM Total" value={overviewData?.vram?.total_mb !== undefined ? `${overviewData.vram.total_mb} MB` : undefined} isLoading={isLoading} />
               <KeyValueListItem label="Boot Source" value={overviewData?.bootSource} isLoading={isLoading} />
               <KeyValueListItem label="UUID" value={overviewData?.uuid} isLoading={isLoading} />
               <KeyValueListItem label="IP Address" value={overviewData?.ipAddress} isLoading={isLoading} />
