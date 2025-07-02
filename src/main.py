@@ -22,38 +22,16 @@ def get_libvirt_connection():
         print("Libvirt-python library not found. Please install it to connect to libvirt.")
         return None
 
-    system = platform.system()
     conn = None
-    uri = None
+    uri = "qemu:///system" # Assuming development is now directly within WSL or a Linux environment
 
-    if system == "Linux":
-        uri = "qemu:///system"
-        print(f"Detected Linux system. Attempting local libvirt connection: {uri}")
-        try:
-            conn = libvirt.open(uri)
-        except libvirt.libvirtError as e:
-            print(f"Failed to connect to local libvirt (Linux): {e}")
-            if os.getenv("WSL_DISTRO_NAME"):
-                print("Running inside WSL, but local connection failed. Ensure libvirtd service is active and configured.")
-            conn = None
-    elif system == "Windows":
-        wsl_ip = os.getenv("WSL_LIBVIRT_IP")
-        if not wsl_ip:
-            print("Windows system: WSL_LIBVIRT_IP environment variable not set. Cannot connect to WSL libvirt.")
-            # Optionally, attempt to dynamically get WSL IP here if desired, as discussed previously.
-            # For now, we rely on the environment variable.
-            return None
-
-        uri = f"qemu+tcp://{wsl_ip}:16509/system" # Default libvirt TCP port
-        print(f"Detected Windows system. Attempting to connect to WSL libvirt via TCP: {uri}")
-        try:
-            conn = libvirt.open(uri)
-        except libvirt.libvirtError as e:
-            print(f"Failed to connect to WSL libvirt via TCP (Windows): {e}")
-            conn = None
-    else:
-        print(f"Unsupported OS for libvirt connection: {system}")
-        return None
+    print(f"Attempting local libvirt connection (WSL/Linux): {uri}")
+    try:
+        conn = libvirt.open(uri)
+    except libvirt.libvirtError as e:
+        print(f"Failed to connect to local libvirt ({uri}): {e}")
+        print("Ensure libvirtd service is active and configured in your WSL/Linux environment.")
+        conn = None
 
     if conn is None:
         print("Failed to establish libvirt connection. API will use mock data or operate in a limited mode.")

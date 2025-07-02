@@ -51,82 +51,38 @@
     ```
     *(此步骤针对 Node.js 环境，而非 Python，但对于代理功能正常工作至关重要。)*
 
-## 为 WSL Libvirt 配置 TCP 连接 (可选，用于 Windows 主机开发)
+## Libvirt 服务 (在 WSL 内部)
 
-如果您的开发环境是 Windows，并且希望 Python 后端 (在 Windows 上通过 `server.js` 启动) 连接到在 WSL (Windows Subsystem for Linux) 内部运行的 Libvirt 服务，您需要进行以下配置：
+由于开发环境现在直接在 WSL 内部，Python 后端将通过本地 Unix domain socket (`qemu:///system`) 连接到 Libvirt 服务。您不再需要为 Libvirt 配置 TCP 监听或在 Windows 上设置特殊环境变量来连接 WSL。
 
-1.  **在 WSL 内部启用 Libvirt TCP Socket 监听 (推荐方法)**:
-    *   现代 systemd-based Linux 发行版 (通常 WSL2 使用这类发行版，如 Ubuntu) 通过 systemd socket activation 来管理服务监听。这通常比直接编辑 `libvirtd.conf` 中的 `listen_tcp` 更简洁。
-    *   打开 WSL 终端，执行以下命令以启用并立即启动 Libvirt TCP socket：
-        ```bash
-        sudo systemctl enable --now libvirtd-tcp.socket
-        ```
-        *注意：具体的 socket 单元名称可能是 `libvirtd-tcp.socket` (专门用于无加密 TCP) 或 `libvirtd.socket` (一个通用的 socket，其行为可能取决于 `libvirtd.conf` 中的其他设置)。对于无加密的 TCP，`libvirtd-tcp.socket` 通常是正确的。如果此命令失败，您可以尝试 `sudo systemctl enable --now libvirtd.socket`，然后检查它是否在 TCP 端口 16509 上监听。*
-    *   此方法通常会自动处理监听地址和默认端口 (16509)，无需在 `libvirtd.conf` 中设置 `listen_tcp = 1` 或 `tcp_port`。
-
-2.  **配置认证 (`auth_tcp`)**:
-    *   **重要**: 即便使用 socket activation，认证方式仍需在 Libvirt 配置文件中指定。
-    *   编辑 WSL 中的 `/etc/libvirt/libvirtd.conf`:
-        ```bash
-        sudo nano /etc/libvirt/libvirtd.conf
-        ```
-    *   确保 `auth_tcp` 设置为 `"none"` (用于开发环境，不安全) 或 `"sasl"` (更安全，但需要额外配置 SASL)。**为方便本地开发，我们这里使用 "none"**:
-        ```ini
-        # 找到或添加此行
-        auth_tcp = "none"
-        ```
-        *警告：`auth_tcp = "none"` 会允许任何能够通过网络访问此端口的客户端无密码连接到 Libvirt。这仅适用于受信任的本地开发网络环境。*
-    *   如果修改了 `libvirtd.conf`，你需要重启 `libvirtd` 服务以使更改生效：
-        ```bash
-        sudo systemctl restart libvirtd.service
-        # 或者简单地 sudo systemctl restart libvirtd
-        ```
-        (注意：如果仅启用了 socket 而 `libvirtd.service` 本身未运行，它会在第一个 TCP 连接到达时由 systemd 自动启动。但如果更改了 `libvirtd.conf`，重启服务是确保配置加载的好习惯。)
-
-3.  **获取 WSL 实例的 IP 地址**:
-    Python 后端 (在 Windows 上运行时) 需要知道 WSL 实例的 IP 地址才能通过 TCP 连接。
-    *   在 WSL 终端中，运行以下命令之一来查找 IP 地址：
-        ```bash
-        hostname -I
-        # 或
-        ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1
-        ```
-        (注意：网络接口名称可能是 `eth0` 或其他名称，如 `ensP preocupaciónX`。)
-    *   WSL 的 IP 地址在重启后可能会改变。为了更稳定的开发，您可以考虑为 WSL 设置静态 IP，或者在 Windows 的 `hosts` 文件中为动态获取的 IP 设置一个本地 DNS 名称。
-
-3.  **在 Windows 上设置 `WSL_LIBVIRT_IP` 环境变量**:
-    当您从 Windows 启动 Node.js 服务器 (`src/server.js`) 时，`src/main.py` (Python 后端) 会读取名为 `WSL_LIBVIRT_IP` 的环境变量来找到 WSL。
-    在启动 `server.js` 的那个 Windows 终端会话中设置此变量：
-    *   使用 PowerShell:
-        ```powershell
-        $env:WSL_LIBVIRT_IP="YOUR_WSL_IP_ADDRESS"
-        ```
-    *   使用命令提示符 (CMD):
-        ```cmd
-        set WSL_LIBVIRT_IP=YOUR_WSL_IP_ADDRESS
-        ```
-    将 `YOUR_WSL_IP_ADDRESS` 替换为您在上一步中找到的实际 WSL IP 地址。
-    为了方便，您也可以将此环境变量添加到系统的环境变量中，或者使用 `.env` 文件配合 `python-dotenv` (如果项目中配置了)。
-
-4.  **防火墙注意事项**:
-    *   **Windows 防火墙**: 可能需要配置 Windows 防火墙以允许出站连接到 WSL IP 地址的 `16509` 端口。通常，出站连接的限制较少，但如果遇到问题，这是一个检查点。
-    *   **WSL 防火墙**: 如果您在 WSL 内部运行了防火墙 (如 `ufw`)，请确保它允许来自 Windows 主机 IP 地址 (或所有本地网络) 对 `16509` TCP 端口的入站连接。
-        例如，使用 `ufw`:
-        ```bash
-        sudo ufw allow 16509/tcp
-        ```
+*   **确保 Libvirt 服务正在运行**:
+    在您的 WSL 终端中，检查 `libvirtd`服务的状态并确保它正在运行：
+    ```bash
+    sudo systemctl status libvirtd
+    # 或者，如果 systemctl 不可用或服务名称不同 (例如在非 systemd 的 WSL 发行版中):
+    # sudo service libvirtd status
+    ```
+    如果服务未运行，请启动它：
+    ```bash
+    sudo systemctl start libvirtd
+    sudo systemctl enable libvirtd # 设置为开机自启 (可选, 仅适用于 systemd 系统)
+    # 或者:
+    # sudo service libvirtd start
+    ```
+    标准安装的 Libvirt 通常会默认配置为监听本地 Unix socket。
 
 ## 运行后端
 
-Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start`) 自动作为子进程启动。`server.js` 会执行 `python src/main.py` (或 `python3 src/main.py`)，而 `src/main.py` 内部使用 `uvicorn.run()` 来启动 FastAPI 服务。
+Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start` 从项目根目录) 自动作为子进程启动。`server.js` 会执行 `python src/main.py` (或 `python3 src/main.py`)，而 `src/main.py` 内部使用 `uvicorn.run()` 来启动 FastAPI 服务。
 
 Node.js 服务器将会：
-*   通过运行 `python src/main.py` 启动 FastAPI/Uvicorn 服务，该服务将监听端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
+*   通过运行 `python src/main.py` (在WSL环境中) 启动 FastAPI/Uvicorn 服务，该服务将监听端口 8000 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
 *   将对 `/api/vm/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的此端口。
 
 启动 `src/server.js` 时，请检查控制台输出，以获取指示 FastAPI 服务器状态的消息。
-如果您想单独测试 Python 后端（不通过 Node.js 代理），您可以直接在已安装依赖的 Python 环境中运行：
+如果您想单独测试 Python 后端（不通过 Node.js 代理），您可以直接在已安装依赖的 Python 环境中 (在 WSL 内部) 运行：
 ```bash
+# 确保你在 src 目录的父目录下，或者调整路径
 python src/main.py
 # 或者 python3 src/main.py
 ```
@@ -134,7 +90,7 @@ python src/main.py
 
 ## 故障排除
 
-*   **命令 `python` 或 `python3` 未找到 (当 `server.js` 尝试运行时)**:
+*   **命令 `python` 或 `python3` 未找到 (当 `server.js` 尝试运行时 从 Node.js)**:
     *   确保 `python` (Windows) 或 `python3` (Linux/macOS) 在您运行 `npm start` 的终端的系统 PATH 中。
     *   如果您使用了虚拟环境，直接从 `server.js` 启动 Python 脚本通常不需要预先激活该虚拟环境，因为 `server.js` 会调用系统级的 `python` 或 `python3`。重要的是，这个被调用的 `python`/`python3` 实例能够访问到 `src/requirements.txt` 中安装的包（即这些包要么全局安装，要么安装在 `server.js` 执行时 `python` 命令所指向的环境中）。
     *   如果坚持在特定虚拟环境下运行 Python 脚本，您需要在 `server.js` 中指定虚拟环境内 Python解释器的绝对路径，或者在启动 `server.js` 前确保该虚拟环境已被激活，并且其 `python` 解释器是默认的。
