@@ -22,7 +22,10 @@ import {
   ReportProblemOutlined as EmptyIcon
 } from '@mui/icons-material';
 
-const VM_ID = "test-vm"; // Placeholder VM ID
+
+interface NetworkPanelProps {
+  vmId: string;
+}
 
 type NicModelType = 'virtio' | 'e1000' | 'rtl8139'; // Keep in sync with backend/frontend
 type NicStatusType = 'active' | 'inactive' | 'unplugged';
@@ -52,7 +55,7 @@ interface NicFormData {
 const mockBridges = ['virbr0', 'br-lan', 'host-only-net']; // Could be fetched from API
 const mockNicModels: NicModelType[] = ['virtio', 'e1000', 'rtl8139'];
 
-export default function NetworkPanel() {
+export default function NetworkPanel({ vmId }: NetworkPanelProps) {
   const [vnics, setVnics] = useState<VirtualNic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +76,7 @@ export default function NetworkPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${VM_ID}/network/vnics`);
+      const response = await fetch(`/api/vm/${vmId}/network/vnics`);
       if (!response.ok) throw new Error(`Failed to fetch vNICs: ${response.status}`);
       const data: VirtualNic[] = await response.json();
       setVnics(data);
@@ -128,7 +131,7 @@ export default function NetworkPanel() {
         bandwidth_limit_mbps: editingNicData.bandwidth_limit_mbps,
         vlan_tag: editingNicData.vlan_tag,
     };
-    handleApiCall(`${API_BASE_URL}/vm/${VM_ID}/network/vnics/${editingNic.id}`, 'PUT', payload, () => {
+    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics/${editingNic.id}`, 'PUT', payload, () => {
       setEditDrawerOpen(false);
       setEditingNic(null);
     });
@@ -144,14 +147,14 @@ export default function NetworkPanel() {
         setError("Bridge and Model are required for a new NIC.");
         return;
     }
-    handleApiCall(`${API_BASE_URL}/vm/${VM_ID}/network/vnics`, 'POST', newNicData, () => {
+    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics`, 'POST', newNicData, () => {
       setAttachDrawerOpen(false);
     });
   };
 
   const handleDeleteNic = (nicId: string, nicMac?: string) => {
     if (!window.confirm(`Are you sure you want to delete vNIC ${nicMac || nicId}?`)) return;
-    handleApiCall(`${API_BASE_URL}/vm/${VM_ID}/network/vnics/${nicId}`, 'DELETE');
+    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics/${nicId}`, 'DELETE');
   };
 
   const renderRateChip = (rateKbps: number, type: 'rx' | 'tx') => {

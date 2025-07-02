@@ -60,47 +60,12 @@ const VmImageManagementPage: React.FC = () => {
     })
 const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-    // 模拟数据
+    // 从后端获取镜像列表
     useEffect(() => {
-        const mockImages: VmImage[] = [
-            {
-                id: "1",
-                name: "Ubuntu Server",
-                version: "22.04 LTS",
-                osType: "Linux",
-                architecture: "x86_64",
-                size: "2.1 GB",
-                description: "Ubuntu Server 22.04 LTS with basic tools",
-                uploadDate: "2024-01-15T10:30:00Z",
-                status: "available",
-                filePath: "/images/ubuntu-22.04.qcow2",
-            },
-            {
-                id: "2",
-                name: "Windows Server",
-                version: "2022",
-                osType: "Windows",
-                architecture: "x86_64",
-                size: "4.8 GB",
-                description: "Windows Server 2022 Standard Edition",
-                uploadDate: "2024-01-10T14:20:00Z",
-                status: "available",
-                filePath: "/images/windows-server-2022.qcow2",
-            },
-            {
-                id: "3",
-                name: "Kali Linux",
-                version: "2024.1",
-                osType: "Linux",
-                architecture: "x86_64",
-                size: "3.2 GB",
-                description: "Kali Linux penetration testing distribution",
-                uploadDate: "2024-01-20T09:15:00Z",
-                status: "available",
-                filePath: "/images/kali-2024.1.qcow2",
-            },
-        ]
-        setImages(mockImages)
+        fetch('/api/vm/images')
+            .then(res => res.json())
+            .then((data: VmImage[]) => setImages(data))
+            .catch(() => {})
     }, [])
 
     const handleOpenDialog = (image?: VmImage) => {

@@ -6,7 +6,10 @@ import {
   Dns, Memory as MemoryIconMui, Storage as StorageIcon, NetworkCheck
 } from '@mui/icons-material'; // Renamed Memory to MemoryIconMui to avoid conflict
 
-const VM_ID = "test-vm"; // Placeholder VM ID
+
+interface OverviewPanelProps {
+  vmId: string;
+}
 
 interface VCPUInfo {
   count: number;
@@ -52,7 +55,7 @@ const KeyValueListItem: React.FC<{label: string; value: string | number | undefi
   </Stack>
 );
 
-export default function OverviewPanel() {
+export default function OverviewPanel({ vmId }: OverviewPanelProps) {
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export default function OverviewPanel() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/vm/${VM_ID}/overview`);
+        const response = await fetch(`/api/vm/${vmId}/overview`);
         if (!response.ok) {
           throw new Error(`Failed to fetch overview data: ${response.status} ${response.statusText}`);
         }

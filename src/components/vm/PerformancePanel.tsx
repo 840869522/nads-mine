@@ -55,9 +55,11 @@ interface HistoricalMetrics {
   network_throughput_mbps_total: MetricDataPoint[];
 }
 
-const VM_ID = "test-vm"; // Placeholder VM ID
+interface PerformancePanelProps {
+  vmId: string;
+}
 
-export default function PerformancePanel() {
+export default function PerformancePanel({ vmId }: PerformancePanelProps) {
   const [timeRange, setTimeRange] = useState(timeRanges[0].value);
   const [refreshIntervalValue, setRefreshIntervalValue] = useState(refreshIntervals[1].value); // Renamed to avoid conflict
   const [performanceData, setPerformanceData] = useState<HistoricalMetrics | null>(null);
@@ -68,7 +70,7 @@ export default function PerformancePanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${VM_ID}/performance/historical?range=${currentRange}`);
+      const response = await fetch(`/api/vm/${vmId}/performance/historical?range=${currentRange}`);
       if (!response.ok) {
         const errBody = await response.text();
         throw new Error(`Failed to fetch performance data: ${response.status} ${response.statusText} - ${errBody}`);
@@ -81,7 +83,7 @@ export default function PerformancePanel() {
     } finally {
       setIsLoading(false);
     }
-  }, []); // VM_ID can be added if it's dynamic
+  }, [vmId]);
 
   useEffect(() => {
     fetchPerformanceData(timeRange);

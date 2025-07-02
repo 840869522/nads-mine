@@ -19,8 +19,9 @@ import {
 } from '@mui/icons-material';
 import { SimpleTreeView, TreeItem, TreeViewBasePayload } from '@mui/x-tree-view'; // Added TreeViewBasePayload
 
-const VM_ID = "test-vm"; // Placeholder VM ID
-
+interface SnapshotsPanelProps {
+  vmId: string;
+}
 
 interface Snapshot {
   id: string;
@@ -32,7 +33,7 @@ interface Snapshot {
   xml?: string;
 }
 
-export default function SnapshotsPanel() {
+export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -48,7 +49,7 @@ export default function SnapshotsPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots`);
+      const response = await fetch(`${API_BASE_URL}/vm/${vmId}/snapshots`);
       if (!response.ok) {
         throw new Error(`Failed to fetch snapshots: ${response.status} ${response.statusText}`);
       }
@@ -86,7 +87,7 @@ export default function SnapshotsPanel() {
     setActionInProgress(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${VM_ID}/snapshots`, {
+      const response = await fetch(`/api/vm/${vmId}/snapshots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSnapshotName, description: newSnapshotDescription }),
@@ -118,7 +119,7 @@ export default function SnapshotsPanel() {
         return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots/${selectedSnapshotId}`, {
+      const response = await fetch(`${API_BASE_URL}/vm/${vmId}/snapshots/${selectedSnapshotId}`, {
         method: 'DELETE',
       });
       if (!response.ok && response.status !== 204) { // 204 is also a success (No Content)
@@ -143,7 +144,7 @@ export default function SnapshotsPanel() {
         return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots/${selectedSnapshot.id}/revert`, {
+      const response = await fetch(`${API_BASE_URL}/vm/${vmId}/snapshots/${selectedSnapshot.id}/revert`, {
         method: 'POST',
       });
       if (!response.ok) {

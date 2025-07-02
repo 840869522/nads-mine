@@ -18,7 +18,10 @@ import {
   // SensorsOutlined as LiveTailIconOn // Placeholder for live tail
 } from '@mui/icons-material';
 
-const VM_ID = "test-vm"; // Placeholder VM ID
+
+interface EventsPanelProps {
+  vmId: string;
+}
 
 type EventLevel = 'info' | 'warning' | 'error' | 'debug';
 
@@ -39,7 +42,7 @@ const timeWindowOptions = [
 ];
 
 
-export default function EventsPanel() {
+export default function EventsPanel({ vmId }: EventsPanelProps) {
   const [events, setEvents] = useState<EventLog[]>([]);
   const [filterLevel, setFilterLevel] = useState<EventLevel | 'all'>('all');
   const [filterKeyword, setFilterKeyword] = useState('');
@@ -62,7 +65,7 @@ export default function EventsPanel() {
     // queryParams.append('limit', '200'); // Example limit
 
     try {
-      const response = await fetch(`/api/vm/${VM_ID}/events?${queryParams.toString()}`);
+        const response = await fetch(`/api/vm/${vmId}/events?${queryParams.toString()}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch events: ${response.status} ${response.statusText}`);
       }

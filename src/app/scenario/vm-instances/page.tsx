@@ -41,21 +41,7 @@ interface VmInstance {
     uptime?: string
 }
 
-/* ---------- MOCK ---------- */
-const MOCK: VmInstance[] = [
-    {
-        id: "101",
-        name: "db-01",
-        hostNode: "kvm-node-1",
-        pool: "default",
-        state: "running",
-        vcpu: 4,
-        vmem: 8192,
-        ip: "192.168.122.101",
-        uptime: "2d 03:12",
-    },
-    { id: "102", name: "web-02", hostNode: "kvm-node-2", pool: "web", state: "shutoff", vcpu: 2, vmem: 4096 },
-]
+/* ---------- 从后端获取虚拟机实例列表 ---------- */
 
 /* ---------- 状态图标 ---------- */
 function stateIcon(state: VmInstance["state"]) {
@@ -67,13 +53,24 @@ function stateIcon(state: VmInstance["state"]) {
 }
 
 export default function VmPage() {
-    const [rows] = React.useState(MOCK)
-    const [current, setCurrent] = React.useState<VmInstance | null>(rows[0] ?? null)
+    const [rows, setRows] = React.useState<VmInstance[]>([])
+    const [current, setCurrent] = React.useState<VmInstance | null>(null)
     const [search, setSearch] = React.useState("")
     const [page, setPage] = React.useState(0)
     const [rowsPerPage, setRowsPerPage] = React.useState(10)
     const [tab, setTab] = React.useState(0)
     const [actionAnchor, setActionAnchor] = React.useState<null | HTMLElement>(null)
+
+    // 从后端获取虚拟机实例列表
+    React.useEffect(() => {
+        fetch('/api/vm/instances')
+            .then(res => res.json())
+            .then((data: VmInstance[]) => {
+                setRows(data)
+                setCurrent(data[0] ?? null)
+            })
+            .catch(() => {})
+    }, [])
 
     /* ----- 列定义 ----- */
     const columns = React.useMemo<GridColDef[]>(() => [
@@ -184,12 +181,12 @@ export default function VmPage() {
 
                     {/* Panels */}
                     <Box sx={{ flex: 1, p: 2 }}>
-                        {tab === 0 && <OverviewPanel />}
-                        {tab === 1 && <SnapshotsPanel />}
-                        {tab === 2 && <StoragePanel />}
-                        {tab === 3 && <NetworkPanel />}
-                        {tab === 4 && <PerformancePanel />}
-                        {tab === 5 && <EventsPanel />}
+                        {tab === 0 && current && <OverviewPanel vmId={current.id} />}
+                        {tab === 1 && current && <SnapshotsPanel vmId={current.id} />}
+                        {tab === 2 && current && <StoragePanel vmId={current.id} />}
+                        {tab === 3 && current && <NetworkPanel vmId={current.id} />}
+                        {tab === 4 && current && <PerformancePanel vmId={current.id} />}
+                        {tab === 5 && current && <EventsPanel vmId={current.id} />}
                     </Box>
                 </Box>
             )}

@@ -129,6 +129,25 @@ class Snapshot(SnapshotBase):
     size_mb: int = Field(..., example=1024) # Simplified size
     xml: Optional[str] = Field(None, example="<domainsnapshot>...</domainsnapshot>")
 
+# 新增：虚拟机实例和镜像的模型，用于从 libvirt 获取真实数据
+class VmInstance(BaseModel):
+    id: str
+    name: str
+    hostNode: str
+    pool: str
+    state: str
+    vcpu: int
+    vmem: int
+    ip: Optional[str] = None
+    uptime: Optional[str] = None
+
+class VmImage(BaseModel):
+    id: str
+    name: str
+    pool: str
+    size: str
+    path: str
+
 
 # --- Mock Data Store ---
 # Using global variables for mock data for simplicity in this example.
@@ -178,6 +197,65 @@ def init_mock_snapshots():
 
 init_mock_snapshots()
 
+# --- Libvirt 数据获取工具函数 ---
+def fetch_vm_instances() -> List[VmInstance]:
+    """从 libvirt 获取虚拟机实例列表。如果连接不可用则返回空列表。"""
+    instances: List[VmInstance] = []
+    if not LIBVIRT_CONNECTION:
+        return instances
+    try:
+        host_node = LIBVIRT_CONNECTION.getHostname()
+        for dom in LIBVIRT_CONNECTION.listAllDomains():
+            state, _ = dom.state()
+            # 状态码转换为字符串，便于前端显示
+            if state == libvirt.VIR_DOMAIN_RUNNING:
+                state_str = "running"
+            elif state == libvirt.VIR_DOMAIN_PAUSED:
+                state_str = "paused"
+            else:
+                state_str = "shutoff"
+
+            info = dom.info()
+            instance = VmInstance(
+                id=str(dom.ID()),
+                name=dom.name(),
+                hostNode=host_node,
+                pool="default",
+                state=state_str,
+                vcpu=info[3],
+                vmem=int(info[1] / 1024),
+            )
+            instances.append(instance)
+    except libvirt.libvirtError:
+        pass
+    return instances
+
+
+def fetch_vm_images() -> List[VmImage]:
+    """从 libvirt 所有存储池获取镜像卷信息。"""
+    images: List[VmImage] = []
+    if not LIBVIRT_CONNECTION:
+        return images
+    try:
+        for pool in LIBVIRT_CONNECTION.listAllStoragePools():
+            pool.refresh(0)
+            for vol_name in pool.listVolumes():
+                vol = pool.storageVolLookupByName(vol_name)
+                info = vol.info()
+                size_gb = info[1] / (1024 ** 3)
+                images.append(
+                    VmImage(
+                        id=vol_name,
+                        name=vol_name,
+                        pool=pool.name(),
+                        size=f"{size_gb:.1f} GB",
+                        path=vol.path(),
+                    )
+                )
+    except libvirt.libvirtError:
+        pass
+    return images
+
 
 # --- API Endpoints ---
 
@@ -216,6 +294,19 @@ async def get_vm_overview(vm_id: str):
             pass # Ignore parsing errors for mock uptime
 
     return mock_vm_overview
+
+
+# 读取虚拟机实例和镜像列表的接口
+@app.get("/api/vm/instances", response_model=List[VmInstance], tags=["Instances"])
+async def api_vm_instances():
+    """返回所有虚拟机实例信息"""
+    return fetch_vm_instances()
+
+
+@app.get("/api/vm/images", response_model=List[VmImage], tags=["Images"])
+async def api_vm_images():
+    """返回所有存储卷(镜像)信息"""
+    return fetch_vm_images()
 
 # Lifecycle actions
 @app.post("/api/vm/{vm_id}/overview/{action}", response_model=LifecycleActionResponse, tags=["Overview"])
