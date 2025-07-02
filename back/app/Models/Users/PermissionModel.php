@@ -52,7 +52,7 @@
         }
 
         public static function searchPermissionByName(string $name, int $page = 1,int $pagesize=10) :array {
-            $sql = "SELECT * FROM `c_permissions` WHERE label LIKE ? OR category LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_permissions` WHERE name LIKE ? LIMIT ? OFFSET ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
@@ -133,10 +133,10 @@
         }
 
         public static function insertNewPermission(array $data) : array {
-            $sql = "INSERT INTO c_permissions VALUES(?,?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_permissions VALUES(?,?)";
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$data['id'],$data["name"],$data["category"]]);
+                $res = db::insert($sql,[$data['id'],$data["name"]]);
                 if ($res) {
                     db::commit();
                     return [
@@ -158,7 +158,7 @@
 
         
         public static function updatePermission(string $id,array $data):array {
-            $sql = "UPDATE `c_permissions` SET label= ?,update_at =NOW() WHERE id = ?";
+            $sql = "UPDATE `c_permissions` SET name= ? WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);

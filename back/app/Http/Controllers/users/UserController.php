@@ -119,7 +119,7 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            $permissions = UserModel::getUserPrimissions($user->user_name);
+            $permissions = UserModel::getUserPrimissions($user->username);
             if ($permissions['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
@@ -130,7 +130,7 @@
                 "id" => $user->id,
                 // "role" => $user->role_id,
                 "permission" => array_map(function ($item) {
-                    return $item->label;
+                    return $item->permission_id ;
                 }, $permissions["data"])
             ]);
             if ($jwtRes["err"] != null) {
@@ -139,13 +139,13 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            UserModel::updateUserLastLogin($user->id);
+            UserModel::updateUserLastLogin($user->username);
             return response()->json([
                 "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                 "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,
                 "data" => [
                     "token" => $jwtRes['token'],
-                    "id" => $user->id
+                    "id" => $user->username
                 ]
             ]);
         }

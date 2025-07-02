@@ -16,7 +16,7 @@
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;
             $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(name_key) AS count FROM `c_roles`";
+            $sql_count = "SELECT COUNT(id) AS count FROM `c_roles`";
             try {  
                 $res = db::select($sql,[$pagesize,$offset]);
                 $count = db::select($sql_count);
@@ -117,10 +117,10 @@
 
 
         public static function insertNewRole(?array $data) :array {
-            $sql = "INSERT INTO c_roles(id,name_key,name_display,description,create_at,update_at) VALUES(?,?,?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_roles(id,name,create_at,update_at) VALUES(?,?,NOW(),NOW())";
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$data['id'],$data['name'],$data['name_display'],$data['description']]);
+                $res = db::insert($sql,[$data['id'],$data['name']]);
                 if ($res) {
                     db::commit();
                     return [
@@ -140,7 +140,7 @@
         }
 
         public static function updateRoleById(string $id,?array $data) :array {
-            $sql = "UPDATE c_roles SET name_key = ?,name_display = ?,description = ?,update_at = NOW() WHERE id = ?";
+            $sql = "UPDATE c_roles SET name = ?,update_at = NOW() WHERE id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);
