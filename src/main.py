@@ -7,6 +7,7 @@ import random
 import platform
 import os
 # import libvirt # Uncomment when libvirt is actually used and installed
+from enum import Enum # Added for EventLogLevel
 
 app = FastAPI(
     title="VM Management API",
@@ -506,7 +507,7 @@ async def get_historical_performance(vm_id: str, range: str = "1h"):
 
 
 # --- Events Models & Endpoints ---
-class EventLogLevel(str): # Enum-like for FastAPI
+class EventLogLevel(str, Enum): # Changed to inherit from str and Enum
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"

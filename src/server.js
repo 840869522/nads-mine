@@ -66,7 +66,7 @@ app.prepare().then(() => {
 
   // Proxy middleware for /api/vm requests
   console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL); // Added for debugging
-  const apiProxy = createProxyMiddleware('/api/vm', {
+  const apiProxy = createProxyMiddleware({ // Changed: Removed the first '/api/vm' argument
     target: FASTAPI_TARGET_URL,
     changeOrigin: true, // Recommended for virtual hosted sites
     pathRewrite: { '^/api/vm': '/api/vm' }, // Keep /api/vm in the path to FastAPI
