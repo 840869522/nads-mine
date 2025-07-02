@@ -746,6 +746,6 @@ if __name__ == "__main__":
     # as server.js *expects* it to be on PYTHON_API_PORT.
     # For consistency, we'll use 0.0.0.0 and a default port.
 
-    configured_port = int(os.getenv("PYTHON_API_PORT", "9000"))
+    configured_port = int(os.getenv("PYTHON_API_PORT", "3010"))
     print(f"Attempting to start Uvicorn programmatically on host 0.0.0.0, port {configured_port}")
     uvicorn.run(app, host="0.0.0.0", port=configured_port, log_level="info")

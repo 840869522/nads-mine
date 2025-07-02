@@ -4,13 +4,14 @@ import { Server } from 'socket.io';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch'; // Renamed to avoid conflict
 import { spawn as childProcessSpawn } from 'child_process'; // For launching FastAPI
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { IncomingMessage, ServerResponse } from 'http';
 import path from 'path'; // Ensure path is imported
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 9000;
+const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
 const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1'; // Use 127.0.0.1 for proxy target
 const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
 
@@ -18,7 +19,14 @@ app.prepare().then(() => {
   let pythonExecutable;
   let canRunPythonBackend = false;
   let fastApiProcess = null; // Declare fastApiProcess here to be accessible in cleanup and for checks
-
+  // Graceful shutdown for FastAPI process
+  const cleanupFastApi = () => {
+    // Check if fastApiProcess was initialized and not already killed
+    if (fastApiProcess && !fastApiProcess.killed) {
+      console.log('Attempting to shut down FastAPI server...');
+      fastApiProcess.kill('SIGINT'); // Or 'SIGTERM'
+    }
+  };
   if (process.platform === 'linux') { // WSL typically reports 'linux'
     pythonExecutable = 'python3';
     canRunPythonBackend = true;
@@ -66,14 +74,7 @@ app.prepare().then(() => {
       console.error('Failed to start FastAPI server process:', err);
     });
 
-    // Graceful shutdown for FastAPI process
-    const cleanupFastApi = () => {
-      // Check if fastApiProcess was initialized and not already killed
-      if (fastApiProcess && !fastApiProcess.killed) {
-          console.log('Attempting to shut down FastAPI server...');
-          fastApiProcess.kill('SIGINT'); // Or 'SIGTERM'
-      }
-    };
+
     process.on('SIGINT', cleanupFastApi);
     process.on('SIGTERM', cleanupFastApi);
     process.on('exit', cleanupFastApi);

@@ -6,7 +6,6 @@ import {
   Dns, Memory as MemoryIconMui, Storage as StorageIcon, NetworkCheck
 } from '@mui/icons-material'; // Renamed Memory to MemoryIconMui to avoid conflict
 
-const API_BASE_URL = '/api/vm'; // Updated: No need for process.env for this relative path
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 interface VCPUInfo {
@@ -63,7 +62,7 @@ export default function OverviewPanel() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/overview`);
+        const response = await fetch(`/api/vm/${VM_ID}/overview`);
         if (!response.ok) {
           throw new Error(`Failed to fetch overview data: ${response.status} ${response.statusText}`);
         }

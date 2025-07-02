@@ -18,7 +18,6 @@ import {
   ReportProblemOutlined as EmptyIcon
 } from '@mui/icons-material';
 
-const API_BASE_URL = '/api/vm'; // Updated
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 interface Disk {
@@ -82,7 +81,7 @@ export default function StoragePanel() {
     setIsLoadingCdRoms(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/storage/cdroms`);
+      const response = await fetch(`/api/vm/${VM_ID}/storage/cdroms`);
       if (!response.ok) throw new Error(`Failed to fetch CD-ROMs: ${response.status}`);
       const data: CdRomDevice[] = await response.json();
       setCdRoms(data);

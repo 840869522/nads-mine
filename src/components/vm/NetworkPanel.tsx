@@ -22,7 +22,6 @@ import {
   ReportProblemOutlined as EmptyIcon
 } from '@mui/icons-material';
 
-const API_BASE_URL = '/api/vm'; // Updated
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 type NicModelType = 'virtio' | 'e1000' | 'rtl8139'; // Keep in sync with backend/frontend
@@ -74,7 +73,7 @@ export default function NetworkPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/network/vnics`);
+      const response = await fetch(`/api/vm/${VM_ID}/network/vnics`);
       if (!response.ok) throw new Error(`Failed to fetch vNICs: ${response.status}`);
       const data: VirtualNic[] = await response.json();
       setVnics(data);

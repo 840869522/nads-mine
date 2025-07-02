@@ -55,7 +55,6 @@ interface HistoricalMetrics {
   network_throughput_mbps_total: MetricDataPoint[];
 }
 
-const API_BASE_URL = '/api/vm'; // Updated
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 export default function PerformancePanel() {
@@ -69,7 +68,7 @@ export default function PerformancePanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/performance/historical?range=${currentRange}`);
+      const response = await fetch(`/api/vm/${VM_ID}/performance/historical?range=${currentRange}`);
       if (!response.ok) {
         const errBody = await response.text();
         throw new Error(`Failed to fetch performance data: ${response.status} ${response.statusText} - ${errBody}`);

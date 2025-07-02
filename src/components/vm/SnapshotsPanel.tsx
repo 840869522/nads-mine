@@ -19,7 +19,6 @@ import {
 } from '@mui/icons-material';
 import { SimpleTreeView, TreeItem, TreeViewBasePayload } from '@mui/x-tree-view'; // Added TreeViewBasePayload
 
-const API_BASE_URL = '/api/vm'; // Updated
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 
@@ -87,7 +86,7 @@ export default function SnapshotsPanel() {
     setActionInProgress(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/snapshots`, {
+      const response = await fetch(`/api/vm/${VM_ID}/snapshots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSnapshotName, description: newSnapshotDescription }),

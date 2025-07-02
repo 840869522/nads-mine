@@ -18,7 +18,6 @@ import {
   // SensorsOutlined as LiveTailIconOn // Placeholder for live tail
 } from '@mui/icons-material';
 
-const API_BASE_URL = '/api/vm'; // Updated
 const VM_ID = "test-vm"; // Placeholder VM ID
 
 type EventLevel = 'info' | 'warning' | 'error' | 'debug';
@@ -63,7 +62,7 @@ export default function EventsPanel() {
     // queryParams.append('limit', '200'); // Example limit
 
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${VM_ID}/events?${queryParams.toString()}`);
+      const response = await fetch(`/api/vm/${VM_ID}/events?${queryParams.toString()}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch events: ${response.status} ${response.statusText}`);
       }
