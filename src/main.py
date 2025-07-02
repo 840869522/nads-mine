@@ -728,38 +728,43 @@ def get_libvirt_connection():
         print("Successfully connected to libvirt service.")
     return conn
 
-@app.on_event("startup")
-async def startup_event():
-    global LIBVIRT_CONNECTION
-    print("FastAPI application starting up. Attempting to initialize libvirt connection...")
-    LIBVIRT_CONNECTION = get_libvirt_connection()
-    if LIBVIRT_CONNECTION:
-        try:
-            hostname = LIBVIRT_CONNECTION.getHostname()
-            print(f"Libvirt connection successful. Hostname: {hostname}")
-        except Exception as e: # Catch potential errors if connection drops immediately
-            print(f"Libvirt connection established but failed to get hostname: {e}")
-            LIBVIRT_CONNECTION = None # Reset if post-connection check fails
-            print("Reverted to no Libvirt connection due to post-connection check failure.")
-    else:
-        print("Libvirt connection failed during startup. Backend will use mock data.")
-        print("Ensure libvirt service is running and configured correctly.")
-        print("- On Linux/WSL: Check 'sudo systemctl status libvirtd' or 'sudo service libvirtd status'.")
-        print("- On Windows (for WSL connection): Set WSL_LIBVIRT_IP and ensure WSL's libvirtd listens on TCP.")
+# @app.on_event("startup") # REMOVED - Replaced by lifespan manager
+# async def startup_event():
+#     global LIBVIRT_CONNECTION
+#     print("FastAPI application starting up. Attempting to initialize libvirt connection...")
+#     LIBVIRT_CONNECTION = get_libvirt_connection()
+#     if LIBVIRT_CONNECTION:
+#         try:
+#             hostname = LIBVIRT_CONNECTION.getHostname()
+#             print(f"Libvirt connection successful. Hostname: {hostname}")
+#         except Exception as e: # Catch potential errors if connection drops immediately
+#             print(f"Libvirt connection established but failed to get hostname: {e}")
+#             LIBVIRT_CONNECTION = None # Reset if post-connection check fails
+#             print("Reverted to no Libvirt connection due to post-connection check failure.")
+#     else:
+#         print("Libvirt connection failed during startup. Backend will use mock data.")
+#         print("Ensure libvirt service is running and configured correctly.")
+#         print("- On Linux/WSL: Check 'sudo systemctl status libvirtd' or 'sudo service libvirtd status'.")
+#         print("- On Windows (for WSL connection): Set WSL_LIBVIRT_IP and ensure WSL's libvirtd listens on TCP.")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    global LIBVIRT_CONNECTION
-    if LIBVIRT_CONNECTION:
-        print("FastAPI application shutting down. Closing libvirt connection...")
-        try:
-            LIBVIRT_CONNECTION.close()
-            print("Libvirt connection closed.")
-        except Exception as e: # Use generic Exception for libvirt.libvirtError if import is conditional
-            print(f"Error closing libvirt connection: {e}")
-        LIBVIRT_CONNECTION = None
+# @app.on_event("shutdown") # REMOVED - Replaced by lifespan manager
+# async def shutdown_event():
+#     global LIBVIRT_CONNECTION
+#     if LIBVIRT_CONNECTION:
+#         print("FastAPI application shutting down. Closing libvirt connection...")
+#         try:
+#             LIBVIRT_CONNECTION.close()
+#             print("Libvirt connection closed.")
+#         except Exception as e: # Use generic Exception for libvirt.libvirtError if import is conditional
+#             print(f"Error closing libvirt connection: {e}")
+#         LIBVIRT_CONNECTION = None
 
 # --- End Libvirt Connection Framework ---
+
+# Note: The lifespan manager is defined earlier and passed to FastAPI app instance:
+# @asynccontextmanager
+# async def lifespan(app_instance: FastAPI): ...
+# app = FastAPI(..., lifespan=lifespan)
 
 if __name__ == "__main__":
     import uvicorn
