@@ -8,12 +8,108 @@ import platform
 import os
 # import libvirt # Uncomment when libvirt is actually used and installed
 from enum import Enum # Added for EventLogLevel
+from contextlib import asynccontextmanager # Added for lifespan manager
+
+# --- Libvirt Connection Framework ---
+LIBVIRT_CONNECTION = None
+
+def get_libvirt_connection():
+    """Attempts to establish a libvirt connection based on the OS."""
+    global libvirt # Make sure to use the global import if it's conditional
+    try:
+        import libvirt # Try importing here, so it's only required if this function is called
+    except ImportError:
+        print("Libvirt-python library not found. Please install it to connect to libvirt.")
+        return None
+
+    system = platform.system()
+    conn = None
+    uri = None
+
+    if system == "Linux":
+        uri = "qemu:///system"
+        print(f"Detected Linux system. Attempting local libvirt connection: {uri}")
+        try:
+            conn = libvirt.open(uri)
+        except libvirt.libvirtError as e:
+            print(f"Failed to connect to local libvirt (Linux): {e}")
+            if os.getenv("WSL_DISTRO_NAME"):
+                print("Running inside WSL, but local connection failed. Ensure libvirtd service is active and configured.")
+            conn = None
+    elif system == "Windows":
+        wsl_ip = os.getenv("WSL_LIBVIRT_IP")
+        if not wsl_ip:
+            print("Windows system: WSL_LIBVIRT_IP environment variable not set. Cannot connect to WSL libvirt.")
+            # Optionally, attempt to dynamically get WSL IP here if desired, as discussed previously.
+            # For now, we rely on the environment variable.
+            return None
+
+        uri = f"qemu+tcp://{wsl_ip}:16509/system" # Default libvirt TCP port
+        print(f"Detected Windows system. Attempting to connect to WSL libvirt via TCP: {uri}")
+        try:
+            conn = libvirt.open(uri)
+        except libvirt.libvirtError as e:
+            print(f"Failed to connect to WSL libvirt via TCP (Windows): {e}")
+            conn = None
+    else:
+        print(f"Unsupported OS for libvirt connection: {system}")
+        return None
+
+    if conn is None:
+        print("Failed to establish libvirt connection. API will use mock data or operate in a limited mode.")
+    else:
+        print("Successfully connected to libvirt service.")
+    return conn
+
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI): # app_instance is the FastAPI app
+    global LIBVIRT_CONNECTION
+    print("FastAPI application starting up (lifespan). Attempting to initialize libvirt connection...")
+    LIBVIRT_CONNECTION = get_libvirt_connection()
+    if LIBVIRT_CONNECTION:
+        try:
+            hostname = LIBVIRT_CONNECTION.getHostname()
+            print(f"Libvirt connection successful (lifespan). Hostname: {hostname}")
+        except Exception as e:
+            print(f"Libvirt connection established but failed to get hostname (lifespan): {e}")
+            LIBVIRT_CONNECTION = None
+            print("Reverted to no Libvirt connection due to post-connection check failure (lifespan).")
+    else:
+        print("Libvirt connection failed during startup (lifespan). Backend will use mock data.")
+        print("Ensure libvirt service is running and configured correctly.")
+        print("- On Linux/WSL: Check 'sudo systemctl status libvirtd' or 'sudo service libvirtd status'.")
+        print("- On Windows (for WSL connection): Set WSL_LIBVIRT_IP and ensure WSL's libvirtd listens on TCP.")
+
+    yield # Application runs here
+
+    # Shutdown logic
+    if LIBVIRT_CONNECTION:
+        print("FastAPI application shutting down (lifespan). Closing libvirt connection...")
+        try:
+            LIBVIRT_CONNECTION.close()
+            print("Libvirt connection closed (lifespan).")
+        except Exception as e:
+            print(f"Error closing libvirt connection (lifespan): {e}")
+        LIBVIRT_CONNECTION = None
+
+# --- End Libvirt Connection Framework ---
+
 
 app = FastAPI(
     title="VM Management API",
     description="API for managing virtual machines (mock implementation)",
     version="0.1.0",
+    lifespan=lifespan # Added lifespan manager
 )
+
+# Remove old on_event handlers if they exist (they were in a previous version of the file)
+# @app.on_event("startup")
+# async def startup_event():
+#     ...
+#
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     ...
 
 # --- Pydantic Models ---
 
