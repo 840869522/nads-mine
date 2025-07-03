@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 import os
 import libvirt
+from dissect.hypervisor import disk
 from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
@@ -46,6 +47,15 @@ class VmImage(BaseModel):
     pool: str
     size: str
     path: str
+    # 下列字段在 libvirt 的存储卷信息中通常不存在，故设为可选
+    description: Optional[str] = None
+    version: Optional[str] = None
+    osType: Optional[str] = None
+    architecture: Optional[str] = None
+    # 上传日期可近似使用文件的修改时间
+    uploadDate: Optional[str] = None
+    # 镜像状态目前固定为 available，无法直接从 libvirt 获取
+    status: Optional[str] = None
 
 class VCPUInfo(BaseModel):
     count: int
@@ -138,6 +148,39 @@ def _require_conn():
         raise HTTPException(status_code=503, detail="libvirt 未连接")
     return LIBVIRT_CONNECTION
 
+# 尝试使用 dissect.hypervisor 解析镜像文件以获取版本等元数据
+def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
+    meta: dict[str, Optional[str]] = {
+        "version": None,
+        "osType": None,
+        "architecture": None,
+    }
+    ext = os.path.splitext(path)[1].lower()
+    try:
+        if ext == ".qcow2":
+            with open(path, "rb") as fh:
+                img = disk.qcow2.QCow2(fh, backing_file=disk.qcow2.ALLOW_NO_BACKING_FILE)
+                meta["version"] = f"qcow2 v{img.header.version}"
+        elif ext == ".vmdk":
+            with open(path, "rb") as fh:
+                img = disk.vmdk.VMDK(fh)
+                meta["version"] = f"vmdk v{img.header.version}"
+        elif ext == ".vdi":
+            with open(path, "rb") as fh:
+                img = disk.vdi.VDI(fh)
+                meta["version"] = f"vdi v{img.header.version}"
+        elif ext == ".vhdx":
+            with open(path, "rb") as fh:
+                img = disk.vhdx.VHDX(fh)
+                meta["version"] = f"vhdx v{img.header.version}"
+        elif ext == ".vhd":
+            with open(path, "rb") as fh:
+                img = disk.vhd.VHD(fh)
+                meta["version"] = f"vhd v{img.header.version}"
+    except Exception:
+        pass
+    return meta
+
 # 获取所有虚拟机实例
 def fetch_vm_instances() -> List[VmInstance]:
     conn = _require_conn()
@@ -173,14 +216,30 @@ def fetch_vm_images() -> List[VmImage]:
         pool.refresh(0)
         for vol_name in pool.listVolumes():
             vol = pool.storageVolLookupByName(vol_name)
-            size_gb = vol.info()[1] / (1024 ** 3)
+            size_mb = vol.info()[1] / (1024 ** 2)
+            path = vol.path()
+            # 使用文件的修改时间作为上传日期的近似值
+            try:
+                mtime = os.path.getmtime(path)
+                upload_date = datetime.fromtimestamp(mtime).isoformat()
+            except OSError:
+                upload_date = None
+
+            # 通过 dissect.hypervisor 尝试解析镜像文件获取更多元信息
+            meta = _get_image_metadata(path)
+
             images.append(
                 VmImage(
                     id=vol_name,
                     name=vol_name,
                     pool=pool.name(),
-                    size=f"{size_gb:.1f} GB",
-                    path=vol.path(),
+                    size=f"{size_mb:.1f} MB",
+                    path=path,
+                    uploadDate=upload_date,
+                    status="available",
+                    version=meta.get("version"),
+                    osType=meta.get("osType"),
+                    architecture=meta.get("architecture"),
                 )
             )
     return images

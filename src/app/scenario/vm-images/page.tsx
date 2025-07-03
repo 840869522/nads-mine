@@ -37,13 +37,13 @@ import dayjs from "dayjs"
 interface VmImage {
     id: string
     name: string
-    version: string
-    osType: "Windows" | "Linux" | "Other"
-    architecture: "x86_64" | "arm64"
+    version?: string
+    osType?: "Windows" | "Linux" | "Other"
+    architecture?: "x86_64" | "arm64"
     size: string
-    description: string
-    uploadDate: string
-    status: "available" | "uploading" | "error"
+    description?: string
+    uploadDate?: string
+    status?: "available" | "uploading" | "error"
     filePath?: string
 }
 
@@ -73,10 +73,10 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             setEditingImage(image)
             setFormData({
                 name: image.name,
-                version: image.version,
-                osType: image.osType,
-                architecture: image.architecture,
-                description: image.description,
+                version: image.version || '',
+                osType: image.osType || 'Linux',
+                architecture: image.architecture || 'x86_64',
+                description: image.description || '',
             })
         } else {
             setEditingImage(null)
@@ -107,7 +107,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             const newImage: VmImage = {
                 id: Date.now().toString(),
                 ...formData,
-                size: selectedFile ? `${(selectedFile.size / (1024 * 1024 * 1024)).toFixed(1)} GB` : "0 GB",
+                size: selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "0 MB",
                 uploadDate: new Date().toISOString(),
                 status: "available",
                 filePath: selectedFile ? `/images/${selectedFile.name}` : undefined,
@@ -123,8 +123,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
-        img.version.toLowerCase().includes(search.toLowerCase()) ||
-        img.description.toLowerCase().includes(search.toLowerCase())
+        img.version?.toLowerCase().includes(search.toLowerCase()) ||
+        img.description?.toLowerCase().includes(search.toLowerCase())
     )
 
     const handleDelete = (id: string) => {
@@ -179,7 +179,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             headerName: '上传日期',
             flex: 1,
             minWidth: 160,
-            valueFormatter: params => dayjs(params.value as string).format('YYYY年M月D日'),
+            valueFormatter: params =>
+                params.value ? dayjs(params.value as string).format('YYYY年M月D日') : '',
         },
         {
             field: 'actions',
