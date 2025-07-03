@@ -20,7 +20,7 @@
          */
         public static function encodeJWT(?array $data, int $exp_time = 18000, string $algo = "HS256"): array{
             $issuedAt = time();
-            $secretKey = env("JWT-SECRET-KEY", "default-secret-key");
+            $secretKey = env("JWT_SECRET_KEY", "default-secret-key");
             $payload = array_merge([
                 /** 签发时间 */
                 "iat" => $issuedAt,
