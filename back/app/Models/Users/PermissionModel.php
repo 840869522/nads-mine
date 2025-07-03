@@ -11,7 +11,7 @@
 
     class PermissionModel extends Model {
 
-        protected $table = "permissions";
+        protected $table = "c_permissions";
 
 
         public static function getAllPermission(int $page = 1,int $pagesize = 10):?array {

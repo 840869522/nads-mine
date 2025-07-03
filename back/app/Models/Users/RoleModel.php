@@ -11,7 +11,7 @@
     use Exception;
 
     class RoleModel extends Model {
-        protected $table = "role";
+        protected $table = "c_roles";
 
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;

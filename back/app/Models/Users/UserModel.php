@@ -11,7 +11,7 @@
 
     class UserModel extends Model{
 
-        protected  $table = "platform_user";
+        protected  $table = "c_users";
 
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             $offset = ($page - 1 ) * $pagesize;
