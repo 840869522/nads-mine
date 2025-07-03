@@ -1,10 +1,9 @@
-import { createServer } from 'http';
+import Fastify from 'fastify';
+import fastifyHttpProxy from '@fastify/http-proxy';
 import next from 'next';
 import { Server } from 'socket.io';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch'; // Renamed to avoid conflict
 import { spawn as childProcessSpawn } from 'child_process'; // For launching FastAPI
-import { createProxyMiddleware } from 'http-proxy-middleware';
-import { IncomingMessage, ServerResponse } from 'http';
 import path from 'path'; // Ensure path is imported
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -85,87 +84,62 @@ app.prepare().then(() => {
     console.log('[NodeJS] Python backend startup skipped due to incompatible platform.');
   }
 
-  // Proxy middleware for /api/vm requests
-  console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL);
-  const apiProxy = createProxyMiddleware({
-    target: FASTAPI_TARGET_URL,
-    changeOrigin: true,
-    pathRewrite: { '^/api/vm': '/api/vm' }, // Keep /api/vm in the path to FastAPI
-    logLevel: dev ? 'debug' : 'info', // More logs in development
-    onError: (err, req, res) => {
-        console.error('Proxy error:', err);
-        if (res && !res.headersSent) { // Check if headersSent before trying to send a response
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Proxy Error', error: err.message }));
+  const server = Fastify({ logger: false });
+
+  console.log('[Debug Fastify] Intended Proxy Target URL:', FASTAPI_TARGET_URL);
+  server.register(fastifyHttpProxy, {
+    upstream: FASTAPI_TARGET_URL,
+    prefix: '/api/vm',
+    rewritePrefix: '/api/vm',
+    preHandler: (request, reply, done) => {
+      console.log(`[Proxy] Request to FastAPI: ${request.method} ${request.url} -> ${FASTAPI_TARGET_URL}${request.url}`);
+      done();
+    },
+    replyOptions: {
+      onResponse(request, reply, res) {
+        console.log(`[Proxy] Response from FastAPI: ${res.statusCode} for ${request.url}`);
+      },
+      onError(reply, error) {
+        console.error('Proxy error:', error);
+        if (!reply.sent) {
+          reply.code(500).send({ message: 'Proxy Error', error: error.message });
         }
-    },
-    onProxyReq: (proxyReq, req, res) => {
-        console.log(`[Proxy] Request to FastAPI: ${req.method} ${req.url} -> ${FASTAPI_TARGET_URL}${proxyReq.path}`);
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      console.log(`[Proxy] Response from FastAPI: ${proxyRes.statusCode} for ${req.url}`);
+      }
     }
   });
 
-  // Proxy middleware for PHP backend requests
-  console.log('[Debug HPM] Intended PHP Proxy Target URL:', PHP_TARGET_URL);
-  const phpProxy = createProxyMiddleware({
-    target: PHP_TARGET_URL,
-    changeOrigin: true,
-    pathRewrite: { '^/api/php': '/' },
-    logLevel: dev ? 'debug' : 'info',
-    onError: (err, req, res) => {
-      console.error('PHP Proxy error:', err);
-      if (res && !res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'PHP Proxy Error', error: err.message }));
-      }
+  console.log('[Debug Fastify] Intended PHP Proxy Target URL:', PHP_TARGET_URL);
+  server.register(fastifyHttpProxy, {
+    upstream: PHP_TARGET_URL,
+    prefix: '/api/php',
+    rewritePrefix: '/',
+    preHandler: (request, reply, done) => {
+      console.log(`[Proxy] Request to PHP: ${request.method} ${request.url} -> ${PHP_TARGET_URL}${request.url.replace('/api/php', '/')}`);
+      done();
     },
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxy] Request to PHP: ${req.method} ${req.url} -> ${PHP_TARGET_URL}${proxyReq.path}`);
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      console.log(`[Proxy] Response from PHP: ${proxyRes.statusCode} for ${req.url}`);
-    }
-  });
-
-  const httpServer = createServer((req, res) => {
-    if (req.url && req.url.startsWith('/api/vm')) {
-      if (canRunPythonBackend) { // Only proxy if backend is supposed to be running
-        return apiProxy(req, res, (err) => {
-          if (err) {
-              console.error('Error in proxy middleware execution:', err);
-              if (!res.headersSent) {
-                  res.writeHead(500, { 'Content-Type': 'text/plain' });
-                  res.end('Proxy middleware error.');
-              }
-          } else {
-            // Fallback to Next.js handler if proxy doesn't fully handle (should not happen for matched path)
-            return handle(req, res);
-          }
-        });
-      } else {
-        // Python backend is not running on this platform, return 503 Service Unavailable
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Python backend service (for /api/vm) is unavailable on this platform.' }));
-        return;
-      }
-    } else if (req.url && req.url.startsWith('/api/php')) {
-      return phpProxy(req, res, (err) => {
-        if (err) {
-          console.error('Error in PHP proxy middleware:', err);
-          if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Proxy middleware error.');
-          }
+    replyOptions: {
+      onResponse(request, reply, res) {
+        console.log(`[Proxy] Response from PHP: ${res.statusCode} for ${request.url}`);
+      },
+      onError(reply, error) {
+        console.error('PHP Proxy error:', error);
+        if (!reply.sent) {
+          reply.code(500).send({ message: 'PHP Proxy Error', error: error.message });
         }
-      });
+      }
     }
-    // Default to Next.js handler for other requests
-    return handle(req, res);
   });
 
-  const io = new Server(httpServer, { path: '/api/terminal' }); // Existing WebSocket for terminal
+  server.all('*', (request, reply) => {
+    handle(request.raw, reply.raw).then(() => {
+      reply.sent = true;
+    }).catch(err => {
+      console.error('Error handling request:', err);
+      if (!reply.sent) reply.status(500).send('Server error');
+    });
+  });
+
+  const io = new Server(server.server, { path: '/api/terminal' });
 
   io.on('connection', socket => {
     const id = socket.handshake.query.id;
@@ -173,7 +147,6 @@ app.prepare().then(() => {
       socket.disconnect(true);
       return;
     }
-    // Use ptySpawn (renamed import)
     const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/sh'], {
       name: 'xterm-color',
       cols: 80,
@@ -189,16 +162,16 @@ app.prepare().then(() => {
   });
 
   const port = parseInt(process.env.PORT || '3000', 10);
-  httpServer
-    .once("error", (err) => {
+  server.listen({ port }, (err, address) => {
+    if (err) {
       console.error('HTTP Server Error:', err);
-      cleanupFastApi(); // Attempt to clean up FastAPI process too
+      cleanupFastApi();
       process.exit(1);
-    })
-    .listen(port, () => {
-      console.log(`> Node.js server ready on http://localhost:${port}`);
-      console.log(`> FastAPI (Python) API available via proxy at http://localhost:${port}/api/vm`);
-      console.log(`> PHP API available via proxy at http://localhost:${port}/api/php`);
-      console.log(`> Terminal WebSocket available at ws://localhost:${port}/api/terminal`);
-    });
+    }
+    console.log(`> Node.js server ready on ${address}`);
+    console.log(`> FastAPI (Python) API available via proxy at ${address}/api/vm`);
+    console.log(`> PHP API available via proxy at ${address}/api/php`);
+    console.log(`> Terminal WebSocket available at ws://localhost:${port}/api/terminal`);
+  });
+
 });
