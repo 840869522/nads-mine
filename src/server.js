@@ -14,6 +14,9 @@ const handle = app.getRequestHandler();
 const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
 const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1'; // Use 127.0.0.1 for proxy target
 const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
+const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
+const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
+const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
 app.prepare().then(() => {
   let pythonExecutable;
@@ -99,8 +102,30 @@ app.prepare().then(() => {
     onProxyReq: (proxyReq, req, res) => {
         console.log(`[Proxy] Request to FastAPI: ${req.method} ${req.url} -> ${FASTAPI_TARGET_URL}${proxyReq.path}`);
     },
-     onProxyRes: (proxyRes, req, res) => {
-        console.log(`[Proxy] Response from FastAPI: ${proxyRes.statusCode} for ${req.url}`);
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(`[Proxy] Response from FastAPI: ${proxyRes.statusCode} for ${req.url}`);
+    }
+  });
+
+  // Proxy middleware for PHP backend requests
+  console.log('[Debug HPM] Intended PHP Proxy Target URL:', PHP_TARGET_URL);
+  const phpProxy = createProxyMiddleware({
+    target: PHP_TARGET_URL,
+    changeOrigin: true,
+    pathRewrite: { '^/api/php': '/api' },
+    logLevel: dev ? 'debug' : 'info',
+    onError: (err, req, res) => {
+      console.error('PHP Proxy error:', err);
+      if (res && !res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'PHP Proxy Error', error: err.message }));
+      }
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxy] Request to PHP: ${req.method} ${req.url} -> ${PHP_TARGET_URL}${proxyReq.path}`);
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(`[Proxy] Response from PHP: ${proxyRes.statusCode} for ${req.url}`);
     }
   });
 
@@ -125,6 +150,16 @@ app.prepare().then(() => {
         res.end(JSON.stringify({ message: 'Python backend service (for /api/vm) is unavailable on this platform.' }));
         return;
       }
+    } else if (req.url && req.url.startsWith('/api/php')) {
+      return phpProxy(req, res, (err) => {
+        if (err) {
+          console.error('Error in PHP proxy middleware:', err);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Proxy middleware error.');
+          }
+        }
+      });
     }
     // Default to Next.js handler for other requests
     return handle(req, res);
@@ -163,6 +198,7 @@ app.prepare().then(() => {
     .listen(port, () => {
       console.log(`> Node.js server ready on http://localhost:${port}`);
       console.log(`> FastAPI (Python) API available via proxy at http://localhost:${port}/api/vm`);
+      console.log(`> PHP API available via proxy at http://localhost:${port}/api/php`);
       console.log(`> Terminal WebSocket available at ws://localhost:${port}/api/terminal`);
     });
 });

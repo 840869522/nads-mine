@@ -23,7 +23,7 @@ const BindMountsModal: React.FC<BindMountsModalProps> = ({ open, containerId, on
     useEffect(() => {
         if (open && containerId) {
             setLoading(true);
-            fetch(`/api/containers/${containerId}?action=binds`)
+            fetch(`/api/php/containers/${containerId}?action=binds`)
                 .then(res => res.json())
                 .then(setMounts)
                 .finally(() => setLoading(false));

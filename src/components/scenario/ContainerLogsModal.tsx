@@ -23,7 +23,7 @@ const ContainerLogsModal: React.FC<ContainerLogsModalProps> = ({ open, container
     useEffect(() => {
         if (open && containerId) {
             setLoading(true);
-            fetch(`/api/containers/${containerId}?action=logs`)
+            fetch(`/api/php/containers/${containerId}?action=logs`)
                 .then(res => res.json())
                 .then(data => setLogs(data.logs || ''))
                 .finally(() => setLoading(false));
