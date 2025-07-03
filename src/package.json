@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node --trace-deprecation server.js",
     "build": "TSC_COMPILE_ON_ERROR=true next build",
     "start": "NODE_ENV=production node server.js"
   },
