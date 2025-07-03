@@ -18,6 +18,8 @@ const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
 const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
 const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
+let httpServer;
+
 app.prepare().then(() => {
   let pythonExecutable;
   let canRunPythonBackend = false;
@@ -78,8 +80,17 @@ app.prepare().then(() => {
     });
 
 
-    process.on('SIGINT', cleanupFastApi);
-    process.on('SIGTERM', cleanupFastApi);
+    const shutdown = () => {
+      cleanupFastApi();
+      if (httpServer) {
+        httpServer.close(() => process.exit());
+      } else {
+        process.exit();
+      }
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
     process.on('exit', cleanupFastApi);
   } else {
     console.log('[NodeJS] Python backend startup skipped due to incompatible platform.');
@@ -129,7 +140,7 @@ app.prepare().then(() => {
     }
   });
 
-  const httpServer = createServer((req, res) => {
+  httpServer = createServer((req, res) => {
     if (req.url && req.url.startsWith('/api/vm')) {
       if (canRunPythonBackend) { // Only proxy if backend is supposed to be running
         return apiProxy(req, res, (err) => {
