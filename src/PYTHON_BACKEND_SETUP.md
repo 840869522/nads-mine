@@ -79,7 +79,8 @@
         ```bash
         pip install -r src/requirements.txt
         ```
-        这将确保 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要) 等库安装到 `.venv` 虚拟环境中。`server.js` (在Linux/WSL环境下) 会配置为使用此特定虚拟环境中的 Python 解释器。
+        这将确保 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv`、`libvirt-python` 以及 `guestfs` 等库安装到 `.venv` 虚拟环境中。`server.js` (在Linux/WSL环境下) 会配置为使用此特定虚拟环境中的 Python 解释器。
+        `guestfs` 用于在 `fetch_vm_images` 中解析镜像文件的元数据，如版本和架构信息。如果安装 `guestfs` 时提示缺少系统库，请根据发行版安装 `libguestfs` 相关开发包。
 
 4.  **Node.js 服务器依赖项检查 (`http-proxy-middleware`)**:
     主 Node.js 服务器 (`src/server.js`) 使用 `http-proxy-middleware` 将 API 请求代理到 Python 后端。此 Node.js 依赖项应在 `src/package.json` (或项目根目录的 `package.json`) 中列出并已安装。如果缺失，请导航到包含相应 `package.json` 的目录并运行：

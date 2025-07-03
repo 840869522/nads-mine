@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 import os
 import libvirt
-from dissect.hypervisor import disk
+import guestfs
 from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
@@ -148,37 +148,33 @@ def _require_conn():
         raise HTTPException(status_code=503, detail="libvirt 未连接")
     return LIBVIRT_CONNECTION
 
-# 尝试使用 dissect.hypervisor 解析镜像文件以获取版本等元数据
+# 使用 libguestfs 解析镜像文件以获取版本等元数据
 def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
     meta: dict[str, Optional[str]] = {
         "version": None,
         "osType": None,
         "architecture": None,
     }
-    ext = os.path.splitext(path)[1].lower()
+    g = guestfs.GuestFS(python_return_dict=True)
     try:
-        if ext == ".qcow2":
-            with open(path, "rb") as fh:
-                img = disk.qcow2.QCow2(fh, backing_file=disk.qcow2.ALLOW_NO_BACKING_FILE)
-                meta["version"] = f"qcow2 v{img.header.version}"
-        elif ext == ".vmdk":
-            with open(path, "rb") as fh:
-                img = disk.vmdk.VMDK(fh)
-                meta["version"] = f"vmdk v{img.header.version}"
-        elif ext == ".vdi":
-            with open(path, "rb") as fh:
-                img = disk.vdi.VDI(fh)
-                meta["version"] = f"vdi v{img.header.version}"
-        elif ext == ".vhdx":
-            with open(path, "rb") as fh:
-                img = disk.vhdx.VHDX(fh)
-                meta["version"] = f"vhdx v{img.header.version}"
-        elif ext == ".vhd":
-            with open(path, "rb") as fh:
-                img = disk.vhd.VHD(fh)
-                meta["version"] = f"vhd v{img.header.version}"
+        g.add_drive_opts(path, readonly=1)
+        g.launch()
+        roots = g.inspect_os()
+        if roots:
+            root = roots[0]
+            distro = g.inspect_get_distro(root)
+            major = g.inspect_get_major_version(root)
+            minor = g.inspect_get_minor_version(root)
+            meta["version"] = f"{distro} {major}.{minor}"
+            meta["osType"] = g.inspect_get_type(root)
+            meta["architecture"] = g.inspect_get_arch(root)
     except Exception:
         pass
+    finally:
+        try:
+            g.close()
+        except Exception:
+            pass
     return meta
 
 # 获取所有虚拟机实例
@@ -225,7 +221,7 @@ def fetch_vm_images() -> List[VmImage]:
             except OSError:
                 upload_date = None
 
-            # 通过 dissect.hypervisor 尝试解析镜像文件获取更多元信息
+            # 使用 guestfs 解析镜像文件获取更多元信息
             meta = _get_image_metadata(path)
 
             images.append(
