@@ -81,12 +81,12 @@
         ```
         这将确保 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv` 以及 `libvirt-python` (如果需要) 等库安装到 `.venv` 虚拟环境中。`server.js` (在Linux/WSL环境下) 会配置为使用此特定虚拟环境中的 Python 解释器。
 
-4.  **Node.js 服务器依赖项检查 (`http-proxy-middleware`)**:
-    主 Node.js 服务器 (`src/server.js`) 使用 `http-proxy-middleware` 将 API 请求代理到 Python 后端。此 Node.js 依赖项应在 `src/package.json` (或项目根目录的 `package.json`) 中列出并已安装。如果缺失，请导航到包含相应 `package.json` 的目录并运行：
+4.  **Node.js 服务器依赖项检查 (`fastify` 及相关插件)**:
+    更新后的 `src/server.js` 使用 `fastify`、`@fastify/http-proxy` 和 `@fastify/nextjs` 来处理代理和 Next.js 集成。这些依赖应在 `src/package.json` (或项目根目录的 `package.json`) 中列出并已安装。如果缺失，请导航到包含相应 `package.json` 的目录并运行：
     ```bash
-    npm install http-proxy-middleware
+    npm install fastify @fastify/http-proxy @fastify/nextjs
     # 或
-    yarn add http-proxy-middleware
+    yarn add fastify @fastify/http-proxy @fastify/nextjs
     ```
     *(此步骤针对 Node.js 环境，而非 Python，但对于代理功能正常工作至关重要。)*
 
