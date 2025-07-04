@@ -70,7 +70,7 @@ export default function PerformancePanel({ vmId }: PerformancePanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${vmId}/performance/historical?range=${currentRange}`);
+      const response = await fetch(`/api/vms/${vmId}/performance/historical?range=${currentRange}`);
       if (!response.ok) {
         const errBody = await response.text();
         throw new Error(`Failed to fetch performance data: ${response.status} ${response.statusText} - ${errBody}`);

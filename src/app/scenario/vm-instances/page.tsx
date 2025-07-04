@@ -64,7 +64,7 @@ function useVmInstances() {
         isLoading,
         isValidating,
         mutate, // 若后面需要手动刷新可用
-    } = useSWR<VmInstance[]>("/api/vm/instances", fetcher, {
+    } = useSWR<VmInstance[]>("/api/vms", fetcher, {
         // 10 s 内认为数据“新鲜”，避免短时间重复请求
         dedupingInterval: 10_000,
         keepPreviousData: true,
@@ -84,7 +84,7 @@ function useVmInstances() {
         revalidateOnFocus: true,
     });
 
-    return { data, error, isLoading, isValidating };
+    return { data, error, isLoading, isValidating, mutate };
 }
 
 /* ---------- 状态图标 ---------- */
@@ -101,7 +101,7 @@ function stateIcon(state: VmInstance["state"]) {
 
 export default function VmPage() {
     /* ---- SWR 数据 ---- */
-    const { data, isLoading, isValidating } = useVmInstances();
+    const { data, isLoading, isValidating, mutate } = useVmInstances();
 
     /* ---- 本地 UI 状态 ---- */
     const [current, setCurrent] = React.useState<VmInstance | null>(null);
@@ -112,6 +112,7 @@ export default function VmPage() {
     const [actionAnchor, setActionAnchor] = React.useState<null | HTMLElement>(
         null
     );
+    const [actionLoading, setActionLoading] = React.useState(false);
 
     /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
     React.useEffect(() => {
@@ -154,6 +155,25 @@ export default function VmPage() {
             ),
         [data, search]
     );
+
+    const handleLifecycle = async (action: string) => {
+        if (!current) return;
+        setActionLoading(true);
+        try {
+            const res = await fetch(`/api/vms/${current.id}/actions/${action}`, {
+                method: "POST",
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || res.statusText);
+            }
+            await mutate();
+        } catch (e: any) {
+            alert(e.message || "Operation failed");
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -255,19 +275,39 @@ export default function VmPage() {
 
                         {current.state === "running" ? (
                             <>
-                                <Button size="small" startIcon={<PauseIcon />}>
+                                <Button
+                                    size="small"
+                                    startIcon={<PauseIcon />}
+                                    disabled={actionLoading}
+                                    onClick={() => handleLifecycle("pause")}
+                                >
                                     Pause
                                 </Button>
-                                <Button size="small" startIcon={<StopIcon />}>
+                                <Button
+                                    size="small"
+                                    startIcon={<StopIcon />}
+                                    disabled={actionLoading}
+                                    onClick={() => handleLifecycle("shutdown")}
+                                >
                                     Shutdown
                                 </Button>
-                                <Button size="small" startIcon={<ResetIcon />}>
+                                <Button
+                                    size="small"
+                                    startIcon={<ResetIcon />}
+                                    disabled={actionLoading}
+                                    onClick={() => handleLifecycle("reboot")}
+                                >
                                     Reboot
                                 </Button>
                             </>
                         ) : (
-                            <Button size="small" startIcon={<StartIcon />}>
-                                Start
+                            <Button
+                                size="small"
+                                startIcon={<StartIcon />}
+                                disabled={actionLoading}
+                                onClick={() => handleLifecycle(current.state === "paused" ? "resume" : "start")}
+                            >
+                                {current.state === "paused" ? "Resume" : "Start"}
                             </Button>
                         )}
 

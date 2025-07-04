@@ -142,7 +142,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     error,
     isLoading,
     isValidating, // 后台刷新中
-  } = useSWR<OverviewData>(`/api/vm/${vmId}/overview`, fetcher, {
+  } = useSWR<OverviewData>(`/api/vms/${vmId}`, fetcher, {
     refreshInterval: 5000, // 5 s 轮询
     keepPreviousData: true,
     refreshWhenHidden: false, // 标签页不可见时暂停

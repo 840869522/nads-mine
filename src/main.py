@@ -193,7 +193,7 @@ def fetch_vm_instances() -> List[VmInstance]:
             state = "shutoff"
         instances.append(
             VmInstance(
-                id=str(dom.ID()),
+                id=dom.UUIDString(),
                 name=dom.name(),
                 hostNode=host,
                 pool="default",
@@ -243,18 +243,18 @@ def fetch_vm_images() -> List[VmImage]:
     return images
 
 # ---------------- API Endpoints ----------------
-@app.get("/api/vm/instances", response_model=List[VmInstance])
-def api_vm_instances():
+@app.get("/api/vms", response_model=List[VmInstance])
+def list_vms():
     return fetch_vm_instances()
 
-@app.get("/api/vm/images", response_model=List[VmImage])
-def api_vm_images():
+@app.get("/api/vms/images", response_model=List[VmImage])
+def list_vm_images():
     return fetch_vm_images()
 
-@app.get("/api/vm/{vm_id}/overview", response_model=OverviewData)
-def get_vm_overview(vm_id: str):
+@app.get("/api/vms/{vm_id}", response_model=OverviewData)
+def get_vm_info(vm_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     info = dom.info()
     state_code = info[0]
     if state_code == libvirt.VIR_DOMAIN_RUNNING:
@@ -290,10 +290,10 @@ def get_vm_overview(vm_id: str):
         network_throughput_mbps=0.0,
     )
 
-@app.post("/api/vm/{vm_id}/overview/{action}", response_model=LifecycleActionResponse)
+@app.post("/api/vms/{vm_id}/actions/{action}", response_model=LifecycleActionResponse)
 def manage_vm_lifecycle(vm_id: str, action: str = Path(...)):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     try:
         if action == "start":
             dom.create()
@@ -313,10 +313,10 @@ def manage_vm_lifecycle(vm_id: str, action: str = Path(...)):
         raise HTTPException(status_code=500, detail=str(e))
     return LifecycleActionResponse(message="ok", vm_id=vm_id, action=action)
 
-@app.get("/api/vm/{vm_id}/snapshots", response_model=List[Snapshot])
+@app.get("/api/vms/{vm_id}/snapshots", response_model=List[Snapshot])
 def list_vm_snapshots(vm_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     snaps = []
     for name in dom.snapshotListNames(0):
         snap = dom.snapshotLookupByName(name, 0)
@@ -331,10 +331,10 @@ def list_vm_snapshots(vm_id: str):
         )
     return snaps
 
-@app.post("/api/vm/{vm_id}/snapshots", response_model=Snapshot)
+@app.post("/api/vms/{vm_id}/snapshots", response_model=Snapshot)
 def create_vm_snapshot(vm_id: str, snapshot_data: SnapshotCreate):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     snap_xml = f"<domainsnapshot><name>{snapshot_data.name}</name><description>{snapshot_data.description or ''}</description></domainsnapshot>"
     try:
         snap = dom.snapshotCreateXML(snap_xml, 0)
@@ -343,10 +343,10 @@ def create_vm_snapshot(vm_id: str, snapshot_data: SnapshotCreate):
     except libvirt.libvirtError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/vm/{vm_id}/snapshots/{snapshot_id}/revert")
+@app.post("/api/vms/{vm_id}/snapshots/{snapshot_id}/revert")
 def revert_to_vm_snapshot(vm_id: str, snapshot_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     snap = dom.snapshotLookupByName(snapshot_id, 0)
     try:
         snap.revertToSnapshot(0)
@@ -354,10 +354,10 @@ def revert_to_vm_snapshot(vm_id: str, snapshot_id: str):
     except libvirt.libvirtError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/vm/{vm_id}/snapshots/{snapshot_id}")
+@app.delete("/api/vms/{vm_id}/snapshots/{snapshot_id}")
 def delete_vm_snapshot(vm_id: str, snapshot_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     snap = dom.snapshotLookupByName(snapshot_id, 0)
     try:
         snap.delete(0)
@@ -365,10 +365,10 @@ def delete_vm_snapshot(vm_id: str, snapshot_id: str):
     except libvirt.libvirtError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/vm/{vm_id}/storage/disks", response_model=List[Disk])
+@app.get("/api/vms/{vm_id}/storage/disks", response_model=List[Disk])
 def list_vm_disks(vm_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     xml = dom.XMLDesc(0)
     import xml.etree.ElementTree as ET
     tree = ET.fromstring(xml)
@@ -394,10 +394,10 @@ def list_vm_disks(vm_id: str):
         )
     return disks
 
-@app.get("/api/vm/{vm_id}/storage/cdroms", response_model=List[CdRomDevice])
+@app.get("/api/vms/{vm_id}/storage/cdroms", response_model=List[CdRomDevice])
 def list_vm_cdroms(vm_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     xml = dom.XMLDesc(0)
     import xml.etree.ElementTree as ET
     tree = ET.fromstring(xml)
@@ -410,10 +410,10 @@ def list_vm_cdroms(vm_id: str):
         cds.append(CdRomDevice(id=target, target=target, source_iso=iso, mounted=mounted))
     return cds
 
-@app.get("/api/vm/{vm_id}/network/vnics", response_model=List[VirtualNic])
+@app.get("/api/vms/{vm_id}/network/vnics", response_model=List[VirtualNic])
 def list_vm_vnics(vm_id: str):
     conn = _require_conn()
-    dom = conn.lookupByID(int(vm_id))
+    dom = conn.lookupByUUIDString(vm_id)
     xml = dom.XMLDesc(0)
     import xml.etree.ElementTree as ET
     tree = ET.fromstring(xml)
@@ -441,12 +441,12 @@ def list_vm_vnics(vm_id: str):
         )
     return nics
 
-@app.get("/api/vm/{vm_id}/performance/historical", response_model=HistoricalMetrics)
+@app.get("/api/vms/{vm_id}/performance/historical", response_model=HistoricalMetrics)
 def get_historical_performance(vm_id: str, range: str = "1h"):
     # 由于缺乏持久化，此处仅返回空数据
     return HistoricalMetrics(cpu_percent=[], memory_mb=[], disk_rw_mbps_total=[], network_throughput_mbps_total=[])
 
-@app.get("/api/vm/{vm_id}/events", response_model=List[EventLog])
+@app.get("/api/vms/{vm_id}/events", response_model=List[EventLog])
 def list_vm_events(vm_id: str):
     # 未实现事件持久化，暂返回空列表
     return []

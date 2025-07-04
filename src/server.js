@@ -39,7 +39,7 @@ app.prepare().then(() => {
   } else {
     console.warn(`[NodeJS] WARNING: Current platform is '${process.platform}'.`);
     console.warn('[NodeJS] The Python backend is configured for Libvirt on Linux/WSL (uses local Unix socket).');
-    console.warn('[NodeJS] Python backend will NOT be started on this platform. API calls to /api/vm/* will return 503.');
+    console.warn('[NodeJS] Python backend will NOT be started on this platform. API calls to /api/vms/* will return 503.');
   }
 
   if (canRunPythonBackend) {
@@ -96,12 +96,12 @@ app.prepare().then(() => {
     console.log('[NodeJS] Python backend startup skipped due to incompatible platform.');
   }
 
-  // Proxy middleware for /api/vm requests
+  // Proxy middleware for /api/vms requests
   console.log('[Debug HPM] Intended Proxy Target URL:', FASTAPI_TARGET_URL);
   const apiProxy = createProxyMiddleware({
     target: FASTAPI_TARGET_URL,
     changeOrigin: true,
-    pathRewrite: { '^/api/vm': '/api/vm' }, // Keep /api/vm in the path to FastAPI
+    pathRewrite: { '^/api/vms': '/api/vms' }, // Keep /api/vms in the path to FastAPI
     logLevel: dev ? 'debug' : 'info', // More logs in development
     onError: (err, req, res) => {
         console.error('Proxy error:', err);
@@ -141,7 +141,7 @@ app.prepare().then(() => {
   });
 
   httpServer = createServer((req, res) => {
-    if (req.url && req.url.startsWith('/api/vm')) {
+    if (req.url && req.url.startsWith('/api/vms')) {
       if (canRunPythonBackend) { // Only proxy if backend is supposed to be running
         return apiProxy(req, res, (err) => {
           if (err) {
@@ -158,7 +158,7 @@ app.prepare().then(() => {
       } else {
         // Python backend is not running on this platform, return 503 Service Unavailable
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Python backend service (for /api/vm) is unavailable on this platform.' }));
+        res.end(JSON.stringify({ message: 'Python backend service (for /api/vms) is unavailable on this platform.' }));
         return;
       }
     } else if (req.url && req.url.startsWith('/api/php')) {
@@ -208,7 +208,7 @@ app.prepare().then(() => {
     })
     .listen(port, () => {
       console.log(`> Node.js server ready on http://localhost:${port}`);
-      console.log(`> FastAPI (Python) API available via proxy at http://localhost:${port}/api/vm`);
+      console.log(`> FastAPI (Python) API available via proxy at http://localhost:${port}/api/vms`);
       console.log(`> PHP API available via proxy at http://localhost:${port}/api/php`);
       console.log(`> Terminal WebSocket available at ws://localhost:${port}/api/terminal`);
     });

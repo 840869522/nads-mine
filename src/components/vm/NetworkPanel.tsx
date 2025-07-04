@@ -76,7 +76,7 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${vmId}/network/vnics`);
+      const response = await fetch(`/api/vms/${vmId}/network/vnics`);
       if (!response.ok) throw new Error(`Failed to fetch vNICs: ${response.status}`);
       const data: VirtualNic[] = await response.json();
       setVnics(data);
@@ -131,7 +131,7 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
         bandwidth_limit_mbps: editingNicData.bandwidth_limit_mbps,
         vlan_tag: editingNicData.vlan_tag,
     };
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics/${editingNic.id}`, 'PUT', payload, () => {
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/network/vnics/${editingNic.id}`, 'PUT', payload, () => {
       setEditDrawerOpen(false);
       setEditingNic(null);
     });
@@ -147,14 +147,14 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
         setError("Bridge and Model are required for a new NIC.");
         return;
     }
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics`, 'POST', newNicData, () => {
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/network/vnics`, 'POST', newNicData, () => {
       setAttachDrawerOpen(false);
     });
   };
 
   const handleDeleteNic = (nicId: string, nicMac?: string) => {
     if (!window.confirm(`Are you sure you want to delete vNIC ${nicMac || nicId}?`)) return;
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/network/vnics/${nicId}`, 'DELETE');
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/network/vnics/${nicId}`, 'DELETE');
   };
 
   const renderRateChip = (rateKbps: number, type: 'rx' | 'tx') => {

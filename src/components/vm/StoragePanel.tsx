@@ -72,7 +72,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
     setIsLoadingDisks(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/vm/${vmId}/storage/disks`);
+      const response = await fetch(`${API_BASE_URL}/vms/${vmId}/storage/disks`);
       if (!response.ok) throw new Error(`Failed to fetch disks: ${response.status}`);
       const data: Disk[] = await response.json();
       setDisks(data);
@@ -84,7 +84,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
     setIsLoadingCdRoms(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vm/${vmId}/storage/cdroms`);
+      const response = await fetch(`/api/vms/${vmId}/storage/cdroms`);
       if (!response.ok) throw new Error(`Failed to fetch CD-ROMs: ${response.status}`);
       const data: CdRomDevice[] = await response.json();
       setCdRoms(data);
@@ -127,7 +127,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
       setError('Invalid capacity for new disk.');
       return;
     }
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/storage/disks`, 'POST', { ...newDisk, capacity_gb: capacityNum }, () => {
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/storage/disks`, 'POST', { ...newDisk, capacity_gb: capacityNum }, () => {
       setAddDiskOpen(false);
       setNewDisk({ pool_name: mockStoragePools[0], capacity_gb: '20', bus: 'virtio', format: 'qcow2' });
     });
@@ -135,7 +135,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
 
   const handleDeleteDisk = (diskId: string) => {
     if (!window.confirm(`Are you sure you want to delete disk ${disks.find(d=>d.id === diskId)?.target || diskId}?`)) return;
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/storage/disks/${diskId}`, 'DELETE');
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/storage/disks/${diskId}`, 'DELETE');
   };
 
   const openResizeDialog = (disk: Disk) => {
@@ -151,7 +151,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
       setError('New size must be larger than current capacity.');
       return;
     }
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/storage/disks/${diskToResize.id}/resize`, 'POST', { new_capacity_gb: sizeNum }, () => {
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/storage/disks/${diskToResize.id}/resize`, 'POST', { new_capacity_gb: sizeNum }, () => {
       setResizeDiskOpen(false);
       setDiskToResize(null);
     });
@@ -165,13 +165,13 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
 
   const handleMountIso = () => {
     if (!cdRomToMount) return;
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/storage/cdroms/${cdRomToMount.id}/mount`, 'POST', { iso_path: selectedIsoPath }, () => {
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/storage/cdroms/${cdRomToMount.id}/mount`, 'POST', { iso_path: selectedIsoPath }, () => {
       setMountIsoOpen(false);
     });
   };
 
   const handleEjectIso = (cdRomId: string) => {
-    handleApiCall(`${API_BASE_URL}/vm/${vmId}/storage/cdroms/${cdRomId}/eject`, 'POST');
+    handleApiCall(`${API_BASE_URL}/vms/${vmId}/storage/cdroms/${cdRomId}/eject`, 'POST');
   };
 
   const renderDiskRows = () => {

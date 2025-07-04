@@ -62,7 +62,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     // 从后端获取镜像列表
     useEffect(() => {
-        fetch('/api/vm/images')
+        fetch('/api/vms/images')
             .then(res => res.json())
             .then((data: VmImage[]) => setImages(data))
             .catch(() => {})

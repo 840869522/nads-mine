@@ -2,7 +2,7 @@
 
 本文档概述了为 VM 管理 API 设置 Python 后端环境所需的步骤。Node.js 服务器 (`src/server.js`) 负责自动启动此 Python 后端。
 
-**重要提示：此项目的 Python 后端配置主要为在 WSL (Windows Subsystem for Linux) 或原生 Linux 环境下运行和开发而设计。当 `server.js` 在这些环境中执行时，它会尝试启动 Python 后端。如果在其他操作系统 (如直接在 Windows 上运行 Node.js，而非通过 WSL) 上运行 `server.js`，Python 后端将不会启动，依赖于它的 API 功能 (如 `/api/vm/*`) 将不可用，并会返回 503 服务不可用错误。**
+**重要提示：此项目的 Python 后端配置主要为在 WSL (Windows Subsystem for Linux) 或原生 Linux 环境下运行和开发而设计。当 `server.js` 在这些环境中执行时，它会尝试启动 Python 后端。如果在其他操作系统 (如直接在 Windows 上运行 Node.js，而非通过 WSL) 上运行 `server.js`，Python 后端将不会启动，依赖于它的 API 功能 (如 `/api/vms/*`) 将不可用，并会返回 503 服务不可用错误。**
 
 ## 先决条件
 
@@ -123,7 +123,7 @@ Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Nod
 
 Node.js 服务器将会：
 *   通过上述方式启动 FastAPI/Uvicorn 服务，该服务将监听端口 3010 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
-*   将对 `/api/vm/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的此端口。
+*   将对 `/api/vms/*` (在 Node.js 服务器的端口上，例如 3000) 的请求代理到 Python 后端的此端口。
 
 启动 `src/server.js` 时，请检查控制台输出，以获取指示 FastAPI 服务器状态的消息。
 如果您想单独测试 Python 后端（不通过 Node.js 代理），请确保您已激活项目根目录的 `.venv` 虚拟环境，然后从项目根目录运行：
