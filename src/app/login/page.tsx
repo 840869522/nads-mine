@@ -9,6 +9,7 @@ import {
   Button,
   Alert
 } from '@mui/material';
+import CryptoJS from "crypto-js";
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -36,8 +37,9 @@ const LoginPage: React.FC = () => {
     if (hasLocalError) return;
 
     try {
+      const pwsha256 = CryptoJS.SHA256(password).toString()
       setSubmitting(true);
-      await login(username, password);
+      await login(username, pwsha256);
     } catch (err) {
       setError((err as Error).message || '用户名或密码错误');
     } finally {

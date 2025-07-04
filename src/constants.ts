@@ -66,6 +66,12 @@ export const USER_ROLES_CONFIG: Record<UserRole, { name: string; permissions: st
   },
 };
 
+
+export const GetUserRole = (data :[])=>{
+  const role_data = data?.map(item =>item==="admin" && USER_ROLES_CONFIG[UserRole.ADMIN] || null).filter(Boolean);
+  return role_data;
+} 
+
 export const MOCK_QUESTIONS: Question[] = [
   { id: 'q1', text: '无人机中飞行控制器的主要用途是什么？', type: 'short-answer' },
   { id: 'q2', text: '哪个频段通常用于无人机控制和视频传输？', type: 'multiple-choice', options: ['2.4 GHz', '5.8 GHz', '900 MHz', 'A和B两者皆是'] },

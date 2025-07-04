@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
-import { APP_NAME, USER_ROLES_CONFIG } from '../../constants';
+import { APP_NAME, GetUserRole, USER_ROLES_CONFIG } from '../../constants';
 import { UserRole } from "../../types.ts";
 import { useThemeMode } from '../../contexts/ThemeModeContext.tsx';
 
@@ -238,8 +238,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                   <AccountCircleIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="body2" fontWeight="medium">{user.username}</Typography>
-                  <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
+                  <Typography variant="body2" fontWeight="medium">{user.user.username}</Typography>
+                  <Typography variant="caption" color="text.secondary">{GetUserRole(user.role).name}</Typography>
                 </Box>
               </Box>
           )}

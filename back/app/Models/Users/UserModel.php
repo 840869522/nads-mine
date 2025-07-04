@@ -102,9 +102,9 @@
 
         public static function insertNewUser(array $data) :array {
             try {
-                $sql = "INSERT INTO `c_users`(id,username, password,email,create_at,update_at) VALUES(?,?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(username, password,email,create_at,update_at) VALUES(?,?,?,?,NOW(),NOW())";
                 db::beginTransaction();
-                $res = db::insert($sql,[Uuid::uuid4()->toString(),$data['username'],$data['password'],$data["email"]]);
+                $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
                     db::commit();
                     return [
@@ -125,7 +125,7 @@
 
 
         public static function updateUserById(string $id, array $data) :array {
-            $sql = "UPDATE `c_users` SET email = ?,password = ?, update_at = NOW() WHERE id = ?";
+            $sql = "UPDATE `c_users` SET email = ?,password = ?, update_at = NOW() WHERE username = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['email'],$data['password'],$id]);
@@ -179,7 +179,7 @@
         }
 
         public static function updateUserLastLogin(string $id) {
-            $sql = "UPDATE c_users SET last_login = NOW() WHERE id = ?";
+            $sql = "UPDATE c_users SET last_login = NOW() WHERE username = ?";
             db::update($sql,[$id]);
         }
 

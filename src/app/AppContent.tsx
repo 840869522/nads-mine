@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { useAuth } from '@/hooks/useAuth';
-import { USER_ROLES_CONFIG } from '@/constants';
+import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
 
 const DRAWER_WIDTH = 250;
@@ -39,7 +39,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     } else {
       const match = ROUTE_PERMISSIONS.find(r => pathname.startsWith(r.prefix));
       if (match) {
-        const perms = USER_ROLES_CONFIG[user.role]?.permissions || [];
+        const perms = GetUserRole[user.role]?.permissions || [];
         if (user.role !== UserRole.ADMIN && !perms.includes(match.key)) {
           router.replace('/login');
           return;

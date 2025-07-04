@@ -34,6 +34,22 @@
         }
 
 
+        public static function getUserRole(string $username):array {
+            $sql = "SELECT cr.id FROM `c_users_roles` AS cur JOIN `c_roles` AS cr ON cur.role_id = cr.id  WHERE user_id = ?";
+            try {
+                $res = db::select($sql,[$username]);
+                return [
+                    "data" => $res,
+                    "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE
+                ];
+            }catch (Exception $e) {
+                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
+        }
+
         public static function getRoleById(?string $id) :array {
             try {
                 $sql = "SELECT * FROM  `c_roles` WHERE `id` = ?";

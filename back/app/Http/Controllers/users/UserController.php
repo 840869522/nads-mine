@@ -5,6 +5,7 @@
     use App\Http\Controllers\Controller;
     use Illuminate\Http\Request;
     use App\Models\Users\UserModel;
+    use App\Models\Users\RoleModel;
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;
@@ -120,6 +121,7 @@
                 ]);
             }
             $permissions = UserModel::getUserPrimissions($user->username);
+            $role = RoleModel::getUserRole($user->username);
             if ($permissions['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
@@ -127,8 +129,7 @@
                 ]);
             }
             $jwtRes = JWTControll::encodeJWT([
-                "id" => $user->id,
-                // "role" => $user->role_id,
+                "id" => $user->username,
                 "permission" => array_map(function ($item) {
                     return $item->permission_id ;
                 }, $permissions["data"])
@@ -140,12 +141,14 @@
                 ]);
             }
             UserModel::updateUserLastLogin($user->username);
+            $user->password = "";
             return response()->json([
                 "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                 "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,
                 "data" => [
                     "token" => $jwtRes['token'],
-                    "id" => $user->username
+                    "user" => $user,
+                    "role"=> array_map(function ($item) {return $item->id;},$role["data"])
                 ]
             ]);
         }
