@@ -25,8 +25,10 @@
     *   `python` (Windows) 或 `python3` (Linux/macOS 通常) 命令应在您的终端 PATH 中可用。
     *   `pip` (Python 包安装器) 也应可用。
 
-2.  **安装 libvirt-python 依赖项**:
-    要安装 `libvirt-python`，你可以根据你的操作系统选择合适的方式。以下是主流平台的安装方法：
+2.  安装 sudo apt install libguestfs-tools python3-guestfs
+
+3. **安装 libvirt-python 依赖项**
+   要安装 `libvirt-python`，你可以根据你的操作系统选择合适的方式。以下是主流平台的安装方法：
 
     ✅ 通用推荐：使用 pip 安装（适用于大多数 Linux 系统和虚拟环境）
     
@@ -67,7 +69,7 @@
     *   **必须使用虚拟环境**: 为了确保 `server.js` 能够正确启动 Python 后端，您**必须**在项目的**根目录**下创建一个名为 `.venv` 的 Python 虚拟环境，并将所有 Python 依赖项安装到此环境中。
         *   在项目根目录 (与 `src` 文件夹同级的位置) 打开 WSL 终端，然后执行：
             ```bash
-            python3 -m venv .venv
+            python3 -m venv --system-site-packages .venv
             ```
             *(如果您的系统默认 `python` 指向 Python 3，也可以使用 `python -m venv .venv`)*
         *   激活虚拟环境：
@@ -77,7 +79,7 @@
             激活后，您的终端提示符通常会显示 `(.venv)`。
     *   **安装 Python 依赖包**: 激活虚拟环境后，安装 `src/requirements.txt` 中列出的所有依赖项：
         ```bash
-        pip install -r src/requirements.txt
+        pip install -r requirements.txt
         ```
         这将确保 `fastapi`、`uvicorn`、`pydantic`、`python-dotenv`、`libvirt-python` 以及 `guestfs` 等库安装到 `.venv` 虚拟环境中。`server.js` (在Linux/WSL环境下) 会配置为使用此特定虚拟环境中的 Python 解释器。
         `guestfs` 用于在 `fetch_vm_images` 中解析镜像文件的元数据，如版本和架构信息。如果安装 `guestfs` 时提示缺少系统库，请根据发行版安装 `libguestfs` 相关开发包。

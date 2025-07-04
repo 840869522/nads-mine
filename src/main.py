@@ -157,7 +157,7 @@ def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
     }
     g = guestfs.GuestFS(python_return_dict=True)
     try:
-        g.add_drive_opts(path, readonly=1)
+        g.add_drive_opts(path, readonly=True)
         g.launch()
         roots = g.inspect_os()
         if roots:
@@ -209,6 +209,8 @@ def fetch_vm_images() -> List[VmImage]:
     conn = _require_conn()
     images: List[VmImage] = []
     for pool in conn.listAllStoragePools():
+        if pool.name() != "default":          # 只看 default 池
+            continue
         pool.refresh(0)
         for vol_name in pool.listVolumes():
             vol = pool.storageVolLookupByName(vol_name)

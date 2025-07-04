@@ -33,6 +33,7 @@
     "react-rnd": "^10.5.2",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.7.5",
+    "swr": "^2.3.4",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
