@@ -22,7 +22,7 @@ class CommandLineService
     public function createContainer(array $options): string
     {
         // 1. 构建 docker run 命令数组
-        $command = ['docker', 'run', '-d', '--privileged']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
+        $command = ['docker', 'run', '-d', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
 
         // a. 添加容器名称
         if (!empty($options['name'])) {
@@ -67,7 +67,6 @@ class CommandLineService
         if (empty($containerId)) {
              throw new \Exception('无法从 docker run 命令的输出中获取有效的容器ID。');
         }
-
         return $containerId;
     }
 
@@ -93,12 +92,6 @@ class CommandLineService
         if ($pid <= 0) {
             throw new \Exception("无法获取容器 {$containerId} 的有效 PID。");
         }
-        
         return $pid;
     }
-
-    // 在这里，我们未来会添加更多方法，例如：
-    // public function createOvsBridge(string $bridgeName) { ... }
-    // public function connectContainerToOvs(...) { ... }
-    // public function removeContainer(string $containerId) { ... }
 }

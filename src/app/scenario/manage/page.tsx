@@ -17,6 +17,7 @@ import {
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
 import {TopologyData} from "@/types.ts";
+import { useAuth } from '@/hooks/useAuth';
 // 定义场景的数据结构
 interface Scenario {
     id: string; // 文件名将作为ID
@@ -31,6 +32,7 @@ type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
 const ScenarioManagementPage: React.FC = () => {
+    const { user } = useAuth();
     const [scenarios, setScenarios] = useState<Scenario[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -115,11 +117,14 @@ const ScenarioManagementPage: React.FC = () => {
     };
     // 启动场景
     const handleStartDrill = async (scenario: Scenario) => {
-        // 为了更好的用户体验，可以考虑添加一个行内加载状态
-        // 此处为了简化，我们先用 alert 提示
-        console.log(`正在尝试启动场景: ${scenario.name}`);
+        // 1. 从 useAuth Hook 获取用户名
+        const username = user?.username;
 
-        // 可以弹出一个确认框，防止误操作
+        if (!username) {
+            alert('无法获取当前用户名，请确保您已登录。');
+            return;
+        }
+
         if (!window.confirm(`您确定要启动场景 “${scenario.name}” 的演练吗？`)) {
             return;
         }
@@ -131,25 +136,24 @@ const ScenarioManagementPage: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
+                // 2. 在请求体中附加上用户名
+                body: JSON.stringify({ username: username }),
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                // 如果后端返回错误，抛出错误信息
                 throw new Error(result.message || '启动失败');
             }
 
-            // 成功时，显示后端返回的成功信息
             alert(result.message);
-            // 你也可以在这里做其他操作，比如跳转到演练监控页面等
 
         } catch (err: any) {
-            // 失败时，显示错误弹窗
             setError(err.message || '发生未知网络错误');
             alert(`启动失败: ${err.message}`);
         }
     };
+
     // 新增一个临时的编辑处理函数
     const handleEditScenario = (scenario: Scenario) => {
         setEditingScenario(scenario);
