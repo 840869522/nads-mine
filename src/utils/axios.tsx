@@ -25,7 +25,7 @@ export const apiClient = axios.create({
  */
 apiClientWithToken.interceptors.request.use(
     config=>{
-        const token = getCookie("auth");
+        const token = getCookie("_auth");
         if (token){
             config.headers['Authorization'] = token;
         }
@@ -42,7 +42,8 @@ apiClientWithToken.interceptors.request.use(
 apiClientWithToken.interceptors.response.use(
     function (res) {
         if (res.data.code === 420){
-            deleteCookie("auth");
+            deleteCookie("_auth");
+            localStorage.removeItem('droneSimUser');
             window.location.href = "/login"
         }
         return res

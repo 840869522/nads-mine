@@ -53,7 +53,7 @@
                     "err" => "Invalid JWT token"
                 ];
             }
-            $secretKey = env("JWT-SECRET-KEY", "default-secret-key");
+            $secretKey = env("JWT_SECRET_KEY", "default-secret-key");
             try {
                 $data = JWT::decode($token, new Key($secretKey, $algo));
                 return [

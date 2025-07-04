@@ -15,8 +15,8 @@
 
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             $offset = ($page - 1 ) * $pagesize;
-            $sql = "SELECT id,username,email,status,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(id) AS count FROM `c_users`";
+            $sql = "SELECT username,email,is_login,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(username) AS count FROM `c_users`";
             try {
                 $user = db::select($sql, [$pagesize, $offset]);
                 $count = db::select($sql_count);
@@ -34,13 +34,16 @@
         }
 
         public static function searchUserByName(string $name, int $page=1, int $pagesize=10):array {
-            $sql = "SELECT id,username,email,status,last_login,create_at,update_at FROM `c_users` WHERE `user_name` LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT username,email,is_login,last_login,create_at,update_at FROM `c_users` WHERE `username` LIKE ? LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(username) AS count FROM `c_users` WHERE `username` LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%'.$name.'%',$pagesize, $offset]);
+                $count = db::selectOne($sql_count,['%'.$name.'%']);
                 return [
                     "data"=>$user,
-                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "count" => $count->count
                 ];
             }catch (Exception $e) {
                 Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
@@ -102,7 +105,7 @@
 
         public static function insertNewUser(array $data) :array {
             try {
-                $sql = "INSERT INTO `c_users`(username, password,email,create_at,update_at) VALUES(?,?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(username, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
@@ -125,10 +128,10 @@
 
 
         public static function updateUserById(string $id, array $data) :array {
-            $sql = "UPDATE `c_users` SET email = ?,password = ?, update_at = NOW() WHERE username = ?";
+            $sql = "UPDATE `c_users` SET is_login = ? ,email = ?,password = ?, update_at = NOW() WHERE username = ?";
             try {
                 db::beginTransaction();
-                $res = db::update($sql,[$data['email'],$data['password'],$id]);
+                $res = db::update($sql,[$data["is_login"],$data['email'],$data['password'],$id]);
                 if ($res){
                     db::commit();
                     return [

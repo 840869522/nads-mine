@@ -239,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                 </Avatar>
                 <Box>
                   <Typography variant="body2" fontWeight="medium">{user.user.username}</Typography>
-                  <Typography variant="caption" color="text.secondary">{GetUserRole(user.role).name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
                 </Box>
               </Box>
           )}

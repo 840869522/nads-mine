@@ -7,6 +7,7 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import { useAuth } from '@/hooks/useAuth';
 import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
+import { getCookie } from '@/utils/cookie';
 
 const DRAWER_WIDTH = 250;
 
@@ -32,19 +33,20 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!user) {
+    const token = getCookie("_auth");
+    if (!token) {
       if (pathname !== '/login') {
         router.replace('/login');
       }
     } else {
-      const match = ROUTE_PERMISSIONS.find(r => pathname.startsWith(r.prefix));
-      if (match) {
-        const perms = GetUserRole[user.role]?.permissions || [];
-        if (user.role !== UserRole.ADMIN && !perms.includes(match.key)) {
-          router.replace('/login');
-          return;
-        }
-      }
+      // const match = ROUTE_PERMISSIONS.find(r => pathname.startsWith(r.prefix));
+      // if (match) {
+      //   const perms = GetUserRole[user.role]?.permissions || [];
+      //   if (user.role !== UserRole.ADMIN && !perms.includes(match.key)) {
+      //     router.replace('/login');
+      //     return;
+      //   }
+      // }
       if (pathname === '/login') {
         router.replace('/');
       }

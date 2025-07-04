@@ -13,6 +13,7 @@ import {
 import MuiLink from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import { getCookie } from '@/utils/cookie';
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -50,7 +51,8 @@ const DashboardPage: React.FC = () => {
 
   const router = useRouter();
   useEffect(() => {
-    if (!user) {
+    const token = getCookie("_auth");
+    if (!token) {
       router.replace('/login');
     }
   }, [user, router]);
@@ -61,7 +63,7 @@ const DashboardPage: React.FC = () => {
   return (
     <Box>
       <Box className="mb-8 p-6 bg-gradient-to-r from-primary-600 to-blue-500 dark:from-primary-700 dark:to-blue-600 rounded-lg shadow-xl text-white">
-        <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>{`欢迎来到无人机网络安全实验平台, ${user?.id || ''}!`}</Typography>
+        <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>{`欢迎来到无人机网络安全实验平台, ${user?.user.username || ''}!`}</Typography>
         <Typography variant="h6" component="p" sx={{ opacity: 0.9 }}>
           您的无人机攻击和防御模拟中心。选择下面的分系统开始探索。
         </Typography>
