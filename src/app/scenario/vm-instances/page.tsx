@@ -165,6 +165,8 @@ export default function VmPage() {
     const handleLifecycle = async (action: string) => {
         if (!current) return;
         setActionLoading(true);
+        // 动作触发即刻进入快速轮询模式
+        forceRefreshUntil.current = Date.now() + 30_000;
         try {
             const res = await fetch(`/api/vms/${current.id}/actions/${action}`, {
                 method: "POST",
@@ -174,8 +176,6 @@ export default function VmPage() {
                 throw new Error(err.detail || res.statusText);
             }
             const result = (await res.json()) as { state?: string };
-            // 动作触发后强制一段时间内快速轮询
-            forceRefreshUntil.current = Date.now() + 20_000;
             await mutate();
             await globalMutate(`/api/vms/${current.id}`);
             if (result.state !== "shutoff") {

@@ -219,8 +219,8 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
             ) : (
                 <Stack alignItems="center" justifyContent="center" sx={{flexGrow:1, color: 'text.secondary', p:2}}>
                     <EmptyIcon sx={{fontSize: 30, mb:0.5}}/>
-                    <Typography>No snapshots available.</Typography>
-                    <Typography variant="caption">Click "Create Snapshot" to begin.</Typography>
+                    <Typography>暂无快照</Typography>
+                    <Typography variant="caption">点击“创建快照”开始</Typography>
                 </Stack>
             )}
           </Paper>
@@ -248,23 +248,23 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
           ) : (
             <Paper variant="outlined" sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', minHeight: 200 }}>
               <EmptyIcon sx={{fontSize: 40, color: 'grey.400', mb:1}}/>
-              <Typography variant="h6" color="text.secondary">{snapshots.length > 0 ? "No Snapshot Selected" : "No Snapshots Found"}</Typography>
-              <Typography color="text.secondary">{snapshots.length > 0 ? "Select a snapshot from the tree to view its details." : "Create a snapshot to get started."}</Typography>
+              <Typography variant="h6" color="text.secondary">{snapshots.length > 0 ? "未选择快照" : "没有可用快照"}</Typography>
+              <Typography color="text.secondary">{snapshots.length > 0 ? "从左侧列表选择一个快照查看详情。" : "点击上方按钮创建快照。"}</Typography>
             </Paper>
           )}
         </Grid>
       </Grid>
 
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Create New Snapshot</DialogTitle>
+        <DialogTitle>创建新快照</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{mt:1}}>
-            <TextField autoFocus label="Snapshot Name" fullWidth size="small" value={newSnapshotName} onChange={(e) => setNewSnapshotName(e.target.value)} disabled={actionInProgress}/>
-            <TextField label="Description (Optional)" fullWidth size="small" multiline rows={3} value={newSnapshotDescription} onChange={(e) => setNewSnapshotDescription(e.target.value)} disabled={actionInProgress}/>
+            <TextField autoFocus label="快照名称" fullWidth size="small" value={newSnapshotName} onChange={(e) => setNewSnapshotName(e.target.value)} disabled={actionInProgress}/>
+            <TextField label="描述（可选）" fullWidth size="small" multiline rows={3} value={newSnapshotDescription} onChange={(e) => setNewSnapshotDescription(e.target.value)} disabled={actionInProgress}/>
         </Stack></DialogContent>
         <DialogActions>
-            <Button onClick={() => setCreateDialogOpen(false)} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setCreateDialogOpen(false)} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleCreateSnapshot} variant="contained" disabled={actionInProgress || !newSnapshotName.trim()}>
-                {actionInProgress ? <CircularProgress size={20}/> : "Create"}
+                {actionInProgress ? <CircularProgress size={20}/> : "创建"}
             </Button>
         </DialogActions>
       </Dialog>

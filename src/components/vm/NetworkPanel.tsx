@@ -226,8 +226,8 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
 
       <Toolbar disableGutters sx={{ px: 1.5, borderBottom: '1px solid #eee' }}>
         <NetworkIcon sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>Virtual Network Interfaces</Typography>
-        <Button startIcon={<AddIcon />} onClick={handleOpenAttachDrawer} variant="outlined" size="small" disabled={actionInProgress}>Attach NIC</Button>
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>虚拟网络接口</Typography>
+        <Button startIcon={<AddIcon />} onClick={handleOpenAttachDrawer} variant="outlined" size="small" disabled={actionInProgress}>添加网卡</Button>
       </Toolbar>
       <TableContainer>
         <Table size="small" stickyHeader>
@@ -260,14 +260,14 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
       </Drawer>
 
       <Drawer anchor="right" open={attachDrawerOpen} onClose={() => setAttachDrawerOpen(false)} PaperProps={{sx: {width: 360, display: 'flex', flexDirection: 'column'}}}>
-        <Box sx={{p: 2, borderBottom: '1px solid #eee'}}><Typography variant="h6" gutterBottom sx={{mb:0}}>Attach New vNIC</Typography></Box>
+        <Box sx={{p: 2, borderBottom: '1px solid #eee'}}><Typography variant="h6" gutterBottom sx={{mb:0}}>添加新网卡</Typography></Box>
         <Box sx={{flexGrow:1, overflowY: 'auto'}}>
             <NicFormFields nicData={newNicData} onChange={(field, value) => setNewNicData(prev => ({...prev, [field]: value}))} disabled={actionInProgress}/>
         </Box>
         <Box sx={{p:2, borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end'}}>
-            <Button onClick={() => setAttachDrawerOpen(false)} sx={{mr:1}} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setAttachDrawerOpen(false)} sx={{mr:1}} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleAttachNic} variant="contained" disabled={actionInProgress || !newNicData.bridge || !newNicData.model}>
-                 {actionInProgress ? <CircularProgress size={20}/> : "Attach NIC"}
+                 {actionInProgress ? <CircularProgress size={20}/> : "添加"}
             </Button>
         </Box>
       </Drawer>

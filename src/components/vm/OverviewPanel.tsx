@@ -103,6 +103,37 @@ const MiniGauge: React.FC<{
   </Paper>
 );
 
+const MetricBox: React.FC<{
+  label: string;
+  value: number;
+  unit?: string;
+  icon?: React.ReactElement;
+  isLoading?: boolean;
+}> = ({ label, value, unit = '', icon, isLoading }) => (
+  <Paper
+    variant="outlined"
+    sx={{ p: 2, textAlign: 'center', width: '100%', height: '100%' }}
+  >
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      justifyContent="center"
+      sx={{ mb: 1 }}
+    >
+      {icon}
+      <Typography variant="subtitle2">{label}</Typography>
+    </Stack>
+    {isLoading ? (
+      <Skeleton width="60%" sx={{ mx: 'auto' }} />
+    ) : (
+      <Typography variant="h6" display="block">
+        {value.toFixed(1)} {unit}
+      </Typography>
+    )}
+  </Paper>
+);
+
 const KeyValueListItem: React.FC<{
   label: string;
   value: string | number | undefined;
@@ -187,7 +218,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
 
         <Grid container spacing={2.5}>
           {/* ---------- 左侧基本信息 ---------- */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={5}>
             <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Typography
                   variant="h6"
@@ -250,7 +281,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
           </Grid>
 
           {metricsKey && (
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={7}>
               <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
                 <Typography
                     variant="h6"
@@ -276,7 +307,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
                     />
                   </Grid>
                   <Grid item xs={6} sm={3}>
-                    <MiniGauge
+                    <MetricBox
                         label="磁盘读写"
                         value={metrics?.disk_rw_mb_s ?? 0}
                         unit="MB/s"
@@ -285,7 +316,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
                     />
                   </Grid>
                   <Grid item xs={6} sm={3}>
-                    <MiniGauge
+                    <MetricBox
                         label="网络吞吐"
                         value={metrics?.network_mbps ?? 0}
                         unit="Mbps"
