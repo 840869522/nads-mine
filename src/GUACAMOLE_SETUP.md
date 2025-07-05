@@ -1,6 +1,6 @@
 # Guacamole 安装与配置指南
 
-本文档描述如何在本服务器上部署 [Apache Guacamole](https://guacamole.apache.org/) 并使 `src/main.py` 中的 `/api/vms/create` 接口能够自动创建 SSH、VNC 与 RDP 连接。
+本文档描述如何在本服务器上部署 [Apache Guacamole](https://guacamole.apache.org/) 并使 `src/main_cli.py` 中的 `/api/vms/create` 接口能够自动创建 SSH、VNC 与 RDP 连接。
 
 ## 1. 安装依赖
 
@@ -92,6 +92,6 @@ curl -X POST "http://<服务器IP>:8080/guacamole/api/tokens" \
      -d "username=guacadmin" -d "password=guacpass"
 ```
 
-返回 JSON 中应包含 `authToken`。随后即可按照 `src/main.py` 中的逻辑创建 SSH、VNC、RDP 连接。
+返回 JSON 中应包含 `authToken`。随后即可按照 `src/main_cli.py` 中的逻辑创建 SSH、VNC、RDP 连接。
 
 完成以上步骤后，前端在调用 `/api/vms/create` 时填写相同的 Guacamole URL 与凭据，即可在 Guacamole 中自动生成对应连接。
