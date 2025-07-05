@@ -193,9 +193,9 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
   return (
     <Stack spacing={2} sx={{ height: '100%' }}>
       <Toolbar disableGutters variant="dense">
-        <Button startIcon={<AddIcon />} onClick={() => setCreateDialogOpen(true)} variant="outlined" size="small" disabled={actionInProgress}>Create Snapshot</Button>
-        <Button startIcon={<RestoreIcon />} onClick={handleRestoreSnapshot} disabled={!selectedSnapshot || actionInProgress} sx={{ ml: 1 }} variant="outlined" size="small">Restore</Button>
-        <Button startIcon={<DeleteIcon />} onClick={handleDeleteSnapshot} disabled={!selectedSnapshot || actionInProgress} color="error" sx={{ ml: 1 }} variant="outlined" size="small">Delete</Button>
+        <Button startIcon={<AddIcon />} onClick={() => setCreateDialogOpen(true)} variant="outlined" size="small" disabled={actionInProgress}>创建快照</Button>
+        <Button startIcon={<RestoreIcon />} onClick={handleRestoreSnapshot} disabled={!selectedSnapshot || actionInProgress} sx={{ ml: 1 }} variant="outlined" size="small">恢复</Button>
+        <Button startIcon={<DeleteIcon />} onClick={handleDeleteSnapshot} disabled={!selectedSnapshot || actionInProgress} color="error" sx={{ ml: 1 }} variant="outlined" size="small">删除</Button>
         {actionInProgress && <CircularProgress size={24} sx={{ml: 2}} />}
       </Toolbar>
 
@@ -204,7 +204,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         <Grid item xs={12} md={4} sx={{ minHeight: 300, display:'flex', flexDirection:'column' }}>
           <Paper variant="outlined" sx={{ p: 1.5, flexGrow:1, display:'flex', flexDirection:'column',  overflowY: 'auto' }}>
-            <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb:1 }}><TreeIcon sx={{ mr: 1 }} /> Snapshots</Typography>
+            <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb:1 }}><TreeIcon sx={{ mr: 1 }} /> 快照列表</Typography>
             {isLoading ? (
                 <Stack spacing={1}><Skeleton variant="text" /><Skeleton variant="text" /><Skeleton variant="text" /></Stack>
             ) : snapshots.length > 0 ? (

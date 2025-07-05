@@ -146,11 +146,17 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     dedupingInterval: 5000, // 与 refreshInterval 对齐
   });
 
+  const overviewData = data ?? null;
+  const metricsKey =
+    overviewData && overviewData.status !== "shutoff"
+      ? `/api/vms/${vmId}/metrics`
+      : null;
+
   const {
     data: rtData,
     error: rtError,
     isLoading: rtLoading,
-  } = useSWR<RealtimeMetrics>(`/api/vms/${vmId}/metrics`, fetcher, {
+  } = useSWR<RealtimeMetrics>(metricsKey, fetcher, {
     refreshInterval: 5000,
     keepPreviousData: true,
     refreshWhenHidden: false,
@@ -158,7 +164,6 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
   });
 
   const initialLoading = isLoading && !data;
-  const overviewData = data ?? null;
   const metrics = rtData ?? null;
 
   if (error) {
@@ -169,7 +174,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     );
   }
 
-  if (rtError) {
+  if (metricsKey && rtError) {
     return (
         <Alert severity="error" sx={{ m: 2 }}>
           Error loading metrics: {(rtError as any).message || "unknown"}
@@ -192,27 +197,27 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
               </Typography>
               <Stack spacing={0}>
                 <KeyValueListItem
-                    label="Status"
+                    label="状态"
                     value={overviewData?.status}
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="Host Node"
+                    label="宿主机"
                     value={overviewData?.hostNode}
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="Pool"
+                    label="存储池"
                     value={overviewData?.pool}
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="vCPU Count"
+                    label="vCPU 数"
                     value={overviewData?.vcpu?.count}
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="vRAM Total"
+                    label="内存总量"
                     value={
                       overviewData?.vram?.total_mb !== undefined
                           ? `${overviewData.vram.total_mb} MB`
@@ -221,7 +226,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="Boot Source"
+                    label="启动介质"
                     value={overviewData?.bootSource}
                     isLoading={initialLoading}
                 />
@@ -231,12 +236,12 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="IP Address"
+                    label="IP 地址"
                     value={overviewData?.ipAddress}
                     isLoading={initialLoading}
                 />
                 <KeyValueListItem
-                    label="Uptime"
+                    label="运行时长"
                     value={overviewData?.uptime}
                     isLoading={initialLoading}
                 />
@@ -244,53 +249,54 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
             </Paper>
           </Grid>
 
-          {/* ---------- 右侧实时用量 ---------- */}
-          <Grid item xs={12} md={6}>
-            <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-              <Typography
-                  variant="h6"
-                  sx={{ mb: 1.5, borderBottom: "1px solid #ddd", pb: 1 }}
-              >
-                实时用量
-              </Typography>
-              <Grid container spacing={2} alignItems="stretch">
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="CPU"
-                      value={metrics?.cpu_percent ?? 0}
-                      icon={<Dns fontSize="small" />}
-                      isLoading={rtLoading && !metrics}
-                  />
+          {metricsKey && (
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+                <Typography
+                    variant="h6"
+                    sx={{ mb: 1.5, borderBottom: "1px solid #ddd", pb: 1 }}
+                >
+                  实时用量
+                </Typography>
+                <Grid container spacing={2} alignItems="stretch">
+                  <Grid item xs={6} sm={3}>
+                    <MiniGauge
+                        label="CPU"
+                        value={metrics?.cpu_percent ?? 0}
+                        icon={<Dns fontSize="small" />}
+                        isLoading={rtLoading && !metrics}
+                    />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <MiniGauge
+                        label="内存"
+                        value={metrics?.memory_percent ?? 0}
+                        icon={<MemoryIconMui fontSize="small" />}
+                        isLoading={rtLoading && !metrics}
+                    />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <MiniGauge
+                        label="磁盘读写"
+                        value={metrics?.disk_rw_mb_s ?? 0}
+                        unit="MB/s"
+                        icon={<StorageIcon fontSize="small" />}
+                        isLoading={rtLoading && !metrics}
+                    />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <MiniGauge
+                        label="网络吞吐"
+                        value={metrics?.network_mbps ?? 0}
+                        unit="Mbps"
+                        icon={<NetworkCheck fontSize="small" />}
+                        isLoading={rtLoading && !metrics}
+                    />
+                  </Grid>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Memory"
-                      value={metrics?.memory_percent ?? 0}
-                      icon={<MemoryIconMui fontSize="small" />}
-                      isLoading={rtLoading && !metrics}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Disk R/W"
-                      value={metrics?.disk_rw_mb_s ?? 0}
-                      unit="MB/s"
-                      icon={<StorageIcon fontSize="small" />}
-                      isLoading={rtLoading && !metrics}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Net Throughput"
-                      value={metrics?.network_mbps ?? 0}
-                      unit="Mbps"
-                      icon={<NetworkCheck fontSize="small" />}
-                      isLoading={rtLoading && !metrics}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-          </Grid>
+              </Paper>
+            </Grid>
+          )}
         </Grid>
       </Stack>
   );

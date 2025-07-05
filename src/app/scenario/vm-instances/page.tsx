@@ -173,13 +173,14 @@ export default function VmPage() {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
             }
+            const result = (await res.json()) as { state?: string };
             // 动作触发后强制一段时间内快速轮询
             forceRefreshUntil.current = Date.now() + 20_000;
             await mutate();
-            await Promise.all([
-                globalMutate(`/api/vms/${current.id}`),
-                globalMutate(`/api/vms/${current.id}/metrics`),
-            ]);
+            await globalMutate(`/api/vms/${current.id}`);
+            if (result.state !== "shutoff") {
+                await globalMutate(`/api/vms/${current.id}/metrics`);
+            }
         } catch (e: any) {
             alert(e.message || "Operation failed");
         } finally {
@@ -291,7 +292,7 @@ export default function VmPage() {
                                     disabled={actionLoading}
                                     onClick={() => handleLifecycle("pause")}
                                 >
-                                    Pause
+                                    暂停
                                 </Button>
                                 <Button
                                     size="small"
@@ -299,7 +300,7 @@ export default function VmPage() {
                                     disabled={actionLoading}
                                     onClick={() => handleLifecycle("shutdown")}
                                 >
-                                    Shutdown
+                                    关机
                                 </Button>
                                 <Button
                                     size="small"
@@ -307,7 +308,7 @@ export default function VmPage() {
                                     disabled={actionLoading}
                                     onClick={() => handleLifecycle("reboot")}
                                 >
-                                    Reboot
+                                    重启
                                 </Button>
                                 <Button
                                     size="small"
@@ -315,7 +316,7 @@ export default function VmPage() {
                                     disabled={actionLoading}
                                     onClick={() => handleLifecycle("force-off")}
                                 >
-                                    Force Off
+                                    强制关闭
                                 </Button>
                             </>
                         ) : (
@@ -325,7 +326,7 @@ export default function VmPage() {
                                 disabled={actionLoading}
                                 onClick={() => handleLifecycle(current.state === "paused" ? "resume" : "start")}
                             >
-                                {current.state === "paused" ? "Resume" : "Start"}
+                                {current.state === "paused" ? "继续" : "启动"}
                             </Button>
                         )}
                         {current.state !== "shutoff" && current.state !== "running" && (
@@ -335,7 +336,7 @@ export default function VmPage() {
                                 disabled={actionLoading}
                                 onClick={() => handleLifecycle("force-off")}
                             >
-                                Force Off
+                                强制关闭
                             </Button>
                         )}
 
@@ -345,7 +346,7 @@ export default function VmPage() {
                             sx={{ ml: "auto" }}
                             startIcon={<ConsoleIcon />}
                         >
-                            Console
+                            控制台
                         </Button>
                         <Button
                             size="small"
@@ -353,7 +354,7 @@ export default function VmPage() {
                             endIcon={<ArrowDownIcon />}
                             onClick={(e) => setActionAnchor(e.currentTarget)}
                         >
-                            More
+                            更多
                         </Button>
                     </Box>
 
@@ -364,14 +365,14 @@ export default function VmPage() {
                         sx={{ borderBottom: 1, borderColor: "divider", pl: 2 }}
                     >
                         {[
-                            "Overview",
-                            "Snapshots",
-                            "Storage",
-                            "Network",
-                            "Performance",
-                            "Events",
+                            "概览",
+                            "快照",
+                            "存储",
+                            "网络",
+                            "性能",
+                            "事件",
                         ].map((l) => (
-                            <Tab key={l} label={l.toUpperCase()} />
+                            <Tab key={l} label={l} />
                         ))}
                     </Tabs>
 
