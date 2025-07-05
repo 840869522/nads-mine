@@ -183,7 +183,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
         ));
     }
     if (disks.length === 0) {
-        return <TableRow><TableCell colSpan={8} align="center" sx={{py:3}}><EmptyIcon sx={{fontSize: 30, color: 'grey.400', mb:0.5}}/><Typography color="text.secondary">No disks attached.</Typography></TableCell></TableRow>;
+        return <TableRow><TableCell colSpan={8} align="center" sx={{py:3}}><EmptyIcon sx={{fontSize: 30, color: 'grey.400', mb:0.5}}/><Typography color="text.secondary">暂无磁盘</Typography></TableCell></TableRow>;
     }
     return disks.map(d => (
         <TableRow key={d.id} hover>
@@ -200,8 +200,8 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
           </TableCell>
           <TableCell><Stack direction="row" alignItems="center" spacing={0.5}><IopsIcon fontSize="small" color="action" /> <Typography variant="body2">{d.iops_rw || 'N/A'}</Typography></Stack></TableCell>
           <TableCell align="right">
-            <IconButton size="small" title="Resize Disk" onClick={() => openResizeDialog(d)} disabled={actionInProgress}><ResizeIcon fontSize="inherit" /></IconButton>
-            <IconButton size="small" title="Delete Disk" color="error" onClick={() => handleDeleteDisk(d.id)} disabled={actionInProgress}><DeleteIcon fontSize="inherit" /></IconButton>
+            <IconButton size="small" title="调整大小" onClick={() => openResizeDialog(d)} disabled={actionInProgress}><ResizeIcon fontSize="inherit" /></IconButton>
+            <IconButton size="small" title="删除磁盘" color="error" onClick={() => handleDeleteDisk(d.id)} disabled={actionInProgress}><DeleteIcon fontSize="inherit" /></IconButton>
           </TableCell>
         </TableRow>
       ));
@@ -216,17 +216,17 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
         ));
     }
     if (cdRoms.length === 0) {
-        return <TableRow><TableCell colSpan={4} align="center" sx={{py:3}}><EmptyIcon sx={{fontSize: 30, color: 'grey.400', mb:0.5}}/><Typography color="text.secondary">No CD/DVD drives available.</Typography></TableCell></TableRow>;
+        return <TableRow><TableCell colSpan={4} align="center" sx={{py:3}}><EmptyIcon sx={{fontSize: 30, color: 'grey.400', mb:0.5}}/><Typography color="text.secondary">暂无 CD/DVD 设备</Typography></TableCell></TableRow>;
     }
     return cdRoms.map(cd => (
         <TableRow key={cd.id} hover>
           <TableCell sx={{fontWeight: 'medium'}}>{cd.target}</TableCell>
-          <TableCell sx={{maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={cd.source_iso}>{cd.source_iso || 'Empty'}</TableCell>
-          <TableCell>{cd.mounted ? <Chip label="Mounted" color="success" size="small" variant="outlined" /> : <Chip label="Ejected" size="small" variant="outlined" />}</TableCell>
+          <TableCell sx={{maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={cd.source_iso}>{cd.source_iso || '空'}</TableCell>
+          <TableCell>{cd.mounted ? <Chip label="已挂载" color="success" size="small" variant="outlined" /> : <Chip label="未挂载" size="small" variant="outlined" />}</TableCell>
           <TableCell align="right">
             {cd.mounted ?
-                (<Button variant="outlined" size="small" startIcon={<EjectIcon />} onClick={() => handleEjectIso(cd.id)} disabled={actionInProgress}>Eject</Button>) :
-                (<Button variant="outlined" size="small" startIcon={<MountIcon />} onClick={() => openMountDialog(cd)} disabled={actionInProgress}>Mount ISO</Button>)}
+                (<Button variant="outlined" size="small" startIcon={<EjectIcon />} onClick={() => handleEjectIso(cd.id)} disabled={actionInProgress}>弹出</Button>) :
+                (<Button variant="outlined" size="small" startIcon={<MountIcon />} onClick={() => openMountDialog(cd)} disabled={actionInProgress}>挂载 ISO</Button>)}
           </TableCell>
         </TableRow>
       ));
@@ -241,15 +241,15 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
       <Paper variant="outlined">
         <Toolbar disableGutters sx={{ px: 1.5, borderBottom: '1px solid #eee' }}>
           <StoragePoolIcon sx={{ mr: 1, color: 'text.secondary' }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>Disk Drives</Typography>
-          <Button startIcon={<AddIcon />} onClick={() => setAddDiskOpen(true)} variant="outlined" size="small" disabled={actionInProgress}>Add Disk</Button>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>磁盘列表</Typography>
+          <Button startIcon={<AddIcon />} onClick={() => setAddDiskOpen(true)} variant="outlined" size="small" disabled={actionInProgress}>添加磁盘</Button>
         </Toolbar>
         <TableContainer>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>Target</TableCell><TableCell>Source</TableCell><TableCell>Format</TableCell><TableCell>Bus</TableCell>
-                <TableCell>Capacity</TableCell><TableCell>Usage</TableCell><TableCell>R/W IOPS</TableCell><TableCell align="right">Actions</TableCell>
+                <TableCell>目标</TableCell><TableCell>源</TableCell><TableCell>格式</TableCell><TableCell>总线</TableCell>
+                <TableCell>容量</TableCell><TableCell>已用</TableCell><TableCell>读写 IOPS</TableCell><TableCell align="right">操作</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -261,11 +261,11 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
 
       <Paper variant="outlined">
         <Toolbar disableGutters sx={{ px: 1.5, borderBottom: '1px solid #eee' }}>
-          <IsoIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>CD/DVD Drives</Typography>
+          <IsoIcon sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>CD/DVD 驱动器</Typography>
         </Toolbar>
         <TableContainer>
           <Table size="small" stickyHeader>
-            <TableHead><TableRow><TableCell>Target</TableCell><TableCell>Source ISO</TableCell><TableCell>Status</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>目标</TableCell><TableCell>ISO 路径</TableCell><TableCell>状态</TableCell><TableCell align="right">操作</TableCell></TableRow></TableHead>
             <TableBody>
                 {renderCdRomRows()}
             </TableBody>
@@ -274,66 +274,66 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
       </Paper>
 
       <Dialog open={addDiskOpen} onClose={() => setAddDiskOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Add New Disk</DialogTitle>
+        <DialogTitle>添加新磁盘</DialogTitle>
         <DialogContent><Stack spacing={2.5} sx={{mt:1}}>
             <FormControl fullWidth size="small">
-                <InputLabel>Storage Pool</InputLabel>
-                <Select label="Storage Pool" value={newDisk.pool_name} onChange={(e) => setNewDisk(prev => ({...prev, pool_name: e.target.value}))} disabled={actionInProgress}>
+                <InputLabel>存储池</InputLabel>
+                <Select label="存储池" value={newDisk.pool_name} onChange={(e) => setNewDisk(prev => ({...prev, pool_name: e.target.value}))} disabled={actionInProgress}>
                     {mockStoragePools.map(pool => <MenuItem key={pool} value={pool}>{pool}</MenuItem>)}
                 </Select>
             </FormControl>
-            <TextField label="Capacity (GB)" type="number" fullWidth size="small" value={newDisk.capacity_gb} onChange={(e) => setNewDisk(prev => ({...prev, capacity_gb: e.target.value}))} InputProps={{ inputProps: { min: 1 } }} disabled={actionInProgress}/>
+            <TextField label="容量 (GB)" type="number" fullWidth size="small" value={newDisk.capacity_gb} onChange={(e) => setNewDisk(prev => ({...prev, capacity_gb: e.target.value}))} InputProps={{ inputProps: { min: 1 } }} disabled={actionInProgress}/>
             <FormControl fullWidth size="small">
-                <InputLabel>Format</InputLabel>
-                <Select label="Format" value={newDisk.format} onChange={(e) => setNewDisk(prev => ({...prev, format: e.target.value as 'qcow2' | 'raw'}))} disabled={actionInProgress}>
+                <InputLabel>格式</InputLabel>
+                <Select label="格式" value={newDisk.format} onChange={(e) => setNewDisk(prev => ({...prev, format: e.target.value as 'qcow2' | 'raw'}))} disabled={actionInProgress}>
                     <MenuItem value="qcow2">qcow2</MenuItem>
                     <MenuItem value="raw">raw</MenuItem>
                 </Select>
             </FormControl>
             <FormControl fullWidth size="small">
-                <InputLabel>Bus Type</InputLabel>
-                <Select label="Bus Type" value={newDisk.bus} onChange={(e) => setNewDisk(prev => ({...prev, bus: e.target.value as Disk['bus']}))} disabled={actionInProgress}>
+                <InputLabel>总线类型</InputLabel>
+                <Select label="总线类型" value={newDisk.bus} onChange={(e) => setNewDisk(prev => ({...prev, bus: e.target.value as Disk['bus']}))} disabled={actionInProgress}>
                     {mockBusTypes.map(bus => <MenuItem key={bus} value={bus}>{bus}</MenuItem>)}
                 </Select>
             </FormControl>
         </Stack></DialogContent>
         <DialogActions>
-            <Button onClick={() => setAddDiskOpen(false)} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setAddDiskOpen(false)} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleAddDisk} variant="contained" disabled={actionInProgress || !newDisk.capacity_gb.trim() || parseInt(newDisk.capacity_gb) <=0}>
-                 {actionInProgress ? <CircularProgress size={20}/> : "Add Disk"}
+                 {actionInProgress ? <CircularProgress size={20}/> : "添加"}
             </Button>
         </DialogActions>
       </Dialog>
 
       {diskToResize && (<Dialog open={resizeDiskOpen} onClose={() => setResizeDiskOpen(false)} fullWidth maxWidth="xs">
-          <DialogTitle>Resize Disk: {diskToResize.target}</DialogTitle>
+          <DialogTitle>调整磁盘大小: {diskToResize.target}</DialogTitle>
           <DialogContent><Stack spacing={2.5} sx={{mt:1}}>
-              <Typography variant="body2">Current Capacity: {diskToResize.capacity_gb} GB</Typography>
-              <TextField label="New Capacity (GB)" type="number" fullWidth size="small" value={newDiskSize} onChange={(e) => setNewDiskSize(e.target.value)} InputProps={{ inputProps: { min: diskToResize.capacity_gb + 1 } }} disabled={actionInProgress}/>
+              <Typography variant="body2">当前容量: {diskToResize.capacity_gb} GB</Typography>
+              <TextField label="新容量 (GB)" type="number" fullWidth size="small" value={newDiskSize} onChange={(e) => setNewDiskSize(e.target.value)} InputProps={{ inputProps: { min: diskToResize.capacity_gb + 1 } }} disabled={actionInProgress}/>
           </Stack></DialogContent>
           <DialogActions>
-            <Button onClick={() => setResizeDiskOpen(false)} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setResizeDiskOpen(false)} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleResizeDisk} variant="contained" disabled={actionInProgress || !newDiskSize.trim() || parseInt(newDiskSize) <= diskToResize.capacity_gb}>
-                 {actionInProgress ? <CircularProgress size={20}/> : "Resize"}
+                 {actionInProgress ? <CircularProgress size={20}/> : "调整"}
             </Button>
           </DialogActions>
       </Dialog>)}
 
       {cdRomToMount && (<Dialog open={mountIsoOpen} onClose={() => setMountIsoOpen(false)} fullWidth maxWidth="xs">
-          <DialogTitle>Mount ISO to {cdRomToMount.target}</DialogTitle>
+          <DialogTitle>挂载 ISO 到 {cdRomToMount.target}</DialogTitle>
           <DialogContent><Stack spacing={2.5} sx={{mt:1}}>
               <FormControl fullWidth size="small">
-                  <InputLabel>Select ISO Image</InputLabel>
-                  <Select label="Select ISO Image" value={selectedIsoPath} onChange={(e) => setSelectedIsoPath(e.target.value)} disabled={actionInProgress}>
-                      <MenuItem value=""><em>(Eject/None)</em></MenuItem>
+                  <InputLabel>选择 ISO 镜像</InputLabel>
+                  <Select label="选择 ISO 镜像" value={selectedIsoPath} onChange={(e) => setSelectedIsoPath(e.target.value)} disabled={actionInProgress}>
+                      <MenuItem value=""><em>(弹出/无)</em></MenuItem>
                       {mockIsoImages.map(isoPath => (<MenuItem key={isoPath} value={isoPath}>{isoPath.split('/').pop() || isoPath}</MenuItem>))}
                   </Select>
               </FormControl>
           </Stack></DialogContent>
           <DialogActions>
-            <Button onClick={() => setMountIsoOpen(false)} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setMountIsoOpen(false)} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleMountIso} variant="contained" disabled={actionInProgress}>
-                 {actionInProgress ? <CircularProgress size={20}/> : "Mount"}
+                 {actionInProgress ? <CircularProgress size={20}/> : "挂载"}
             </Button>
           </DialogActions>
       </Dialog>)}

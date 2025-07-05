@@ -212,8 +212,8 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
           <TableCell>{nic.vlan_tag || 'N/A'}</TableCell><TableCell>{nic.bandwidth_limit_mbps ? `${nic.bandwidth_limit_mbps} Mbps` : 'Unlimited'}</TableCell>
           <TableCell align="center">{renderRateChip(nic.rx_rate_kbps, 'rx')}</TableCell><TableCell align="center">{renderRateChip(nic.tx_rate_kbps, 'tx')}</TableCell>
           <TableCell align="right">
-            <IconButton size="small" title="Edit NIC" onClick={() => handleOpenEditDrawer(nic)} disabled={actionInProgress}><EditIcon fontSize="inherit" /></IconButton>
-            <IconButton size="small" title="Delete NIC" color="error" onClick={() => handleDeleteNic(nic.id, nic.mac)} disabled={actionInProgress}><DeleteIcon fontSize="inherit" /></IconButton>
+            <IconButton size="small" title="编辑网卡" onClick={() => handleOpenEditDrawer(nic)} disabled={actionInProgress}><EditIcon fontSize="inherit" /></IconButton>
+            <IconButton size="small" title="删除网卡" color="error" onClick={() => handleDeleteNic(nic.id, nic.mac)} disabled={actionInProgress}><DeleteIcon fontSize="inherit" /></IconButton>
           </TableCell>
         </TableRow>
       ));
@@ -233,11 +233,11 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>Status</TableCell><TableCell><MacIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>MAC Address</TableCell>
-              <TableCell><BridgeIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Bridge</TableCell><TableCell><NicModelIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Model</TableCell>
-              <TableCell><PciIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>PCI Address</TableCell><TableCell><VlanIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>VLAN</TableCell>
-              <TableCell><SpeedIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Bandwidth</TableCell><TableCell align="center">RX Rate</TableCell>
-              <TableCell align="center">TX Rate</TableCell><TableCell align="right">Actions</TableCell>
+              <TableCell>状态</TableCell><TableCell><MacIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>MAC地址</TableCell>
+              <TableCell><BridgeIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>桥接</TableCell><TableCell><NicModelIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>型号</TableCell>
+              <TableCell><PciIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>PCI 地址</TableCell><TableCell><VlanIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>VLAN</TableCell>
+              <TableCell><SpeedIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>带宽</TableCell><TableCell align="center">接收速率</TableCell>
+              <TableCell align="center">发送速率</TableCell><TableCell align="right">操作</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -247,14 +247,14 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
       </TableContainer>
 
       <Drawer anchor="right" open={editDrawerOpen} onClose={() => setEditDrawerOpen(false)} PaperProps={{sx: {width: 360, display: 'flex', flexDirection: 'column'}}}>
-        <Box sx={{p: 2, borderBottom: '1px solid #eee'}}><Typography variant="h6" gutterBottom sx={{mb:0}}>Edit vNIC: {editingNic?.mac}</Typography></Box>
+        <Box sx={{p: 2, borderBottom: '1px solid #eee'}}><Typography variant="h6" gutterBottom sx={{mb:0}}>编辑网卡: {editingNic?.mac}</Typography></Box>
         <Box sx={{flexGrow:1, overflowY: 'auto'}}>
           {editingNic && (<NicFormFields nicData={editingNicData} onChange={(field, value) => setEditingNicData(prev => ({...prev, [field]: value}))} disabled={actionInProgress}/>)}
         </Box>
         <Box sx={{p:2, borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end'}}>
-            <Button onClick={() => setEditDrawerOpen(false)} sx={{mr:1}} disabled={actionInProgress}>Cancel</Button>
+            <Button onClick={() => setEditDrawerOpen(false)} sx={{mr:1}} disabled={actionInProgress}>取消</Button>
             <Button onClick={handleSaveEditNic} variant="contained" disabled={actionInProgress}>
-                {actionInProgress ? <CircularProgress size={20}/> : "Save Changes"}
+                {actionInProgress ? <CircularProgress size={20}/> : "保存"}
             </Button>
         </Box>
       </Drawer>

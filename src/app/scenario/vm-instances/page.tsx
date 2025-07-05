@@ -41,7 +41,6 @@ import OverviewPanel from "@/components/vm/OverviewPanel";
 import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
 import StoragePanel from "@/components/vm/StoragePanel";
 import NetworkPanel from "@/components/vm/NetworkPanel";
-import PerformancePanel from "@/components/vm/PerformancePanel";
 import EventsPanel from "@/components/vm/EventsPanel";
 
 /* ---------- 类型 ---------- */
@@ -364,14 +363,7 @@ export default function VmPage() {
                         onChange={(_, v) => setTab(v)}
                         sx={{ borderBottom: 1, borderColor: "divider", pl: 2 }}
                     >
-                        {[
-                            "概览",
-                            "快照",
-                            "存储",
-                            "网络",
-                            "性能",
-                            "事件",
-                        ].map((l) => (
+                        {["概览", "快照", "存储", "网络", "事件"].map((l) => (
                             <Tab key={l} label={l} />
                         ))}
                     </Tabs>
@@ -382,8 +374,7 @@ export default function VmPage() {
                         {tab === 1 && current && <SnapshotsPanel vmId={current.id} />}
                         {tab === 2 && current && <StoragePanel vmId={current.id} />}
                         {tab === 3 && current && <NetworkPanel vmId={current.id} />}
-                        {tab === 4 && current && <PerformancePanel vmId={current.id} />}
-                        {tab === 5 && current && <EventsPanel vmId={current.id} />}
+                        {tab === 4 && current && <EventsPanel vmId={current.id} />}
                     </Box>
                 </Box>
             )}

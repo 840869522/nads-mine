@@ -35,10 +35,10 @@ interface EventLog {
 
 const eventLevels: EventLevel[] = ['info', 'warning', 'error', 'debug'];
 const timeWindowOptions = [
-    { value: 'all', label: 'All Time' },
-    { value: '1h', label: 'Last 1 Hour' },
-    { value: '6h', label: 'Last 6 Hours' },
-    { value: '24h', label: 'Last 24 Hours' },
+    { value: 'all', label: '全部' },
+    { value: '1h', label: '最近 1 小时' },
+    { value: '6h', label: '最近 6 小时' },
+    { value: '24h', label: '最近 24 小时' },
 ];
 
 
@@ -90,13 +90,12 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
   // For now, the API is assumed to return sorted data.
 
   const handleClearLogs = () => {
-    // This would be an API call if supported. For now, it's a mock.
-    alert('Clear Logs (mock action) - This feature would typically require backend support.');
+    alert('清空日志（示例功能）');
     // setEvents([]); // If we were managing local state primarily
   };
 
   const handleExportCsv = () => {
-    alert(`Exporting ${events.length} events to CSV (mock action)`);
+    alert(`导出 ${events.length} 条事件到 CSV（示例功能）`);
   };
 
   const toggleLiveTail = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,23 +124,23 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
       <Toolbar disableGutters sx={{ px: 1.5, borderBottom: '1px solid #eee', flexWrap: 'wrap', gap: 1.5, py:1 }}>
         <Stack direction="row" alignItems="center" spacing={0.5}>
           <FilterIcon color="action"/>
-          <Typography variant="subtitle1" fontWeight="medium">Filters:</Typography>
+          <Typography variant="subtitle1" fontWeight="medium">筛选:</Typography>
         </Stack>
         <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Level</InputLabel>
+          <InputLabel>级别</InputLabel>
           <Select
-            label="Level"
+            label="级别"
             value={filterLevel}
             onChange={(e: SelectChangeEvent<EventLevel | 'all'>) => setFilterLevel(e.target.value as EventLevel | 'all')}
             disabled={isLoading || liveTail}
           >
-            <MenuItem value="all">All Levels</MenuItem>
+            <MenuItem value="all">所有级别</MenuItem>
             {eventLevels.map(lvl => <MenuItem key={lvl} value={lvl}>{lvl.charAt(0).toUpperCase() + lvl.slice(1)}</MenuItem>)}
           </Select>
         </FormControl>
         <TextField
           size="small"
-          placeholder="Keyword search..."
+          placeholder="关键字搜索..."
           value={filterKeyword}
           onChange={e => setFilterKeyword(e.target.value)}
           disabled={isLoading || liveTail}
@@ -151,9 +150,9 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
           sx={{minWidth: 200}}
         />
         <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Time Window</InputLabel>
+          <InputLabel>时间范围</InputLabel>
           <Select
-            label="Time Window"
+            label="时间范围"
             value={filterTimeWindow}
             onChange={(e: SelectChangeEvent<string>) => setFilterTimeWindow(e.target.value)}
             disabled={isLoading || liveTail}
@@ -168,14 +167,14 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
         <FormControlLabel
             control={<Switch checked={liveTail} onChange={toggleLiveTail} size="small" disabled={isLoading} />}
             labelPlacement="start"
-            label={<Typography variant="body2" sx={{mr:0.5}}>Live Tail</Typography>}
+            label={<Typography variant="body2" sx={{mr:0.5}}>实时追踪</Typography>}
             sx={{mr:1}}
         />
         <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCsv} disabled={isLoading || events.length === 0}>
-          Export CSV
+          导出 CSV
         </Button>
         <Button size="small" variant="outlined" color="error" startIcon={<ClearIcon />} onClick={handleClearLogs} disabled={isLoading || events.length === 0}>
-          Clear Log
+          清空日志
         </Button>
       </Toolbar>
 
@@ -185,9 +184,9 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell sx={{width: '180px'}}><TimeIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Timestamp</TableCell>
-              <TableCell sx={{width: '100px'}}><LevelIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Level</TableCell>
-              <TableCell><DetailIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>Message & Details</TableCell>
+              <TableCell sx={{width: '180px'}}><TimeIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>时间戳</TableCell>
+              <TableCell sx={{width: '100px'}}><LevelIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>级别</TableCell>
+              <TableCell><DetailIcon fontSize="inherit" sx={{verticalAlign:'middle', mr:0.5}}/>消息及详情</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -218,7 +217,7 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
               <TableRow>
                 <TableCell colSpan={3} align="center" sx={{py:3}}>
                   <EventIcon sx={{fontSize: 40, color: 'grey.400', mb:1}}/>
-                  <Typography color="text.secondary">No events match current filters.</Typography>
+                  <Typography color="text.secondary">没有符合当前筛选条件的事件。</Typography>
                 </TableCell>
               </TableRow>
             )}
@@ -227,12 +226,12 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
       </TableContainer>
       {!isLoading && events.length > 0 && (
          <Box sx={{p:1, textAlign: 'right', borderTop: '1px solid #eee'}}>
-            <Typography variant="caption">Displaying {events.length} events (Total matching: {totalFetchedEvents})</Typography>
+            <Typography variant="caption">显示 {events.length} 条事件（共 {totalFetchedEvents} 条）</Typography>
         </Box>
       )}
        {!isLoading && events.length === 0 && !error && (
          <Box sx={{p:1, textAlign: 'right', borderTop: '1px solid #eee'}}>
-            <Typography variant="caption">No events to display.</Typography>
+            <Typography variant="caption">暂无事件记录。</Typography>
         </Box>
       )}
     </Paper>

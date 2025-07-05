@@ -128,15 +128,6 @@ class VirtualNic(BaseModel):
     bandwidth_limit_mbps: Optional[int] = None
     vlan_tag: Optional[int] = None
 
-class MetricDataPoint(BaseModel):
-    timestamp: datetime
-    value: float
-
-class HistoricalMetrics(BaseModel):
-    cpu_percent: List[MetricDataPoint]
-    memory_mb: List[MetricDataPoint]
-    disk_rw_mbps_total: List[MetricDataPoint]
-    network_throughput_mbps_total: List[MetricDataPoint]
 
 class VmRealtimeMetrics(BaseModel):
     cpu_percent: float
@@ -538,10 +529,6 @@ def get_vm_realtime_metrics(vm_id: str):
         network_mbps=network_mbps,
     )
 
-@app.get("/api/vms/{vm_id}/performance/historical", response_model=HistoricalMetrics)
-def get_historical_performance(vm_id: str, range: str = "1h"):
-    # 由于缺乏持久化，此处仅返回空数据
-    return HistoricalMetrics(cpu_percent=[], memory_mb=[], disk_rw_mbps_total=[], network_throughput_mbps_total=[])
 
 @app.get("/api/vms/{vm_id}/events", response_model=List[EventLog])
 def list_vm_events(vm_id: str):
