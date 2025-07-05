@@ -20,6 +20,7 @@ import {
   Chip,
   Tooltip,
   Alert as MuiAlert,
+  CircularProgress,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SearchIcon from '@mui/icons-material/Search';
@@ -31,27 +32,29 @@ import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
+import { table } from 'console';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
-type UserDisplayItem = User & { email: string; is_login: 1 | 0; create_at: string, update_at: string , last_login:string};
+type UserDisplayItem = {c_username:string;  c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
 
 
 type Order = 'asc' | 'desc';
-type SortableUserKeys = keyof Pick<UserDisplayItem, 'username' | 'role' | 'email' | 'is_login' | 'create_at'| 'update_at' | 'last_login'>;
+type SortableUserKeys = keyof Pick<UserDisplayItem,'c_username' | 'c_email' | 'c_is_login' | 'c_create_at' | 'c_update_at' | 'c_last_login'>;
 
 
 const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<UserDisplayItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [order, setOrder] = useState<Order>('asc');
-  const [orderBy, setOrderBy] = useState<SortableUserKeys>('username');
-  const [count, setDataCount] = useState<number>(0);
+  const [orderBy, setOrderBy] = useState<SortableUserKeys>('c_username');
 
+  const [count, setDataCount] = useState<number>(0);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDisplayItem | null>(null);
 
+  const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserDisplayItem | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -62,13 +65,39 @@ const UserManagementPage: React.FC = () => {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
       }
+    }).finally(() => {
+      setTableLoading(false);
     });
   }, []);
 
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value.toLowerCase());
+    setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
     setPage(1);
+  };
+
+  const handleSearchSubmit = async () => {
+    if (!searchTerm.data.trim()) return;
+
+    setTableLoading(true);
+    try {
+      const res = await apiClientWithToken.post("/api/user/search", JSON.stringify({
+        page: 1,
+        pagesize: rowsPerPage,
+        name: searchTerm.data
+      }));
+
+      if (res.data.code === 200) {
+        setUsers(res.data.data.data);
+        setDataCount(res.data.data.count);
+        setPage(1);
+      }
+    } catch (error) {
+      console.error('搜索失败:', error);
+      setFeedbackMessage({ type: 'error', text: '搜索用户时发生错误' });
+    } finally {
+      setTableLoading(false);
+    }
   };
 
   const handleRequestSort = (property: SortableUserKeys) => {
@@ -100,29 +129,24 @@ const UserManagementPage: React.FC = () => {
 
   const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
     if (isNew) {
-      const id = crypto.randomUUID();
       await apiClientWithToken.post('/api/user/new', JSON.stringify({
-        id,
         username: formData.username,
-        passwordHash: formData.password,
-        roleId: formData.role,
+        passwordHash: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
-        status: formData.status
+        is_login: formData.status == "active" ? 1 : 0
       })
       );
-      setUsers(prev => [{ id, username: formData.username!, role: formData.role!, email: formData.email!, is_login: formData.status ==  'active' ? 1 :0  , createdAt: new Date().toISOString() }, ...prev]);
+      setUsers(prev => [{ c_username: formData.username!, c_email: formData.email!, c_is_login: formData.status == 'active' ? 1 : 0 }, ...prev]);
       setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 添加成功。` });
     } else if (editingUser) {
       await apiClientWithToken.post('/api/user/update', JSON.stringify({
-        id: editingUser.id,
-        username: formData.username,
-        passwordHash: formData.password,
-        roleId: formData.role,
+        id: editingUser.c_username,
+        passwordHash: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
-        status: formData.status
+        is_login: formData.status == "active" ? 1 : 0
       }));
       setUsers(prev => prev.map(u =>
-        u.id === editingUser.id ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+        u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
       ));
       setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
     }
@@ -137,9 +161,12 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      fetch(`/api/users?id=${userToDelete.id}`, { method: 'DELETE' }).then(() => {
-        setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
-        setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.username}" 已删除。` });
+      apiClientWithToken.post(`/api/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+        if (res.data.code === 200) {
+          setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
+          setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });
+        } else
+          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.c_username}" 已删除。` })
       });
     }
     setIsConfirmDeleteOpen(false);
@@ -148,13 +175,7 @@ const UserManagementPage: React.FC = () => {
 
 
   const filteredAndSortedUsers = useMemo(() => {
-    let processedUsers = [...users].filter(user =>
-      user.username.toLowerCase().includes(searchTerm) ||
-      user.email.toLowerCase().includes(searchTerm) ||
-      USER_ROLES_CONFIG[user.role].name.toLowerCase().includes(searchTerm)
-    );
-
-    processedUsers.sort((a, b) => {
+    let processedUsers = [...users].sort((a, b) => {
       const valA = a[orderBy];
       const valB = b[orderBy];
       if (valB < valA) return order === 'asc' ? 1 : -1;
@@ -162,7 +183,7 @@ const UserManagementPage: React.FC = () => {
       return 0;
     });
     return processedUsers;
-  }, [users, searchTerm, order, orderBy]);
+  }, [users, order, orderBy]);
 
   return (
     <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
@@ -180,21 +201,40 @@ const UserManagementPage: React.FC = () => {
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <TextField
-          variant="outlined"
-          size="small"
-          placeholder="搜索用户..."
-          value={searchTerm}
-          onChange={handleSearchChange}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ minWidth: { sm: 300 } }}
-        />
+        <Box sx={{display:"flex", alignItems:"center" , mb: 3,gap: 2, flexWrap:"wrap"}}>
+          <TextField
+            variant="outlined"
+            size="small"
+            placeholder="搜索用户..."
+            value={searchTerm.data}
+            onChange={handleSearchChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSearchSubmit();
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+              endAdornment: tableLaoding ? (
+                <CircularProgress size={20} />
+              ) : null
+            }}
+            sx={{ minWidth: { sm: 300 } }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleSearchSubmit}
+            disabled={!searchTerm.data.trim() || tableLaoding}
+            sx={{ ml: 1, minWidth: 80 }}
+          >
+            搜索
+          </Button>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddCircleOutlineIcon />}
@@ -209,15 +249,15 @@ const UserManagementPage: React.FC = () => {
           <TableHead sx={{ bgcolor: 'action.focus' }}>
             <TableRow>
               {[
-                { id: 'username', label: '用户名' },
-                { id: 'email', label: '邮箱' },
-                { id: 'is_login', label: '状态' },
-                { id: 'create_at', label: '创建日期' },
-                { id: 'update_at', label: '更新日期' },
-                { id: 'last_ogin', label: '更新日期' },
+                { id: 'c_username', label: '用户名' },
+                { id: 'c_email', label: '邮箱' },
+                { id: 'c_is_login', label: '状态' },
+                { id: 'c_create_at', label: '创建日期' },
+                { id: 'c_update_at', label: '更新日期' },
+                { id: 'c_last_ogin', label: '最后登录日期' },
               ].map((headCell) => (
                 <TableCell
-                  key={headCell.id}
+                  key={headCell.c_username}
                   sortDirection={orderBy === headCell.id ? order : false}
                 >
                   <TableSortLabel
@@ -234,8 +274,8 @@ const UserManagementPage: React.FC = () => {
           </TableHead>
           <TableBody>
             {filteredAndSortedUsers.map((user) => (
-              <TableRow key={user.id} hover>
-                <TableCell sx={{ fontWeight: 'medium' }}>{user.username}</TableCell>
+              <TableRow key={user.c_username} hover>
+                <TableCell sx={{ fontWeight: 'medium' }}>{user.c_username}</TableCell>
                 {/* <TableCell>
                   <Chip
                     label={USER_ROLES_CONFIG[user.role].name}
@@ -250,18 +290,18 @@ const UserManagementPage: React.FC = () => {
                     }}
                   />
                 </TableCell> */}
-                <TableCell>{user.email}</TableCell>
+                <TableCell>{user.c_email}</TableCell>
                 <TableCell>
                   <Chip
-                    label={user.is_login ? '已激活' : '已禁用'}
-                    color={user.is_login ? 'success' : 'error'}
+                    label={user.c_is_login ? '已激活' : '已禁用'}
+                    color={user.c_is_login ? 'success' : 'error'}
                     size="small"
                     variant="outlined"
                   />
                 </TableCell>
-                <TableCell>{user.create_at}</TableCell>
-                <TableCell>{user.update_at}</TableCell>
-                <TableCell>{user.last_login}</TableCell>
+                <TableCell>{user.c_create_at}</TableCell>
+                <TableCell>{user.c_update_at}</TableCell>
+                <TableCell>{user.c_last_login}</TableCell>
                 <TableCell align="center">
                   <Tooltip title="编辑用户">
                     <IconButton size="small" onClick={() => handleEditUserClick(user)} color="primary">
@@ -269,7 +309,7 @@ const UserManagementPage: React.FC = () => {
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="删除用户">
-                    <IconButton size="small" onClick={() => handleDeleteUserClick(user)} color="error" disabled={user.username === 'admin_main' /* Prevent deleting main admin for demo */}>
+                    <IconButton size="small" onClick={() => handleDeleteUserClick(user)} color="error" disabled={user.c_username === 'admin' /* Prevent deleting main admin for demo */}>
                       <DeleteIcon />
                     </IconButton>
                   </Tooltip>
@@ -310,7 +350,7 @@ const UserManagementPage: React.FC = () => {
           open={isConfirmDeleteOpen}
           onClose={() => setIsConfirmDeleteOpen(false)}
           title="确认删除用户"
-          message={`您确定要删除用户 "${userToDelete?.username}" 吗？此操作无法撤销。`}
+          message={`您确定要删除用户 "${userToDelete?.c_username}" 吗？此操作无法撤销。`}
           onConfirm={confirmDeleteUser}
         />
       )}

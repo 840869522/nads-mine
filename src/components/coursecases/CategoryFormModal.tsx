@@ -7,8 +7,9 @@ import {
   TextField,
   Button,
   Stack,
-  FormHelperText,
+  FormHelperText
 } from '@mui/material';
+import useMediaQuery  from '@mui/material/useMediaQuery'; 
 import { useTheme } from '@mui/material/styles';
 
 interface CategoryFormModalProps {

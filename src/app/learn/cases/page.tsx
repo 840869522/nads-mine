@@ -17,15 +17,15 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import api from '../../services/api';
-import FileViewerModal from '../../components/coursecases/FileViewerModal';
-import CourseCaseFormModal from '../../components/coursecases/CourseCaseFormModal';
-import CategoryFormModal from '../../components/coursecases/CategoryFormModal';
-import { CourseCase, CourseCaseFile, Category } from '../../types';
+import { apiClientWithToken as api } from '@/utils/axios';
+import FileViewerModal from '@/components/coursecases/FileViewerModal';
+import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
+import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
+import { CourseCase, CourseCaseFile } from '@/types';
 
 const CourseCaseList = () => {
   const [courseCases, setCourseCases] = useState<CourseCase[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<[]>([]);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [categoryId, setCategoryId] = useState<string>('');
@@ -49,8 +49,8 @@ const CourseCaseList = () => {
 
   useEffect(() => {
     api
-      .get('/categories')
-      .then((res) => setCategories(res.data))
+      .get('/api/categories')
+      .then((res) => setCategories(res.data ||[]))
       .catch((err) => {
         setSnackbar({ open: true, message: '获取分类失败', severity: 'error' });
       });
@@ -58,7 +58,7 @@ const CourseCaseList = () => {
 
   useEffect(() => {
     api
-      .get('/course-cases', { params: { page, category_id: categoryId, search } })
+      .get('/api/course-cases', { params: { page, category_id: categoryId, search } })
       .then((res) => {
         setCourseCases(res.data.data);
         setTotalRows(res.data.last_page * 10); // Assuming 10 items per page
@@ -115,8 +115,8 @@ const CourseCaseList = () => {
       });
     }
     const request = editingCase
-      ? api.put(`/course-cases/${editingCase.course_id}`, formData)
-      : api.post('/course-cases', formData);
+      ? api.put(`/api/course-cases/${editingCase.course_id}`, formData)
+      : api.post('/api/course-cases', formData);
     request
       .then((res) => {
         setCourseCases((prev) =>
@@ -143,7 +143,7 @@ const CourseCaseList = () => {
       return;
     }
     api
-      .delete(`/course-cases/${courseId}`)
+      .delete(`/api/course-cases/${courseId}`)
       .then(() => {
         setCourseCases((prev) => prev.filter((c) => c.course_id !== courseId));
         setSnackbar({ open: true, message: '删除成功', severity: 'success' });
@@ -164,7 +164,7 @@ const CourseCaseList = () => {
       return;
     }
     api
-      .post('/categories', { category_name: newCategory })
+      .post('/api/categories', { category_name: newCategory })
       .then((res) => {
         setCategories((prev) => [...prev, res.data]);
         setSnackbar({ open: true, message: '分类添加成功', severity: 'success' });
@@ -246,17 +246,17 @@ const CourseCaseList = () => {
           </>
         )}
       </Box>
-      {categories.length === 0 && (
+      {categories && categories.length === 0 && (
         <Typography variant="body1" sx={{ p: 2, textAlign: 'center' }}>
           暂无分类，请先添加分类
         </Typography>
       )}
-      {courseCases.length === 0 && categories.length > 0 && (
+      {categories && courseCases?.length === 0 && categories?.length > 0 && (
         <Typography variant="body1" sx={{ p: 2, textAlign: 'center' }}>
           暂无课程案例
         </Typography>
       )}
-      {categories.length > 0 && courseCases.length > 0 && (
+      {categories && categories?.length > 0 && courseCases?.length > 0 && (
         <DataGrid
           rows={courseCases}
           columns={columns}

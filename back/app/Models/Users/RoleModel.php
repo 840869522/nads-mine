@@ -16,7 +16,7 @@
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;
             $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(id) AS count FROM `c_roles`";
+            $sql_count = "SELECT COUNT(c_id) AS count FROM `c_roles`";
             try {  
                 $res = db::select($sql,[$pagesize,$offset]);
                 $count = db::select($sql_count);
@@ -35,7 +35,7 @@
 
 
         public static function getUserRole(string $username):array {
-            $sql = "SELECT cr.id FROM `c_users_roles` AS cur JOIN `c_roles` AS cr ON cur.role_id = cr.id  WHERE user_id = ?";
+            $sql = "SELECT DISTINCT cr.c_id FROM `c_users_roles` AS cur JOIN `c_roles` AS cr ON cur.c_role_id = cr.c_id  WHERE c_user_id = ?";
             try {
                 $res = db::select($sql,[$username]);
                 return [
@@ -67,10 +67,10 @@
         }
 
         public static function searchRoleByName(string $name, int $page = 1,int $pagesize=10) :array {
-            $sql = "SELECT * FROM `c_roles` WHERE name_key LIKE ? OR name_display LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_roles` WHERE c_name LIKE ? LIMIT ? OFFSET ?";
             $offset = ($page - 1) * $pagesize;
             try {
-                $user = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
+                $user = db::select($sql, ['%'.$name.'%',$pagesize, $offset]);
                 return [
                     "data"=>$user,
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
@@ -108,7 +108,7 @@
         }
 
         public static function revokeRoleFromUser(string $role_id,string $permission_id):array {
-            $sql = "DELETE FROM c_users_roles WHERE role_id = ? and user_id = ?";
+            $sql = "DELETE FROM c_users_roles WHERE c_role_id = ? and c_user_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$role_id,$permission_id]);
@@ -133,7 +133,7 @@
 
 
         public static function insertNewRole(?array $data) :array {
-            $sql = "INSERT INTO c_roles(id,name,create_at,update_at) VALUES(?,?,NOW(),NOW())";
+            $sql = "INSERT INTO c_roles(c_id,c_name,c_create_at,c_update_at) VALUES(?,?,NOW(),NOW())";
             try {
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['id'],$data['name']]);
@@ -156,7 +156,7 @@
         }
 
         public static function updateRoleById(string $id,?array $data) :array {
-            $sql = "UPDATE c_roles SET name = ?,update_at = NOW() WHERE id = ?";
+            $sql = "UPDATE c_roles SET c_name = ?,c_update_at = NOW() WHERE c_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);
@@ -179,16 +179,15 @@
         }
 
         public static function deleteRoleById(string $id):array {
-            $sql = "DELETE FROM c_roles WHERE id = ?";
+            $sql = "DELETE FROM c_roles WHERE c_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);
                 if($res) {
-                    $sql_user_role = "DELETE FROM c_USERS_ROLES WHERE role_id = ?";
-                    $sql_role_permission = "DELETE FROM c_ROLES_PERMISSIONS WHERE role_id = ?";
+                    $sql_user_role = "DELETE FROM c_USERS_ROLES WHERE c_role_id = ?";
+                    $sql_role_permission = "DELETE FROM c_ROLES_PERMISSIONS WHERE c_role_id = ?";
                     $res_role_permission = db::delete($sql_role_permission,[$id]);
                     $res_user_role = db::delete($sql_user_role,[$id]);
-                    log::info("res_role_permission:".$res_role_permission."res_user_role".$res_user_role);
                     if ($res_user_role >=0 && $res_role_permission >=0) {
                         db::commit();
                         return [

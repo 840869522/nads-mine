@@ -37,7 +37,7 @@
 
         public static function getPermissionById(?string $id) {
             try {
-                $sql =  "SELECT * FROM `c_permissions` WHERE `id` = ?";
+                $sql =  "SELECT * FROM `c_permissions` WHERE `c_id` = ?";
                 $res = db::selectOne($sql,[$id]);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -52,7 +52,7 @@
         }
 
         public static function searchPermissionByName(string $name, int $page = 1,int $pagesize=10) :array {
-            $sql = "SELECT * FROM `c_permissions` WHERE name LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_permissions` WHERE c_name LIKE ? LIMIT ? OFFSET ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
@@ -69,7 +69,7 @@
         }
 
         public static function getPermissionsByRoleId (string $role_id):array {
-            $sql = "SELECT cper.* FROM `c_roles_permissions` AS crp JOIN `c_permissions` AS cper ON crp.permission_id = cper.id WHERE crp.`role_id` = ?";
+            $sql = "SELECT cper.* FROM `c_roles_permissions` AS crp JOIN `c_permissions` AS cper ON crp.c_permission_id = cper.c_id WHERE crp.`c_role_id` = ?";
             try {
                 $res = db::select($sql,[$role_id]);
                 return [
@@ -109,7 +109,7 @@
         }
 
         public static function revokePermissionFromRole(string $role_id,string $permission_id):array {
-            $sql = "DELETE FROM c_roles_permissions WHERE role_id = ? and permission_id = ?";
+            $sql = "DELETE FROM c_roles_permissions WHERE c_role_id = ? and c_permission_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$role_id,$permission_id]);
@@ -158,7 +158,7 @@
 
         
         public static function updatePermission(string $id,array $data):array {
-            $sql = "UPDATE `c_permissions` SET name= ? WHERE id = ?";
+            $sql = "UPDATE `c_permissions` SET c_name= ? WHERE c_id = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data['name'],$id]);
@@ -181,8 +181,8 @@
         }
 
         public static function deletePermission(string $id) :array {
-            $sql = "DELETE * FROM  c_permissions WHERE id = ?";
-            $sql_role_permissions = "DELETE * FROM c_ROLES_PERMISSIONS WHERE permission_id = ? ";
+            $sql = "DELETE * FROM  c_permissions WHERE c_id = ?";
+            $sql_role_permissions = "DELETE * FROM c_ROLES_PERMISSIONS WHERE c_permission_id = ? ";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);
