@@ -33,6 +33,7 @@ import {
     DesktopWindows as VncIcon,
     Camera as SnapshotIcon,
     KeyboardArrowDown as ArrowDownIcon,
+    AddCircleOutline as AddIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
@@ -42,6 +43,7 @@ import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
 import StoragePanel from "@/components/vm/StoragePanel";
 import NetworkPanel from "@/components/vm/NetworkPanel";
 import EventsPanel from "@/components/vm/EventsPanel";
+import CreateVmModal from "@/components/vm/CreateVmModal";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -118,6 +120,7 @@ export default function VmPage() {
         null
     );
     const [actionLoading, setActionLoading] = React.useState(false);
+    const [createOpen, setCreateOpen] = React.useState(false);
 
     /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
     React.useEffect(() => {
@@ -218,6 +221,13 @@ export default function VmPage() {
                         sx={{ width: { xs: "100%", sm: 260 } }}
                     />
                 </Box>
+                <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setCreateOpen(true)}
+                >
+                    创建实例
+                </Button>
             </Box>
 
             {/* ---------- 列表区域 ---------- */}
@@ -398,6 +408,7 @@ export default function VmPage() {
             <Backdrop open={actionLoading} sx={{ zIndex: theme.zIndex.modal + 1 }}>
                 <CircularProgress color="inherit" />
             </Backdrop>
+            <CreateVmModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => mutate()} />
         </Box>
     );
 }

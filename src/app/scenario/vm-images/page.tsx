@@ -26,13 +26,14 @@ import {
     Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
-    Visibility as ViewIcon,
+    PlayArrow as StartIcon,
     CloudUpload as UploadIcon,
     Computer as ComputerIcon,
     Search as SearchIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
 import dayjs from "dayjs"
+import CreateVmModal from "@/components/vm/CreateVmModal"
 
 interface VmImage {
     id: string
@@ -51,6 +52,7 @@ const VmImageManagementPage: React.FC = () => {
     const [images, setImages] = useState<VmImage[]>([])
     const [openDialog, setOpenDialog] = useState(false)
     const [editingImage, setEditingImage] = useState<VmImage | null>(null)
+    const [createModalImage, setCreateModalImage] = useState<string | null>(null)
     const [formData, setFormData] = useState({
         name: "",
         version: "",
@@ -96,6 +98,10 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         setOpenDialog(false)
         setEditingImage(null)
         setSelectedFile(null)
+    }
+
+    const handleStart = (image: VmImage) => {
+        setCreateModalImage(image.filePath || (image as any).path || image.name)
     }
 
     const handleSave = () => {
@@ -189,9 +195,9 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             width: 140,
             renderCell: params => (
                 <Box>
-                    <Tooltip title="查看详情">
-                        <IconButton size="small">
-                            <ViewIcon />
+                    <Tooltip title="启动">
+                        <IconButton size="small" onClick={() => handleStart(params.row)}>
+                            <StartIcon color="success" />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="编辑">
@@ -321,6 +327,11 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                     </Button>
                 </DialogActions>
             </Dialog>
+            <CreateVmModal
+                open={Boolean(createModalImage)}
+                onClose={() => setCreateModalImage(null)}
+                fixedImage={createModalImage || undefined}
+            />
         </Box>
     )
 }

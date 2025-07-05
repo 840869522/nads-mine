@@ -3,10 +3,20 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4
+import uuid
 import os
 import time
+import textwrap
+import json
+import re
 import libvirt
 import guestfs
+import requests
+from virtinst import Guest
+from virtinst.device.disk import DeviceDisk
+from virtinst.device.interface import DeviceInterface
+from virtinst.device.cloudinit import DeviceCloudInit
+from virtinst.device.graphics import DeviceGraphics
 from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
@@ -143,6 +153,24 @@ class EventLog(BaseModel):
     message: str
     details: Optional[Dict[str, Any]] = None
 
+# ----- VM Creation Models -----
+class GuacInfo(BaseModel):
+    url: str
+    username: str
+    password: str
+    folder_id: Optional[str] = "ROOT"
+
+class VMRequest(BaseModel):
+    vm_name: Optional[str] = None
+    base_image: str
+    memory: int = 2048
+    vcpus: int = 2
+    disk_gb: int = 20
+    ssh_key: Optional[str] = None
+    admin_password: Optional[str] = None
+    static_ip: Optional[str] = None
+    guacamole: GuacInfo
+
 # ---------------- Helper Functions ----------------
 def _require_conn():
     if not LIBVIRT_CONNECTION:
@@ -255,6 +283,52 @@ def _wait_for_state(dom, target_code: int, timeout: int = 30) -> bool:
         time.sleep(1)
     return False
 
+# ----- VM Creation Helpers -----
+POOL_DIR = "/var/lib/libvirt/images"
+VIRTIO_ISO = "/usr/share/virtio-win/virtio-win.iso"
+
+def detect_os(img_path: str) -> str:
+    g = guestfs.GuestFS(python_return_dict=True)
+    g.add_drive_opts(img_path, readonly=1)
+    g.launch()
+    roots = g.inspect_os()
+    if not roots:
+        raise ValueError("Cannot detect guest OS")
+    return g.inspect_get_type(roots[0])
+
+def gen_mac(seed: str) -> str:
+    h = uuid.uuid5(uuid.NAMESPACE_DNS, seed).hex
+    return "02:" + ":".join(h[i:i+2] for i in range(0, 10, 2))
+
+def parse_vnc_port(xml: str) -> int | None:
+    m = re.search(r"<graphics[^>]*type='vnc'[^>]*port='(\d+)'", xml)
+    return int(m.group(1)) if m else None
+
+def guac_login(url: str, username: str, password: str) -> tuple[str, str]:
+    r = requests.post(f"{url}/api/tokens", data={"username": username, "password": password})
+    if not r.ok:
+        raise RuntimeError("Guacamole auth failed")
+    data = r.json()
+    return data["authToken"], next(iter(data["dataSource"]))
+
+def guac_create_conn(url: str, token: str, ds: str, name: str, proto: str, params: dict, parent: str | None):
+    body = {
+        "name": name,
+        "protocol": proto,
+        "parameters": params,
+        "attributes": {"max-connections": "5", "max-connections-per-user": "2"},
+    }
+    r = requests.post(f"{url}/api/session/data/{ds}/connections", params={"token": token}, json=body)
+    if not r.ok:
+        raise RuntimeError("create connection failed")
+    conn_id = r.json()
+    if parent and parent != "ROOT":
+        requests.post(
+            f"{url}/api/session/data/{ds}/connectionGroups/{parent}/connections/{conn_id}",
+            params={"token": token},
+        )
+    return conn_id
+
 # ---------------- API Endpoints ----------------
 @app.get("/api/vms", response_model=List[VmInstance])
 def list_vms():
@@ -263,6 +337,121 @@ def list_vms():
 @app.get("/api/vms/images", response_model=List[VmImage])
 def list_vm_images():
     return fetch_vm_images()
+
+@app.post("/api/vms/create")
+def create_vm(req: VMRequest):
+    vm_name = req.vm_name or f"vm-{uuid.uuid4().hex[:8]}"
+    mac = gen_mac(vm_name)
+
+    guest_os = detect_os(req.base_image)
+    conn = _require_conn()
+    g = Guest(conn)
+    g.name, g.memory, g.vcpus = vm_name, req.memory, req.vcpus
+    g.os_type = "hvm"
+    g.os_variant = "ubuntu24.04" if guest_os == "linux" else "win10"
+
+    overlay = f"{POOL_DIR}/{vm_name}.qcow2"
+    d = DeviceDisk(g)
+    d.source_file = overlay
+    d.backing_store = req.base_image
+    d.driver_type = "qcow2"
+    d.size = req.disk_gb
+    d.bus, d.create = "virtio", True
+    g.devices.append(d)
+
+    iface = DeviceInterface(g)
+    iface.type = DeviceInterface.TYPE_USER
+    iface.hostfwd = [
+        "tcp::2222-:22",
+        "tcp::33389-:3389",
+    ]
+    iface.mac_address = mac
+    g.devices.append(iface)
+
+    if guest_os == "linux":
+        user_data = textwrap.dedent(f"""\
+            #cloud-config
+            hostname: {vm_name}
+            users:
+              - default
+              - name: ubuntu
+                sudo: ALL=(ALL) NOPASSWD:ALL
+                ssh_authorized_keys:
+                  - {req.ssh_key or ''}
+        """)
+    else:
+        if not req.admin_password:
+            raise HTTPException(422, "Windows VM requires admin_password")
+        user_data = textwrap.dedent(f"""\
+            #cloud-config
+            password: {req.admin_password}
+            username: Administrator
+            runcmd:
+              - powershell -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
+              - powershell -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
+        """)
+
+    ci = DeviceCloudInit(g)
+    ci.user_data = user_data
+    ci.disable = True
+    g.devices.append(ci)
+
+    if guest_os == "windows":
+        drv = DeviceDisk(g)
+        drv.device = DeviceDisk.DEVICE_CDROM
+        drv.read_only = True
+        drv.source_file = VIRTIO_ISO
+        drv.bus = "sata"
+        g.devices.append(drv)
+
+    vnc = DeviceGraphics(g)
+    vnc.type, vnc.port, vnc.listen = "vnc", -1, "0.0.0.0"
+    g.devices.append(vnc)
+
+    dom_xml = g.get_xml_config()
+    dom = conn.defineXML(dom_xml)
+    dom.create()
+    vnc_port = parse_vnc_port(dom.XMLDesc()) or 5900
+
+    try:
+        token, ds = guac_login(
+            req.guacamole.url, req.guacamole.username, req.guacamole.password
+        )
+
+        if guest_os == "linux":
+            guac_create_conn(
+                req.guacamole.url,
+                token,
+                ds,
+                name=vm_name + "-ssh",
+                proto="ssh",
+                params={"hostname": "hypervisor", "port": "2222", "username": "ubuntu"},
+                parent=req.guacamole.folder_id,
+            )
+        else:
+            guac_create_conn(
+                req.guacamole.url,
+                token,
+                ds,
+                name=vm_name + "-rdp",
+                proto="rdp",
+                params={"hostname": "hypervisor", "port": "33389", "security": "nla"},
+                parent=req.guacamole.folder_id,
+            )
+
+        guac_create_conn(
+            req.guacamole.url,
+            token,
+            ds,
+            name=vm_name + "-vnc",
+            proto="vnc",
+            params={"hostname": "hypervisor", "port": str(vnc_port)},
+            parent=req.guacamole.folder_id,
+        )
+    except Exception as e:
+        return {"vm": vm_name, "mac": mac, "vnc_port": vnc_port, "guac_warning": str(e)}
+
+    return {"vm": vm_name, "mac": mac, "vnc_port": vnc_port, "guac_connections": "created"}
 
 @app.get("/api/vms/{vm_id}", response_model=OverviewData)
 def get_vm_info(vm_id: str):
