@@ -117,7 +117,7 @@
                 ];
             }
             $user = $modelRes["data"];
-            if ($user->password != $pwd) {
+            if ($user->c_password != $pwd) {
                 return response()->json([
                     "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
@@ -134,7 +134,7 @@
             $jwtRes = JWTControll::encodeJWT([
                 "id" => $user->c_username,
                 "permission" => array_map(function ($item) {
-                    return $item->permission_id ;
+                    return $item->c_permission_id ;
                 }, $permissions["data"])
             ]);
             if ($jwtRes["err"] != null) {
@@ -151,7 +151,7 @@
                 "data" => [
                     "token" => $jwtRes['token'],
                     "user" => $user,
-                    "role"=> array_map(function ($item) {return $item->id;},$role["data"])
+                    "role"=> array_map(function ($item) {return $item->c_id;},$role["data"])
                 ]
             ]);
         }

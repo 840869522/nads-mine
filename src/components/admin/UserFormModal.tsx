@@ -21,6 +21,7 @@ import { USER_ROLES_CONFIG } from '../../constants';
 
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
+  username?: string;
   email?: string;
   status?: 'active' | 'disabled';
   password?: string;
@@ -30,7 +31,7 @@ interface UserFormModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (user: UserFormData, isNew: boolean) => void;
-  initialUser: (User & { email: string; status: 'active' | 'disabled'; createdAt: string }) | null;
+  initialUser: ({}) | null;
 }
 
 const DEFAULT_FORM: UserFormData = {
@@ -55,11 +56,10 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
     if (initialUser) {
       setFormData({
-        id:        initialUser.id,
-        username:  initialUser.username,
+        username:  initialUser.c_username,
         role:      initialUser.role,
-        email:     initialUser.email,
-        status:    initialUser.status,
+        email:     initialUser.c_email,
+        status:    initialUser.c_is_login ? "active" : "disabled",
         password:  '',
       });
     } else {

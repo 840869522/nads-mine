@@ -16,7 +16,7 @@
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
             $offset = ($page - 1 ) * $pagesize;
             $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(id) AS count FROM `c_roles`";
+            $sql_count = "SELECT COUNT(c_id) AS count FROM `c_roles`";
             try {  
                 $res = db::select($sql,[$pagesize,$offset]);
                 $count = db::select($sql_count);
@@ -35,7 +35,7 @@
 
 
         public static function getUserRole(string $username):array {
-            $sql = "SELECT cr.id FROM `c_users_roles` AS cur JOIN `c_roles` AS cr ON cur.role_id = cr.id  WHERE user_id = ?";
+            $sql = "SELECT DISTINCT cr.c_id FROM `c_users_roles` AS cur JOIN `c_roles` AS cr ON cur.c_role_id = cr.c_id  WHERE c_user_id = ?";
             try {
                 $res = db::select($sql,[$username]);
                 return [
