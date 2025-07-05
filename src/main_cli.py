@@ -13,6 +13,7 @@ import requests
 import subprocess
 import tempfile
 import shutil
+import xml.etree.ElementTree as ET
 # from virtinst import Guest                     # (old)
 # from virtinst.device.disk import DeviceDisk    # (old)
 # from virtinst.device.interface import DeviceInterface  # (old)
@@ -178,40 +179,43 @@ def _require_conn():
 
 # 使用命令行工具 virt-inspector 获取镜像的系统信息
 def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
-    meta: dict[str, Optional[str]] = {
-        "version": None,
-        "osType": None,
-        "architecture": None,
-    }
-    try:
-        result = subprocess.run(
-            ["virt-inspector", "-a", path, "--xml"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            import xml.etree.ElementTree as ET
+    meta: dict[str, Optional[str]] = {"version": None, "osType": None, "architecture": None}
 
-            tree = ET.fromstring(result.stdout)
-            os_node = tree.find(".//operatingsystem")
-            if os_node is not None:
-                arch = os_node.findtext("arch")
-                if arch:
-                    meta["architecture"] = arch
-                os_type = os_node.findtext("os_type") or os_node.findtext("os-type")
-                if os_type:
-                    meta["osType"] = os_type
-                distro = os_node.findtext("distro") or os_node.findtext("name")
-                version = os_node.findtext("distro_version") or os_node.findtext(
-                    "distro-version"
-                )
-                if distro:
-                    if version:
-                        meta["version"] = f"{distro} {version}"
-                    else:
-                        meta["version"] = distro
-    except Exception:
-        pass
+    # 1. 精简输出，减少解析负担
+    cmd = ["virt-inspector", "--no-applications", "--no-icon", "-a", path]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError:
+        return meta                    # 运行失败直接返回空白 meta
+
+    root = ET.fromstring(result.stdout)
+    os_node = root.find(".//operatingsystem")
+    if os_node is None:
+        return meta
+
+    # 2. architecture
+    meta["architecture"] = os_node.findtext("arch")
+
+    # 3. osType —— 优先 os_type / os-type，其次 name
+    meta["osType"] = (
+            os_node.findtext("os_type") or
+            os_node.findtext("os-type") or
+            os_node.findtext("name")
+    )
+
+    # 4. version —— distro + (major.minor | product_name)
+    distro = os_node.findtext("distro") or os_node.findtext("name")
+    major  = os_node.findtext("major_version") or os_node.findtext("major-version")
+    minor  = os_node.findtext("minor_version") or os_node.findtext("minor-version")
+
+    if distro:
+        if major and minor:
+            meta["version"] = f"{distro} {major}.{minor}"
+        else:
+            # 某些发行版只有 product_name，或者 major/minor 取不到
+            product = os_node.findtext("product_name")
+            meta["version"] = product if product else distro
+
     return meta
 
 def _size_to_mb(size: float, unit: str) -> float:
