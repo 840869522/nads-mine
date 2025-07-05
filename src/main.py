@@ -581,15 +581,19 @@ def list_vm_snapshots(vm_id: str):
     conn = _require_conn()
     dom = conn.lookupByUUIDString(vm_id)
     snaps = []
+    import xml.etree.ElementTree as ET
     for name in dom.snapshotListNames(0):
         snap = dom.snapshotLookupByName(name, 0)
-        info = snap.getInfo()
+        xml = snap.getXMLDesc()
+        tree = ET.fromstring(xml)
+        ctime = tree.findtext("creationTime")
+        created = datetime.fromtimestamp(int(ctime)) if ctime else datetime.now()
         snaps.append(
             Snapshot(
                 id=name,
                 name=name,
-                created=datetime.fromtimestamp(info[1]),
-                xml=snap.getXMLDesc(),
+                created=created,
+                xml=xml,
             )
         )
     return snaps
@@ -599,10 +603,20 @@ def create_vm_snapshot(vm_id: str, snapshot_data: SnapshotCreate):
     conn = _require_conn()
     dom = conn.lookupByUUIDString(vm_id)
     snap_xml = f"<domainsnapshot><name>{snapshot_data.name}</name><description>{snapshot_data.description or ''}</description></domainsnapshot>"
+    import xml.etree.ElementTree as ET
     try:
         snap = dom.snapshotCreateXML(snap_xml, 0)
-        info = snap.getInfo()
-        return Snapshot(id=snap.getName(), name=snap.getName(), description=snapshot_data.description, created=datetime.fromtimestamp(info[1]), xml=snap.getXMLDesc())
+        xml = snap.getXMLDesc()
+        tree = ET.fromstring(xml)
+        ctime = tree.findtext("creationTime")
+        created = datetime.fromtimestamp(int(ctime)) if ctime else datetime.now()
+        return Snapshot(
+            id=snap.getName(),
+            name=snap.getName(),
+            description=snapshot_data.description,
+            created=created,
+            xml=xml,
+        )
     except libvirt.libvirtError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
