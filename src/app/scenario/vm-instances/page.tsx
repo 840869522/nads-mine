@@ -28,13 +28,14 @@ import {
     Stop as StopIcon,
     Pause as PauseIcon,
     RestartAlt as ResetIcon,
+    PowerSettingsNew as ForceOffIcon,
     Visibility as ConsoleIcon,
     DesktopWindows as VncIcon,
     Camera as SnapshotIcon,
     KeyboardArrowDown as ArrowDownIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 
 import OverviewPanel from "@/components/vm/OverviewPanel";
 import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
@@ -175,6 +176,7 @@ export default function VmPage() {
             // 动作触发后强制一段时间内快速轮询
             forceRefreshUntil.current = Date.now() + 20_000;
             await mutate();
+            await globalMutate(`/api/vms/${current.id}`);
         } catch (e: any) {
             alert(e.message || "Operation failed");
         } finally {
@@ -304,6 +306,14 @@ export default function VmPage() {
                                 >
                                     Reboot
                                 </Button>
+                                <Button
+                                    size="small"
+                                    startIcon={<ForceOffIcon />}
+                                    disabled={actionLoading}
+                                    onClick={() => handleLifecycle("force-off")}
+                                >
+                                    Force Off
+                                </Button>
                             </>
                         ) : (
                             <Button
@@ -313,6 +323,16 @@ export default function VmPage() {
                                 onClick={() => handleLifecycle(current.state === "paused" ? "resume" : "start")}
                             >
                                 {current.state === "paused" ? "Resume" : "Start"}
+                            </Button>
+                        )}
+                        {current.state !== "shutoff" && current.state !== "running" && (
+                            <Button
+                                size="small"
+                                startIcon={<ForceOffIcon />}
+                                disabled={actionLoading}
+                                onClick={() => handleLifecycle("force-off")}
+                            >
+                                Force Off
                             </Button>
                         )}
 
