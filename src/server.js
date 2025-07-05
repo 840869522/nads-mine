@@ -46,7 +46,7 @@ app.prepare().then(() => {
     // pythonExecutable is already 'python3' if we are in this block.
     // Now, construct the path to python3 *inside* the .venv
     pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
-    const scriptToRun = 'main.py'; // The script to run, relative to the new CWD
+    const scriptToRun = 'main_cli.py'; // The script to run, relative to the new CWD
 
     console.log(`[NodeJS] Attempting to start FastAPI server using venv Python.`);
     console.log(`[NodeJS Debug] Python executable (from .venv): ${pythonExecutable}`);

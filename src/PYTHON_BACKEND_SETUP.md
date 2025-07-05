@@ -118,8 +118,8 @@
 Python FastAPI 后端由主 Node.js 服务器 (`src/server.js`) 在您启动 Node.js 应用时 (例如，通过 `npm start` 或 `yarn start` 从项目根目录) 自动作为子进程启动。
 当在 Linux/WSL 环境下运行时，`server.js` 会：
 1.  定位到项目根目录下的 `.venv/bin/python3` 解释器。
-2.  使用此解释器执行本目录下的 `main.py` 脚本 (即 `PROJECT_ROOT/.venv/bin/python3 main.py`)。
-3.  `main.py` 内部通过 `uvicorn.run()` 启动 FastAPI 服务。
+2.  使用此解释器执行本目录下的 `main_cli.py` 脚本 (即 `PROJECT_ROOT/.venv/bin/python3 main_cli.py`)。
+3.  `main_cli.py` 内部通过 `uvicorn.run()` 启动 FastAPI 服务。
 
 Node.js 服务器将会：
 *   通过上述方式启动 FastAPI/Uvicorn 服务，该服务将监听端口 3010 (或由 `PYTHON_API_PORT` 环境变量配置的端口)。
@@ -129,8 +129,8 @@ Node.js 服务器将会：
 如果您想单独测试 Python 后端（不通过 Node.js 代理），请确保您已激活项目根目录的 `.venv` 虚拟环境，然后从项目根目录运行：
 ```bash
 # 确保你在 src 目录的父目录下，或者调整路径
-python src/main.py
-# 或者 python3 src/main.py
+python src/main_cli.py
+# 或者 python3 src/main_cli.py
 ```
 这将直接在 `0.0.0.3010` (或 `PYTHON_API_PORT` 指定的端口) 上启动 FastAPI 服务。
 
@@ -142,7 +142,7 @@ python src/main.py
     *   如果坚持在特定虚拟环境下运行 Python 脚本，您需要在 `server.js` 中指定虚拟环境内 Python解释器的绝对路径，或者在启动 `server.js` 前确保该虚拟环境已被激活，并且其 `python` 解释器是默认的。
 
 *   **Python 模块未找到 (例如 `No module named 'fastapi'` 或 `No module named 'uvicorn'`)**:
-    *   这表示 `src/requirements.txt` 中的依赖项没有安装到 `server.js` 调用 `python src/main.py` 时所使用的 Python 环境中。
+    *   这表示 `src/requirements.txt` 中的依赖项没有安装到 `server.js` 调用 `python src/main_cli.py` 时所使用的 Python 环境中。
     *   请返回 “安装 Python 依赖项” 部分，确保在正确的 Python 环境中执行了 `pip install -r src/requirements.txt`。
 
 *   **代理错误**:
