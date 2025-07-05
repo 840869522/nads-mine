@@ -14,6 +14,8 @@ import {
     InputAdornment,
     Paper,
     LinearProgress,
+    Backdrop,
+    CircularProgress,
     Skeleton,
     useTheme,
 } from "@mui/material";
@@ -228,12 +230,7 @@ export default function VmPage() {
                         position: "relative",
                     }}
                 >
-                    {/* 细线进度条：仅后台刷新时显示 */}
-                    {isValidating && (
-                        <LinearProgress
-                            sx={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 2 }}
-                        />
-                    )}
+                    {/* 进度条移动至按钮区域 */}
 
                     <DataGrid
                         rows={filteredRows}
@@ -274,7 +271,10 @@ export default function VmPage() {
                     }}
                 >
                     {/* --- Action Bar --- */}
-                    <Box sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1, position: 'relative' }}>
+                        {actionLoading && (
+                            <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 }} />
+                        )}
                         {stateIcon(current.state)}
                         <Typography sx={{ mr: 2 }}>{current.name}</Typography>
 
@@ -380,6 +380,9 @@ export default function VmPage() {
                     VNC / SPICE 控制台
                 </MenuItem>
             </Menu>
+            <Backdrop open={actionLoading} sx={{ zIndex: theme.zIndex.modal + 1 }}>
+                <CircularProgress color="inherit" />
+            </Backdrop>
         </Box>
     );
 }

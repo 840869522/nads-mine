@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4
 import os
+import time
 import libvirt
 import guestfs
 from contextlib import asynccontextmanager
@@ -83,6 +84,7 @@ class LifecycleActionResponse(BaseModel):
     message: str
     vm_id: str
     action: str
+    state: str
 
 class Snapshot(BaseModel):
     id: str
@@ -242,6 +244,18 @@ def fetch_vm_images() -> List[VmImage]:
             )
     return images
 
+# 等待虚拟机达到指定状态
+def _wait_for_state(dom, target_code: int, timeout: int = 30) -> bool:
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if dom.info()[0] == target_code:
+                return True
+        except libvirt.libvirtError:
+            pass
+        time.sleep(1)
+    return False
+
 # ---------------- API Endpoints ----------------
 @app.get("/api/vms", response_model=List[VmInstance])
 def list_vms():
@@ -297,21 +311,34 @@ def manage_vm_lifecycle(vm_id: str, action: str = Path(...)):
     try:
         if action == "start":
             dom.create()
+            target = libvirt.VIR_DOMAIN_RUNNING
         elif action == "pause":
             dom.suspend()
+            target = libvirt.VIR_DOMAIN_PAUSED
         elif action == "resume":
             dom.resume()
+            target = libvirt.VIR_DOMAIN_RUNNING
         elif action == "shutdown":
             dom.shutdown()
+            target = libvirt.VIR_DOMAIN_SHUTOFF
         elif action == "reboot":
             dom.reboot()
+            target = libvirt.VIR_DOMAIN_RUNNING
         elif action == "force-off":
             dom.destroy()
+            target = libvirt.VIR_DOMAIN_SHUTOFF
         else:
             raise HTTPException(status_code=400, detail="未知操作")
     except libvirt.libvirtError as e:
         raise HTTPException(status_code=500, detail=str(e))
-    return LifecycleActionResponse(message="ok", vm_id=vm_id, action=action)
+
+    _wait_for_state(dom, target)
+    state_map = {
+        libvirt.VIR_DOMAIN_RUNNING: "running",
+        libvirt.VIR_DOMAIN_PAUSED: "paused",
+        libvirt.VIR_DOMAIN_SHUTOFF: "shutoff",
+    }
+    return LifecycleActionResponse(message="ok", vm_id=vm_id, action=action, state=state_map.get(target, "unknown"))
 
 @app.get("/api/vms/{vm_id}/snapshots", response_model=List[Snapshot])
 def list_vm_snapshots(vm_id: str):

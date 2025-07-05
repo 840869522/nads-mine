@@ -9,7 +9,6 @@ import {
   Typography,
   Paper,
   Skeleton,
-  LinearProgress,
 } from "@mui/material";
 import {
   Dns,
@@ -141,7 +140,6 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     data,
     error,
     isLoading,
-    isValidating, // 后台刷新中
   } = useSWR<OverviewData>(`/api/vms/${vmId}`, fetcher, {
     refreshInterval: 5000, // 5 s 轮询
     keepPreviousData: true,
@@ -162,12 +160,6 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
 
   return (
       <Stack spacing={2.5} sx={{ p: 0.5, position: "relative" }}>
-        {/* 细线进度条：后台刷新时出现，不影响内容 */}
-        {isValidating && (
-            <LinearProgress
-                sx={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 2 }}
-            />
-        )}
 
         <Grid container spacing={2.5}>
           {/* ---------- 左侧基本信息 ---------- */}
