@@ -182,7 +182,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
 
         <Grid container spacing={2.5}>
           {/* ---------- 左侧基本信息 ---------- */}
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Typography
                   variant="h6"
@@ -245,7 +245,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
           </Grid>
 
           {/* ---------- 右侧实时用量 ---------- */}
-          <Grid item xs={12} md={7}>
+          <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Typography
                   variant="h6"

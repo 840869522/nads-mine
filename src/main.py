@@ -486,7 +486,8 @@ def get_vm_realtime_metrics(vm_id: str):
     info = dom.info()
     vcpu_count = info[3]
 
-    cpu_time = dom.getCPUStats(False)[0]["cpu_time"]
+    # cgroup v2 环境下不支持 per-vCPU 统计，需使用汇总值
+    cpu_time = dom.getCPUStats(True)[0]["cpu_time"]
 
     mem_stats = dom.memoryStats()
     rss_kb = mem_stats.get("rss", 0)
