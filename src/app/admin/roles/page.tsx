@@ -29,6 +29,7 @@ import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
 import { apiClientWithToken } from '@/utils/axios';
+import { json } from 'stream/consumers';
 
 
 interface MockRole {
@@ -49,6 +50,7 @@ const RoleManagementPage: React.FC = () => {
     const [order, setOrder] = useState<Order>('asc');
     const [orderBy, setOrderBy] = useState<SortableRoleKeys>('c_id');
     const [page, setPage] = useState<number>(1);
+    const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
 
@@ -61,7 +63,7 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        apiClientWithToken.post('/api/role/all',JSON.stringify({page:1,pagesize:10}))
+        apiClientWithToken.post('/api/support/role/all',JSON.stringify({page:1,pagesize:10}))
             .then((res)=>{
                 if (res.data.code === 200){
                     setRoles(res.data.data.data);
@@ -88,7 +90,7 @@ const RoleManagementPage: React.FC = () => {
 
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
         if (isNew) {
-            const res = await apiClientWithToken.post('/api/role/new', JSON.stringify({
+            const res = await apiClientWithToken.post('/api/support/role/new', JSON.stringify({
                     nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole,
                     nameDisplay: formData.nameDisplay,
                     description: formData.description,
@@ -104,13 +106,11 @@ const RoleManagementPage: React.FC = () => {
             }
             
         } else if (editingRole) {
-            await fetch('/api/roles', {
-                method: 'PUT',
-                body: JSON.stringify({
+            const res = await apiClientWithToken.post('/api/support/role/update',JSON.stringify({
                     id: editingRole.c_id,
                     nameKey: editingRole.c_name,
                 })
-            });
+            );
             setRoles(prev => prev.map(r =>
                 r.c_id === editingRole.c_id
                     ? { ...r, nameDisplay: formData.nameDisplay, description: formData.description, permissions: formData.permissions }
@@ -122,8 +122,8 @@ const RoleManagementPage: React.FC = () => {
 
 
     const handleDeleteRoleClick = (role: MockRole) => {
-        if (role.nameKey === UserRole.ADMIN || role.nameKey === UserRole.STUDENT) {
-            setFeedbackMessage({ type: 'error', text: `核心角色 "${role.nameDisplay}" 不能被删除。` });
+        if (role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT) {
+            setFeedbackMessage({ type: 'error', text: `核心角色 "${role.c_id}" 不能被删除。` });
             return;
         }
         setRoleToDelete(role);
@@ -133,8 +133,9 @@ const RoleManagementPage: React.FC = () => {
 
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await fetch(`/api/roles?id=${roleToDelete.c_id}`, { method: 'DELETE' });
-            setRoles(prev => prev.filter(r => r.c_id !== roleToDelete.c_id));
+            await apiClientWithToken.post(`/api/support/role/delete`, JSON.stringify({id:roleToDelete.c_id}));
+            const res = await apiClientWithToken.post("/api/support/role/all",JSON.stringify({page:page,pagesize:rowsPerPage}));
+            setRoles(res.data.data.data);
             setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
         }
         setIsConfirmDeleteOpen(false);
@@ -149,8 +150,14 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        setViewingRolePerms({ nameDisplay: role.c_name, permissions: role.permissions });
-        setIsViewPermsModalOpen(true);
+        apiClientWithToken.post("/api/support/permission/role",JSON.stringify({role_id: role.c_id })).then((res)=>{
+            if (res.data.code ===200) {
+                setViewingRolePerms({ nameDisplay: role.c_id, permissions: res.data.data });
+                setIsViewPermsModalOpen(true);
+            }
+        });
+
+        
     };
 
     const sortedRoles = useMemo(() => {

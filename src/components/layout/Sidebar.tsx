@@ -238,7 +238,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                   <AccountCircleIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="body2" fontWeight="medium">{user.user.username}</Typography>
+                  <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
                   <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
                 </Box>
               </Box>

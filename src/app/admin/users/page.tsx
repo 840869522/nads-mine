@@ -60,7 +60,7 @@ const UserManagementPage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    apiClientWithToken.post('/api/user/all', JSON.stringify({ page: page, pagesize: rowsPerPage })).then((res) => {
+    apiClientWithToken.post('/api/support/user/all', JSON.stringify({ page: page, pagesize: rowsPerPage })).then((res) => {
       if (res.data.code === 200) {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
@@ -79,7 +79,7 @@ const UserManagementPage: React.FC = () => {
   const handleSearchSubmit = async () => {
     setTableLoading(true);
     try {
-      const res = await apiClientWithToken.post("/api/user/search", JSON.stringify({
+      const res = await apiClientWithToken.post("/api/support/user/search", JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
         name: searchTerm.data
@@ -127,7 +127,7 @@ const UserManagementPage: React.FC = () => {
 
   const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
     if (isNew) {
-      await apiClientWithToken.post('/api/user/new', JSON.stringify({
+      await apiClientWithToken.post('/api/support/user/new', JSON.stringify({
         username: formData.username,
         passwordHash: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
@@ -159,7 +159,7 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      apiClientWithToken.post(`/api/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+      apiClientWithToken.post(`/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
         if (res.data.code === 200) {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
           setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });

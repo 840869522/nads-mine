@@ -28,8 +28,8 @@ export const APP_PERMISSIONS: AppPermission[] = [
   { key: 'DRILL_ACCESS', label: '访问安全演练', category: '安全使用分系统' },
 
   // Admin / Base Support System (基础支撑分系统)
-  { key: 'ADMIN_USERS_MANAGE', label: '管理用户', category: '基础支撑分系统' },
-  { key: 'ADMIN_ROLES_MANAGE', label: '管理角色与权限', category: '基础支撑分系统' },
+  { key: 'support_user', label: '管理用户', category: '基础支撑分系统' },
+  { key: 'support_role', label: '管理角色与权限', category: '基础支撑分系统' },
 ];
 
 
