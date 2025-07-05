@@ -28,27 +28,27 @@ import { USER_ROLES_CONFIG } from '@/constants';
 import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
+import { apiClientWithToken } from '@/utils/axios';
 
 
 interface MockRole {
-    id: string;
-    nameKey: UserRole;
-    nameDisplay: string;
-    description: string;
+    c_id: string;
+    c_name: string;
     permissions: string[];
 }
 
 
 
 type Order = 'asc' | 'desc';
-type SortableRoleKeys = keyof Pick<MockRole, 'nameDisplay' | 'description'> | 'permissionCount';
+type SortableRoleKeys = keyof Pick<MockRole, 'c_id' | "c_name"> | 'permissionCount';
 
 
 const RoleManagementPage: React.FC = () => {
     const [roles, setRoles] = useState<MockRole[]>([]);
+    const [count, setCount] = useState<number>(0);
     const [order, setOrder] = useState<Order>('asc');
-    const [orderBy, setOrderBy] = useState<SortableRoleKeys>('nameDisplay');
-
+    const [orderBy, setOrderBy] = useState<SortableRoleKeys>('c_id');
+    const [page, setPage] = useState<number>(1);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
 
@@ -61,9 +61,16 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        fetch('/api/roles')
-            .then(res => res.json())
-            .then(setRoles);
+        apiClientWithToken.post('/api/role/all',JSON.stringify({page:1,pagesize:10}))
+            .then((res)=>{
+                if (res.data.code === 200){
+                    setRoles(res.data.data.data);
+                    setCount(res.data.data.count);
+                }
+                else {
+                    setFeedbackMessage({type:"error", text:res.data.message});
+                }
+            });
     }, []);
 
 
@@ -81,31 +88,31 @@ const RoleManagementPage: React.FC = () => {
 
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
         if (isNew) {
-            const res = await fetch('/api/roles', {
-                method: 'POST',
-                body: JSON.stringify({
+            const res = await apiClientWithToken.post('/api/role/new', JSON.stringify({
                     nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole,
                     nameDisplay: formData.nameDisplay,
                     description: formData.description,
                     permissions: formData.permissions
                 })
-            });
-            const data = await res.json();
-            setRoles(prev => [{ id: data.id, ...formData, nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole }, ...prev]);
-            setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
+            );
+            const data = await res.data;
+            if (data.code === 200){
+                setRoles(prev => [{ id: data.id, ...formData, nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole }, ...prev]);
+                setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
+            }else{
+                setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
+            }
+            
         } else if (editingRole) {
             await fetch('/api/roles', {
                 method: 'PUT',
                 body: JSON.stringify({
-                    id: editingRole.id,
-                    nameKey: editingRole.nameKey,
-                    nameDisplay: formData.nameDisplay,
-                    description: formData.description,
-                    permissions: formData.permissions
+                    id: editingRole.c_id,
+                    nameKey: editingRole.c_name,
                 })
             });
             setRoles(prev => prev.map(r =>
-                r.id === editingRole.id
+                r.c_id === editingRole.c_id
                     ? { ...r, nameDisplay: formData.nameDisplay, description: formData.description, permissions: formData.permissions }
                     : r
             ));
@@ -126,9 +133,9 @@ const RoleManagementPage: React.FC = () => {
 
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await fetch(`/api/roles?id=${roleToDelete.id}`, { method: 'DELETE' });
-            setRoles(prev => prev.filter(r => r.id !== roleToDelete.id));
-            setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.nameDisplay}" 已删除。` });
+            await fetch(`/api/roles?id=${roleToDelete.c_id}`, { method: 'DELETE' });
+            setRoles(prev => prev.filter(r => r.c_id !== roleToDelete.c_id));
+            setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
         }
         setIsConfirmDeleteOpen(false);
         setRoleToDelete(null);
@@ -142,7 +149,7 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        setViewingRolePerms({ nameDisplay: role.nameDisplay, permissions: role.permissions });
+        setViewingRolePerms({ nameDisplay: role.c_name, permissions: role.permissions });
         setIsViewPermsModalOpen(true);
     };
 
@@ -156,8 +163,8 @@ const RoleManagementPage: React.FC = () => {
                 valA = a.permissions.length;
                 valB = b.permissions.length;
             } else {
-                valA = a[orderBy as keyof Pick<MockRole, 'nameDisplay' | 'description'>];
-                valB = b[orderBy as keyof Pick<MockRole, 'nameDisplay' | 'description'>];
+                valA = a[orderBy as keyof Pick<MockRole, 'c_id' | 'c_name'>];
+                valB = b[orderBy as keyof Pick<MockRole, 'c_id' | 'c_name'>];
             }
 
             if (typeof valA === 'number' && typeof valB === 'number') {
@@ -205,18 +212,18 @@ const RoleManagementPage: React.FC = () => {
                         <TableRow>
                             <TableCell>
                                 <TableSortLabel
-                                    active={orderBy === 'nameDisplay'}
-                                    direction={orderBy === 'nameDisplay' ? order : 'asc'}
-                                    onClick={() => handleRequestSort('nameDisplay')}
+                                    active={orderBy === 'c_id'}
+                                    direction={orderBy === 'c_id' ? order : 'asc'}
+                                    onClick={() => handleRequestSort('c_id')}
                                 >
                                     角色名称
                                 </TableSortLabel>
                             </TableCell>
                             <TableCell>
                                 <TableSortLabel
-                                    active={orderBy === 'description'}
-                                    direction={orderBy === 'description' ? order : 'asc'}
-                                    onClick={() => handleRequestSort('description')}
+                                    active={orderBy === 'c_name'}
+                                    direction={orderBy === 'c_name' ? order : 'asc'}
+                                    onClick={() => handleRequestSort('c_name')}
                                 >
                                     描述
                                 </TableSortLabel>
@@ -235,20 +242,20 @@ const RoleManagementPage: React.FC = () => {
                     </TableHead>
                     <TableBody>
                         {sortedRoles.map((role) => {
-                            const isCoreRole = role.nameKey === UserRole.ADMIN || role.nameKey === UserRole.STUDENT;
+                            const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
                             return (
-                                <TableRow key={role.id} hover>
-                                    <TableCell sx={{fontWeight: 'medium'}}>{role.nameDisplay}</TableCell>
+                                <TableRow key={role.c_id} hover>
+                                    <TableCell sx={{fontWeight: 'medium'}}>{role.c_id}</TableCell>
                                     <TableCell sx={{maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                                        <Tooltip title={role.description} placement="top-start">
-                                            <span>{role.description}</span>
+                                        <Tooltip title={role.c_id} placement="top-start">
+                                            <span>{role.c_name}</span>
                                         </Tooltip>
                                     </TableCell>
                                     <TableCell align="center">
-                                        <Tooltip title={`查看 ${role.nameDisplay} 的权限`}>
+                                        <Tooltip title={`查看 ${role.c_id} 的权限`}>
                                             <Chip
                                                 icon={<VisibilityIcon fontSize="small" />}
-                                                label={role.permissions.length}
+                                                // label={role.permissions.length}
                                                 size="small"
                                                 variant="outlined"
                                                 onClick={() => handleViewPermissions(role)}
@@ -257,12 +264,12 @@ const RoleManagementPage: React.FC = () => {
                                         </Tooltip>
                                     </TableCell>
                                     <TableCell align="center">
-                                        <Tooltip title={isCoreRole ? `编辑核心角色 "${role.nameDisplay}"` : `编辑角色 "${role.nameDisplay}"`}>
+                                        <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
                                             <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
                                                 <EditIcon />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.nameDisplay}"`}>
+                                        <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
                       <span> {/* Span needed for disabled IconButton tooltip */}
                           <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
                           <DeleteIcon />

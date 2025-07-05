@@ -1,5 +1,7 @@
 import axios from "axios";
 import { getCookie, deleteCookie } from "./cookie";
+import {toast} from "react-toastify"
+
 
 /**
  * 定义带有 token和拦截器的axios 请求客户端
@@ -42,8 +44,15 @@ apiClientWithToken.interceptors.request.use(
 apiClientWithToken.interceptors.response.use(
     function (res) {
         if (res.data.code === 420){
+            toast.error(res.data.message,{
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+            });
             deleteCookie("_auth");
             localStorage.removeItem('droneSimUser');
+            setTimeout(()=>{},200);
             window.location.href = "/login"
         }
         return res

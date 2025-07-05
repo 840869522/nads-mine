@@ -31,38 +31,66 @@
      * 
      */
 
-    Route::prefix("user")->group(function() {
-        Route::post("/login",[UserController::class,"login"]);
-        Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
-        Route::post("/search",[UserController::class,"searchUser"])->middleware("jwtcheck:get-all-users");
-        Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
-        Route::post("/new",[UserController::class,"insertNewUser"]);
-        Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
-        Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
-    });
+    /**
+     * 定义基础分系统路由
+     */
+    Route::prefix("support")->group(function() {
+        Route::prefix("user")->group(function() {
+            Route::post("/login",[UserController::class,"login"]);
+            Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
+            Route::post("/search",[UserController::class,"searchUser"])->middleware("jwtcheck:get-all-users");
+            Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
+            Route::post("/new",[UserController::class,"insertNewUser"]);
+            Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
+            Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
+        });
+    
+        Route::prefix("role")->group(function(){
+            Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
+            Route::post("/id",[RoleController::class,"getRoleById"]);
+            Route::post("/search",[RoleController::class,"searchRole"])->middleware("jwtcheck:get-all-roles");
+            Route::post("/new",[RoleController::class,"newRole"])->middleware("jwtcheck:edit-roles");
+            Route::post("/update",[RoleController::class, "updateRole"])->middleware("jwtcheck:edit-roles");
+            Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
+            Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
+            Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
+        });
+    
+        Route::prefix('permission')->group(function () {
+            Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
+            Route::post('/id', [PermissionController::class, 'getPermissionById']);
+            Route::post("/search",[PermissionController::class,"searchPermission"])->middleware("jwtcheck:get-all-permissions");
+            Route::post("/role",[PermissionController::class,"getPermissionsByRoleId"])->middleware("jwtcheck:get-all-permissions");
+            Route::post('/new', [PermissionController::class, 'newPermission'])->middleware('jwtcheck:edit-permissions');
+            Route::post('/update', [PermissionController::class, 'updatePermission'])->middleware('jwtcheck:edit-permissions');
+            Route::post('/delete', [PermissionController::class, 'deletePermission'])->middleware('jwtcheck:edit-permissions');
+            Route::post('/grant', [PermissionController::class, 'grantPermission2Role'])->middleware('jwtcheck:edit-permissions');
+            Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole'])->middleware('jwtcheck:edit-permissions');
+        });
+    })->middleware("jwtcheck:support");
 
-    Route::prefix("role")->group(function(){
-        Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
-        Route::post("/id",[RoleController::class,"getRoleById"]);
-        Route::post("/search",[RoleController::class,"searchRole"])->middleware("jwtcheck:get-all-roles");
-        Route::post("/new",[RoleController::class,"newRole"])->middleware("jwtcheck:edit-roles");
-        Route::post("/update",[RoleController::class, "updateRole"])->middleware("jwtcheck:edit-roles");
-        Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
-        Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
-        Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
-    });
 
-    Route::prefix('permission')->group(function () {
-        Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
-        Route::post('/id', [PermissionController::class, 'getPermissionById']);
-        Route::post("/search",[PermissionController::class,"searchPermission"])->middleware("jwtcheck:get-all-permissions");
-        Route::post("/role",[PermissionController::class,"getPermissionsByRoleId"])->middleware("jwtcheck:get-all-permissions");
-        Route::post('/new', [PermissionController::class, 'newPermission'])->middleware('jwtcheck:edit-permissions');
-        Route::post('/update', [PermissionController::class, 'updatePermission'])->middleware('jwtcheck:edit-permissions');
-        Route::post('/delete', [PermissionController::class, 'deletePermission'])->middleware('jwtcheck:edit-permissions');
-        Route::post('/grant', [PermissionController::class, 'grantPermission2Role'])->middleware('jwtcheck:edit-permissions');
-        Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole'])->middleware('jwtcheck:edit-permissions');
-    });
+    /**
+     * 定义安全实验分系统路由
+     */
+    Route::prefix("ad")->group(function() {
+
+    })->middleware("jwtcheck:ad");
+
+    /**
+     * 定义人员测试分系统路由
+     */
+    Route::prefix("study")->group(function () {
+
+    })->middleware("jwtcheck:study");
+
+    /**
+     * 定义环境构建分系统
+     */
+    Route::prefix("scene")->group(function () {
+
+    })->middleware("jwtcheck:scene");
+    
 
     Route::prefix('scenarios')->group(function () {
         Route::get('/', [ScenarioController::class, 'index']);

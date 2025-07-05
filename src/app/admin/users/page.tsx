@@ -77,8 +77,6 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleSearchSubmit = async () => {
-    if (!searchTerm.data.trim()) return;
-
     setTableLoading(true);
     try {
       const res = await apiClientWithToken.post("/api/user/search", JSON.stringify({
@@ -229,7 +227,7 @@ const UserManagementPage: React.FC = () => {
             variant="contained"
             size="small"
             onClick={handleSearchSubmit}
-            disabled={!searchTerm.data.trim() || tableLaoding}
+            disabled={ tableLaoding}
             sx={{ ml: 1, minWidth: 80 }}
           >
             搜索
@@ -257,7 +255,7 @@ const UserManagementPage: React.FC = () => {
                 { id: 'c_last_ogin', label: '最后登录日期' },
               ].map((headCell) => (
                 <TableCell
-                  key={headCell.c_username}
+                  key={headCell.id}
                   sortDirection={orderBy === headCell.id ? order : false}
                 >
                   <TableSortLabel
@@ -330,7 +328,7 @@ const UserManagementPage: React.FC = () => {
           component="div"
           count={count}
           rowsPerPage={rowsPerPage}
-          page={page}
+          page={page-1}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           labelRowsPerPage="每页行数:"
