@@ -7,6 +7,7 @@ import os
 import time
 import libvirt
 import guestfs
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
@@ -256,6 +257,41 @@ def _wait_for_state(dom, target_code: int, timeout: int = 30) -> bool:
         time.sleep(1)
     return False
 
+# 获取虚拟机在给定时间间隔内的实时统计
+def _sample_stats(dom, iface: str | None, disk: str | None):
+    cpu = dom.getCPUStats(False)[0]["cpu_time"]  # ns
+    mem = dom.memoryStats().get("rss", 0) * 1024  # B
+    rx = tx = rd = wr = 0
+    if iface:
+        nstat = dom.interfaceStats(iface)
+        rx, tx = nstat[0], nstat[4]
+    if disk:
+        dstat = dom.blockStats(disk)
+        rd, wr = dstat[1], dstat[3]
+    return cpu, mem, rx, tx, rd, wr
+
+
+def _realtime_metrics(dom, interval: float = 1.0):
+    xml = ET.fromstring(dom.XMLDesc())
+    iface_elem = xml.find(".//devices/interface/target")
+    disk_elem = xml.find(".//devices/disk[@device='disk']/target")
+    iface = iface_elem.get("dev") if iface_elem is not None else None
+    disk = disk_elem.get("dev") if disk_elem is not None else None
+
+    c0, m0, rx0, tx0, rd0, wr0 = _sample_stats(dom, iface, disk)
+    time.sleep(interval)
+    c1, m1, rx1, tx1, rd1, wr1 = _sample_stats(dom, iface, disk)
+
+    vcpus = dom.maxVcpus() or 1
+    cpu_pct = 100 * (c1 - c0) / (interval * 1e9 * vcpus)
+    mem_mb = m1 / (1024 ** 2)
+    return {
+        "cpu_pct": cpu_pct,
+        "mem_usage_mb": mem_mb,
+        "rx_tx_mbps": ((rx1 - rx0) + (tx1 - tx0)) * 8 / interval / 1024 / 1024,
+        "disk_mbps": (rd1 - rd0 + wr1 - wr0) / interval / 1024 / 1024,
+    }
+
 # ---------------- API Endpoints ----------------
 @app.get("/api/vms", response_model=List[VmInstance])
 def list_vms():
@@ -278,9 +314,14 @@ def get_vm_info(vm_id: str):
     else:
         status = "shutoff"
     total_mb = int(info[1] / 1024)
-    used_mb = int(info[2] / 1024)
-    vram = VRAMInfo(total_mb=total_mb, usage_mb=used_mb, usage_percent=used_mb / total_mb * 100)
-    vcpu = VCPUInfo(count=info[3], usage_percent=0.0)
+    metrics = _realtime_metrics(dom)
+    used_mb = int(metrics["mem_usage_mb"])
+    vram = VRAMInfo(
+        total_mb=total_mb,
+        usage_mb=used_mb,
+        usage_percent=used_mb / total_mb * 100 if total_mb else 0.0,
+    )
+    vcpu = VCPUInfo(count=info[3], usage_percent=metrics["cpu_pct"])
     ip = None
     try:
         ifaces = dom.interfaceAddresses(libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT, 0)
@@ -290,9 +331,10 @@ def get_vm_info(vm_id: str):
                 break
     except libvirt.libvirtError:
         pass
+    uptime_s = int(info[4] / 1e9) if info[3] else 0
     return OverviewData(
         status=status,
-        uptime="N/A",
+        uptime=str(uptime_s),
         hostNode=conn.getHostname(),
         pool="default",
         vcpu=vcpu,
@@ -300,8 +342,8 @@ def get_vm_info(vm_id: str):
         bootSource="disk",
         uuid=dom.UUIDString(),
         ipAddress=ip or "",
-        disks_rw_mbps=0.0,
-        network_throughput_mbps=0.0,
+        disks_rw_mbps=metrics["disk_mbps"],
+        network_throughput_mbps=metrics["rx_tx_mbps"],
     )
 
 @app.post("/api/vms/{vm_id}/actions/{action}", response_model=LifecycleActionResponse)
