@@ -15,8 +15,8 @@
 
         public static function getAllUser(int $page = 1,int $pagesize = 10):array {
             $offset = ($page - 1 ) * $pagesize;
-            $sql = "SELECT username,email,is_login,last_login,create_at,update_at FROM `c_users`  LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(username) AS count FROM `c_users`";
+            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users`";
             try {
                 $user = db::select($sql, [$pagesize, $offset]);
                 $count = db::select($sql_count);
@@ -34,8 +34,8 @@
         }
 
         public static function searchUserByName(string $name, int $page=1, int $pagesize=10):array {
-            $sql = "SELECT username,email,is_login,last_login,create_at,update_at FROM `c_users` WHERE `username` LIKE ? LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(username) AS count FROM `c_users` WHERE `username` LIKE ?";
+            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `username` LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%'.$name.'%',$pagesize, $offset]);
@@ -54,7 +54,7 @@
         }
 
         public static function getUserByName(string $name) : array {
-            $sql = "SELECT * FROM `c_users` WHERE username = ?";
+            $sql = "SELECT * FROM `c_users` WHERE c_username = ?";
             try {
                 $res = db::selectOne($sql,[$name]);
                 return [
@@ -72,7 +72,7 @@
         public static function getUserPrimissions (string $id) : array {
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT crp.permission_id FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.role_id = crp.role_id  WHERE cur.user_id = ?" ;
+                $sql = "SELECT DISTINCT crp.c_permission_id FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.c_role_id = crp.c_role_id  WHERE cur.c_user_id = ?" ;
                 $res = db::select($sql,[$id]);
                 db::commit();
                 return [
@@ -88,7 +88,7 @@
         }
 
         public static function getUserById(string $id) :array {
-            $sql = "SELECT * FROM `c_users` WHERE username = ?";
+            $sql = "SELECT * FROM `c_users` WHERE c_username = ?";
             try {
                 $res = db::selectOne($sql,[$id,$id]);
                 return [
@@ -105,7 +105,7 @@
 
         public static function insertNewUser(array $data) :array {
             try {
-                $sql = "INSERT INTO `c_users`(username, password,email,create_at,update_at) VALUES(?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(c_username,c_password,c_email,c_create_at,c_update_at) VALUES(?,?,?,NOW(),NOW())";
                 db::beginTransaction();
                 $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
@@ -128,7 +128,7 @@
 
 
         public static function updateUserById(string $id, array $data) :array {
-            $sql = "UPDATE `c_users` SET is_login = ? ,email = ?,password = ?, update_at = NOW() WHERE username = ?";
+            $sql = "UPDATE `c_users` SET c_is_login = ?,c_email = ?,c_password = ?, c_update_at = NOW() WHERE c_username = ?";
             try {
                 db::beginTransaction();
                 $res = db::update($sql,[$data["is_login"],$data['email'],$data['password'],$id]);
@@ -152,7 +152,7 @@
 
 
         public static function deleteUserById (string $id) :array {
-            $sql = "DELETE * FROM `c_users` WHERE username = ?";
+            $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
             $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
             try {
                 if (!$id)
@@ -182,7 +182,7 @@
         }
 
         public static function updateUserLastLogin(string $id) {
-            $sql = "UPDATE c_users SET last_login = NOW() WHERE username = ?";
+            $sql = "UPDATE c_users SET c_last_login = NOW() WHERE c_username = ?";
             db::update($sql,[$id]);
         }
 

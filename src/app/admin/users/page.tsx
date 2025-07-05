@@ -100,29 +100,24 @@ const UserManagementPage: React.FC = () => {
 
   const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
     if (isNew) {
-      const id = crypto.randomUUID();
       await apiClientWithToken.post('/api/user/new', JSON.stringify({
-        id,
         username: formData.username,
-        passwordHash: formData.password,
-        roleId: formData.role,
+        passwordHash: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
-        status: formData.status
+        is_login: formData.status == "active" ? 1 :0
       })
       );
-      setUsers(prev => [{ id, username: formData.username!, role: formData.role!, email: formData.email!, is_login: formData.status ==  'active' ? 1 :0  , createdAt: new Date().toISOString() }, ...prev]);
+      setUsers(prev => [{ id, username: formData.username!, email: formData.email!, is_login: formData.status ==  'active' ? 1 :0   }, ...prev]);
       setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 添加成功。` });
     } else if (editingUser) {
       await apiClientWithToken.post('/api/user/update', JSON.stringify({
-        id: editingUser.id,
-        username: formData.username,
-        passwordHash: formData.password,
-        roleId: formData.role,
+        id: editingUser.username,
+        passwordHash: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
-        status: formData.status
+        is_login: formData.status == "active" ? 1 :0
       }));
       setUsers(prev => prev.map(u =>
-        u.id === editingUser.id ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+        u.username === editingUser.username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
       ));
       setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
     }
@@ -137,9 +132,12 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      fetch(`/api/users?id=${userToDelete.id}`, { method: 'DELETE' }).then(() => {
-        setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
-        setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.username}" 已删除。` });
+      apiClientWithToken.post(`/api/user/delete`, JSON.stringify({id:userToDelete.username})).then((res) => {
+        if (res.data.code === 200){
+          setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+          setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.username}" 已删除。` });
+        }else
+          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.username}" 已删除。` })
       });
     }
     setIsConfirmDeleteOpen(false);

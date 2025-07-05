@@ -123,8 +123,8 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            $permissions = UserModel::getUserPrimissions($user->username);
-            $role = RoleModel::getUserRole($user->username);
+            $permissions = UserModel::getUserPrimissions($user->c_username);
+            $role = RoleModel::getUserRole($user->c_username);
             if ($permissions['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
@@ -132,7 +132,7 @@
                 ]);
             }
             $jwtRes = JWTControll::encodeJWT([
-                "id" => $user->username,
+                "id" => $user->c_username,
                 "permission" => array_map(function ($item) {
                     return $item->permission_id ;
                 }, $permissions["data"])
@@ -143,7 +143,7 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            UserModel::updateUserLastLogin($user->username);
+            UserModel::updateUserLastLogin($user->c_username);
             $user->password = "";
             return response()->json([
                 "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
