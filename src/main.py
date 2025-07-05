@@ -12,11 +12,14 @@ import re
 import libvirt
 import guestfs
 import requests
-from virtinst import Guest
-from virtinst.device.disk import DeviceDisk
-from virtinst.device.interface import DeviceInterface
-from virtinst.device.cloudinit import DeviceCloudInit
-from virtinst.device.graphics import DeviceGraphics
+import subprocess
+import tempfile
+import shutil
+# from virtinst import Guest                     # (old)
+# from virtinst.device.disk import DeviceDisk    # (old)
+# from virtinst.device.interface import DeviceInterface  # (old)
+# from virtinst.device.cloudinit import DeviceCloudInit  # (old)
+# from virtinst.device.graphics import DeviceGraphics    # (old)
 from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
@@ -286,6 +289,7 @@ def _wait_for_state(dom, target_code: int, timeout: int = 30) -> bool:
 # ----- VM Creation Helpers -----
 POOL_DIR = "/var/lib/libvirt/images"
 VIRTIO_ISO = "/usr/share/virtio-win/virtio-win.iso"
+QEMU_IMG = "qemu-img"
 
 def detect_os(img_path: str) -> str:
     g = guestfs.GuestFS(python_return_dict=True)
@@ -340,82 +344,125 @@ def list_vm_images():
 
 @app.post("/api/vms/create")
 def create_vm(req: VMRequest):
-    vm_name = req.vm_name or f"vm-{uuid.uuid4().hex[:8]}"
-    mac = gen_mac(vm_name)
-
+    vm = req.vm_name or f"vm-{uuid.uuid4().hex[:8]}"
+    mac = gen_mac(vm)
     guest_os = detect_os(req.base_image)
-    conn = _require_conn()
-    g = Guest(conn)
-    g.name, g.memory, g.vcpus = vm_name, req.memory, req.vcpus
-    g.os_type = "hvm"
-    g.os_variant = "ubuntu24.04" if guest_os == "linux" else "win10"
 
-    overlay = f"{POOL_DIR}/{vm_name}.qcow2"
-    d = DeviceDisk(g)
-    d.source_file = overlay
-    d.backing_store = req.base_image
-    d.driver_type = "qcow2"
-    d.size = req.disk_gb
-    d.bus, d.create = "virtio", True
-    g.devices.append(d)
+    # 1. 创建差分盘
+    overlay = f"{POOL_DIR}/{vm}.qcow2"
+    subprocess.run([
+        QEMU_IMG,
+        "create",
+        "-f",
+        "qcow2",
+        "-F",
+        "qcow2",
+        "-o",
+        f"backing_file={req.base_image}",
+        overlay,
+        f"{req.disk_gb}G",
+    ], check=True)
 
-    iface = DeviceInterface(g)
-    iface.type = DeviceInterface.TYPE_USER
-    iface.hostfwd = [
-        "tcp::2222-:22",
-        "tcp::33389-:3389",
-    ]
-    iface.mac_address = mac
-    g.devices.append(iface)
+    # 2. 生成 Cloud-Init 文件
+    tmpdir = tempfile.mkdtemp(prefix=f"{vm}-ci-")
+    try:
+        if guest_os == "linux":
+            udata = textwrap.dedent(
+                f"""\
+                #cloud-config
+                hostname: {vm}
+                users:
+                  - default
+                  - name: ubuntu
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    ssh_authorized_keys:
+                      - {req.ssh_key or ''}
+                """
+            )
+        else:
+            if not req.admin_password:
+                raise HTTPException(422, "Windows VM requires admin_password")
+            udata = textwrap.dedent(
+                f"""\
+                #cloud-config
+                password: {req.admin_password}
+                username: Administrator
+                runcmd:
+                  - powershell -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
+                  - powershell -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
+                """
+            )
 
-    if guest_os == "linux":
-        user_data = textwrap.dedent(f"""\
-            #cloud-config
-            hostname: {vm_name}
-            users:
-              - default
-              - name: ubuntu
-                sudo: ALL=(ALL) NOPASSWD:ALL
-                ssh_authorized_keys:
-                  - {req.ssh_key or ''}
-        """)
-    else:
-        if not req.admin_password:
-            raise HTTPException(422, "Windows VM requires admin_password")
-        user_data = textwrap.dedent(f"""\
-            #cloud-config
-            password: {req.admin_password}
-            username: Administrator
-            runcmd:
-              - powershell -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
-              - powershell -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
-        """)
+        with open(os.path.join(tmpdir, "user-data"), "w") as f:
+            f.write(udata)
+        with open(os.path.join(tmpdir, "meta-data"), "w") as f:
+            f.write(f"instance-id: {vm}\nlocal-hostname: {vm}\n")
+        open(os.path.join(tmpdir, "network-config"), "w").close()
 
-    ci = DeviceCloudInit(g)
-    ci.user_data = user_data
-    ci.disable = True
-    g.devices.append(ci)
+        ci_param = ",".join(
+            [
+                f"user-data={os.path.join(tmpdir, 'user-data')}",
+                f"meta-data={os.path.join(tmpdir, 'meta-data')}",
+                "network-config=" + os.path.join(tmpdir, "network-config"),
+                "disable=on",
+            ]
+        )
 
-    if guest_os == "windows":
-        drv = DeviceDisk(g)
-        drv.device = DeviceDisk.DEVICE_CDROM
-        drv.read_only = True
-        drv.source_file = VIRTIO_ISO
-        drv.bus = "sata"
-        g.devices.append(drv)
+        disk_root = (
+            f"path={overlay},format=qcow2,bus=virtio,backing_file={req.base_image}"
+        )
 
-    vnc = DeviceGraphics(g)
-    vnc.type, vnc.port, vnc.listen = "vnc", -1, "0.0.0.0"
-    g.devices.append(vnc)
+        network_arg = (
+            "user,model=virtio,mac="
+            f"{mac},hostfwd=tcp::2222-:22,hostfwd=tcp::33389-:3389"
+        )
 
-    dom_xml = g.get_xml_config()
-    dom = conn.defineXML(dom_xml)
-    dom.create()
+        cmd = [
+            "virt-install",
+            "--import",
+            "--quiet",
+            "--name",
+            vm,
+            "--memory",
+            str(req.memory),
+            "--vcpus",
+            str(req.vcpus),
+            "--os-variant",
+            "ubuntu24.04" if guest_os == "linux" else "win10",
+            "--graphics",
+            "vnc,listen=0.0.0.0",
+            "--noautoconsole",
+            "--wait",
+            "0",
+            "--disk",
+            disk_root,
+            "--network",
+            network_arg,
+            "--cloud-init",
+            ci_param,
+        ]
+
+        if guest_os == "windows":
+            cmd += [
+                "--disk",
+                f"path={VIRTIO_ISO},device=cdrom,readonly=on,bus=sata",
+            ]
+
+        subprocess.run(cmd, check=True)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # 3. 查询 VNC 端口
+    lv = libvirt.open("qemu:///system")
+    dom = lv.lookupByName(vm)
     vnc_port = parse_vnc_port(dom.XMLDesc()) or 5900
 
+    # 4. Guacamole 集成
     try:
         token, ds = guac_login(
-            req.guacamole.url, req.guacamole.username, req.guacamole.password
+            req.guacamole.url,
+            req.guacamole.username,
+            req.guacamole.password,
         )
 
         if guest_os == "linux":
@@ -423,7 +470,7 @@ def create_vm(req: VMRequest):
                 req.guacamole.url,
                 token,
                 ds,
-                name=vm_name + "-ssh",
+                name=vm + "-ssh",
                 proto="ssh",
                 params={"hostname": "hypervisor", "port": "2222", "username": "ubuntu"},
                 parent=req.guacamole.folder_id,
@@ -433,7 +480,7 @@ def create_vm(req: VMRequest):
                 req.guacamole.url,
                 token,
                 ds,
-                name=vm_name + "-rdp",
+                name=vm + "-rdp",
                 proto="rdp",
                 params={"hostname": "hypervisor", "port": "33389", "security": "nla"},
                 parent=req.guacamole.folder_id,
@@ -443,15 +490,15 @@ def create_vm(req: VMRequest):
             req.guacamole.url,
             token,
             ds,
-            name=vm_name + "-vnc",
+            name=vm + "-vnc",
             proto="vnc",
             params={"hostname": "hypervisor", "port": str(vnc_port)},
             parent=req.guacamole.folder_id,
         )
     except Exception as e:
-        return {"vm": vm_name, "mac": mac, "vnc_port": vnc_port, "guac_warning": str(e)}
+        return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_warning": str(e)}
 
-    return {"vm": vm_name, "mac": mac, "vnc_port": vnc_port, "guac_connections": "created"}
+    return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_connections": "created"}
 
 @app.get("/api/vms/{vm_id}", response_model=OverviewData)
 def get_vm_info(vm_id: str):
