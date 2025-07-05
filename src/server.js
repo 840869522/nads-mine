@@ -3,86 +3,28 @@ import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
-import { spawn as childProcessSpawn } from 'child_process';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import path from 'path';
 import process from 'process';
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
-const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1';
-const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
-
 const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
 const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
 const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
 let httpServer;
-let fastApiProcess = null; // will hold FastAPI child process
-
 // Track all open TCP sockets so we can destroy them on shutdown
 const sockets = new Set();
 
 app.prepare().then(() => {
-  /* ---------- 1. START (optionally) THE PYTHON BACKEND ---------- */
-  let canRunPythonBackend = false;
-  let pythonExecutable;
-
-  if (process.platform === 'linux') {
-    canRunPythonBackend = true;
-    pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
-    const scriptToRun = 'main_cli.py';
-
-    console.log(`[NodeJS] Starting FastAPI with: ${pythonExecutable} ${scriptToRun}`);
-
-    fastApiProcess = childProcessSpawn(pythonExecutable, [scriptToRun], {
-      stdio: 'pipe',
-    });
-
-    fastApiProcess.stdout.on('data', (d) => {
-      console.log(`[FastAPI STDOUT]: ${d.toString().trim()}`);
-    });
-
-    fastApiProcess.stderr.on('data', (d) => {
-      console.error(`[FastAPI STDERR]: ${d.toString().trim()}`);
-    });
-
-    fastApiProcess.on('close', (code) => {
-      console.log(`[FastAPI] exited with code ${code}`);
-    });
-
-    fastApiProcess.on('error', (err) => {
-      console.error('[FastAPI] failed to start:', err);
-    });
-
-    // 让子进程不阻止 Node 退出；我们自己会 kill 它
-    fastApiProcess.unref();
-  } else {
-    console.warn(`[NodeJS] Platform '${process.platform}' detected; FastAPI backend disabled.`);
-  }
-
-  /* ---------- 2. PROXY MIDDLEWARE ---------- */
-  const apiProxy = createProxyMiddleware({
-    target: FASTAPI_TARGET_URL,
-    changeOrigin: true,
-    pathRewrite: { '^/api/vms': '/api/vms' },
-    logLevel: dev ? 'debug' : 'info',
-    onError: (err, req, res) => {
-      console.error('Proxy error:', err);
-      if (!res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Proxy Error', error: err.message }));
-      }
-    },
-  });
+  /* ---------- 1. PROXY MIDDLEWARE ---------- */
 
   const phpProxy = createProxyMiddleware({
     target: PHP_TARGET_URL,
     changeOrigin: true,
-    pathRewrite: { '^/api/php': '/' },
+    pathRewrite: { '^/api/php': '/', '^/api/vms': '/vms' },
     logLevel: dev ? 'debug' : 'info',
     onError: (err, req, res) => {
       console.error('PHP Proxy error:', err);
@@ -95,16 +37,7 @@ app.prepare().then(() => {
 
   /* ---------- 3. CREATE HTTP SERVER ---------- */
   httpServer = createServer((req, res) => {
-    if (req.url && req.url.startsWith('/api/vms')) {
-      if (canRunPythonBackend) {
-        return apiProxy(req, res, () => handle(req, res));
-      }
-      res.writeHead(503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Python backend unavailable on this platform.' }));
-      return;
-    }
-
-    if (req.url && req.url.startsWith('/api/php')) {
+    if (req.url && (req.url.startsWith('/api/php') || req.url.startsWith('/api/vms'))) {
       return phpProxy(req, res, () => handle(req, res));
     }
 
@@ -118,7 +51,7 @@ app.prepare().then(() => {
     socket.on('close', () => sockets.delete(socket));
   });
 
-  /* ---------- 4. SOCKET.IO TERMINAL ---------- */
+  /* ---------- 2. SOCKET.IO TERMINAL ---------- */
   const io = new Server(httpServer, { path: '/api/terminal' });
 
   io.on('connection', (socket) => {
@@ -148,19 +81,13 @@ app.prepare().then(() => {
   async function shutdown() {
     console.log('[NodeJS] Shutting down…');
 
-    // 1) 关闭 FastAPI
-    if (fastApiProcess && !fastApiProcess.killed) {
-      console.log('[NodeJS] Killing FastAPI child process…');
-      fastApiProcess.kill('SIGINT');
-    }
-
-    // 2) 关闭 socket.io (会关闭所有 namespace / room)
+    // 1) 关闭 socket.io (会关闭所有 namespace / room)
     await new Promise((resolve) => io.close(resolve));
 
-    // 3) 关闭 HTTP 服务器（停止接收新连接）
+    // 2) 关闭 HTTP 服务器（停止接收新连接）
     await new Promise((resolve) => httpServer.close(resolve));
 
-    // 4) 销毁所有仍然存活的 TCP 连接
+    // 3) 销毁所有仍然存活的 TCP 连接
     sockets.forEach((s) => s.destroy());
 
     console.log('[NodeJS] Cleanup done. Exiting.');
@@ -186,9 +113,6 @@ app.prepare().then(() => {
   const port = parseInt(process.env.PORT || '3000', 10);
   httpServer.listen(port, () => {
     console.log(`> Node.js server ready on http://localhost:${port}`);
-    if (canRunPythonBackend) {
-      console.log(`> FastAPI proxied at http://localhost:${port}/api/vms`);
-    }
     console.log(`> PHP proxied at http://localhost:${port}/api/php`);
     console.log(`> Terminal WebSocket at ws://localhost:${port}/api/terminal`);
   });

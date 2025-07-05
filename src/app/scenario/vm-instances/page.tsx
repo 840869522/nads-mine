@@ -70,7 +70,7 @@ function useVmInstances(forceRef?: React.MutableRefObject<number>) {
         isLoading,
         isValidating,
         mutate, // 若后面需要手动刷新可用
-    } = useSWR<VmInstance[]>("/api/vms", fetcher, {
+    } = useSWR<VmInstance[]>("/api/php/vms", fetcher, {
         // 10 s 内认为数据“新鲜”，避免短时间重复请求
         dedupingInterval: 10_000,
         keepPreviousData: true,
@@ -172,7 +172,7 @@ export default function VmPage() {
         // 动作触发即刻进入快速轮询模式
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/api/vms/${current.id}/actions/${action}`, {
+            const res = await fetch(`/api/php/vms/${current.id}/actions/${action}`, {
                 method: "POST",
             });
             if (!res.ok) {
@@ -181,9 +181,9 @@ export default function VmPage() {
             }
             const result = (await res.json()) as { state?: string };
             await mutate();
-            await globalMutate(`/api/vms/${current.id}`);
+            await globalMutate(`/api/php/vms/${current.id}`);
             if (result.state !== "shutoff") {
-                await globalMutate(`/api/vms/${current.id}/metrics`);
+                await globalMutate(`/api/php/vms/${current.id}/metrics`);
             }
         } catch (e: any) {
             alert(e.message || "Operation failed");
@@ -210,7 +210,7 @@ export default function VmPage() {
         const { url, user, pass } = await getGuacCreds();
         try {
             const q = new URLSearchParams({ url, username: user, password: pass }).toString();
-            const res = await fetch(`/api/vms/${current.name}/guac?${q}`);
+            const res = await fetch(`/api/php/vms/${current.name}/guac?${q}`);
             if (!res.ok) throw new Error('Guacamole request failed');
             const data = await res.json();
             const id = data.connections?.[proto];

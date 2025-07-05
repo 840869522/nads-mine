@@ -170,7 +170,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     data,
     error,
     isLoading,
-  } = useSWR<OverviewData>(`/api/vms/${vmId}`, fetcher, {
+  } = useSWR<OverviewData>(`/api/php/vms/${vmId}`, fetcher, {
     refreshInterval: 5000, // 5 s 轮询
     keepPreviousData: true,
     refreshWhenHidden: false, // 标签页不可见时暂停
@@ -180,7 +180,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
   const overviewData = data ?? null;
   const metricsKey =
     overviewData && overviewData.status !== "shutoff"
-      ? `/api/vms/${vmId}/metrics`
+      ? `/api/php/vms/${vmId}/metrics`
       : null;
 
   const {

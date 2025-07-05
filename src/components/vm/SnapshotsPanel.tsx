@@ -49,7 +49,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vms/${vmId}/snapshots`);
+      const response = await fetch(`/api/php/vms/${vmId}/snapshots`);
       if (!response.ok) {
         throw new Error(`Failed to fetch snapshots: ${response.status} ${response.statusText}`);
       }
@@ -87,7 +87,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
     setActionInProgress(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vms/${vmId}/snapshots`, {
+      const response = await fetch(`/api/php/vms/${vmId}/snapshots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSnapshotName, description: newSnapshotDescription }),
@@ -119,7 +119,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
         return;
     }
     try {
-      const response = await fetch(`/api/vms/${vmId}/snapshots/${selectedSnapshotId}`, {
+      const response = await fetch(`/api/php/vms/${vmId}/snapshots/${selectedSnapshotId}`, {
         method: 'DELETE',
       });
       if (!response.ok && response.status !== 204) { // 204 is also a success (No Content)
@@ -144,7 +144,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
         return;
     }
     try {
-      const response = await fetch(`/api/vms/${vmId}/snapshots/${selectedSnapshot.id}/revert`, {
+      const response = await fetch(`/api/php/vms/${vmId}/snapshots/${selectedSnapshot.id}/revert`, {
         method: 'POST',
       });
       if (!response.ok) {

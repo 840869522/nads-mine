@@ -47,7 +47,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       setForm(f => ({ ...f, base_image: fixedImage }));
       setImages([]);
     } else {
-      fetch("/api/vms/images")
+      fetch("/api/php/vms/images")
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -73,7 +73,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   };
 
   const handleSubmit = async () => {
-    await fetch("/api/vms/create", {
+    await fetch("/api/php/vms/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form)

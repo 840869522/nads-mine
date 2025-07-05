@@ -84,7 +84,7 @@ export default function StoragePanel({ vmId }: StoragePanelProps) {
     setIsLoadingCdRoms(true);
     setError(null);
     try {
-      const response = await fetch(`/api/vms/${vmId}/storage/cdroms`);
+      const response = await fetch(`/api/php/vms/${vmId}/storage/cdroms`);
       if (!response.ok) throw new Error(`Failed to fetch CD-ROMs: ${response.status}`);
       const data: CdRomDevice[] = await response.json();
       setCdRoms(data);
