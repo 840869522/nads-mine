@@ -64,7 +64,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
           id: initialRole.id,
           nameDisplay: initialRole.nameDisplay,
           description: initialRole.description,
-          permissions: [...initialRole.permissions], // Clone permissions array
+          // permissions: [...initialRole.permissions], // Clone permissions array
         });
       } else {
         setFormData({
@@ -163,7 +163,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
               required
             />
           </Box>
-          <Box sx={{ flex: 1 }}>
+          {/* <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>
               权限分配
               {errors.permissions && <Typography component="span" color="error.main" sx={{fontSize: '0.75rem', ml:1}}>{errors.permissions}</Typography>}
@@ -204,7 +204,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
               ))}
               </List>
             </Paper>
-          </Box>
+          </Box> */}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
