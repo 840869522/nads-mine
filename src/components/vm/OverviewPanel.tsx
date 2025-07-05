@@ -2,20 +2,12 @@
 import React from "react";
 import {
   Alert,
-  Box,
-  CircularProgress,
   Grid,
   Stack,
   Typography,
   Paper,
   Skeleton,
 } from "@mui/material";
-import {
-  Dns,
-  Memory as MemoryIconMui,
-  Storage as StorageIcon,
-  NetworkCheck,
-} from "@mui/icons-material";
 import useSWR from "swr";
 
 /* ---------- 类型 ---------- */
@@ -41,68 +33,7 @@ interface OverviewData {
   bootSource: string;
   uuid: string;
   ipAddress: string;
-  disks_rw_mbps: number;
-  network_throughput_mbps: number;
 }
-
-/* ---------- 公用小组件 ---------- */
-const MiniGauge: React.FC<{
-  label: string;
-  value: number;
-  unit?: string;
-  icon?: React.ReactElement;
-  isLoading?: boolean;
-}> = ({ label, value, unit = "%", icon, isLoading }) => (
-    <Paper
-        variant="outlined"
-        sx={{
-          p: 2,
-          textAlign: "center",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-        }}
-    >
-      <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
-          justifyContent="center"
-          sx={{ mb: 1 }}
-      >
-        {icon}
-        <Typography variant="subtitle2">{label}</Typography>
-      </Stack>
-
-      {isLoading ? (
-          <Skeleton
-              variant="circular"
-              width={60}
-              height={60}
-              sx={{ my: 1, mx: "auto" }}
-          />
-      ) : (
-          <CircularProgress
-              variant="determinate"
-              value={unit === "%" ? value : value > 0 ? 100 : 0}
-              size={60}
-              thickness={4}
-              sx={{ my: 1 }}
-          />
-      )}
-
-      {isLoading ? (
-          <Skeleton width="50%" sx={{ mx: "auto" }} />
-      ) : (
-          <Typography variant="h6" display="block">
-            {value.toFixed(1)}
-            {unit}
-          </Typography>
-      )}
-    </Paper>
-);
 
 const KeyValueListItem: React.FC<{
   label: string;
@@ -225,7 +156,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
             </Paper>
           </Grid>
 
-          {/* ---------- 右侧实时用量 ---------- */}
+          {/* ---------- 右侧占位（实时用量已移除） ---------- */}
           <Grid item xs={12} md={7}>
             <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Typography
@@ -234,42 +165,15 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
               >
                 实时用量
               </Typography>
-              <Grid container spacing={2} alignItems="stretch">
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="CPU"
-                      value={overviewData?.vcpu?.usage_percent ?? 0}
-                      icon={<Dns fontSize="small" />}
-                      isLoading={initialLoading}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Memory"
-                      value={overviewData?.vram?.usage_percent ?? 0}
-                      icon={<MemoryIconMui fontSize="small" />}
-                      isLoading={initialLoading}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Disk R/W"
-                      value={overviewData?.disks_rw_mbps ?? 0}
-                      unit="MB/s"
-                      icon={<StorageIcon fontSize="small" />}
-                      isLoading={initialLoading}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <MiniGauge
-                      label="Net Throughput"
-                      value={overviewData?.network_throughput_mbps ?? 0}
-                      unit="Mbps"
-                      icon={<NetworkCheck fontSize="small" />}
-                      isLoading={initialLoading}
-                  />
-                </Grid>
-              </Grid>
+              <Stack
+                alignItems="center"
+                justifyContent="center"
+                sx={{ height: 120 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  实时资源监控已禁用
+                </Typography>
+              </Stack>
             </Paper>
           </Grid>
         </Grid>
