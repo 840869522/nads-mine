@@ -333,6 +333,18 @@ def guac_create_conn(url: str, token: str, ds: str, name: str, proto: str, param
         )
     return conn_id
 
+def guac_find_conn(url: str, token: str, ds: str, name: str) -> str | None:
+    r = requests.get(
+        f"{url}/api/session/data/{ds}/connections",
+        params={"token": token},
+    )
+    if not r.ok:
+        return None
+    for cid, info in r.json().items():
+        if info.get("name") == name:
+            return cid
+    return None
+
 # ---------------- API Endpoints ----------------
 @app.get("/api/vms", response_model=List[VmInstance])
 def list_vms():
@@ -499,6 +511,17 @@ def create_vm(req: VMRequest):
         return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_warning": str(e)}
 
     return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_connections": "created"}
+
+
+@app.get("/api/vms/{vm_name}/guac")
+def get_guac_info(vm_name: str, url: str, username: str, password: str):
+    token, ds = guac_login(url, username, password)
+    conns = {}
+    for proto in ["ssh", "rdp", "vnc"]:
+        cid = guac_find_conn(url, token, ds, f"{vm_name}-{proto}")
+        if cid:
+            conns[proto] = cid
+    return {"token": token, "ds": ds, "connections": conns}
 
 @app.get("/api/vms/{vm_id}", response_model=OverviewData)
 def get_vm_info(vm_id: str):

@@ -31,6 +31,8 @@ import {
     PowerSettingsNew as ForceOffIcon,
     Visibility as ConsoleIcon,
     DesktopWindows as VncIcon,
+    Terminal as SshIcon,
+    LaptopWindows as RdpIcon,
     Camera as SnapshotIcon,
     KeyboardArrowDown as ArrowDownIcon,
     AddCircleOutline as AddIcon,
@@ -188,6 +190,37 @@ export default function VmPage() {
         } finally {
             setActionLoading(false);
         }
+    };
+
+    const getGuacCreds = async () => {
+        let url = localStorage.getItem('guac_url') || '';
+        let user = localStorage.getItem('guac_user') || '';
+        let pass = localStorage.getItem('guac_pass') || '';
+        if (!url) url = prompt('Guacamole URL', 'http://localhost:8080/guacamole') || '';
+        if (!user) user = prompt('Guacamole Username', '') || '';
+        if (!pass) pass = prompt('Guacamole Password', '') || '';
+        localStorage.setItem('guac_url', url);
+        localStorage.setItem('guac_user', user);
+        localStorage.setItem('guac_pass', pass);
+        return { url, user, pass };
+    };
+
+    const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
+        if (!current) return;
+        const { url, user, pass } = await getGuacCreds();
+        try {
+            const q = new URLSearchParams({ url, username: user, password: pass }).toString();
+            const res = await fetch(`/api/vms/${current.name}/guac?${q}`);
+            if (!res.ok) throw new Error('Guacamole request failed');
+            const data = await res.json();
+            const id = data.connections?.[proto];
+            if (!id) throw new Error('Connection not found');
+            const dest = `/guac?url=${encodeURIComponent(url)}&token=${encodeURIComponent(data.token)}&ds=${encodeURIComponent(data.ds)}&id=${encodeURIComponent(id)}`;
+            window.open(dest, '_blank');
+        } catch (e: any) {
+            alert(e.message || 'Failed to open connection');
+        }
+        setActionAnchor(null);
     };
 
     return (
@@ -400,9 +433,17 @@ export default function VmPage() {
                     创建快照
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={() => setActionAnchor(null)}>
+                <MenuItem onClick={() => handleGuac('ssh')}>
+                    <SshIcon fontSize="small" sx={{ mr: 1 }} />
+                    SSH
+                </MenuItem>
+                <MenuItem onClick={() => handleGuac('rdp')}>
+                    <RdpIcon fontSize="small" sx={{ mr: 1 }} />
+                    RDP
+                </MenuItem>
+                <MenuItem onClick={() => handleGuac('vnc')}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
-                    VNC / SPICE 控制台
+                    VNC 控制台
                 </MenuItem>
             </Menu>
             <Backdrop open={actionLoading} sx={{ zIndex: theme.zIndex.modal + 1 }}>
