@@ -57,7 +57,7 @@ interface VmInstance {
 /* ---------- SWR Hook ---------- */
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-function useVmInstances() {
+function useVmInstances(forceRef?: React.MutableRefObject<number>) {
     const {
         data,
         error,
@@ -71,6 +71,8 @@ function useVmInstances() {
 
         /* 智能轮询：有 pending 状态 ➜ 5 s；全部 running ➜ 30 s */
         refreshInterval: (latest: VmInstance[] | undefined) => {
+            // 动作触发后，在一定时间内保持快速轮询
+            if (forceRef && Date.now() < forceRef.current) return 5_000;
             if (!latest) return 5_000; // 首次
             const unstable = latest.some((vm) =>
                 ["paused", "shutoff"].includes(vm.state)
@@ -101,7 +103,8 @@ function stateIcon(state: VmInstance["state"]) {
 
 export default function VmPage() {
     /* ---- SWR 数据 ---- */
-    const { data, isLoading, isValidating, mutate } = useVmInstances();
+    const forceRefreshUntil = React.useRef(0);
+    const { data, isLoading, isValidating, mutate } = useVmInstances(forceRefreshUntil);
 
     /* ---- 本地 UI 状态 ---- */
     const [current, setCurrent] = React.useState<VmInstance | null>(null);
@@ -167,6 +170,8 @@ export default function VmPage() {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
             }
+            // 动作触发后强制一段时间内快速轮询
+            forceRefreshUntil.current = Date.now() + 20_000;
             await mutate();
         } catch (e: any) {
             alert(e.message || "Operation failed");
