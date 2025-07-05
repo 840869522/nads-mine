@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 # ---------------- Libvirt Connection ----------------
 LIBVIRT_CONNECTION = None
+METRIC_SAMPLES: Dict[str, Dict[str, float]] = {}
 
 def get_libvirt_connection():
     """建立到 libvirt 的连接"""
@@ -136,6 +137,13 @@ class HistoricalMetrics(BaseModel):
     memory_mb: List[MetricDataPoint]
     disk_rw_mbps_total: List[MetricDataPoint]
     network_throughput_mbps_total: List[MetricDataPoint]
+
+class VmRealtimeMetrics(BaseModel):
+    cpu_percent: float
+    memory_mb: int
+    memory_percent: float
+    disk_rw_mb_s: float
+    network_mbps: float
 
 class EventLog(BaseModel):
     id: str
@@ -468,6 +476,66 @@ def list_vm_vnics(vm_id: str):
             )
         )
     return nics
+
+@app.get("/api/vms/{vm_id}/metrics", response_model=VmRealtimeMetrics)
+def get_vm_realtime_metrics(vm_id: str):
+    conn = _require_conn()
+    dom = conn.lookupByUUIDString(vm_id)
+    now = time.time()
+
+    info = dom.info()
+    vcpu_count = info[3]
+
+    cpu_time = dom.getCPUStats(False)[0]["cpu_time"]
+
+    mem_stats = dom.memoryStats()
+    rss_kb = mem_stats.get("rss", 0)
+    mem_mb = int(rss_kb / 1024)
+    mem_pct = (rss_kb / info[1]) * 100 if info[1] else 0.0
+
+    xml_desc = dom.XMLDesc(0)
+    import xml.etree.ElementTree as ET
+    tree = ET.fromstring(xml_desc)
+
+    disk_bytes = 0
+    for disk in tree.findall(".//devices/disk[@device='disk']"):
+        dev = disk.find("target").get("dev")
+        stats = dom.blockStats(dev)
+        disk_bytes += stats[1] + stats[3]
+
+    net_bytes = 0
+    for iface in tree.findall(".//devices/interface/target"):
+        name = iface.get("dev")
+        rx, _, _, _, tx, _, _, _ = dom.interfaceStats(name)
+        net_bytes += rx + tx
+
+    prev = METRIC_SAMPLES.get(vm_id)
+    if prev:
+        dt = now - prev["time"]
+        if dt <= 0:
+            dt = 1
+        cpu_percent = (cpu_time - prev["cpu_time"]) / (dt * 1e9 * vcpu_count) * 100
+        disk_rw_mb_s = (disk_bytes - prev["disk"]) / dt / (1024 ** 2)
+        network_mbps = (net_bytes - prev["net"]) * 8 / dt / (1024 ** 2)
+    else:
+        cpu_percent = 0.0
+        disk_rw_mb_s = 0.0
+        network_mbps = 0.0
+
+    METRIC_SAMPLES[vm_id] = {
+        "time": now,
+        "cpu_time": cpu_time,
+        "disk": disk_bytes,
+        "net": net_bytes,
+    }
+
+    return VmRealtimeMetrics(
+        cpu_percent=cpu_percent,
+        memory_mb=mem_mb,
+        memory_percent=mem_pct,
+        disk_rw_mb_s=disk_rw_mb_s,
+        network_mbps=network_mbps,
+    )
 
 @app.get("/api/vms/{vm_id}/performance/historical", response_model=HistoricalMetrics)
 def get_historical_performance(vm_id: str, range: str = "1h"):

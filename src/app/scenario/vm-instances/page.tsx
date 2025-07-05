@@ -176,7 +176,10 @@ export default function VmPage() {
             // 动作触发后强制一段时间内快速轮询
             forceRefreshUntil.current = Date.now() + 20_000;
             await mutate();
-            await globalMutate(`/api/vms/${current.id}`);
+            await Promise.all([
+                globalMutate(`/api/vms/${current.id}`),
+                globalMutate(`/api/vms/${current.id}/metrics`),
+            ]);
         } catch (e: any) {
             alert(e.message || "Operation failed");
         } finally {

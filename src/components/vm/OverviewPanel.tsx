@@ -7,7 +7,9 @@ import {
   Typography,
   Paper,
   Skeleton,
+  CircularProgress,
 } from "@mui/material";
+import { Dns, Memory as MemoryIconMui, Storage as StorageIcon, NetworkCheck } from "@mui/icons-material";
 import useSWR from "swr";
 
 /* ---------- 类型 ---------- */
@@ -34,6 +36,72 @@ interface OverviewData {
   uuid: string;
   ipAddress: string;
 }
+
+interface RealtimeMetrics {
+  cpu_percent: number;
+  memory_mb: number;
+  memory_percent: number;
+  disk_rw_mb_s: number;
+  network_mbps: number;
+}
+
+const MiniGauge: React.FC<{
+  label: string;
+  value: number;
+  unit?: string;
+  icon?: React.ReactElement;
+  isLoading?: boolean;
+}> = ({ label, value, unit = "%", icon, isLoading }) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: 2,
+      textAlign: "center",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "space-between",
+    }}
+  >
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      justifyContent="center"
+      sx={{ mb: 1 }}
+    >
+      {icon}
+      <Typography variant="subtitle2">{label}</Typography>
+    </Stack>
+
+    {isLoading ? (
+      <Skeleton
+        variant="circular"
+        width={60}
+        height={60}
+        sx={{ my: 1, mx: "auto" }}
+      />
+    ) : (
+      <CircularProgress
+        variant="determinate"
+        value={unit === "%" ? value : value > 0 ? 100 : 0}
+        size={60}
+        thickness={4}
+        sx={{ my: 1 }}
+      />
+    )}
+
+    {isLoading ? (
+      <Skeleton width="50%" sx={{ mx: "auto" }} />
+    ) : (
+      <Typography variant="h6" display="block">
+        {value.toFixed(1)}
+        {unit}
+      </Typography>
+    )}
+  </Paper>
+);
 
 const KeyValueListItem: React.FC<{
   label: string;
@@ -78,13 +146,33 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     dedupingInterval: 5000, // 与 refreshInterval 对齐
   });
 
-  const initialLoading = isLoading && !data; // 只在首屏显示 Skeleton
+  const {
+    data: rtData,
+    error: rtError,
+    isLoading: rtLoading,
+  } = useSWR<RealtimeMetrics>(`/api/vms/${vmId}/metrics`, fetcher, {
+    refreshInterval: 5000,
+    keepPreviousData: true,
+    refreshWhenHidden: false,
+    dedupingInterval: 5000,
+  });
+
+  const initialLoading = isLoading && !data;
   const overviewData = data ?? null;
+  const metrics = rtData ?? null;
 
   if (error) {
     return (
         <Alert severity="error" sx={{ m: 2 }}>
           Error loading overview: {(error as any).message || "unknown"}
+        </Alert>
+    );
+  }
+
+  if (rtError) {
+    return (
+        <Alert severity="error" sx={{ m: 2 }}>
+          Error loading metrics: {(rtError as any).message || "unknown"}
         </Alert>
     );
   }
@@ -156,7 +244,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
             </Paper>
           </Grid>
 
-          {/* ---------- 右侧占位（实时用量已移除） ---------- */}
+          {/* ---------- 右侧实时用量 ---------- */}
           <Grid item xs={12} md={7}>
             <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Typography
@@ -165,15 +253,42 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
               >
                 实时用量
               </Typography>
-              <Stack
-                alignItems="center"
-                justifyContent="center"
-                sx={{ height: 120 }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  实时资源监控已禁用
-                </Typography>
-              </Stack>
+              <Grid container spacing={2} alignItems="stretch">
+                <Grid item xs={6} sm={3}>
+                  <MiniGauge
+                      label="CPU"
+                      value={metrics?.cpu_percent ?? 0}
+                      icon={<Dns fontSize="small" />}
+                      isLoading={rtLoading && !metrics}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <MiniGauge
+                      label="Memory"
+                      value={metrics?.memory_percent ?? 0}
+                      icon={<MemoryIconMui fontSize="small" />}
+                      isLoading={rtLoading && !metrics}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <MiniGauge
+                      label="Disk R/W"
+                      value={metrics?.disk_rw_mb_s ?? 0}
+                      unit="MB/s"
+                      icon={<StorageIcon fontSize="small" />}
+                      isLoading={rtLoading && !metrics}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <MiniGauge
+                      label="Net Throughput"
+                      value={metrics?.network_mbps ?? 0}
+                      unit="Mbps"
+                      icon={<NetworkCheck fontSize="small" />}
+                      isLoading={rtLoading && !metrics}
+                  />
+                </Grid>
+              </Grid>
             </Paper>
           </Grid>
         </Grid>
