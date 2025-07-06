@@ -185,7 +185,7 @@ const RunningInstancesPage: React.FC = () => {
         if (!user) return;
         const q = `?userId=${user.id}&role=${user.role}`;
         try {
-            const res = await fetch(`${API_BASE}/api/instances${q}`);
+            const res = await fetch(`${API_BASE}/instances${q}`);
             if (!res.ok) throw new Error('fetch failed');
             const data = await res.json();
             setInstances(data);
@@ -235,7 +235,7 @@ const RunningInstancesPage: React.FC = () => {
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 const action = instance.status === 'paused' ? 'unpause' : 'start';
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
+                await fetch(`${API_BASE}/containers/${instance.id}?action=${action}`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -248,7 +248,7 @@ const RunningInstancesPage: React.FC = () => {
             title: `停止实例: ${instance.name}`,
             message: `您确定要停止实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=stop`, { method: 'POST' });
+                await fetch(`${API_BASE}/containers/${instance.id}?action=stop`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -261,7 +261,7 @@ const RunningInstancesPage: React.FC = () => {
             title: `暂停实例: ${instance.name}`,
             message: `您确定要暂停实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
+                await fetch(`${API_BASE}/containers/${instance.id}?action=pause`, { method: 'POST' });
                 fetchInstances();
             },
             instanceName: instance.name
@@ -275,10 +275,10 @@ const RunningInstancesPage: React.FC = () => {
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
                 const id = instance.id;
-                await fetch(`${API_BASE}/api/containers/${id}?action=delete`, { method: 'POST' });
+                await fetch(`${API_BASE}/containers/${id}?action=delete`, { method: 'POST' });
                 if (user) {
                     const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
-                    await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
+                    await fetch(`${API_BASE}/instances${q}`, { method: 'DELETE' });
                 }
                 fetchInstances();
             },

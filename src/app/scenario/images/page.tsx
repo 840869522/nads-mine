@@ -60,7 +60,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     try {
-      const res = await fetch(`${API_BASE}/api/images${q}`);
+      const res = await fetch(`${API_BASE}/images${q}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setImages(data);
@@ -87,11 +87,11 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     if (editingImage) {
-      fetch(`${API_BASE}/api/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
+      fetch(`${API_BASE}/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
         setImages(prevImages => prevImages.map(img => (img.id === image.id ? image : img)));
       });
     } else {
-      fetch(`${API_BASE}/api/images${q}`, { method: 'POST', body: JSON.stringify(image) })
+      fetch(`${API_BASE}/images${q}`, { method: 'POST', body: JSON.stringify(image) })
         .then(res => res.json())
         .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
     }
@@ -112,7 +112,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user || !imageToDelete) return;
     const id = imageToDelete.id;
     const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
-    await fetch(`${API_BASE}/api/images${q}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
     await fetchImages();
     handleCloseConfirmDialog();
   };

@@ -50,7 +50,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
       setImage(fixedImage);
       setImages([]);
     } else if (user) {
-      fetch(`${API_BASE}/api/images?userId=${user.id}&role=${user.role}`)
+      fetch(`${API_BASE}/images?userId=${user.id}&role=${user.role}`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -90,7 +90,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
 
   const handleSubmit = async () => {
     if (!user || !image) return;
-    await fetch(`${API_BASE}/api/containers`, {
+    await fetch(`${API_BASE}/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
