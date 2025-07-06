@@ -375,7 +375,10 @@ def list_vm_images():
 def create_vm(req: VMRequest):
     vm = req.vm_name or f"vm-{uuid.uuid4().hex[:8]}"
     mac = gen_mac(vm)
-    guest_os = detect_os(req.base_image)
+    try:
+        guest_os = detect_os(req.base_image)
+    except Exception:
+        guest_os = "linux"
 
     # 1. 创建差分盘
     overlay = f"{POOL_DIR}/{vm}.qcow2"
@@ -447,9 +450,7 @@ def create_vm(req: VMRequest):
             ]
         )
 
-        disk_root = (
-            f"path={overlay},format=qcow2,bus=virtio,backing_file={req.base_image}"
-        )
+        disk_root = f"path={overlay},format=qcow2,bus=virtio"
 
         network_arg = (
             "user,model=virtio,mac="
