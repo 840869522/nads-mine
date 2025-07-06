@@ -107,8 +107,9 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       label: "安全实验分系统", // Renamed from "安全使用分系统"
       icon: ShieldCheckIcon,
       children: [
-        {to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
-        {to: "/drill/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
+        {to: "/ad", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
+        {to: "/ad/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
+        {to: "/ad/referee", label: "裁判管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
       ]
     },
     {
@@ -121,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' },
-        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }
+        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' } 
       ]
     },
   ];
@@ -238,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                   <AccountCircleIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="body2" fontWeight="medium">{user.user.username}</Typography>
+                  <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
                   <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
                 </Box>
               </Box>

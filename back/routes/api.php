@@ -1,6 +1,8 @@
 <?php
 
-    use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ad\RefereeController;
+use App\Http\Controllers\ad\TeamController;
+use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -25,10 +27,10 @@
     /**
      * 管理员账户：admin
      * 密码：  admin123 hash sha256加密后为：240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
-     * 
+     *
      * 测试用户： test_12
      * 测试用户密码： test123 hash sha256 加密后为： ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae
-     * 
+     *
      */
 
     /**
@@ -44,7 +46,7 @@
             Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
             Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
         });
-    
+
         Route::prefix("role")->group(function(){
             Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
             Route::post("/id",[RoleController::class,"getRoleById"]);
@@ -55,7 +57,7 @@
             Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
         });
-    
+
         Route::prefix('permission')->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
             Route::post('/id', [PermissionController::class, 'getPermissionById']);
@@ -90,7 +92,7 @@
     Route::prefix("scene")->group(function () {
 
     })->middleware("jwtcheck:scene");
-    
+
 
     Route::prefix('scenarios')->group(function () {
         Route::get('/', [ScenarioController::class, 'index']);
@@ -139,5 +141,63 @@
         Route::put('/{id}', [CourseController::class, 'update'])->middleware('jwtcheck:edit-courses');
         Route::delete('/{id}', [CourseController::class, 'destroy'])->middleware('jwtcheck:edit-courses');
     });
+
+Route::prefix('ad/team')->group(function () {
+    // 获取所有队伍列表
+    // GET /api/ad/team
+    Route::get('/', [TeamController::class, 'index']);
+
+    // 创建一个新队伍
+    // POST /api/ad/team
+    Route::post('/', [TeamController::class, 'store']);
+
+    // 获取单个队伍的详细信息
+    // GET /api/ad/team/{team}
+    // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
+    Route::get('/{team}', [TeamController::class, 'show']);
+
+    // 更新一个已存在的队伍
+    // PUT /api/ad/team/{team}
+    Route::put('/{team}', [TeamController::class, 'update']);
+
+    // 删除一个队伍
+    // DELETE /api/ad/team/{team}
+    Route::delete('/{team}', [TeamController::class, 'destroy']);
+});
+
+
+Route::prefix('ad')->group(function () {
+
+    // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
+    // GET /api/ad/available-users
+    // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
+    // 如果它在后面，'/available-users' 可能会被误匹配为 '/{referee}'。
+    Route::get('available-users', [RefereeController::class, 'availableUsers']);
+
+    // 裁判的 CRUD 路由
+    Route::prefix('referee')->group(function () {
+        // 获取所有裁判列表
+        // GET /api/ad/referee
+        Route::get('/', [RefereeController::class, 'index']);
+
+        // 创建一个新裁判
+        // POST /api/ad/referee
+        Route::post('/', [RefereeController::class, 'store']);
+
+        // 获取单个裁判的详细信息
+        // GET /api/ad/referee/{referee}
+        // {referee} 是路由模型绑定，Laravel 会自动根据 ID (c_id) 查找 Referee
+        Route::get('/{referee}', [RefereeController::class, 'show']);
+
+        // 更新一个已存在的裁判
+        // PUT /api/ad/referee/{referee}
+        Route::put('/{referee}', [RefereeController::class, 'update']);
+
+        // 删除一个裁判
+        // DELETE /api/ad/referee/{referee}
+        Route::delete('/{referee}', [RefereeController::class, 'destroy']);
+    });
+
+});
 
 ?>
