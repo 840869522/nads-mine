@@ -5,6 +5,7 @@ namespace App\Http\Controllers\scenario;
 use App\Http\Controllers\Controller;
 use App\Models\scenario\SceneConfig;
 use App\Models\scenario\SceneInstance; 
+use App\Models\scenario\SceneContainerInstance;
 use App\RunTool\CommandLineService;
 use App\RunTool\TopologyParser;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ class DrillController extends Controller
     public function startDrill(Request $request, SceneConfig $scenario)
     {
 
-       // --- 【关键修改 3】从请求体中获取并验证 username ---
+       
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:50',
         ]);
@@ -72,6 +73,13 @@ class DrillController extends Controller
                 $containerId = $this->cliService->createContainer($options);
                 $pid = $this->cliService->getContainerPid($containerId);
 
+                //插入容器id到容器实例场景实例关联表
+                SceneContainerInstance::create([
+                    'c_container_id'       => $containerId,
+                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                ]);
+                Log::info("容器实例关联记录已创建", ['instance_id' => $sceneInstance->c_scene_instances_id, 'container_id' => $containerId]);
+                
                 $createdContainersInfo[$containerData['id']] = [
                     'container_id' => $containerId, 'pid' => $pid, 'label' => $containerData['label']
                 ];

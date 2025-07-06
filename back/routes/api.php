@@ -6,15 +6,7 @@
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
-    use App\Http\Controllers\ImagesController;
-    use App\Http\Controllers\InstancesController;
-    use App\Http\Controllers\ContainersController;
-    use App\Http\Controllers\ad\RefereeController;
-    use App\Http\Controllers\ad\TeamController;
-    use App\Http\Controllers\Course\CourseController;
-    use App\Http\Controllers\Course\CategoryController;
-    use App\Http\Controllers\Course\ResourceController;
-
+    use App\Http\Controllers\scenario\DrillController;
 
     /*
     |--------------------------------------------------------------------------
@@ -170,15 +162,29 @@
 
 
     Route::prefix('scenarios')->group(function () {
+
+        // GET 获取所有场景列表
         Route::get('/', [ScenarioController::class, 'index']);
+        // POST 创建一个新场景
         Route::post('/', [ScenarioController::class, 'store']);
+        // DELETE  删除一个指定场景
         Route::delete('/', [ScenarioController::class, 'destroy']);
-        // PUT /api/scenarios/{scenario} - 更新一个指定的场景Add commentMore actions
-        // 我们使用 {scenario} 作为参数，Laravel 可以自动通过ID找到对应的模型实例 (Route Model Binding)
+        // PUT 修改场景
         Route::put('/{scenario}', [ScenarioController::class, 'update']);
-
-
+        //GET 获取场景
         Route::get('/{scenario}', [ScenarioController::class, 'update']);
+
+         // 启动场景
+        Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+
+
+    });
+
+    Route::prefix('scenariosinstances')->group(function () {
+        // GET /api/scenarios/instances - 获取所有场景实例列表
+        Route::get('/', [InstanceController::class, 'index']);
+        // --- 【新增】获取单个场景实例的详细信息 ---
+        Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
 
     });
 

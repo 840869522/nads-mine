@@ -4,66 +4,61 @@ namespace App\Models\scenario;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str; // 引入 Str 以便使用 UUID
+use Illuminate\Support\Str;
 
 class SceneInstance extends Model
 {
     use HasFactory;
 
-    /**
-     * 手动指定模型关联的数据表名。
-     * @var string
-     */
     protected $table = 'c_scene_instances';
-
-    /**
-     * 手动指定主键。
-     * @var string
-     */
     protected $primaryKey = 'c_scene_instances_id';
-
-    /**
-     * 主键不是自增整数。
-     * @var bool
-     */
     public $incrementing = false;
-
-    /**
-     * 主键的类型是字符串 (UUID)。
-     * @var string
-     */
     protected $keyType = 'string';
-
-    /**
-     * 定义时间戳字段的名称。
-     */
     const CREATED_AT = 'c_runtime';
-    const UPDATED_AT = null; // 数据库中没有更新时间字段
+    const UPDATED_AT = null;
 
-    /**
-     * 可批量赋值的属性。
-     * @var array<int, string>
-     */
     protected $fillable = [
         'c_scene_instances_id',
         'c_config_id',
         'c_username',
         'c_status',
-        // 注意：c_runtime 会在创建时自动填充
     ];
 
-    /**
-     * 为模型创建事件添加一个引导方法，用于自动生成 UUID。
-     */
     protected static function boot()
     {
         parent::boot();
-
         static::creating(function ($model) {
-            // 在创建新记录时，如果主键为空，则自动为其生成一个 UUID
             if (empty($model->{$model->getKeyName()})) {
                 $model->{$model->getKeyName()} = Str::uuid()->toString();
             }
         });
+    }
+
+    /**
+     * 定义与 SceneConfig 模型的关联关系。
+     */
+    public function sceneConfig()
+    {
+        return $this->belongsTo(SceneConfig::class, 'c_config_id', 'c_config_id')
+            ->withDefault([
+                'c_name' => '场景已删除或未知'
+            ]);
+    }
+
+    /**
+     * 【在这里添加这个方法】
+     * * 定义一个“场景实例”拥有多个“容器实例”的“一对多”关联关系。
+     * 当控制器中调用 $instance->load('containers') 时，Laravel会查找并执行此方法。
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function containers()
+    {
+        // 这个方法的参数是：
+        // 1. 关联的模型类: SceneContainerInstance::class
+        // 2. 关联表中的外键: 'c_scene_instances_id' (在 c_scene_container_instances 表中)
+        // 3. 本地表中的主键: 'c_scene_instances_id' (在 c_scene_instances 表中)
+        // 您的命名非常规范，所以外键和主键名是一样的。
+        return $this->hasMany(SceneContainerInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
 }
