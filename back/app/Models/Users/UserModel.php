@@ -7,7 +7,6 @@
     use App\Utils\GlobalResponse;
     use Exception;
     use Illuminate\Support\Facades\Log;
-    use Ramsey\Uuid\Uuid;
 
     class UserModel extends Model{
 
