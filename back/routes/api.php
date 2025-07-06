@@ -73,10 +73,6 @@
         Route::get('/{id}/inspect', [\App\Http\Controllers\Docker\ContainersController::class, 'inspect']);
     });
 
-    Route::prefix('vms')->group(function () {
-        $c = App\Http\Controllers\Vm\VmProxyController::class;
-        // Catch-all proxy to FastAPI backend
-        Route::any('/{path?}', [$c, 'handle'])->where('path', '.*');
-    });
+
 
 ?>
