@@ -85,7 +85,7 @@ app.prepare().then(() => {
   const phpProxy = createProxyMiddleware({
     target: PHP_TARGET_URL,
     changeOrigin: true,
-    pathRewrite: { '^/api/php': '/' },
+    pathRewrite: { '^/api/php': '/api' },
     logLevel: dev ? 'debug' : 'info',
     onError: (err, req, res) => {
       console.error('PHP Proxy error:', err);
