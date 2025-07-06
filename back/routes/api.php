@@ -6,6 +6,7 @@
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
+    use App\Http\Controllers\Vm\MainCli\VmController;
 
     /*
     |--------------------------------------------------------------------------
@@ -71,6 +72,25 @@
         Route::post('/{id}', [\App\Http\Controllers\Docker\ContainersController::class, 'action']);
         Route::get('/{id}', [\App\Http\Controllers\Docker\ContainersController::class, 'get']);
         Route::get('/{id}/inspect', [\App\Http\Controllers\Docker\ContainersController::class, 'inspect']);
+    });
+
+    Route::prefix('vms')->group(function () {
+        $c = VmController::class;
+        Route::get('/', [$c, 'listVms']);
+        Route::get('/images', [$c, 'listVmImages']);
+        Route::post('/create', [$c, 'createVm']);
+        Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+        Route::get('/{vm_id}', [$c, 'getVmInfo']);
+        Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
+        Route::get('/{vm_id}/snapshots', [$c, 'listVmSnapshots']);
+        Route::post('/{vm_id}/snapshots', [$c, 'createVmSnapshot']);
+        Route::post('/{vm_id}/snapshots/{snapshot_id}/revert', [$c, 'revertVmSnapshot']);
+        Route::delete('/{vm_id}/snapshots/{snapshot_id}', [$c, 'deleteVmSnapshot']);
+        Route::get('/{vm_id}/storage/disks', [$c, 'listVmDisks']);
+        Route::get('/{vm_id}/storage/cdroms', [$c, 'listVmCdroms']);
+        Route::get('/{vm_id}/network/vnics', [$c, 'listVmVnics']);
+        Route::get('/{vm_id}/metrics', [$c, 'getVmRealtimeMetrics']);
+        Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
 
