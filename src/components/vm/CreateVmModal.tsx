@@ -37,8 +37,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
     disk_gb: 20,
     ssh_key: "",
     admin_password: "",
-    static_ip: "",
-    guacamole: { url: "", username: "", password: "", folder_id: "ROOT" }
+    static_ip: ""
   });
 
   useEffect(() => {
@@ -62,8 +61,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       disk_gb: 20,
       ssh_key: "",
       admin_password: "",
-      static_ip: "",
-      guacamole: { url: "", username: "", password: "", folder_id: "ROOT" }
+      static_ip: ""
     });
   };
 
@@ -118,14 +116,6 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
             onChange={e => setForm(f => ({ ...f, admin_password: e.target.value }))} fullWidth />
           <TextField label="静态 IP" value={form.static_ip}
             onChange={e => setForm(f => ({ ...f, static_ip: e.target.value }))} fullWidth />
-          <TextField label="Guacamole URL" value={form.guacamole.url}
-            onChange={e => setForm(f => ({ ...f, guacamole: { ...f.guacamole, url: e.target.value } }))} fullWidth />
-          <TextField label="Guacamole 用户名" value={form.guacamole.username}
-            onChange={e => setForm(f => ({ ...f, guacamole: { ...f.guacamole, username: e.target.value } }))} fullWidth />
-          <TextField label="Guacamole 密码" type="password" value={form.guacamole.password}
-            onChange={e => setForm(f => ({ ...f, guacamole: { ...f.guacamole, password: e.target.value } }))} fullWidth />
-          <TextField label="Guacamole Folder ID" value={form.guacamole.folder_id}
-            onChange={e => setForm(f => ({ ...f, guacamole: { ...f.guacamole, folder_id: e.target.value } }))} fullWidth />
         </Stack>
       </DialogContent>
       <DialogActions>
