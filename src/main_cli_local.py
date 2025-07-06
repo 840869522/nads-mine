@@ -396,18 +396,28 @@ def create_vm(req: VMRequest):
     tmpdir = tempfile.mkdtemp(prefix=f"{vm}-ci-")
     try:
         if guest_os == "linux":
-            udata = textwrap.dedent(
-                f"""\
-                #cloud-config
-                hostname: {vm}
-                users:
-                  - default
-                  - name: ubuntu
-                    sudo: ALL=(ALL) NOPASSWD:ALL
-                    ssh_authorized_keys:
-                      - {req.ssh_key or ''}
-                """
-            )
+            udata_lines = [
+                "#cloud-config",
+                f"hostname: {vm}",
+                "users:",
+                "  - default",
+                "  - name: ubuntu",
+                "    sudo: ALL=(ALL) NOPASSWD:ALL",
+            ]
+            if req.ssh_key:
+                udata_lines += [
+                    "    ssh_authorized_keys:",
+                    f"      - {req.ssh_key}",
+                ]
+            if req.admin_password:
+                udata_lines += [
+                    "chpasswd:",
+                    "  list: |",
+                    f"    ubuntu:{req.admin_password}",
+                    "  expire: False",
+                    "ssh_pwauth: True",
+                ]
+            udata = "\n".join(udata_lines)
         else:
             if not req.admin_password:
                 raise HTTPException(422, "Windows VM requires admin_password")

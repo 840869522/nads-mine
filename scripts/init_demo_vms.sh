@@ -19,7 +19,7 @@ cd ..
 python3 src/main_cli_local.py create-vm \
   --vm-name demo-linux \
   --base-image demo-images/ubuntu-demo.img \
-  --ssh-key "$(cat ~/.ssh/id_rsa.pub)"
+  --admin-password demo123
 
 python3 src/main_cli_local.py create-vm \
   --vm-name demo-win \
