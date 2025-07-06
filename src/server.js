@@ -15,25 +15,26 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
-const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1';
-const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
+//const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
+//const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1';
+//const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
 
 const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
 const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
 const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
 let httpServer;
-let fastApiProcess = null; // will hold FastAPI child process
+//let fastApiProcess = null; // will hold FastAPI child process
 
 // Track all open TCP sockets so we can destroy them on shutdown
 const sockets = new Set();
 
 app.prepare().then(() => {
   /* ---------- 1. START (optionally) THE PYTHON BACKEND ---------- */
-  let canRunPythonBackend = false;
-  let pythonExecutable;
+  //let canRunPythonBackend = false;
+  //let pythonExecutable;
 
+  /*
   if (process.platform === 'linux') {
     canRunPythonBackend = true;
     pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
@@ -67,7 +68,7 @@ app.prepare().then(() => {
     console.warn(`[NodeJS] Platform '${process.platform}' detected; FastAPI backend disabled.`);
   }
 
-  /* ---------- 2. PROXY MIDDLEWARE ---------- */
+  //2. PROXY MIDDLEWARE
   const apiProxy = createProxyMiddleware({
     target: FASTAPI_TARGET_URL,
     changeOrigin: true,
@@ -81,6 +82,7 @@ app.prepare().then(() => {
       }
     },
   });
+  */
 
   const phpProxy = createProxyMiddleware({
     target: PHP_TARGET_URL,
@@ -98,14 +100,14 @@ app.prepare().then(() => {
 
   /* ---------- 3. CREATE HTTP SERVER ---------- */
   httpServer = createServer((req, res) => {
-    if (req.url && req.url.startsWith('/api/vms')) {
+    /*if (req.url && req.url.startsWith('/api/vms')) {
       if (canRunPythonBackend) {
         return apiProxy(req, res, () => handle(req, res));
       }
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: 'Python backend unavailable on this platform.' }));
       return;
-    }
+    }*/
 
     if (req.url && req.url.startsWith('/api/php')) {
       return phpProxy(req, res, () => handle(req, res));
@@ -189,10 +191,10 @@ app.prepare().then(() => {
   const port = parseInt(process.env.PORT || '3000', 10);
   httpServer.listen(port, () => {
     console.log(`> Node.js server ready on http://localhost:${port}`);
-    if (canRunPythonBackend) {
-      console.log(`> FastAPI proxied at http://localhost:${port}/api/vms`);
-    }
-    console.log(`> PHP proxied at http://localhost:${port}/api/php`);
+    //if (canRunPythonBackend) {
+    //  console.log(`> FastAPI proxied at http://localhost:${port}/api/vms`);
+    //}
+    console.log(`> PHP proxied at http://localhost:${PHP_API_PORT}/api/php`);
     console.log(`> Terminal WebSocket at ws://localhost:${port}/api/terminal`);
   });
 });
