@@ -5,6 +5,7 @@
 import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';
+import GuacamoleLite from 'guacamole-lite';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
 import { spawn as childProcessSpawn } from 'child_process';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -24,6 +25,7 @@ const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
 const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
 let httpServer;
+let guacServer;
 //let fastApiProcess = null; // will hold FastAPI child process
 
 // Track all open TCP sockets so we can destroy them on shutdown
@@ -117,6 +119,20 @@ app.prepare().then(() => {
     return handle(req, res);
   });
 
+  // guacamole-lite server
+  guacServer = new GuacamoleLite(
+    { server: httpServer, path: '/api/guac' },
+    { port: parseInt(process.env.GUACD_PORT || '4822', 10) },
+    {
+      allowedUnencryptedConnectionSettings: {
+        rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
+        ssh: ['hostname', 'port', 'username', 'password'],
+        vnc: ['hostname', 'port', 'password'],
+        join: ['id']
+      }
+    }
+  );
+
   // 记录所有 TCP 连接
   httpServer.on('connection', (socket) => {
     sockets.add(socket);
@@ -161,6 +177,10 @@ app.prepare().then(() => {
 
     // 2) 关闭 socket.io (会关闭所有 namespace / room)
     await new Promise((resolve) => io.close(resolve));
+
+    if (guacServer) {
+      guacServer.close();
+    }
 
     // 3) 关闭 HTTP 服务器（停止接收新连接）
     await new Promise((resolve) => httpServer.close(resolve));

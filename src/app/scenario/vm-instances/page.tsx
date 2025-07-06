@@ -192,31 +192,15 @@ export default function VmPage() {
         }
     };
 
-    const getGuacCreds = async () => {
-        let url = localStorage.getItem('guac_url') || '';
-        let user = localStorage.getItem('guac_user') || '';
-        let pass = localStorage.getItem('guac_pass') || '';
-        if (!url) url = prompt('Guacamole URL', 'http://localhost:8080/guacamole') || '';
-        if (!user) user = prompt('Guacamole Username', '') || '';
-        if (!pass) pass = prompt('Guacamole Password', '') || '';
-        localStorage.setItem('guac_url', url);
-        localStorage.setItem('guac_user', user);
-        localStorage.setItem('guac_pass', pass);
-        return { url, user, pass };
-    };
-
     const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
         if (!current) return;
-        const { url, user, pass } = await getGuacCreds();
         try {
-            const q = new URLSearchParams({ url, username: user, password: pass }).toString();
-            const res = await fetch(`/api/php/vms/${current.name}/guac?${q}`);
-            if (!res.ok) throw new Error('Guacamole request failed');
-            const data = await res.json();
-            const id = data.connections?.[proto];
-            if (!id) throw new Error('Connection not found');
-            const dest = `/guac?url=${encodeURIComponent(url)}&token=${encodeURIComponent(data.token)}&ds=${encodeURIComponent(data.ds)}&id=${encodeURIComponent(id)}`;
-            window.open(dest, '_blank');
+            const res = await fetch(`/api/php/vms/${current.name}/guac`);
+            if (!res.ok) throw new Error('Guacamole info request failed');
+            const info = await res.json();
+            const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
+            const q = new URLSearchParams({ type: proto, hostname: info.host, port: String(port) }).toString();
+            window.open(`/guac?${q}`, '_blank');
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }

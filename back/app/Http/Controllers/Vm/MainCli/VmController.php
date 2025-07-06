@@ -66,10 +66,6 @@ class VmController extends Controller
             'ssh_key' => '--ssh-key',
             'admin_password' => '--admin-password',
             'static_ip' => '--static-ip',
-            'guac_url' => '--guac-url',
-            'guac_username' => '--guac-username',
-            'guac_password' => '--guac-password',
-            'guac_folder_id' => '--guac-folder-id',
         ] as $key => $flag) {
             if (isset($data[$key]) && $data[$key] !== null) {
                 $args[] = $flag;
@@ -82,19 +78,7 @@ class VmController extends Controller
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
-        $query = $request->query();
-        $args = ['guac-info', $vmName];
-        foreach ([
-            'url' => '--url',
-            'username' => '--username',
-            'password' => '--password',
-        ] as $key => $flag) {
-            if (isset($query[$key])) {
-                $args[] = $flag;
-                $args[] = (string) $query[$key];
-            }
-        }
-        return $this->runCli($args);
+        return $this->runCli(['guac-info', $vmName]);
     }
 
     // GET /vms/{vm_id}

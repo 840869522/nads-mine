@@ -10,7 +10,6 @@ import time
 import textwrap
 import json
 import re
-import requests
 import subprocess
 import tempfile
 import shutil
@@ -149,12 +148,6 @@ class EventLog(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 # ----- VM Creation Models -----
-class GuacInfo(BaseModel):
-    url: str
-    username: str
-    password: str
-    folder_id: Optional[str] = "ROOT"
-
 class VMRequest(BaseModel):
     vm_name: Optional[str] = None
     base_image: str
@@ -164,7 +157,6 @@ class VMRequest(BaseModel):
     ssh_key: Optional[str] = None
     admin_password: Optional[str] = None
     static_ip: Optional[str] = None
-    guacamole: GuacInfo
 
 # ---------------- Helper Functions ----------------
 def _require_conn():
@@ -372,42 +364,6 @@ def parse_vnc_port(xml: str) -> int | None:
     m = re.search(r"<graphics[^>]*type='vnc'[^>]*port='(\d+)'", xml)
     return int(m.group(1)) if m else None
 
-def guac_login(url: str, username: str, password: str) -> tuple[str, str]:
-    r = requests.post(f"{url}/api/tokens", data={"username": username, "password": password})
-    if not r.ok:
-        raise RuntimeError("Guacamole auth failed")
-    data = r.json()
-    return data["authToken"], next(iter(data["dataSource"]))
-
-def guac_create_conn(url: str, token: str, ds: str, name: str, proto: str, params: dict, parent: str | None):
-    body = {
-        "name": name,
-        "protocol": proto,
-        "parameters": params,
-        "attributes": {"max-connections": "5", "max-connections-per-user": "2"},
-    }
-    r = requests.post(f"{url}/api/session/data/{ds}/connections", params={"token": token}, json=body)
-    if not r.ok:
-        raise RuntimeError("create connection failed")
-    conn_id = r.json()
-    if parent and parent != "ROOT":
-        requests.post(
-            f"{url}/api/session/data/{ds}/connectionGroups/{parent}/connections/{conn_id}",
-            params={"token": token},
-        )
-    return conn_id
-
-def guac_find_conn(url: str, token: str, ds: str, name: str) -> str | None:
-    r = requests.get(
-        f"{url}/api/session/data/{ds}/connections",
-        params={"token": token},
-    )
-    if not r.ok:
-        return None
-    for cid, info in r.json().items():
-        if info.get("name") == name:
-            return cid
-    return None
 
 # ---------------- CLI Functions ----------------
 def list_vms():
@@ -532,58 +488,22 @@ def create_vm(req: VMRequest):
     except RuntimeError:
         vnc_port = 5900
 
-    # 4. Guacamole 集成
+    return {"vm": vm, "mac": mac, "vnc_port": vnc_port}
+
+
+def get_guac_info(vm_name: str):
     try:
-        token, ds = guac_login(
-            req.guacamole.url,
-            req.guacamole.username,
-            req.guacamole.password,
-        )
+        xml = run_virsh("dumpxml", vm_name)
+        vnc_port = parse_vnc_port(xml) or 5900
+    except RuntimeError:
+        vnc_port = 5900
 
-        if guest_os == "linux":
-            guac_create_conn(
-                req.guacamole.url,
-                token,
-                ds,
-                name=vm + "-ssh",
-                proto="ssh",
-                params={"hostname": "hypervisor", "port": "2222", "username": "ubuntu"},
-                parent=req.guacamole.folder_id,
-            )
-        else:
-            guac_create_conn(
-                req.guacamole.url,
-                token,
-                ds,
-                name=vm + "-rdp",
-                proto="rdp",
-                params={"hostname": "hypervisor", "port": "33389", "security": "nla"},
-                parent=req.guacamole.folder_id,
-            )
-
-        guac_create_conn(
-            req.guacamole.url,
-            token,
-            ds,
-            name=vm + "-vnc",
-            proto="vnc",
-            params={"hostname": "hypervisor", "port": str(vnc_port)},
-            parent=req.guacamole.folder_id,
-        )
-    except Exception as e:
-        return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_warning": str(e)}
-
-    return {"vm": vm, "mac": mac, "vnc_port": vnc_port, "guac_connections": "created"}
-
-
-def get_guac_info(vm_name: str, url: str, username: str, password: str):
-    token, ds = guac_login(url, username, password)
-    conns = {}
-    for proto in ["ssh", "rdp", "vnc"]:
-        cid = guac_find_conn(url, token, ds, f"{vm_name}-{proto}")
-        if cid:
-            conns[proto] = cid
-    return {"token": token, "ds": ds, "connections": conns}
+    return {
+        "host": "hypervisor",
+        "ssh_port": 2222,
+        "rdp_port": 33389,
+        "vnc_port": vnc_port,
+    }
 
 def get_vm_info(vm_id: str):
     try:
@@ -866,10 +786,7 @@ def main():
     p_create.add_argument("--ssh-key")
     p_create.add_argument("--admin-password")
     p_create.add_argument("--static-ip")
-    p_create.add_argument("--guac-url", required=True)
-    p_create.add_argument("--guac-username", required=True)
-    p_create.add_argument("--guac-password", required=True)
-    p_create.add_argument("--guac-folder-id", default="ROOT")
+    # Guacamole parameters removed in lite mode
 
     def _create_vm(args):
         req = VMRequest(
@@ -881,12 +798,6 @@ def main():
             ssh_key=args.ssh_key,
             admin_password=args.admin_password,
             static_ip=args.static_ip,
-            guacamole=GuacInfo(
-                url=args.guac_url,
-                username=args.guac_username,
-                password=args.guac_password,
-                folder_id=args.guac_folder_id,
-            ),
         )
         return create_vm(req)
 
@@ -894,10 +805,7 @@ def main():
 
     p_guac = sub.add_parser("guac-info")
     p_guac.add_argument("vm_name")
-    p_guac.add_argument("--url", required=True)
-    p_guac.add_argument("--username", required=True)
-    p_guac.add_argument("--password", required=True)
-    p_guac.set_defaults(func=lambda a: get_guac_info(a.vm_name, a.url, a.username, a.password))
+    p_guac.set_defaults(func=lambda a: get_guac_info(a.vm_name))
 
     p_get = sub.add_parser("get-vm")
     p_get.add_argument("vm_id")
