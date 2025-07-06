@@ -34,16 +34,16 @@
     /**
      * 定义基础分系统路由
      */
+    Route::post("support/user/login",[UserController::class,"login"]);
     Route::prefix("support")->group(function() {
         Route::prefix("user")->group(function() {
-            Route::post("/login",[UserController::class,"login"]);
             Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
             Route::post("/search",[UserController::class,"searchUser"])->middleware("jwtcheck:get-all-users");
             Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
             Route::post("/new",[UserController::class,"insertNewUser"]);
             Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
             Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
-        });
+        })->middleware("jwtcheck:support_user");
     
         Route::prefix("role")->group(function(){
             Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
@@ -54,7 +54,7 @@
             Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
             Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
-        });
+        })->middleware("jwtcheck:support_role");
     
         Route::prefix('permission')->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
@@ -66,7 +66,7 @@
             Route::post('/delete', [PermissionController::class, 'deletePermission'])->middleware('jwtcheck:edit-permissions');
             Route::post('/grant', [PermissionController::class, 'grantPermission2Role'])->middleware('jwtcheck:edit-permissions');
             Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole'])->middleware('jwtcheck:edit-permissions');
-        });
+        })->middleware("jwtcheck:support_permissions");
     })->middleware("jwtcheck:support");
 
 

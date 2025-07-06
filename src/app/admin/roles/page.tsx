@@ -29,18 +29,21 @@ import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
 import { apiClientWithToken } from '@/utils/axios';
+import { json } from 'stream/consumers';
 
 
 interface MockRole {
     c_id: string;
     c_name: string;
+    c_create_at: string,
+    c_update_at: string,
     permissions: string[];
 }
 
 
 
 type Order = 'asc' | 'desc';
-type SortableRoleKeys = keyof Pick<MockRole, 'c_id' | "c_name"> | 'permissionCount';
+type SortableRoleKeys = keyof Pick<MockRole, 'c_id' | "c_name" | "c_create_at" | 'c_update_at'> | 'permissionCount';
 
 
 const RoleManagementPage: React.FC = () => {
@@ -49,6 +52,7 @@ const RoleManagementPage: React.FC = () => {
     const [order, setOrder] = useState<Order>('asc');
     const [orderBy, setOrderBy] = useState<SortableRoleKeys>('c_id');
     const [page, setPage] = useState<number>(1);
+    const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
 
@@ -61,16 +65,7 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        apiClientWithToken.post('/api/role/all',JSON.stringify({page:1,pagesize:10}))
-            .then((res)=>{
-                if (res.data.code === 200){
-                    setRoles(res.data.data.data);
-                    setCount(res.data.data.count);
-                }
-                else {
-                    setFeedbackMessage({type:"error", text:res.data.message});
-                }
-            });
+        getRoleData(page, rowsPerPage);
     }, []);
 
 
@@ -80,50 +75,77 @@ const RoleManagementPage: React.FC = () => {
         setFeedbackMessage(null);
     };
 
+    const getRoleData = (page: number, pagesize: number) => {
+        apiClientWithToken.post('/api/support/role/all', JSON.stringify({ page: page, pagesize: pagesize }))
+            .then((res) => {
+                if (res.data.code === 200) {
+                    setRoles(res.data.data.data);
+                    setCount(res.data.data.count);
+                }
+                else {
+                    setFeedbackMessage({ type: "error", text: res.data.message });
+                }
+            });
+    }
+
     const handleEditRoleClick = (role: MockRole) => {
-        setEditingRole(role);
-        setIsRoleModalOpen(true);
-        setFeedbackMessage(null);
+        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+            if (res.data.code === 200) {
+                const permision = res.data.data.map(p => p.c_id);
+                setEditingRole({ ...role, permissions: permision });
+                setIsRoleModalOpen(true);
+                setFeedbackMessage(null);
+            } else {
+                setFeedbackMessage({ type: "error", text: res.data.message });
+            }
+        });
     };
 
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
+        console.log(formData);
         if (isNew) {
-            const res = await apiClientWithToken.post('/api/role/new', JSON.stringify({
-                    nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole,
-                    nameDisplay: formData.nameDisplay,
-                    description: formData.description,
+            const res = await apiClientWithToken.post('/api/support/role/new', JSON.stringify({
+                data: {
+                    id: formData.nameDisplay,
+                    name: formData.description,
                     permissions: formData.permissions
-                })
+                }
+            })
             );
             const data = await res.data;
-            if (data.code === 200){
-                setRoles(prev => [{ id: data.id, ...formData, nameKey: ('custom_' + formData.nameDisplay.toLowerCase().replace(/\s+/g, '_')) as UserRole }, ...prev]);
+            if (data.code === 200) {
+                setPage(1);
+                getRoleData(1, rowsPerPage);
                 setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
-            }else{
+            } else {
                 setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
             }
-            
         } else if (editingRole) {
-            await fetch('/api/roles', {
-                method: 'PUT',
-                body: JSON.stringify({
-                    id: editingRole.c_id,
-                    nameKey: editingRole.c_name,
-                })
-            });
-            setRoles(prev => prev.map(r =>
-                r.c_id === editingRole.c_id
-                    ? { ...r, nameDisplay: formData.nameDisplay, description: formData.description, permissions: formData.permissions }
-                    : r
-            ));
-            setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 更新成功。` });
+            const res = await apiClientWithToken.post('/api/support/role/update', JSON.stringify({
+                id: editingRole.c_id,
+                data: {
+                    name: formData.description,
+                    permissions: formData.permissions
+                }
+            })
+            );
+            if (res.data.code === 200) {
+                setRoles(prev => prev.map(r =>
+                    r.c_id === editingRole.c_id
+                        ? { ...r, nameDisplay: formData.nameDisplay, description: formData.description }
+                        : r
+                ));
+                setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 更新成功。` });
+            } else {
+                setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" ${res.data.message}` });
+            }
         }
     };
 
 
     const handleDeleteRoleClick = (role: MockRole) => {
-        if (role.nameKey === UserRole.ADMIN || role.nameKey === UserRole.STUDENT) {
-            setFeedbackMessage({ type: 'error', text: `核心角色 "${role.nameDisplay}" 不能被删除。` });
+        if (role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT) {
+            setFeedbackMessage({ type: 'error', text: `核心角色 "${role.c_id}" 不能被删除。` });
             return;
         }
         setRoleToDelete(role);
@@ -133,8 +155,9 @@ const RoleManagementPage: React.FC = () => {
 
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await fetch(`/api/roles?id=${roleToDelete.c_id}`, { method: 'DELETE' });
-            setRoles(prev => prev.filter(r => r.c_id !== roleToDelete.c_id));
+            await apiClientWithToken.post(`/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
+            const res = await apiClientWithToken.post("/api/support/role/all", JSON.stringify({ page: page, pagesize: rowsPerPage }));
+            setRoles(res.data.data.data);
             setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
         }
         setIsConfirmDeleteOpen(false);
@@ -149,8 +172,13 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        setViewingRolePerms({ nameDisplay: role.c_name, permissions: role.permissions });
-        setIsViewPermsModalOpen(true);
+        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+            if (res.data.code === 200) {
+                const permision = res.data.data.map(p => p.c_id);
+                setViewingRolePerms({ nameDisplay: role.c_id, permissions: permision });
+                setIsViewPermsModalOpen(true);
+            }
+        });
     };
 
     const sortedRoles = useMemo(() => {
@@ -206,7 +234,7 @@ const RoleManagementPage: React.FC = () => {
                 </Button>
             </Box>
 
-            <TableContainer component={Paper} sx={{boxShadow: 2}}>
+            <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
                 <Table aria-label="角色列表">
                     <TableHead sx={{ bgcolor: 'action.focus' }}>
                         <TableRow>
@@ -230,6 +258,24 @@ const RoleManagementPage: React.FC = () => {
                             </TableCell>
                             <TableCell align="center">
                                 <TableSortLabel
+                                    active={orderBy === 'c_create_at'}
+                                    direction={orderBy === 'c_create_at' ? order : 'asc'}
+                                    onClick={() => handleRequestSort('c_create_at')}
+                                >
+                                    创建时间
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell align="center">
+                                <TableSortLabel
+                                    active={orderBy === 'c_update_at'}
+                                    direction={orderBy === 'c_update_at' ? order : 'asc'}
+                                    onClick={() => handleRequestSort('c_update_at')}
+                                >
+                                    最后更新时间
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell align="center">
+                                <TableSortLabel
                                     active={orderBy === 'permissionCount'}
                                     direction={orderBy === 'permissionCount' ? order : 'asc'}
                                     onClick={() => handleRequestSort('permissionCount')}
@@ -245,17 +291,19 @@ const RoleManagementPage: React.FC = () => {
                             const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
                             return (
                                 <TableRow key={role.c_id} hover>
-                                    <TableCell sx={{fontWeight: 'medium'}}>{role.c_id}</TableCell>
-                                    <TableCell sx={{maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                                    <TableCell sx={{ fontWeight: 'medium' }}>{role.c_id}</TableCell>
+                                    <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         <Tooltip title={role.c_id} placement="top-start">
                                             <span>{role.c_name}</span>
                                         </Tooltip>
                                     </TableCell>
+                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_create_at}</TableCell>
+                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_update_at}</TableCell>
                                     <TableCell align="center">
                                         <Tooltip title={`查看 ${role.c_id} 的权限`}>
                                             <Chip
                                                 icon={<VisibilityIcon fontSize="small" />}
-                                                // label={role.permissions.length}
+                                                label={role.c_id}
                                                 size="small"
                                                 variant="outlined"
                                                 onClick={() => handleViewPermissions(role)}
@@ -263,6 +311,7 @@ const RoleManagementPage: React.FC = () => {
                                             />
                                         </Tooltip>
                                     </TableCell>
+
                                     <TableCell align="center">
                                         <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
                                             <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
@@ -270,11 +319,11 @@ const RoleManagementPage: React.FC = () => {
                                             </IconButton>
                                         </Tooltip>
                                         <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
-                      <span> {/* Span needed for disabled IconButton tooltip */}
-                          <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </span>
+                                            <span> {/* Span needed for disabled IconButton tooltip */}
+                                                <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
+                                                    <DeleteIcon />
+                                                </IconButton>
+                                            </span>
                                         </Tooltip>
                                     </TableCell>
                                 </TableRow>
@@ -282,7 +331,7 @@ const RoleManagementPage: React.FC = () => {
                         })}
                         {!sortedRoles.length && (
                             <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{py: 3}}>
+                                <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
                                     <Typography color="text.secondary">暂无角色数据。</Typography>
                                 </TableCell>
                             </TableRow>
@@ -303,7 +352,7 @@ const RoleManagementPage: React.FC = () => {
                     open={isConfirmDeleteOpen}
                     onClose={() => setIsConfirmDeleteOpen(false)}
                     title="确认删除角色"
-                    message={`您确定要删除角色 "${roleToDelete?.nameDisplay}" 吗？此操作无法撤销。`}
+                    message={`您确定要删除角色 "${roleToDelete?.c_id}" 吗？此操作无法撤销。`}
                     onConfirm={confirmDeleteRole}
                 />
             )}

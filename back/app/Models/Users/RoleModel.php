@@ -83,11 +83,10 @@
             } 
         }
 
-        public static function grantRole2User (string $role_id,string $user_id):array {
-            $sql = "INSERT INTO c_users_roles VALUES(?,?)";
+        public static function grantRole2User (array $values):array {
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$user_id,$role_id]);
+                $res = db::table("c_users_roles")->insert($values);
                 if($res) {
                     db::commit();
                     return [
@@ -139,13 +138,26 @@
                 $res = db::insert($sql,[$data['id'],$data['name']]);
                 if ($res) {
                     db::commit();
+                    $permissions = array_map(function($permissionId) use ($data) {
+                        return [
+                            'c_role_id' => $data['id'],
+                            'c_permission_id' => $permissionId
+                        ];
+                    }, $data["permissions"]);
+                    $permissionsModelRes = PermissionModel::grantPermission2Role($data["id"],$permissions);
+                    if ($permissionsModelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                        RoleModel::deleteRoleById($data["id"]);
+                        return [
+                            "code" => GlobalResponse::$DATABASE_ERROR_CODE
+                        ];
+                    }
                     return [
                         "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     ];
                 }
                 db::rollBack();
                 return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch(Exception $e) {
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
@@ -162,6 +174,14 @@
                 $res = db::update($sql,[$data['name'],$id]);
                 if ($res) {
                     db::commit();
+                    $permissions = array_map(function($permissionId) use ($id) {
+                        return [
+                            'c_role_id' => $id,
+                            'c_permission_id' => $permissionId
+                        ];
+                    }, $data["permissions"]);
+                    PermissionModel::grantPermission2Role($id,$permissions);
+
                     return [
                         "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                     ];
@@ -182,12 +202,12 @@
             $sql = "DELETE FROM c_roles WHERE c_id = ?";
             try {
                 db::beginTransaction();
+                $sql_user_role = "DELETE FROM c_users_roles WHERE c_role_id = ?";
+                $sql_role_permission = "DELETE FROM c_roles_permissions WHERE c_role_id = ?";
+                $res_role_permission = db::delete($sql_role_permission,[$id]);
+                $res_user_role = db::delete($sql_user_role,[$id]);
                 $res = db::delete($sql,[$id]);
                 if($res) {
-                    $sql_user_role = "DELETE FROM c_USERS_ROLES WHERE c_role_id = ?";
-                    $sql_role_permission = "DELETE FROM c_ROLES_PERMISSIONS WHERE c_role_id = ?";
-                    $res_role_permission = db::delete($sql_role_permission,[$id]);
-                    $res_user_role = db::delete($sql_user_role,[$id]);
                     if ($res_user_role >=0 && $res_role_permission >=0) {
                         db::commit();
                         return [

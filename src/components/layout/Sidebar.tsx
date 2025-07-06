@@ -84,14 +84,14 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
   };
 
   const navItems: NavItemType[] = [
-    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'DASHBOARD_VIEW' },
+    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'databoard_view' },
     {
       label: "人员测试分系统",
       icon: AcademicCapIcon,
       children: [
-        { to: "/learn/quiz", label: "在线测验", icon: QuestionMarkCircleIcon, requiredPermission: 'LEARN_QUIZ_ACCESS' },
-        { to: "/learn/cases", label: "课程案例", icon: FolderOpenIconHero, requiredPermission: 'LEARN_CASES_ACCESS' },
-        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'LEARN_QUESTION_BANK_MANAGE' },
+        { to: "/learn/quiz", label: "在线测验", icon: QuestionMarkCircleIcon, requiredPermission: 'study_test' },
+        { to: "/learn/cases", label: "课程案例", icon: FolderOpenIconHero, requiredPermission: 'study_case' },
+        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
       ]
     },
     {
@@ -100,24 +100,24 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         // { to: "/scenario/envirments", label: "环境配置", icon: AdjustmentsHorizontalIcon, requiredPermission: 'SCENARIO_ENVIRONMENTS_CONFIG' },
         // --- 新增的子菜单 ---
-        { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'SCENARIO_MANAGE' }
+        { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'scene_setting' }
       ]
     },
     {
       label: "安全实验分系统", // Renamed from "安全使用分系统"
       icon: ShieldCheckIcon,
       children: [
-        {to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
-        {to: "/drill/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
+        {to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'ad_test' }, // Renamed from "安全演练"
+        {to: "/drill/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'ad' } // Renamed from "安全演练"
       ]
     },
     {
       label: "基础支撑分系统",
       icon: Cog6ToothIcon,
-      requiredPermission: 'ADMIN_USERS_MANAGE',
+      requiredPermission: 'support',
       children: [
-        { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'ADMIN_USERS_MANAGE' },
-        { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'ADMIN_ROLES_MANAGE' },
+        { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'support_user' },
+        { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'support_role' },
         { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' },
@@ -132,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
 
   const filteredNavItems = useMemo(() => {
     if (!user?.role) return [];
-    const userPermissions = USER_ROLES_CONFIG[user.role]?.permissions || [];
+    const userPermissions = user.permission || [];
 
     const filterItems = (items: NavItemType[]): NavItemType[] => {
       return items.reduce((acc, item) => {
@@ -238,8 +238,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                   <AccountCircleIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="body2" fontWeight="medium">{user.user.username}</Typography>
-                  <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
+                  <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
+                  <Typography variant="caption" color="text.secondary">{user.role}</Typography>
                 </Box>
               </Box>
           )}

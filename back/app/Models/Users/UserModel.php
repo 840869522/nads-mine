@@ -90,7 +90,14 @@
         public static function getUserById(string $id) :array {
             $sql = "SELECT * FROM `c_users` WHERE c_username = ?";
             try {
-                $res = db::selectOne($sql,[$id,$id]);
+                $res = db::selectOne($sql,[$id]);
+                $roleModelRes = RoleModel::getUserRole($id);
+                if ($roleModelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                    return [
+                        "code"=> GlobalResponse::$DATABASE_ERROR_CODE
+                    ];
+                }
+                $res->role = array_map(function ($item) {return $item->c_id;},$roleModelRes["data"]);
                 return [
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data" => $res,
@@ -110,6 +117,19 @@
                 $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
                 if ($res){
                     db::commit();
+                    $roles = array_map(function($role_id) use ($data) {
+                        return [
+                            'c_user_id' => $data['username'],
+                            'c_role_id' => $role_id
+                        ];
+                    }, $data["role"]);
+                    $roleModelRes = RoleModel::grantRole2User($roles);
+                    if ($roleModelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE){
+                        UserModel::deleteUserById($data["username"]);
+                        return [
+                            "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
+                        ];
+                    }
                     return [
                         'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     ];
@@ -153,7 +173,7 @@
 
         public static function deleteUserById (string $id) :array {
             $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
-            $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
+            $sql_user_role = "DELETE * FROM `c_users_roles WHERE user_id = ?";
             try {
                 if (!$id)
                     return [
@@ -162,7 +182,7 @@
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);
                 $res_user_role = db::delete($sql_user_role, [$id]);
-                if ($res && $res_user_role) {
+                if ($res && $res_user_role >=0) {
                     db::commit();
                     return [
                         "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE,

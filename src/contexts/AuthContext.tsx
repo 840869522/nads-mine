@@ -4,6 +4,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '../types';
 import { apiClient } from '@/utils/axios';
 import { deleteCookie, setCookie } from '@/utils/cookie';
+import { permission } from 'process';
 
 
 interface AuthContextType {
@@ -29,14 +30,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (username: string, Np: string) => {
-    const res = await apiClient.post('/api/user/login', JSON.stringify({ username, password: Np }));
+    const res = await apiClient.post('/api/support/user/login', JSON.stringify({ username, password: Np }));
     const data = await res.data;
     if (data.code ===  200 ) {
-      var loggedInUser = {user:data.data.user,role:data.data.role};
+      var loggedInUser = {user:data.data.user,role:data.data.role,permission:data.data.permissions};
       if (data.data.role.includes(UserRole.ADMIN)){
-        loggedInUser = {user:data.data.user,role:UserRole.ADMIN};
+        loggedInUser = {...loggedInUser,user:data.data.user,role:UserRole.ADMIN};
       }else if (data.data.role.includes(UserRole.STUDENT)){
-        loggedInUser = {user:data.data.user,role:UserRole.STUDENT};
+        loggedInUser = {...loggedInUser,user:data.data.user,role:UserRole.STUDENT};
       }
       setUser(loggedInUser);
       localStorage.setItem('droneSimUser', JSON.stringify(loggedInUser));
@@ -50,9 +51,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    deleteCookie("_auth");
     setUser(null);
     localStorage.removeItem('droneSimUser');
-    deleteCookie("_auth");
+    
   };
 
   return (
