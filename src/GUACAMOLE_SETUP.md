@@ -59,6 +59,17 @@ chmod +x scripts/init_demo_vms.sh
 - [Ubuntu 22.04 Minimal](https://cloud-images.ubuntu.com/minimal/releases/22.04/release/ubuntu-22.04-minimal-cloudimg-amd64.img)
 - [Windows 10 Evaluation](https://go.microsoft.com/fwlink/?linkid=2215517)
 
+脚本默认为 Linux 与 Windows 虚拟机分别设置密码 `demo123` 与 `P@ssw0rd`，
+无需本地 `~/.ssh/id_rsa.pub` 文件即可登录。如果希望改用 SSH 密钥登录 Linux
+实例，可先运行：
+
+```bash
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
+```
+
+然后在脚本中将 `--admin-password demo123` 替换为
+`--ssh-key "$(cat ~/.ssh/id_rsa.pub)"`。
+
 执行完成后，默认端口分别为：SSH `2222`、RDP `33389`、VNC 从虚拟机 XML 中读取
 （通常为 `59xx`）。可以在浏览器中访问如下地址测试：
 
