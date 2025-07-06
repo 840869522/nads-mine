@@ -93,7 +93,7 @@ class UserModel extends Model{
     public static function getUserById(string $id) :array {
         $sql = "SELECT * FROM `c_users` WHERE c_username = ?";
         try {
-            $res = db::selectOne($sql,[$id,$id]);
+            $res = db::selectOne($sql,[$id]);
             return [
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
                 "data" => $res,
