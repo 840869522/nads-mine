@@ -122,7 +122,8 @@
                     "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            $modelRes = PermissionModel::grantPermission2Role($role_id,$permission_id);
+            $value = ["c_role_id"=>$role_id,"c_permission_id"=>$permission_id];
+            $modelRes = PermissionModel::grantPermission2Role($role_id,$value);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,

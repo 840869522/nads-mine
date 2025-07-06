@@ -144,14 +144,20 @@
                 ]);
             }
             UserModel::updateUserLastLogin($user->c_username);
-            $user->password = "";
+            $new_user = [
+                "c_username"=>$user->c_username,
+                "c_email"=>$user->c_email
+            ];
             return response()->json([
                 "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                 "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,
                 "data" => [
                     "token" => $jwtRes['token'],
-                    "user" => $user,
-                    "role"=> array_map(function ($item) {return $item->c_id;},$role["data"])
+                    "user" => $new_user,
+                    "role"=> array_map(function ($item) {return $item->c_id;},$role["data"]),
+                    "permissions"=> array_map(function ($item) {
+                        return $item->c_permission_id ;
+                    }, $permissions["data"])
                 ]
             ]);
         }

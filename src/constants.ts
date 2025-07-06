@@ -7,29 +7,38 @@ export const APP_NAME = "网络安全实验平台";
 export interface AppPermission {
   key: string;
   label: string;
-  category: string;
+}
+
+
+
+export const APP_PERMISSIONS_CATEGORY = {
+  "study":"人员测试分系统",
+  "scene":"环境构建分系统",
+  "support":"基础支撑分系统",
+  "ad" :"安全使用分系统",
+  "databoard":"仪表盘"
 }
 
 export const APP_PERMISSIONS: AppPermission[] = [
   // Dashboard
-  { key: 'DASHBOARD_VIEW', label: '查看仪表盘', category: '仪表盘' },
+  { key: 'databoard_view', label: '查看仪表盘'},
 
   // Personnel Testing System (人员测试分系统)
-  { key: 'LEARN_QUIZ_ACCESS', label: '访问在线测验', category: '人员测试分系统' },
-  { key: 'LEARN_CASES_ACCESS', label: '访问课程案例', category: '人员测试分系统' },
-  { key: 'LEARN_QUESTION_BANK_MANAGE', label: '管理题库', category: '人员测试分系统' },
+  { key: 'study_test', label: '访问在线测验',  },
+  { key: 'study_case', label: '访问课程案例', },
+  { key: 'study_questions', label: '管理题库', },
 
   // Environment Construction System (环境构建分系统)
-  { key: 'SCENARIO_ENVIRONMENTS_CONFIG', label: '配置环境 (拓扑)', category: '环境构建分系统' },
-  { key: 'SCENARIO_IMAGES_MANAGE', label: '管理镜像', category: '环境构建分系统' },
-  { key: 'SCENARIO_INSTANCES_MANAGE', label: '管理实例', category: '环境构建分系统' },
+  { key: 'scene_setting', label: '配置环境 (拓扑)' },
+  { key: 'scene_image', label: '管理镜像' },
+  { key: 'scene_instance', label: '管理实例' },
 
   // Security Usage System (安全使用分系统)
-  { key: 'DRILL_ACCESS', label: '访问安全演练', category: '安全使用分系统' },
+  { key: 'ad_test', label: '访问安全演练' },
 
   // Admin / Base Support System (基础支撑分系统)
-  { key: 'ADMIN_USERS_MANAGE', label: '管理用户', category: '基础支撑分系统' },
-  { key: 'ADMIN_ROLES_MANAGE', label: '管理角色与权限', category: '基础支撑分系统' },
+  { key: 'support_user', label: '管理用户' },
+  { key: 'support_role', label: '管理角色与权限' },
 ];
 
 

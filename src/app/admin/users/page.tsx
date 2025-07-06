@@ -33,6 +33,8 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
 import { table } from 'console';
+import { json } from 'stream/consumers';
+import { PagedItem } from '@google/genai';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type UserDisplayItem = {c_username:string;  c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
@@ -60,7 +62,11 @@ const UserManagementPage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    apiClientWithToken.post('/api/user/all', JSON.stringify({ page: page, pagesize: rowsPerPage })).then((res) => {
+    getUserData(page,rowsPerPage)
+  }, []);
+
+  const getUserData = (page:number,pagesize:number) =>{
+    apiClientWithToken.post('/api/support/user/all', JSON.stringify({ page: page, pagesize: pagesize })).then((res) => {
       if (res.data.code === 200) {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
@@ -68,8 +74,7 @@ const UserManagementPage: React.FC = () => {
     }).finally(() => {
       setTableLoading(false);
     });
-  }, []);
-
+  }
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
@@ -79,7 +84,7 @@ const UserManagementPage: React.FC = () => {
   const handleSearchSubmit = async () => {
     setTableLoading(true);
     try {
-      const res = await apiClientWithToken.post("/api/user/search", JSON.stringify({
+      const res = await apiClientWithToken.post("/api/support/user/search", JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
         name: searchTerm.data
@@ -120,22 +125,36 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleEditUserClick = (user: UserDisplayItem) => {
-    setEditingUser(user);
-    setIsUserModalOpen(true);
-    setFeedbackMessage(null);
+    apiClientWithToken.post("/api/support/user/id",JSON.stringify({id:user.c_username})).then((res)=>{
+        if (res.data.code === 200){
+            setEditingUser(user);
+            setIsUserModalOpen(true);
+            setFeedbackMessage(null);
+        }else{
+          setFeedbackMessage({type:"error",text:res.data.message});
+        }
+    })
   };
 
   const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
     if (isNew) {
-      await apiClientWithToken.post('/api/user/new', JSON.stringify({
+      var userData = {
         username: formData.username,
-        passwordHash: CryptoJS.SHA256(formData.password).toString(),
+        password: CryptoJS.SHA256(formData.password).toString(),
         email: formData.email,
-        is_login: formData.status == "active" ? 1 : 0
-      })
-      );
-      setUsers(prev => [{ c_username: formData.username!, c_email: formData.email!, c_is_login: formData.status == 'active' ? 1 : 0 }, ...prev]);
-      setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 添加成功。` });
+        is_login: formData.status == "active" ? 1 : 0,
+        role:[formData.role]
+      }
+      console.log(userData);
+      apiClientWithToken.post('/api/support/user/new', JSON.stringify({ data : {...userData}})).then((res)=>{
+        if (res.data.code === 200){
+          setPage(1);;
+          getUserData(1,rowsPerPage);
+          setFeedbackMessage({type:"success",text:`用户 "${formData.username}" 添加成功。`});
+        }else{
+          setFeedbackMessage({type:"error",text:`用户 "${formData.username}" 添加失败。`})
+        }
+      });
     } else if (editingUser) {
       await apiClientWithToken.post('/api/user/update', JSON.stringify({
         id: editingUser.c_username,
@@ -159,7 +178,7 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      apiClientWithToken.post(`/api/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+      apiClientWithToken.post(`/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
         if (res.data.code === 200) {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
           setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });

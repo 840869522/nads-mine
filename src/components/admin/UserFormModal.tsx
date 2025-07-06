@@ -16,8 +16,8 @@ import {
   SelectChangeEvent,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { User, UserRole } from '../../types';
-import { USER_ROLES_CONFIG } from '../../constants';
+import { User, UserRole } from '@/types';
+import { USER_ROLES_CONFIG } from '@/constants';
 
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
@@ -49,6 +49,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
   const [formData, setFormData] = useState<UserFormData>(DEFAULT_FORM);
   const [errors,  setErrors]    = useState<Record<string, string>>({});
   const isNewUser               = !initialUser;
+  const [roles, setRoles] = useState([]);
 
   // ----------- Sync initial data -----------
   useEffect(() => {

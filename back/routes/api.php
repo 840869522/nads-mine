@@ -1,8 +1,6 @@
 <?php
 
-use App\Http\Controllers\ad\RefereeController;
-use App\Http\Controllers\ad\TeamController;
-use Illuminate\Support\Facades\Route;
+    use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -45,7 +43,7 @@ use Illuminate\Support\Facades\Route;
             Route::post("/new",[UserController::class,"insertNewUser"]);
             Route::post("/update",[UserController::class,"updateUserInfo"])->middleware("jwtcheck");
             Route::post("/delete",[UserController::class,"deleteUser"])->middleware("jwtcheck:edit-users");
-        });
+        })->middleware("jwtcheck:support_user");
 
         Route::prefix("role")->group(function(){
             Route::post("/all",[RoleController::class,"getAllRole"])->middleware("jwtcheck:get-all-roles");
@@ -56,7 +54,7 @@ use Illuminate\Support\Facades\Route;
             Route::post("/delete",[RoleController::class,"deleteRole"])->middleware("jwtcheck:edit-roles");
             Route::post("/grant", [RoleController::class,"grantRoles2User"])->middleware("jwtcheck:edit-roles");
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"])->middleware("jwtcheck:edit-roles");
-        });
+        })->middleware("jwtcheck:support_role");
 
         Route::prefix('permission')->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission'])->middleware('jwtcheck:get-all-permissions');
@@ -68,7 +66,7 @@ use Illuminate\Support\Facades\Route;
             Route::post('/delete', [PermissionController::class, 'deletePermission'])->middleware('jwtcheck:edit-permissions');
             Route::post('/grant', [PermissionController::class, 'grantPermission2Role'])->middleware('jwtcheck:edit-permissions');
             Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole'])->middleware('jwtcheck:edit-permissions');
-        });
+        })->middleware("jwtcheck:support_permissions");
     })->middleware("jwtcheck:support");
 
 
