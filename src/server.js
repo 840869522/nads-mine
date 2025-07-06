@@ -1,4 +1,7 @@
 // server.js
+// NOTE: The Python FastAPI backend is still launched for legacy routes.
+// PHP now directly invokes `main_cli_local.py`, but this file remains
+// unchanged to keep existing Node.js functionality working.
 import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';

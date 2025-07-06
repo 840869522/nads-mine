@@ -3,132 +3,172 @@ namespace App\Http\Controllers\Vm\MainCli;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
+use Symfony\Component\Process\Process;
 
 class VmController extends Controller
 {
-    private Client $client;
+    private string $python;
+    private string $script;
 
     public function __construct()
     {
-        $host = env('PYTHON_API_HOST', '127.0.0.1');
-        $port = env('PYTHON_API_PORT', '3010');
-        $base = "http://{$host}:{$port}";
-        $this->client = new Client(['base_uri' => $base]);
+        $root = dirname(base_path());
+        $this->python = $root . '/.venv/bin/python3';
+        $this->script = $root . '/src/main_cli_local.py';
     }
 
-    private function forward(string $method, string $uri, array $options = [])
+    private function runCli(array $args)
     {
-        try {
-            $res = $this->client->request($method, $uri, $options);
-            $body = $res->getBody()->getContents();
-            return response($body, $res->getStatusCode())
-                ->header('Content-Type', $res->getHeaderLine('Content-Type'));
-        } catch (RequestException $e) {
-            $response = $e->getResponse();
-            if ($response) {
-                $body = $response->getBody()->getContents();
-                return response($body, $response->getStatusCode())
-                    ->header('Content-Type', $response->getHeaderLine('Content-Type'));
-            }
-            return response()->json(['error' => $e->getMessage()], 500);
+        $cmd = array_merge([$this->python, $this->script], $args);
+        $process = new Process($cmd);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $err = trim($process->getErrorOutput() ?: $process->getOutput());
+            return response()->json(['error' => $err], 500);
         }
+
+        $output = trim($process->getOutput());
+        $data = json_decode($output, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $status = $data['status_code'] ?? 200;
+            unset($data['status_code']);
+            return response()->json($data, $status);
+        }
+
+        return response($output, 200)
+            ->header('Content-Type', 'application/json');
     }
 
     // GET /vms
     public function listVms()
     {
-        return $this->forward('GET', '/api/vms');
+        return $this->runCli(['list-vms']);
     }
 
     // GET /vms/images
     public function listVmImages()
     {
-        return $this->forward('GET', '/api/vms/images');
+        return $this->runCli(['list-images']);
     }
 
     // POST /vms/create
     public function createVm(Request $request)
     {
-        return $this->forward('POST', '/api/vms/create', [
-            'json' => $request->all(),
-        ]);
+        $data = $request->all();
+        $args = ['create-vm'];
+        foreach ([
+            'vm_name' => '--vm-name',
+            'base_image' => '--base-image',
+            'memory' => '--memory',
+            'vcpus' => '--vcpus',
+            'disk_gb' => '--disk-gb',
+            'ssh_key' => '--ssh-key',
+            'admin_password' => '--admin-password',
+            'static_ip' => '--static-ip',
+            'guac_url' => '--guac-url',
+            'guac_username' => '--guac-username',
+            'guac_password' => '--guac-password',
+            'guac_folder_id' => '--guac-folder-id',
+        ] as $key => $flag) {
+            if (isset($data[$key]) && $data[$key] !== null) {
+                $args[] = $flag;
+                $args[] = (string) $data[$key];
+            }
+        }
+        return $this->runCli($args);
     }
 
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
-        return $this->forward('GET', "/api/vms/{$vmName}/guac", [
-            'query' => $request->query(),
-        ]);
+        $query = $request->query();
+        $args = ['guac-info', $vmName];
+        foreach ([
+            'url' => '--url',
+            'username' => '--username',
+            'password' => '--password',
+        ] as $key => $flag) {
+            if (isset($query[$key])) {
+                $args[] = $flag;
+                $args[] = (string) $query[$key];
+            }
+        }
+        return $this->runCli($args);
     }
 
     // GET /vms/{vm_id}
     public function getVmInfo($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}");
+        return $this->runCli(['get-vm', $vmId]);
     }
 
     // POST /vms/{vm_id}/actions/{action}
     public function manageVmLifecycle($vmId, $action)
     {
-        return $this->forward('POST', "/api/vms/{$vmId}/actions/{$action}");
+        return $this->runCli(['lifecycle', $vmId, $action]);
     }
 
     // GET /vms/{vm_id}/snapshots
     public function listVmSnapshots($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/snapshots");
+        return $this->runCli(['list-snapshots', $vmId]);
     }
 
     // POST /vms/{vm_id}/snapshots
     public function createVmSnapshot($vmId, Request $request)
     {
-        return $this->forward('POST', "/api/vms/{$vmId}/snapshots", [
-            'json' => $request->all(),
-        ]);
+        $data = $request->all();
+        $args = ['create-snapshot', $vmId];
+        if (isset($data['name'])) {
+            $args[] = $data['name'];
+        }
+        if (isset($data['description'])) {
+            $args[] = '--description';
+            $args[] = $data['description'];
+        }
+        return $this->runCli($args);
     }
 
     // POST /vms/{vm_id}/snapshots/{snapshot_id}/revert
     public function revertVmSnapshot($vmId, $snapshotId)
     {
-        return $this->forward('POST', "/api/vms/{$vmId}/snapshots/{$snapshotId}/revert");
+        return $this->runCli(['revert-snapshot', $vmId, $snapshotId]);
     }
 
     // DELETE /vms/{vm_id}/snapshots/{snapshot_id}
     public function deleteVmSnapshot($vmId, $snapshotId)
     {
-        return $this->forward('DELETE', "/api/vms/{$vmId}/snapshots/{$snapshotId}");
+        return $this->runCli(['delete-snapshot', $vmId, $snapshotId]);
     }
 
     // GET /vms/{vm_id}/storage/disks
     public function listVmDisks($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/storage/disks");
+        return $this->runCli(['list-disks', $vmId]);
     }
 
     // GET /vms/{vm_id}/storage/cdroms
     public function listVmCdroms($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/storage/cdroms");
+        return $this->runCli(['list-cdroms', $vmId]);
     }
 
     // GET /vms/{vm_id}/network/vnics
     public function listVmVnics($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/network/vnics");
+        return $this->runCli(['list-vnics', $vmId]);
     }
 
     // GET /vms/{vm_id}/metrics
     public function getVmRealtimeMetrics($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/metrics");
+        return $this->runCli(['metrics', $vmId]);
     }
 
     // GET /vms/{vm_id}/events
     public function listVmEvents($vmId)
     {
-        return $this->forward('GET', "/api/vms/{$vmId}/events");
+        return $this->runCli(['events', $vmId]);
     }
 }
