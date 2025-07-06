@@ -75,7 +75,7 @@
     });
 
     Route::prefix('vms')->group(function () {
-        $c = VmController::class;
+        $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
         Route::get('/', [$c, 'listVms']);
         Route::get('/images', [$c, 'listVmImages']);
         Route::post('/create', [$c, 'createVm']);
