@@ -1,8 +1,6 @@
 <?php
 
-use App\Http\Controllers\ad\RefereeController;
-use App\Http\Controllers\ad\TeamController;
-use Illuminate\Support\Facades\Route;
+    use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -12,6 +10,8 @@ use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\ImagesController;
     use App\Http\Controllers\InstancesController;
     use App\Http\Controllers\ContainersController;
+    use App\Http\Controllers\ad\RefereeController;
+    use App\Http\Controllers\ad\TeamController;
 
     /*
     |--------------------------------------------------------------------------
@@ -36,9 +36,9 @@ use Illuminate\Support\Facades\Route;
     /**
      * 定义基础分系统路由
      */
+    Route::post("support/user/login",[UserController::class,"login"]);
     Route::prefix("support")->group(function() {
         Route::prefix("user")->group(function() {
-            Route::post("/login",[UserController::class,"login"]);
             Route::post("/id",[UserController::class,"getUserById"])->middleware("jwtcheck");
             Route::post("/search",[UserController::class,"searchUser"])->middleware("jwtcheck:get-all-users");
             Route::post("/all",[UserController::class,"getAllUser"])->middleware("jwtcheck:get-all-users");
