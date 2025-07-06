@@ -74,22 +74,9 @@
     });
 
     Route::prefix('vms')->group(function () {
-        $c = App\Http\Controllers\Vm\VmController::class;
-        Route::get('/', [$c, 'index']);
-        Route::get('/images', [$c, 'images']);
-        Route::post('/create', [$c, 'create']);
-        Route::get('/{vm_name}/guac', [$c, 'guac']);
-        Route::get('/{vm_id}', [$c, 'info']);
-        Route::post('/{vm_id}/actions/{action}', [$c, 'lifecycle']);
-        Route::get('/{vm_id}/snapshots', [$c, 'snapshots']);
-        Route::post('/{vm_id}/snapshots', [$c, 'createSnapshot']);
-        Route::post('/{vm_id}/snapshots/{snapshot_id}/revert', [$c, 'revertSnapshot']);
-        Route::delete('/{vm_id}/snapshots/{snapshot_id}', [$c, 'deleteSnapshot']);
-        Route::get('/{vm_id}/storage/disks', [$c, 'disks']);
-        Route::get('/{vm_id}/storage/cdroms', [$c, 'cdroms']);
-        Route::get('/{vm_id}/network/vnics', [$c, 'vnics']);
-        Route::get('/{vm_id}/metrics', [$c, 'metrics']);
-        Route::get('/{vm_id}/events', [$c, 'events']);
+        $c = App\Http\Controllers\Vm\VmProxyController::class;
+        // Catch-all proxy to FastAPI backend
+        Route::any('/{path?}', [$c, 'handle'])->where('path', '.*');
     });
 
 ?>
