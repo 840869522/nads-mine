@@ -168,7 +168,11 @@ const UserManagementPage: React.FC = () => {
       if (res.data.code  === 200){
         setUsers(prev => prev.map(u =>
             u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+<<<<<<< HEAD
         ));
+=======
+          ));
+>>>>>>> new-branch
         setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
       }else{
         setFeedbackMessage({ type: 'error', text: `用户 "${formData.username}" 更新失败。` });

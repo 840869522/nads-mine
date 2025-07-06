@@ -83,21 +83,21 @@
             } 
         }
 
-        public static function grantRole2User (array $values):array {
+        public static function grantRole2User (string $user_id,array $values):array {
             try {
                 db::beginTransaction();
+                $res_delete = db::table("c_users_roles")->where("c_user_id",$user_id)->delete();
                 $res = db::table("c_users_roles")->insert($values);
-                if($res) {
-                    db::commit();
+                if ($res_delete === false || $res === false) {
+                    db::rollBack();
                     return [
-                        "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                        "code" => GlobalResponse::$DATABASE_ERROR_CODE
                     ];
                 }
-                db::rollBack();
+                db::commit();
                 return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
-                return [];
             }catch (Exception $e) {
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
