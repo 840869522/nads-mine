@@ -2,32 +2,45 @@
 
 本文档描述如何在本服务器上部署 [Apache Guacamole](https://guacamole.apache.org/) 并使 `src/main_cli.py` 中的 `/api/vms/create` 接口能够自动创建 SSH、VNC 与 RDP 连接。
 
-## 1. 安装依赖
+## 1. Docker 安装
 
-以 Ubuntu 22.04 为例，首先安装构建 guacd 所需的库及 Tomcat9：
+推荐使用 Docker 快速部署 Guacamole，无需手动编译 `guacd` 与 Web 应用。
+以下示例使用 `docker-compose` 在同一台服务器上同时运行 `guacd` 与
+`guacamole` Web 容器：
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential libcairo2-dev libjpeg-turbo8-dev \
-  libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev \
-  freerdp2-dev libpango1.0-dev libssh2-1-dev libtelnet-dev \
-  libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev \
-  tomcat9 tomcat9-admin
+sudo apt install -y docker.io docker-compose
 ```
 
-接下来下载并编译 `guacamole-server`：
+创建 `docker-compose.yml`：
+
+```yaml
+version: '3'
+services:
+  guacd:
+    image: guacamole/guacd:1.5.4
+    container_name: guacd
+    restart: unless-stopped
+  guacamole:
+    image: guacamole/guacamole:1.5.4
+    container_name: guacamole
+    restart: unless-stopped
+    environment:
+      GUACD_HOSTNAME: guacd
+    ports:
+      - "8080:8080"
+    depends_on:
+      - guacd
+```
+
+启动服务：
 
 ```bash
-wget https://downloads.apache.org/guacamole/1.5.4/source/guacamole-server-1.5.4.tar.gz
- tar -xf guacamole-server-1.5.4.tar.gz
- cd guacamole-server-1.5.4
- ./configure --with-init-dir=/etc/init.d
- make -j$(nproc)
- sudo make install
- sudo ldconfig
- sudo systemctl enable guacd
- sudo systemctl start guacd
+sudo docker-compose up -d
 ```
+
+容器就绪后，可在浏览器访问 `http://<服务器IP>:8080/guacamole` 进入 Web 界面。
 
 ## 2. 部署 Web 应用
 
