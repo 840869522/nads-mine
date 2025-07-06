@@ -20,10 +20,7 @@ const nextConfig = {
       },
     ];
   },
-<<<<<<< HEAD
-=======
 
->>>>>>> new-branch
 };
 
 export default nextConfig;
