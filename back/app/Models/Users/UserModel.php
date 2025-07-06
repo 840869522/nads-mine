@@ -130,7 +130,6 @@ class UserModel extends Model{
         }
     }
 
-<<<<<<< HEAD
 
     public static function updateUserById(string $id, array $data) :array {
         $sql = "UPDATE `c_users` SET c_is_login = ?,c_email = ?,c_password = ?, c_update_at = NOW() WHERE c_username = ?";
@@ -139,19 +138,6 @@ class UserModel extends Model{
             $res = db::update($sql,[$data["is_login"],$data['email'],$data['password'],$id]);
             if ($res){
                 db::commit();
-=======
-        public static function getUserById(string $id) :array {
-            $sql = "SELECT * FROM `c_users` WHERE c_username = ?";
-            try {
-                $res = db::selectOne($sql,[$id]);
-                $roleModelRes = RoleModel::getUserRole($id);
-                if ($roleModelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
-                    return [
-                        "code"=> GlobalResponse::$DATABASE_ERROR_CODE
-                    ];
-                }
-                $res->role = array_map(function ($item) {return $item->c_id;},$roleModelRes["data"]);
->>>>>>> ef1d209c76cf91d37f3a34edd105dc6e99d5c1a2
                 return [
                     'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
                 ];
@@ -168,45 +154,12 @@ class UserModel extends Model{
         }
     }
 
-<<<<<<< HEAD
 
     public static function deleteUserById (string $id) :array {
         $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
         $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
         try {
             if (!$id)
-=======
-        public static function insertNewUser(array $data) :array {
-            try {
-                $sql = "INSERT INTO `c_users`(c_username,c_password,c_email,c_create_at,c_update_at) VALUES(?,?,?,NOW(),NOW())";
-                db::beginTransaction();
-                $res = db::insert($sql,[$data['username'],$data['password'],$data["email"]]);
-                if ($res){
-                    db::commit();
-                    $roles = array_map(function($role_id) use ($data) {
-                        return [
-                            'c_user_id' => $data['username'],
-                            'c_role_id' => $role_id
-                        ];
-                    }, $data["role"]);
-                    $roleModelRes = RoleModel::grantRole2User($roles);
-                    if ($roleModelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE){
-                        UserModel::deleteUserById($data["username"]);
-                        return [
-                            "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
-                        ];
-                    }
-                    return [
-                        'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
-                    ];
-                }
-                db::rollBack();
-                return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
-                ];
-            }catch(Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
->>>>>>> ef1d209c76cf91d37f3a34edd105dc6e99d5c1a2
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
                 ];
@@ -230,46 +183,6 @@ class UserModel extends Model{
                 "code"=>GlobalResponse::$DATABASE_ERROR_CODE
             ];
         }
-<<<<<<< HEAD
-=======
-
-
-        public static function deleteUserById (string $id) :array {
-            $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
-            $sql_user_role = "DELETE * FROM `c_users_roles WHERE user_id = ?";
-            try {
-                if (!$id)
-                    return [
-                        "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
-                    ];
-                db::beginTransaction();
-                $res = db::delete($sql,[$id]);
-                $res_user_role = db::delete($sql_user_role, [$id]);
-                if ($res && $res_user_role >=0) {
-                    db::commit();
-                    return [
-                        "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE,
-                    ];
-                }else{
-                    db::rollBack();
-                    return [
-                        "code"=>GlobalResponse::$DATABASE_ERROR_CODE
-                    ];
-                }
-            }catch(Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
-                return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
-                ];
-            }
-        }
-
-        public static function updateUserLastLogin(string $id) {
-            $sql = "UPDATE c_users SET c_last_login = NOW() WHERE c_username = ?";
-            db::update($sql,[$id]);
-        }
-
->>>>>>> ef1d209c76cf91d37f3a34edd105dc6e99d5c1a2
     }
 
     public static function updateUserLastLogin(string $id) {

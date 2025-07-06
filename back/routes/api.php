@@ -1,6 +1,8 @@
 <?php
 
-    use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ad\RefereeController;
+use App\Http\Controllers\ad\TeamController;
+use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;

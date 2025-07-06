@@ -68,11 +68,11 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     if (currentPath.startsWith('/scenario')) initialOpenMenus["环境构建分系统"] = true;
     if (currentPath.startsWith('/drill')) initialOpenMenus["安全实验分系统"] = true; // Updated key
     if (
-      currentPath.startsWith('/admin') ||
-      currentPath.startsWith('/scenario/images') ||
-      currentPath.startsWith('/scenario/instances') ||
-      currentPath.startsWith('/scenario/vm-images') ||
-      currentPath.startsWith('/scenario/vm-instances')
+        currentPath.startsWith('/admin') ||
+        currentPath.startsWith('/scenario/images') ||
+        currentPath.startsWith('/scenario/instances') ||
+        currentPath.startsWith('/scenario/vm-images') ||
+        currentPath.startsWith('/scenario/vm-instances')
     )
       initialOpenMenus["基础支撑分系统"] = true; // Updated to open if viewing moved items
     return initialOpenMenus;
@@ -107,14 +107,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       label: "安全实验分系统", // Renamed from "安全使用分系统"
       icon: ShieldCheckIcon,
       children: [
-<<<<<<< HEAD
-        {to: "/ad", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
-        {to: "/ad/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' }, // Renamed from "安全演练"
-        {to: "/ad/referee", label: "裁判管理", icon: ShieldCheckIcon, requiredPermission: 'DRILL_ACCESS' } // Renamed from "安全演练"
-=======
-        {to: "/drill", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'ad_test' }, // Renamed from "安全演练"
-        {to: "/drill/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'ad' } // Renamed from "安全演练"
->>>>>>> ef1d209c76cf91d37f3a34edd105dc6e99d5c1a2
+        {to: "/ad", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'ad_test' }, // Renamed from "安全演练"
+        {to: "/ad/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'ad' } // Renamed from "安全演练"
       ]
     },
     {
@@ -127,7 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }, // Moved here and renamed
         { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'SCENARIO_IMAGES_MANAGE' },
-        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' } 
+        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'SCENARIO_INSTANCES_MANAGE' }
       ]
     },
   ];
@@ -245,11 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
                 </Avatar>
                 <Box>
                   <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
-<<<<<<< HEAD
-                  <Typography variant="caption" color="text.secondary">{USER_ROLES_CONFIG[user.role].name}</Typography>
-=======
                   <Typography variant="caption" color="text.secondary">{user.role}</Typography>
->>>>>>> ef1d209c76cf91d37f3a34edd105dc6e99d5c1a2
                 </Box>
               </Box>
           )}
@@ -271,4 +261,3 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
 };
 
 export default Sidebar;
-
