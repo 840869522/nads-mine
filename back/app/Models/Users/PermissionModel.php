@@ -84,11 +84,11 @@
             }
         }
 
-        public static function grantPermission2Role (string $role_id,string $permission_id):array {
-            $sql = "INSERT INTO c_roles_permissions VALUES(?,?)";
+        public static function grantPermission2Role (string $value):array {
+            $sql = "INSERT INTO c_roles_permissions VALUES ?";
             try {
                 db::beginTransaction();
-                $res = db::insert($sql,[$role_id,$permission_id]);
+                $res = db::insert($sql,[$value]);
                 if($res) {
                     db::commit();
                     return [

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -12,9 +12,10 @@ import {
   ListItemIcon,
   Divider,
   Box,
+  useScrollTrigger,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { APP_PERMISSIONS, AppPermission } from '../../constants';
+import { APP_PERMISSIONS, APP_PERMISSIONS_CATEGORY, AppPermission } from '../../constants';
 
 interface ViewRolePermissionsModalProps {
   open: boolean;
@@ -32,10 +33,11 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
   const assignedPermissionsDetails = APP_PERMISSIONS.filter(p => permissionKeys.includes(p.key));
 
   const groupedPermissions = assignedPermissionsDetails.reduce((acc, permission) => {
-    if (!acc[permission.category]) {
-      acc[permission.category] = [];
+    const group = permission.key.split("_")[0];
+    if (!acc[group]) {
+      acc[group] = [];
     }
-    acc[permission.category].push(permission);
+    acc[group].push(permission);
     return acc;
   }, {} as Record<string, AppPermission[]>);
 
@@ -53,7 +55,7 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
           Object.entries(groupedPermissions).map(([category, permissionsInCategory], index) => (
             <Box key={category} sx={{ mb: index < Object.keys(groupedPermissions).length - 1 ? 2 : 0 }}>
               <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', mt: index > 0 ? 2 : 0 }}>
-                {category}
+                {APP_PERMISSIONS_CATEGORY[category]}
               </Typography>
               <List dense disablePadding>
                 {permissionsInCategory.map((permission) => (

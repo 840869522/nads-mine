@@ -24,7 +24,7 @@ import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { UserRole } from '../../types';
-import { APP_PERMISSIONS, AppPermission } from '../../constants';
+import { APP_PERMISSIONS, APP_PERMISSIONS_CATEGORY, AppPermission } from '../../constants';
 
 export interface RoleFormData {
   id?: string;
@@ -61,10 +61,10 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
     if (open) {
       if (initialRole) {
         setFormData({
-          id: initialRole.id,
-          nameDisplay: initialRole.nameDisplay,
-          description: initialRole.description,
-          // permissions: [...initialRole.permissions], // Clone permissions array
+          id: initialRole.C_id,
+          nameDisplay: initialRole.c_id,
+          description: initialRole.c_name,
+          permissions: [...initialRole.permissions], // Clone permissions array
         });
       } else {
         setFormData({
@@ -111,10 +111,11 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
   };
 
   const groupedPermissions = APP_PERMISSIONS.reduce((acc, permission) => {
-    if (!acc[permission.category]) {
-      acc[permission.category] = [];
+    const group = permission.key.split("_")[0];
+    if (!acc[group]) {
+      acc[group] = [];
     }
-    acc[permission.category].push(permission);
+    acc[group].push(permission);
     return acc;
   }, {} as Record<string, AppPermission[]>);
 
@@ -147,7 +148,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
               helperText={errors.nameDisplay}
               required
               sx={{ mb: 2 }}
-              disabled={!isNewRole && (initialRole?.nameKey === UserRole.ADMIN || initialRole?.nameKey === UserRole.STUDENT)}
+              disabled={!isNewRole}
             />
             <TextField
               name="description"
@@ -163,7 +164,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
               required
             />
           </Box>
-          {/* <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>
               权限分配
               {errors.permissions && <Typography component="span" color="error.main" sx={{fontSize: '0.75rem', ml:1}}>{errors.permissions}</Typography>}
@@ -175,11 +176,11 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
                   <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' }, borderBottom: index < Object.keys(groupedPermissions).length -1 ? '1px solid' : 'none', borderColor:'divider' }} disableGutters defaultExpanded>
                     <AccordionSummary
                       expandIcon={<ExpandMoreIcon />}
-                      aria-controls={`permissions-category-${category}-content`}
-                      id={`permissions-category-${category}-header`}
+                      aria-controls={`permissions-category-${APP_PERMISSIONS_CATEGORY[category]}-content`}
+                      id={`permissions-category-${APP_PERMISSIONS_CATEGORY[category]}-header`}
                       sx={{bgcolor: 'action.hover', minHeight: 48, '&.Mui-expanded': { minHeight: 48 }}}
                     >
-                      <Typography variant="subtitle1" sx={{fontWeight:'medium'}}>{category}</Typography>
+                      <Typography variant="subtitle1" sx={{fontWeight:'medium'}}>{APP_PERMISSIONS_CATEGORY[category]}</Typography>
                     </AccordionSummary>
                     <AccordionDetails sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                       <FormGroup>
@@ -204,7 +205,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
               ))}
               </List>
             </Paper>
-          </Box> */}
+          </Box>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
