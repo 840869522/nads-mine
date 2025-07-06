@@ -346,6 +346,24 @@ def detect_os(img_path: str) -> str:
         pass
     raise ValueError("Cannot detect guest OS")
 
+def _detect_vm_os(vm_id: str) -> Optional[str]:
+    """Try to detect the OS type of an existing VM by inspecting its disk image."""
+    try:
+        xml = run_virsh("dumpxml", vm_id)
+    except RuntimeError:
+        return None
+    tree = ET.fromstring(xml)
+    source = tree.find(".//devices/disk[@device='disk']/source")
+    if source is None:
+        return None
+    img_path = source.get("file") or source.get("dev")
+    if not img_path:
+        return None
+    try:
+        return detect_os(img_path).capitalize()
+    except Exception:
+        return None
+
 def gen_mac(seed: str) -> str:
     h = uuid.uuid5(uuid.NAMESPACE_DNS, seed).hex
     return "02:" + ":".join(h[i:i+2] for i in range(0, 10, 2))
@@ -589,8 +607,6 @@ def get_vm_info(vm_id: str):
             total_mb = int(line.split()[2]) // 1024
         elif line.startswith("Used memory:"):
             used_mb = int(line.split()[2]) // 1024
-        elif line.startswith("OS Type:"):
-            os_type = line.split()[2] if len(line.split()) > 2 else line.split()[1]
         elif line.startswith("Persistent:"):
             val = line.split()[1].lower()
             persistent = val == "yes"
@@ -610,6 +626,12 @@ def get_vm_info(vm_id: str):
                 break
     except RuntimeError:
         pass
+
+    if os_type is None:
+        try:
+            os_type = _detect_vm_os(vm_id)
+        except Exception:
+            os_type = None
 
     return OverviewData(
         status=state,
