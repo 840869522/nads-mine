@@ -314,29 +314,76 @@ def _wait_for_state(name: str, target_state: str, timeout: int = 30) -> bool:
     return False
 
 # ----- VM Creation Helpers -----
-POOL_DIR = "/var/lib/libvirt/images"
+POOL_DIR = "/home/proj/"
 VIRTIO_ISO = "/usr/share/virtio-win/virtio-win.iso"
 QEMU_IMG = "qemu-img"
 
-def detect_os(img_path: str) -> str:
-    """Detect operating system type using virt-inspector."""
-    try:
-        result = subprocess.run(
-            ["virt-inspector", "-a", img_path],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip())
+import subprocess
+import xml.etree.ElementTree as ET
+from typing import Literal
 
-        out = result.stdout.lower()
-        if "windows" in out:
-            return "windows"
-        if "linux" in out:
-            return "linux"
-    except Exception:
-        pass
-    raise ValueError("Cannot detect guest OS")
+def detect_os(img_path: str) -> Literal["linux", "windows"]:
+    """
+    使用 virt-inspector 的 XML 元数据精准判断镜像类型。
+
+    返回:
+        "linux"   —— 任意 Linux 发行版（Ubuntu, CentOS, Debian, …）
+        "windows" —— 任意 Windows 版本（Server/桌面）
+    """
+    # 1. 调用 virt-inspector，关掉不必要的输出以加速
+    cmd = ["virt-inspector", "--no-applications", "--no-icon", "-a", img_path]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        raise ValueError(f"virt-inspector failed: {e.stderr.strip()}") from e
+
+    # 2. 解析 XML
+    try:
+        root = ET.fromstring(result.stdout)
+    except ET.ParseError as e:
+        raise ValueError(f"Cannot parse virt-inspector XML: {e}") from e
+
+    os_node = root.find(".//operatingsystem")
+    if os_node is None:
+        raise ValueError("No <operatingsystem> node in inspector output")
+
+    # 3. 取出核心字段
+    os_type = (
+        (os_node.findtext("os_type") or os_node.findtext("os-type") or "")
+        .strip()
+        .lower()
+    )
+
+    # 某些镜像没有 os_type，可 fallback 到 name/distro
+    if not os_type:
+        os_type = (
+            (os_node.findtext("name") or os_node.findtext("distro") or "")
+            .strip()
+            .lower()
+        )
+
+    # 4. 归一化判定
+    if "windows" in os_type:
+        return "windows"
+    if "linux" in os_type:
+        return "linux"
+
+    # 5. 再次 fallback：看 distro 里是否出现典型 Linux 关键字
+    distro = (os_node.findtext("distro") or "").lower()
+    linux_keywords = (
+        "ubuntu", "debian", "centos", "rhel", "redhat", "fedora",
+        "opensuse", "suse", "arch", "alpine", "oracle", "rocky", "alma",
+    )
+    if any(k in distro for k in linux_keywords):
+        return "linux"
+
+    # 实在识别不了就明确抛错，包含元数据方便调试
+    meta = {
+        "os_type": os_type,
+        "distro": distro,
+        "name": (os_node.findtext("name") or "").lower(),
+    }
+    raise ValueError(f"Cannot determine OS type from metadata: {meta}")
 
 def _detect_vm_os(vm_id: str) -> Optional[str]:
     """Try to detect the OS type of an existing VM by inspecting its disk image."""
@@ -452,43 +499,44 @@ def create_vm(req: VMRequest):
 
         disk_root = f"path={overlay},format=qcow2,bus=virtio"
 
-        network_arg = (
-            "user,model=virtio,mac="
-            f"{mac},hostfwd=tcp::2222-:22,hostfwd=tcp::33389-:3389"
+        # 1) virt-install 不让它自动建网卡
+        network_arg = "none"
+
+        # 2) 手动添加 user/slirp 网卡 + 端口转发
+        qemu_netdev = (
+            "--qemu-commandline="
+            "-netdev user,id=net0,"
+            "hostfwd=tcp::2222-:22,"
+            "hostfwd=tcp::33389-:3389"
         )
 
+        # 3) 把网卡插到 pcie.0 的 slot 0x6，避开 0x1(virtio-vga) 和 0x2(root-port)
+        qemu_device = (
+            "--qemu-commandline="
+            "-device virtio-net-pci,netdev=net0,bus=pcie.0,addr=0x6"
+        )
+
+        # 4) 组装 cmd
         cmd = [
             "virt-install",
             "--import",
             "--quiet",
-            "--name",
-            vm,
-            "--memory",
-            str(req.memory),
-            "--vcpus",
-            str(req.vcpus),
-            "--os-variant",
-            "ubuntu24.04" if guest_os == "linux" else "win10",
-            "--graphics",
-            "vnc,listen=0.0.0.0",
+            "--name", vm,
+            "--memory", str(req.memory),
+            "--vcpus", str(req.vcpus),
+            "--os-variant", "ubuntu24.04" if guest_os == "linux" else "win10",
+            "--graphics", "vnc,listen=0.0.0.0",
             "--noautoconsole",
-            "--wait",
-            "0",
-            "--disk",
-            disk_root,
-            "--network",
-            network_arg,
-            "--cloud-init",
-            ci_param,
+            "--wait", "0",
+            "--disk", disk_root,
+            "--network", network_arg,
+            "--cloud-init", ci_param,
+            qemu_netdev,
+            qemu_device,
         ]
 
-        if guest_os == "windows":
-            cmd += [
-                "--disk",
-                f"path={VIRTIO_ISO},device=cdrom,readonly=on,bus=sata",
-            ]
-
         subprocess.run(cmd, check=True)
+
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
