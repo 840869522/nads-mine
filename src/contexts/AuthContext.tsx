@@ -1,6 +1,6 @@
 
 "use client";
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, ReactNode } from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -16,14 +16,19 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  useEffect(() => {
-    // Load any existing session from localStorage
-    const storedUser = localStorage.getItem('droneSimUser');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('droneSimUser');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return null;
+        }
+      }
     }
-  }, []);
+    return null;
+  });
 
   const login = async (username: string, Np: string) => {
     const res = await fetch('/api/login', {
