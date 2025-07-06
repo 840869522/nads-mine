@@ -65,21 +65,9 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     // 从后端获取镜像列表
     useEffect(() => {
         fetch('/api/php/vms/images')
-            .then(async res => {
-                const data = await res.json().catch(() => null)
-                if (!res.ok) {
-                    console.error('Failed to fetch VM images', data)
-                    return
-                }
-                if (Array.isArray(data)) {
-                    setImages(data)
-                } else if (data && Array.isArray(data.data)) {
-                    setImages(data.data)
-                } else {
-                    console.error('Unexpected VM images response', data)
-                }
-            })
-            .catch(err => console.error(err))
+            .then(res => res.json())
+            .then((data: VmImage[]) => setImages(data))
+            .catch(() => {})
     }, [])
 
     const handleOpenDialog = (image?: VmImage) => {
