@@ -1,7 +1,7 @@
 'use client'
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useRef } from 'react'
-import * as Guacamole from 'guacamole-common-js'
+import Guacamole from 'guacamole-common-js'
 
 export default function GuacPage() {
   const params = useSearchParams();
