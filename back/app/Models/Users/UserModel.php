@@ -123,7 +123,7 @@
                             'c_role_id' => $role_id
                         ];
                     }, $data["role"]);
-                    $roleModelRes = RoleModel::grantRole2User($roles);
+                    $roleModelRes = RoleModel::grantRole2User($data['username'],$roles);
                     if ($roleModelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE){
                         UserModel::deleteUserById($data["username"]);
                         return [
@@ -154,6 +154,19 @@
                 $res = db::update($sql,[$data["is_login"],$data['email'],$data['password'],$id]);
                 if ($res){
                     db::commit();
+                    $roles = array_map(function($role_id) use ($id) {
+                        return [
+                            'c_user_id' => $id,
+                            'c_role_id' => $role_id
+                        ];
+                    }, $data["role"]);
+                    $roleModelRes = RoleModel::grantRole2User($id,$roles);
+                    if ($roleModelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE){
+                        UserModel::deleteUserById($data["username"]);
+                        return [
+                            "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
+                        ];
+                    }
                     return [
                         'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     ];

@@ -100,7 +100,7 @@
                     "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            $modelRes = RoleModel::grantRole2User(["c_user_id"=>$user_id,"c_role_id"=>$role_id]);
+            $modelRes = RoleModel::grantRole2User($user_id,["c_user_id"=>$user_id,"c_role_id"=>$role_id]);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
