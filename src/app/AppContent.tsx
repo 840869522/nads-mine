@@ -34,7 +34,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     const token = getCookie("_auth");
-    if (!token) {
+    if (!token && !user) {
       if (pathname !== '/login') {
         router.replace('/login');
       }

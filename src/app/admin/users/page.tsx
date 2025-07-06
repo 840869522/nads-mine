@@ -156,16 +156,23 @@ const UserManagementPage: React.FC = () => {
         }
       });
     } else if (editingUser) {
-      await apiClientWithToken.post('/api/user/update', JSON.stringify({
+      const res = await apiClientWithToken.post('/api/support/user/update', JSON.stringify({
         id: editingUser.c_username,
-        passwordHash: CryptoJS.SHA256(formData.password).toString(),
-        email: formData.email,
-        is_login: formData.status == "active" ? 1 : 0
+        data :{
+          password: CryptoJS.SHA256(formData.password).toString(),
+          email: formData.email,
+          is_login: formData.status == "active" ? 1 : 0,
+          role:[formData.role]
+        }
       }));
-      setUsers(prev => prev.map(u =>
-        u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
-      ));
-      setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
+      if (res.data.code  === 200){
+        setUsers(prev => prev.map(u =>
+            u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+          ));
+        setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
+      }else{
+        setFeedbackMessage({ type: 'error', text: `用户 "${formData.username}" 更新失败。` });
+      }
     }
   };
 
@@ -183,7 +190,7 @@ const UserManagementPage: React.FC = () => {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
           setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });
         } else
-          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.c_username}" 已删除。` })
+          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.c_username}" 删除失败。` })
       });
     }
     setIsConfirmDeleteOpen(false);
