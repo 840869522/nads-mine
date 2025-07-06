@@ -76,16 +76,15 @@ class VRAMInfo(BaseModel):
 
 class OverviewData(BaseModel):
     status: str
-    uptime: str
     hostNode: str
     pool: str
     vcpu: VCPUInfo
     vram: VRAMInfo
-    bootSource: str
+    osType: Optional[str] = None
+    persistent: Optional[bool] = None
+    autostart: Optional[bool] = None
     uuid: str
     ipAddress: str
-    disks_rw_mbps: float
-    network_throughput_mbps: float
 
 class LifecycleActionResponse(BaseModel):
     message: str
@@ -578,6 +577,9 @@ def get_vm_info(vm_id: str):
     vcpu = 0
     total_mb = 0
     used_mb = 0
+    os_type = None
+    persistent = None
+    autostart = None
     for line in info_out.splitlines():
         if line.startswith("State:"):
             state = line.split()[1]
@@ -587,6 +589,14 @@ def get_vm_info(vm_id: str):
             total_mb = int(line.split()[2]) // 1024
         elif line.startswith("Used memory:"):
             used_mb = int(line.split()[2]) // 1024
+        elif line.startswith("OS Type:"):
+            os_type = line.split()[2] if len(line.split()) > 2 else line.split()[1]
+        elif line.startswith("Persistent:"):
+            val = line.split()[1].lower()
+            persistent = val == "yes"
+        elif line.startswith("Autostart:"):
+            val = line.split()[1].lower()
+            autostart = val in ["enable", "yes"]
     vram = VRAMInfo(total_mb=total_mb, usage_mb=used_mb, usage_percent=(used_mb / total_mb * 100) if total_mb else 0.0)
     vcpu_info = VCPUInfo(count=vcpu, usage_percent=0.0)
 
@@ -603,16 +613,15 @@ def get_vm_info(vm_id: str):
 
     return OverviewData(
         status=state,
-        uptime="0",
         hostNode=host,
         pool="default",
         vcpu=vcpu_info,
         vram=vram,
-        bootSource="disk",
+        osType=os_type,
+        persistent=persistent,
+        autostart=autostart,
         uuid=vm_id,
         ipAddress=ip or "",
-        disks_rw_mbps=0.0,
-        network_throughput_mbps=0.0,
     )
 
 def manage_vm_lifecycle(vm_id: str, action: str):
