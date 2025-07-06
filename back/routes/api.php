@@ -5,13 +5,15 @@
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
-    use App\Http\Controllers\CategoryController;
-    use App\Http\Controllers\CourseController;
     use App\Http\Controllers\ImagesController;
     use App\Http\Controllers\InstancesController;
     use App\Http\Controllers\ContainersController;
     use App\Http\Controllers\ad\RefereeController;
     use App\Http\Controllers\ad\TeamController;
+    use App\Http\Controllers\Course\CourseController;
+    use App\Http\Controllers\Course\CategoryController;
+    use App\Http\Controllers\Course\ResourceController;
+    
 
     /*
     |--------------------------------------------------------------------------
@@ -76,7 +78,58 @@
      * 定义安全实验分系统路由
      */
     Route::prefix("ad")->group(function() {
+        // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
+        // GET /api/ad/available-users
+        // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
+        // 如果它在后面，'/available-users' 可能会被误匹配为 '/{referee}'。
+        Route::get('available-users', [RefereeController::class, 'availableUsers']);
 
+        // 裁判的 CRUD 路由
+        Route::prefix('referee')->group(function () {
+            // 获取所有裁判列表
+            // GET /api/ad/referee
+            Route::get('/', [RefereeController::class, 'index']);
+
+            // 创建一个新裁判
+            // POST /api/ad/referee
+            Route::post('/', [RefereeController::class, 'store']);
+
+            // 获取单个裁判的详细信息
+            // GET /api/ad/referee/{referee}
+            // {referee} 是路由模型绑定，Laravel 会自动根据 ID (c_id) 查找 Referee
+            Route::get('/{referee}', [RefereeController::class, 'show']);
+
+            // 更新一个已存在的裁判
+            // PUT /api/ad/referee/{referee}
+            Route::put('/{referee}', [RefereeController::class, 'update']);
+
+            // 删除一个裁判
+            // DELETE /api/ad/referee/{referee}
+            Route::delete('/{referee}', [RefereeController::class, 'destroy']);
+        });
+
+        Route::prefix('team')->group(function () {
+            // 获取所有队伍列表
+            // GET /api/ad/team
+            Route::get('/', [TeamController::class, 'index']);
+        
+            // 创建一个新队伍
+            // POST /api/ad/team
+            Route::post('/', [TeamController::class, 'store']);
+        
+            // 获取单个队伍的详细信息
+            // GET /api/ad/team/{team}
+            // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
+            Route::get('/{team}', [TeamController::class, 'show']);
+        
+            // 更新一个已存在的队伍
+            // PUT /api/ad/team/{team}
+            Route::put('/{team}', [TeamController::class, 'update']);
+        
+            // 删除一个队伍
+            // DELETE /api/ad/team/{team}
+            Route::delete('/{team}', [TeamController::class, 'destroy']);
+        });
     })->middleware("jwtcheck:ad");
 
     /**
@@ -130,74 +183,27 @@
         Route::get('/{id}/binds', [ContainersController::class, 'binds']);
     });
 
-    Route::prefix('categories')->group(function () {
-        Route::get('/', [CategoryController::class, 'index']);
-        Route::post('/', [CategoryController::class, 'store'])->middleware('jwtcheck:edit-categories');
-    });
+    Route::prefix('courses')->group(function(){
+        Route::get('/',[CourseController::class,'index'])->middleware('can:view-courses')->name('courses.index');
+        Route::get('/{id}',[CourseController::class,'show'])->middleware('can:view-courses')->name('courses.show');
+        Route::post('/',[CourseController::class,'store'])->middleware('can:create-course')->name('courses.store');
+        Route::put('/{id}',[CourseController::class,'update'])->middleware('can:edit-courses')->name('courses.update');
+        Route::delete('/{id}',[CourseController::class,'destroy'])->middleware('can:delete-courses')->name('courses.destroy');
+        Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('can:manage-courses')->name('courses.addUser');
+    })->middleware('jwtcheck');
 
-    Route::prefix('course-cases')->group(function () {
-        Route::get('/', [CourseController::class, 'index']);
-        Route::post('/', [CourseController::class, 'store'])->middleware('jwtcheck:edit-courses');
-        Route::put('/{id}', [CourseController::class, 'update'])->middleware('jwtcheck:edit-courses');
-        Route::delete('/{id}', [CourseController::class, 'destroy'])->middleware('jwtcheck:edit-courses');
-    });
+    Route::prefix('categories')->group(function(){
+        Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
+        Route::post('/', [CategoryController::class, 'store'])->middleware('jwtcheck:manage-categories')->name('categories.store');
+        Route::put('/{id}', [CategoryController::class, 'update'])->middleware('jwtcheck:manage-categories')->name('categories.update');
+        Route::delete('/{id}', [CategoryController::class, 'destroy'])->middleware('jwtcheck:manage-categories')->name('categories.destroy');
+    })->middleware('jwtcheck');
 
-Route::prefix('ad/team')->group(function () {
-    // 获取所有队伍列表
-    // GET /api/ad/team
-    Route::get('/', [TeamController::class, 'index']);
-
-    // 创建一个新队伍
-    // POST /api/ad/team
-    Route::post('/', [TeamController::class, 'store']);
-
-    // 获取单个队伍的详细信息
-    // GET /api/ad/team/{team}
-    // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
-    Route::get('/{team}', [TeamController::class, 'show']);
-
-    // 更新一个已存在的队伍
-    // PUT /api/ad/team/{team}
-    Route::put('/{team}', [TeamController::class, 'update']);
-
-    // 删除一个队伍
-    // DELETE /api/ad/team/{team}
-    Route::delete('/{team}', [TeamController::class, 'destroy']);
-});
-
-
-Route::prefix('ad')->group(function () {
-
-    // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
-    // GET /api/ad/available-users
-    // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
-    // 如果它在后面，'/available-users' 可能会被误匹配为 '/{referee}'。
-    Route::get('available-users', [RefereeController::class, 'availableUsers']);
-
-    // 裁判的 CRUD 路由
-    Route::prefix('referee')->group(function () {
-        // 获取所有裁判列表
-        // GET /api/ad/referee
-        Route::get('/', [RefereeController::class, 'index']);
-
-        // 创建一个新裁判
-        // POST /api/ad/referee
-        Route::post('/', [RefereeController::class, 'store']);
-
-        // 获取单个裁判的详细信息
-        // GET /api/ad/referee/{referee}
-        // {referee} 是路由模型绑定，Laravel 会自动根据 ID (c_id) 查找 Referee
-        Route::get('/{referee}', [RefereeController::class, 'show']);
-
-        // 更新一个已存在的裁判
-        // PUT /api/ad/referee/{referee}
-        Route::put('/{referee}', [RefereeController::class, 'update']);
-
-        // 删除一个裁判
-        // DELETE /api/ad/referee/{referee}
-        Route::delete('/{referee}', [RefereeController::class, 'destroy']);
-    });
-
-});
+    Route::prefix('courses/{courseId}/resources')->group(function () {
+        Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
+        Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
+        Route::post('/upload', [ResourceController::class, 'upload'])->middleware('jwtcheck:manage-resources')->name('resources.upload');
+        Route::delete('/{id}', [ResourceController::class, 'destroy'])->middleware('jwtcheck:manage-resources')->name('resources.destroy');
+    })->middleware('jwtcheck');
 
 ?>

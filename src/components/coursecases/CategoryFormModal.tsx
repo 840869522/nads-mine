@@ -6,46 +6,48 @@ import {
   DialogTitle,
   TextField,
   Button,
-  Stack,
-  FormHelperText
+  Stack
 } from '@mui/material';
-import useMediaQuery  from '@mui/material/useMediaQuery'; 
 import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 interface CategoryFormModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (categoryName: string) => void;
-  categories: { category_id: number; category_name: string }[];
+  onSave: (category: { id?: string; name: string }) => void;
+  category: { id: string; name: string } | null;
 }
 
-const CategoryFormModal: React.FC<CategoryFormModalProps> = ({ open, onClose, onSave, categories }) => {
+const CategoryFormModal: React.FC<CategoryFormModalProps> = ({ open, onClose, onSave, category }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const [category_name, setCategoryName] = useState('');
+  const [name, setName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (open) {
-      setCategoryName('');
-      setErrors({});
+    if (category) {
+      setName(category.name);
+    } else {
+      setName('');
     }
-  }, [open]);
+    setErrors({});
+  }, [category, open]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!category_name.trim()) {
-      newErrors.category_name = '分类名称不能为空。';
-    } else if (categories.some(c => c.category_name.toLowerCase() === category_name.trim().toLowerCase())) {
-      newErrors.category_name = '该分类名称已存在。';
-    }
+    if (!name.trim()) newErrors.name = '类别名称不能为空。';
+    if (name.length > 50) newErrors.name = '类别名称不能超过50个字符。';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
     if (validate()) {
-      onSave(category_name);
+      const saveData = {
+        id: category?.id,
+        name: name.trim(),
+      };
+      onSave(saveData);
     }
   };
 
@@ -58,19 +60,21 @@ const CategoryFormModal: React.FC<CategoryFormModalProps> = ({ open, onClose, on
       fullScreen={fullScreen}
       PaperProps={{ component: 'form', onSubmit: (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); handleSubmit(); }, sx: { borderRadius: 2 } }}
     >
-      <DialogTitle>添加新分类</DialogTitle>
+      <DialogTitle>
+        {category ? '编辑类别' : '添加新类别'}
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <TextField
             autoFocus
-            name="category_name"
-            label="分类名称"
+            name="name"
+            label="类别名称"
             fullWidth
             variant="outlined"
-            value={category_name}
-            onChange={(e) => setCategoryName(e.target.value)}
-            error={!!errors.category_name}
-            helperText={errors.category_name}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={!!errors.name}
+            helperText={errors.name}
             required
           />
         </Stack>
@@ -78,7 +82,7 @@ const CategoryFormModal: React.FC<CategoryFormModalProps> = ({ open, onClose, on
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose}>取消</Button>
         <Button type="submit" variant="contained">
-          确认添加
+          {category ? '保存更改' : '确认添加'}
         </Button>
       </DialogActions>
     </Dialog>

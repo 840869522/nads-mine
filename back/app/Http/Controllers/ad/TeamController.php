@@ -4,8 +4,8 @@ namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
 use App\Models\ad\Team;
-use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\Request;
 
 class TeamController extends Controller
 {
