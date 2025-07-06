@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Docker;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\DockerService;
-use App\Models\Instance;
+use App\Models\Docker\Instance;
 use Illuminate\Support\Str;
 
 class InstancesController extends Controller
@@ -62,7 +63,7 @@ class InstancesController extends Controller
             }
 
             // 如果 list 中没端口，fallback 到 inspect
-            if (empty($ports)) {
+            if (true) {
                 try {
                     $detail = $this->docker->containerInspect($info->getId());
                     $bindings = $detail->getHostConfig()->getPortBindings();
@@ -104,22 +105,6 @@ class InstancesController extends Controller
         return response()->json($result);
     }
 
-    public function store(Request $request)
-    {
-        $data = $request->all();
-        $data['id'] = Str::uuid()->toString();
-        Instance::create($data);
-        return response()->json(['ok' => true, 'id' => $data['id']]);
-    }
-
-    public function update(Request $request)
-    {
-        $data = $request->all();
-        $inst = Instance::findOrFail($data['id']);
-        $inst->fill($data);
-        $inst->save();
-        return response()->json(['ok' => true]);
-    }
 
     public function destroy(Request $request)
     {
