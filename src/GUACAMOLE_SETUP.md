@@ -41,33 +41,29 @@ sudo systemctl enable --now guacd
 
 `src/app/guac/page.tsx` 会解析这些参数并通过 `guacamole-common-js` 连接到 `/api/guac`，无需额外的 Guacamole 凭据即可显示远程桌面。
 
-## 4. 本地测试虚拟机配置
+## 4. 下载示例镜像并一键初始化
 
-为了在开发环境中验证远程桌面连接，建议在本机准备一台精简 Linux 虚拟机和一台 Windows 虚拟机，并开启 SSH、RDP、VNC 服务。
+为了让开发者无需手动配置虚拟机，仓库提供了快速脚本 `scripts/init_demo_vms.sh`。
+脚本会下载预装好 SSH、RDP、VNC 服务的最小 Linux 与 Windows 镜像，并调用
+`main_cli_local.py` 创建两个测试实例。
 
-### Linux 实例
+### 使用步骤
 
-1. 使用 KVM 或 VirtualBox 创建最小化 Ubuntu Server。
-2. 在系统中安装并启动服务：
-   ```bash
-   sudo apt update
-   sudo apt install -y openssh-server xrdp tigervnc-standalone-server
-   sudo systemctl enable --now ssh xrdp
-   ```
-3. 运行 `vncpasswd` 设置密码后执行 `vncserver` 启动会话。
-   默认端口分别为 22 (SSH)、3389 (RDP)、5901 (VNC)。
+```bash
+chmod +x scripts/init_demo_vms.sh
+./scripts/init_demo_vms.sh
+```
 
-### Windows 实例
+脚本会自动下载下列镜像（也可手动下载）：
 
-1. 创建 Windows 10/11 虚拟机，可使用微软官方评估镜像。
-2. 在“系统属性”中启用远程桌面并记下登录凭据。
-3. 安装 [TightVNC](https://www.tightvnc.com/) 并允许远程访问。
-4. 确认 3389 (RDP) 与 5900 (VNC) 端口在防火墙中开放。
+- [Ubuntu 22.04 Minimal](https://cloud-images.ubuntu.com/minimal/releases/22.04/release/ubuntu-22.04-minimal-cloudimg-amd64.img)
+- [Windows 10 Evaluation](https://go.microsoft.com/fwlink/?linkid=2215517)
 
-完成后即可在浏览器中访问如下地址测试：
+执行完成后，默认端口分别为：SSH `2222`、RDP `33389`、VNC 从虚拟机 XML 中读取
+（通常为 `59xx`）。可以在浏览器中访问如下地址测试：
 
 ```
-/guac?type=ssh&hostname=<VM_IP>&port=22
-/guac?type=rdp&hostname=<VM_IP>&port=3389
-/guac?type=vnc&hostname=<VM_IP>&port=5901
+/guac?type=ssh&hostname=hypervisor&port=2222
+/guac?type=rdp&hostname=hypervisor&port=33389
+/guac?type=vnc&hostname=hypervisor&port=<vnc_port>
 ```
