@@ -12,6 +12,8 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import process from 'process';
 
+const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
+
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
@@ -124,6 +126,7 @@ app.prepare().then(() => {
     { server: httpServer, path: '/api/guac' },
     { port: parseInt(process.env.GUACD_PORT || '4822', 10) },
     {
+      crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
       allowedUnencryptedConnectionSettings: {
         rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
         ssh: ['hostname', 'port', 'username', 'password'],
