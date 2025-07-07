@@ -126,7 +126,7 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            if ($user->is_login == 0) {
+            if ($user->c_is_login == 0) {
                 return response()->json([
                     "code"=>GlobalResponse::$USER_IS_DEL_CODE,
                     "message"=>GlobalResponse::$USER_LOGIN_IS_DEL_MES
