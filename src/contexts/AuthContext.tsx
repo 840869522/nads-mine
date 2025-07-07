@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (username: string, Np: string) => {
-    const res = await apiClient.post(`${BACK_IP_PORT}/api/support/user/login`, JSON.stringify({ username, password: Np }));
+    const res = await apiClient.post(`/back/api/support/user/login`, JSON.stringify({ username, password: Np }));
     const data = await res.data;
     if (data.code === 200) {
       var loggedInUser = { user: data.data.user, role: data.data.role, permission: data.data.permissions };

@@ -32,9 +32,6 @@ import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
-import { table } from 'console';
-import { json } from 'stream/consumers';
-import { PagedItem } from '@google/genai';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type UserDisplayItem = {c_username:string;  c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
@@ -66,7 +63,7 @@ const UserManagementPage: React.FC = () => {
   }, []);
 
   const getUserData = (page:number,pagesize:number) =>{
-    apiClientWithToken.post('/api/support/user/all', JSON.stringify({ page: page, pagesize: pagesize })).then((res) => {
+    apiClientWithToken.post(`/back/api/support/user/all`, JSON.stringify({ page: page, pagesize: pagesize })).then((res) => {
       if (res.data.code === 200) {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
@@ -84,7 +81,7 @@ const UserManagementPage: React.FC = () => {
   const handleSearchSubmit = async () => {
     setTableLoading(true);
     try {
-      const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/search`, JSON.stringify({
+      const res = await apiClientWithToken.post(`/back/api/support/user/search`, JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
         name: searchTerm.data
@@ -125,7 +122,7 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleEditUserClick = (user: UserDisplayItem) => {
-    apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/id`,JSON.stringify({id:user.c_username})).then((res)=>{
+    apiClientWithToken.post(`/back/api/support/user/id`,JSON.stringify({id:user.c_username})).then((res)=>{
       if (res.data.code === 200){
         setEditingUser(res.data.data);
         setIsUserModalOpen(true);
@@ -146,7 +143,7 @@ const UserManagementPage: React.FC = () => {
     }
     if (isNew) {
       userData.password  = CryptoJS.SHA256(formData.password).toString()
-      apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/new`, JSON.stringify({ data : {...userData}})).then((res)=>{
+      apiClientWithToken.post(`/back/api/support/user/new`, JSON.stringify({ data : {...userData}})).then((res)=>{
         if (res.data.code === 200){
           setPage(1);;
           getUserData(1,rowsPerPage);
@@ -158,7 +155,7 @@ const UserManagementPage: React.FC = () => {
     } else if (editingUser) {
       userData.password = formData.pwdedit ? CryptoJS.SHA256(formData.password).toString() : editingUser.c_password;
       console.log(userData);
-      const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/update`, JSON.stringify({
+      const res = await apiClientWithToken.post(`/back/api/api/support/user/update`, JSON.stringify({
         id: editingUser.c_username,
         data :{
           ...userData
@@ -184,7 +181,7 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+      apiClientWithToken.post(`/back/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
         if (res.data.code === 200) {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
           setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });

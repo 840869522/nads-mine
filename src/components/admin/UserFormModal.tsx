@@ -83,7 +83,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
   useEffect(() => {
     if (isRoleMenuOpen && currentPage >= 1 && hasMore) {
       const loadNextPage = async () => {
-        apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/all`, JSON.stringify({ page: currentPage, pagesize: 10 })).then(res => {
+        apiClientWithToken.post(`/back/api/support/role/all`, JSON.stringify({ page: currentPage, pagesize: 10 })).then(res => {
           if (res.data.code === 200) {
             if (currentPage * 10 > res.data.data.count) {
               setHasMore(false);
