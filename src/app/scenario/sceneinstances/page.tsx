@@ -135,7 +135,46 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 <TableContainer>
                     <Table>
                         <TableHead>
-                           {/* TableHead 内容保持不变 */}
+                           <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 'bold' } }}>
+        <TableCell>实例 ID</TableCell>
+        <TableCell>
+            <TableSortLabel
+                active={orderBy === 'scenario_name'}
+                direction={orderBy === 'scenario_name' ? order : 'asc'}
+                onClick={() => handleRequestSort('scenario_name')}
+            >
+                场景名称
+            </TableSortLabel>
+        </TableCell>
+        <TableCell>
+            <TableSortLabel
+                active={orderBy === 'username'}
+                direction={orderBy === 'username' ? order : 'asc'}
+                onClick={() => handleRequestSort('username')}
+            >
+                启动用户
+            </TableSortLabel>
+        </TableCell>
+        <TableCell>
+            <TableSortLabel
+                active={orderBy === 'runtime'}
+                direction={orderBy === 'runtime' ? order : 'asc'}
+                onClick={() => handleRequestSort('runtime')}
+            >
+                创建时间
+            </TableSortLabel>
+        </TableCell>
+        <TableCell>
+             <TableSortLabel
+                active={orderBy === 'status'}
+                direction={orderBy === 'status' ? order : 'asc'}
+                onClick={() => handleRequestSort('status')}
+            >
+                状态
+            </TableSortLabel>
+        </TableCell>
+        <TableCell align="right">操作</TableCell>
+    </TableRow>
                         </TableHead>
                         <TableBody>
                             {isLoading ? (

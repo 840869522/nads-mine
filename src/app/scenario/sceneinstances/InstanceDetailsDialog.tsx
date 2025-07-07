@@ -12,10 +12,12 @@ import {
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon
 } from '@mui/icons-material';
+
 import { RunningInstance, InstanceStatus } from '@/types';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
+import BindMountsModal from '@/components/scenario/BindMountsModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -41,6 +43,8 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
     const [moreMenuAnchor, setMoreMenuAnchor] = useState<{ anchor: HTMLElement | null; id: string | null }>({ anchor: null, id: null });
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
+    // ==================【 2. 添加 bindsModalId 状态 】==================
+    const [bindsModalId, setBindsModalId] = useState<string | null>(null);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
@@ -93,8 +97,6 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
         }
     }, [open, instanceId, fetchInstanceDetails]);
 
-    // ==================【 核心修改在这里 】==================
-    // 1. 严格按照 RunningInstancesPage.tsx 的模式，创建独立的 handle 函数
     const handleStartInstance = useCallback((instance: RunningInstance) => {
         setConfirmActionProps({
             title: `启动实例: ${instance.name}`,
@@ -102,7 +104,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             onConfirm: async () => {
                 const action = instance.status === 'paused' ? 'unpause' : 'start';
                 await fetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
-                fetchInstanceDetails(); // 刷新弹窗内的数据
+                fetchInstanceDetails();
             },
         });
         setIsConfirmDialogOpen(true);
@@ -114,7 +116,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             message: `您确定要停止实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 await fetch(`${API_BASE}/api/containers/${instance.id}?action=stop`, { method: 'POST' });
-                fetchInstanceDetails(); // 刷新弹窗内的数据
+                fetchInstanceDetails();
             },
         });
         setIsConfirmDialogOpen(true);
@@ -126,7 +128,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             message: `您确定要暂停实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 await fetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
-                fetchInstanceDetails(); // 刷新弹窗内的数据
+                fetchInstanceDetails();
             },
         });
         setIsConfirmDialogOpen(true);
@@ -137,13 +139,12 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             title: `删除实例: ${instance.name}`,
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
-                // 完全复制 RunningInstancesPage 的逻辑
                 await fetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
                 if (user) {
                     const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
                     await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
-                fetchInstanceDetails(); // 刷新弹窗内的数据
+                fetchInstanceDetails();
             },
         });
         setIsConfirmDialogOpen(true);
@@ -168,7 +169,6 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 const isPaused = instance.status === 'paused';
                 return (
                     <Box>
-                        {/* 2. onClick 事件现在调用独立的 handle 函数 */}
                         <Tooltip title={isRunning ? '暂停' : '启动'}>
                             <span>
                                 <IconButton onClick={() => isRunning ? handlePauseInstance(instance) : handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped)}>
@@ -195,8 +195,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance]); // 3. 添加 handle 函数到依赖项
-    // ==========================================================
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -208,7 +207,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
     }, [instances, searchTerm]);
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" PaperProps={{ sx: { height: '90vh' } }}>
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" PaperProps={{ sx: { height: '90vh' } }}disableEnforceFocus>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 场景实例详情: {scenarioName}
                 <IconButton onClick={onClose}><CloseIcon /></IconButton>
@@ -239,7 +238,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                         <DataGrid
                             rows={filteredContainers}
                             columns={columns}
-                            pageSizeOptions={[10, 20, 50]}
+                            pageSizeOptions={[10, 20, 50, 100]}
                             disableRowSelectionOnClick
                             autoHeight={false}
                             sx={{
@@ -271,11 +270,21 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 ))}
             </Menu>
 
+            {/* ==================【 3. 更新“更多操作”菜单 】================== */}
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
-                <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>查看日志</MenuItem>
-                <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>详细信息</MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>终端</MenuItem>
-            </Menu>
+                            <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                                Logs
+                            </MenuItem>
+                            <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                                Inspect
+                            </MenuItem>
+                            <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                                Bind mounts
+                            </MenuItem>
+                            <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                                Terminal
+                            </MenuItem>
+                        </Menu>
 
             {confirmActionProps && (
                 <ConfirmActionDialog
@@ -290,8 +299,10 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 />
             )}
             
+            {/* ==================【 4. 添加 BindMountsModal 组件 】================== */}
             {logsModalId && <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />}
             {inspectModalId && <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />}
+            {bindsModalId && <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />}
         </Dialog>
     );
 };
