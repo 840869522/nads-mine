@@ -24,7 +24,10 @@ function GuacInner() {
         const wsBase = window.location.origin.replace(/^http/, 'ws');
         const ws = wsBase + '/api/guac?token=' + encodeURIComponent(data.token);
         const tunnel = new Guacamole.WebSocketTunnel(ws);
+        tunnel.onerror = status => console.error('Tunnel error', status);
         client = new Guacamole.Client(tunnel);
+        client.onerror = err => console.error('Client error', err);
+        client.onstatechange = state => console.log('Client state', state);
         ref.current!.innerHTML = '';
         ref.current!.appendChild(client.getDisplay().getElement());
         client.connect();
