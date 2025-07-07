@@ -158,7 +158,6 @@ class UserModel extends Model{
                     }, $data["role"]);
                     $roleModelRes = RoleModel::grantRole2User($id,$roles);
                     if ($roleModelRes["code"] == GlobalResponse::$DATABASE_ERROR_CODE){
-                        UserModel::deleteUserById($data["username"]);
                         return [
                             "code"=>GlobalResponse::$DATABASE_ERROR_CODE,
                         ];
@@ -182,7 +181,7 @@ class UserModel extends Model{
 
     public static function deleteUserById (string $id) :array {
         $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
-        $sql_user_role = "DELETE * FROM `c_USERS_ROLES WHERE user_id = ?";
+        $sql_user_role = "DELETE * FROM `c_roles_users WHERE c_user_id = ?";
         try {
             if (!$id)
                 return [

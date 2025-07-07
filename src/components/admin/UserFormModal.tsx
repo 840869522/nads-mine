@@ -116,9 +116,22 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
       ...formData,
       role: selectedRoles,
     });
-    // const { name, value } = e.target;
-    // setFormData(prev => ({ ...prev, [name]: value as any }));
-    // if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    const { name } = event.target;
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
+  const handleStatusChange = (event: SelectChangeEvent<string>) => {
+    const newValue = event.target.value as 'active' | 'disabled';
+    
+    setFormData(prev => ({
+      ...prev,
+      status: newValue
+    }));
+    const {name} = event.target;
+    // 实时清除验证错误
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleScroll = (e: React.UIEvent<HTMLUListElement>) => {
@@ -289,7 +302,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
               name="status"
               label="状态"
               value={formData.status || 'active'}
-              onChange={handleSelectChange}
+              onChange={handleStatusChange}
             >
               <MenuItem value="active">已激活</MenuItem>
               <MenuItem value="disabled">已禁用</MenuItem>
