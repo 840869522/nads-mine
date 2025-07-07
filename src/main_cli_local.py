@@ -821,9 +821,9 @@ def list_vm_events(vm_id: str):
 def _print_result(res):
     """Pretty-print result objects as JSON."""
     if isinstance(res, BaseModel):
-        print(json.dumps(res.model_dump(), indent=2, ensure_ascii=False))
+        print(json.dumps(res.model_dump(mode="json"), indent=2, ensure_ascii=False))
     elif isinstance(res, list):
-        out = [r.model_dump() if isinstance(r, BaseModel) else r for r in res]
+        out = [r.model_dump(mode="json") if isinstance(r, BaseModel) else r for r in res]
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
         print(json.dumps(res, indent=2, ensure_ascii=False))
