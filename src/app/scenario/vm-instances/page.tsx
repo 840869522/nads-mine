@@ -46,6 +46,7 @@ import StoragePanel from "@/components/vm/StoragePanel";
 import NetworkPanel from "@/components/vm/NetworkPanel";
 import EventsPanel from "@/components/vm/EventsPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
+import GuacModal from "@/components/vm/GuacModal";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -123,6 +124,7 @@ export default function VmPage() {
     );
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
+    const [guacParams, setGuacParams] = React.useState<{type:string; hostname:string; port:string} | null>(null);
 
     /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
     React.useEffect(() => {
@@ -199,8 +201,7 @@ export default function VmPage() {
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
-            const q = new URLSearchParams({ type: proto, hostname: info.host, port: String(port) }).toString();
-            window.open(`/guac?${q}`, '_blank');
+            setGuacParams({ type: proto, hostname: info.host, port: String(port) });
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
@@ -434,6 +435,7 @@ export default function VmPage() {
                 <CircularProgress color="inherit" />
             </Backdrop>
             <CreateVmModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => mutate()} />
+            <GuacModal open={Boolean(guacParams)} params={guacParams} onClose={() => setGuacParams(null)} />
         </Box>
     );
 }
