@@ -70,11 +70,15 @@ ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
 然后在脚本中将 `--admin-password demo123` 替换为
 `--ssh-key "$(cat ~/.ssh/id_rsa.pub)"`。
 
-执行完成后，默认端口分别为：SSH `2222`、RDP `33389`、VNC 从虚拟机 XML 中读取
-（通常为 `59xx`）。可以在浏览器中访问如下地址测试：
+执行完成后，虚拟机会从 `br0` 网桥获取 IP 地址，可直接通过标准端口访问：
+- SSH `22`
+- RDP `3389`
+- VNC 端口从虚拟机 XML 中读取（通常为 `59xx`）
+
+可以在浏览器中访问如下地址测试：
 
 ```
-/guac?type=ssh&hostname=hypervisor&port=2222
-/guac?type=rdp&hostname=hypervisor&port=33389
-/guac?type=vnc&hostname=hypervisor&port=<vnc_port>
+/guac?type=ssh&hostname=<vm_ip>&port=22
+/guac?type=rdp&hostname=<vm_ip>&port=3389
+/guac?type=vnc&hostname=<vm_ip>&port=<vnc_port>
 ```

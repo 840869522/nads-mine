@@ -70,6 +70,6 @@ export const sampleCourseCases = [
 ];
 
 export const sampleInstances = [
-  { id: 'inst-vm-001', name: '数据库服务器', type: 'vm', status: 'running', ports: '22->2222', imageName: 'ubuntu-22.04-psql.qcow2', cpuUsage: '10%', memoryUsage: '1GB/4GB', diskUsage: '20GB/100GB', uptime: '1d', nodeId: null, createdAt: new Date().toISOString() },
+  { id: 'inst-vm-001', name: '数据库服务器', type: 'vm', status: 'running', ports: '22', imageName: 'ubuntu-22.04-psql.qcow2', cpuUsage: '10%', memoryUsage: '1GB/4GB', diskUsage: '20GB/100GB', uptime: '1d', nodeId: null, createdAt: new Date().toISOString() },
   { id: 'inst-docker-001', name: 'Web演示容器', type: 'docker', status: 'stopped', ports: '80->8080', imageName: 'nginx-1.25.tar.gz', cpuUsage: '0%', memoryUsage: '0/512MB', diskUsage: '0/1GB', uptime: '0', nodeId: null, createdAt: new Date().toISOString() },
 ];

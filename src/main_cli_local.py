@@ -12,6 +12,7 @@ import json
 import re
 import subprocess
 import tempfile
+from contextlib import ExitStack
 import shutil
 import xml.etree.ElementTree as ET
 # from virtinst import Guest                     # (old)
@@ -419,34 +420,34 @@ def list_vms():
 def list_vm_images():
     return fetch_vm_images()
 
-def create_vm(req: VMRequest):
+def create_vm(req: VMRequest) -> Dict[str, str | int]:
+    """Create a VM bridged to br0 so Guacamole can connect directly."""
     vm = req.vm_name or f"vm-{uuid.uuid4().hex[:8]}"
     mac = gen_mac(vm)
-    try:
-        guest_os = detect_os(req.base_image)
-    except Exception:
-        guest_os = "linux"
 
-    # 1. 创建差分盘
-    overlay = f"{POOL_DIR}/{vm}.qcow2"
-    subprocess.run([
-        QEMU_IMG,
-        "create",
-        "-f",
-        "qcow2",
-        "-F",
-        "qcow2",
-        "-o",
-        f"backing_file={req.base_image}",
-        overlay,
-        f"{req.disk_gb}G",
-    ], check=True)
+    with ExitStack() as stack:
+        tmpdir = stack.enter_context(
+            tempfile.TemporaryDirectory(prefix=f"{vm}-ci-")
+        )
 
-    # 2. 生成 Cloud-Init 文件
-    tmpdir = tempfile.mkdtemp(prefix=f"{vm}-ci-")
-    try:
-        if guest_os == "linux":
-            udata_lines = [
+        guest_os = detect_os(req.base_image) if req.base_image else "linux"
+
+        if guest_os == "windows":
+            if not req.admin_password:
+                raise ValueError("Windows VM requires admin_password")
+            udata = textwrap.dedent(
+                f"""\
+                #cloud-config
+                password: {req.admin_password}
+                username: Administrator
+                runcmd:
+                  - powershell -Command "Set-ItemProperty -Path 'HKLM:\\System\\CCS\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
+                  - powershell -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
+                  - powershell -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"
+                  - powershell -Command "Start-Service sshd"
+            """)
+        else:
+            lines = [
                 "#cloud-config",
                 f"hostname: {vm}",
                 "users:",
@@ -455,96 +456,72 @@ def create_vm(req: VMRequest):
                 "    sudo: ALL=(ALL) NOPASSWD:ALL",
             ]
             if req.ssh_key:
-                udata_lines += [
-                    "    ssh_authorized_keys:",
-                    f"      - {req.ssh_key}",
-                ]
+                lines += ["    ssh_authorized_keys:", f"      - {req.ssh_key}"]
             if req.admin_password:
-                udata_lines += [
+                lines += [
                     "chpasswd:",
                     "  list: |",
                     f"    ubuntu:{req.admin_password}",
                     "  expire: False",
                     "ssh_pwauth: True",
                 ]
-            udata = "\n".join(udata_lines)
-        else:
-            if not req.admin_password:
-                raise HTTPException(422, "Windows VM requires admin_password")
-            udata = textwrap.dedent(
-                f"""\
-                #cloud-config
-                password: {req.admin_password}
-                username: Administrator
-                runcmd:
-                  - powershell -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
-                  - powershell -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
-                """
-            )
-
-        with open(os.path.join(tmpdir, "user-data"), "w") as f:
-            f.write(udata)
-        with open(os.path.join(tmpdir, "meta-data"), "w") as f:
-            f.write(f"instance-id: {vm}\nlocal-hostname: {vm}\n")
-        open(os.path.join(tmpdir, "network-config"), "w").close()
-
-        ci_param = ",".join(
-            [
-                f"user-data={os.path.join(tmpdir, 'user-data')}",
-                f"meta-data={os.path.join(tmpdir, 'meta-data')}",
-                "network-config=" + os.path.join(tmpdir, "network-config"),
-                "disable=on",
+            lines += [
+                "packages:",
+                "  - openssh-server",
+                "  - xrdp",
+                "  - tigervnc-standalone-server",
+                "runcmd:",
+                "  - systemctl enable --now xrdp",
             ]
-        )
+            udata = "\n".join(lines)
 
-        disk_root = f"path={overlay},format=qcow2,bus=virtio"
+        ci_files = {
+            "user-data": udata,
+            "meta-data": f"instance-id: {vm}\nlocal-hostname: {vm}\n",
+            "network-config": "",
+        }
+        for name, content in ci_files.items():
+            with open(os.path.join(tmpdir, name), "w") as fp:
+                fp.write(content)
 
-        # 1) virt-install 不让它自动建网卡
-        network_arg = "none"
+        disk_opts: list[str] = [
+            f"size={req.disk_gb}",
+            "format=qcow2",
+            # f"backing_store={req.base_image},backing_format=qcow2",
+        ]
 
-        # 2) 手动添加 user/slirp 网卡 + 端口转发
-        qemu_netdev = (
-            "--qemu-commandline="
-            "-netdev user,id=net0,"
-            "hostfwd=tcp::2222-:22,"
-            "hostfwd=tcp::33389-:3389"
-        )
-
-        # 3) 把网卡插到 pcie.0 的 slot 0x6，避开 0x1(virtio-vga) 和 0x2(root-port)
-        qemu_device = (
-            "--qemu-commandline="
-            "-device virtio-net-pci,netdev=net0,bus=pcie.0,addr=0x6"
-        )
-
-        # 4) 组装 cmd
         cmd = [
             "virt-install",
             "--import",
             "--quiet",
-            "--name", vm,
-            "--memory", str(req.memory),
-            "--vcpus", str(req.vcpus),
-            "--os-variant", "ubuntu24.04" if guest_os == "linux" else "win10",
-            "--graphics", "vnc,listen=0.0.0.0",
+            "--name",
+            vm,
+            "--memory",
+            str(req.memory),
+            "--vcpus",
+            str(req.vcpus),
+            "--graphics",
+            "vnc,listen=0.0.0.0,port=0",
             "--noautoconsole",
-            "--wait", "0",
-            "--disk", disk_root,
-            "--network", network_arg,
-            "--cloud-init", ci_param,
-            qemu_netdev,
-            qemu_device,
+            "--wait",
+            "0",
+            "--disk",
+            ",".join(disk_opts),
+            "--network",
+            f"bridge=br0,model=virtio,mac={mac}",
+            "--cloud-init",
+            f"user-data={os.path.join(tmpdir,'user-data')},"
+            f"meta-data={os.path.join(tmpdir,'meta-data')},"
+            f"network-config={os.path.join(tmpdir,'network-config')},"
+            "disable=on",
         ]
 
         subprocess.run(cmd, check=True)
 
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-    # 3. 查询 VNC 端口
     try:
         xml = run_virsh("dumpxml", vm)
-        vnc_port = parse_vnc_port(xml) or 5900
-    except RuntimeError:
+        vnc_port = parse_vnc_port(xml)  # type: ignore[arg-type]
+    except Exception:
         vnc_port = 5900
 
     return {"vm": vm, "mac": mac, "vnc_port": vnc_port}
@@ -557,10 +534,21 @@ def get_guac_info(vm_name: str):
     except RuntimeError:
         vnc_port = 5900
 
+    ip = None
+    try:
+        addr_out = run_virsh("domifaddr", vm_name, "--source", "agent")
+        for line in addr_out.splitlines()[2:]:
+            parts = line.split()
+            if len(parts) >= 4:
+                ip = parts[3]
+                break
+    except RuntimeError:
+        pass
+
     return {
-        "host": "hypervisor",
-        "ssh_port": 2222,
-        "rdp_port": 33389,
+        "host": ip or "",
+        "ssh_port": 22,
+        "rdp_port": 3389,
         "vnc_port": vnc_port,
     }
 
