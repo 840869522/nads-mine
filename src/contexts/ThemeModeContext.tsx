@@ -89,6 +89,14 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
                         backgroundImage: 'none', // Disable MUI's default gradient on Paper in dark mode
                     }
                 }
+            },
+            MuiCircularProgress :{
+              styleOverrides: {
+                root: {
+                  color:"#1976d2",
+                  opacity:1,
+                }
+              }
             }
         }
       }, zhCN), // Apply Chinese locale

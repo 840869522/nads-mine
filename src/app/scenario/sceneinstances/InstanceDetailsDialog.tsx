@@ -21,7 +21,7 @@ import BindMountsModal from '@/components/scenario/BindMountsModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "/back";
 
 interface InstanceDetailsDialogProps {
     open: boolean;

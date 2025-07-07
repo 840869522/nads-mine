@@ -51,7 +51,7 @@ const ScenarioManagementPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/scenarios');
+            const response = await fetch('/back/api/scenarios');
             if (!response.ok) {
                 throw new Error('获取场景列表失败');
             }
@@ -96,7 +96,7 @@ const ScenarioManagementPage: React.FC = () => {
         setError(null);
         try {
             // 向后端API发送DELETE请求，通过查询参数传递ID
-            const response = await fetch(`http://127.0.0.1:8000/api/scenarios?id=${deleteTarget.id}`, {
+            const response = await fetch(`/back/api/scenarios?id=${deleteTarget.id}`, {
                 method: 'DELETE',
             });
 
@@ -130,7 +130,7 @@ const ScenarioManagementPage: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/scenarios/${scenario.id}/start`, {
+            const response = await fetch(`/back/api/scenarios/${scenario.id}/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

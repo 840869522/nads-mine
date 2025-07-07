@@ -49,7 +49,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/scenariosinstances');
+            const response = await fetch('/back/api/scenariosinstances');
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
                 throw new Error(errorData.message);
