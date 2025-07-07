@@ -27,7 +27,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { User, UserRole } from '@/types';
-import { USER_ROLES_CONFIG } from '@/constants';
+import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
@@ -84,7 +84,7 @@ const UserManagementPage: React.FC = () => {
   const handleSearchSubmit = async () => {
     setTableLoading(true);
     try {
-      const res = await apiClientWithToken.post("/api/support/user/search", JSON.stringify({
+      const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/search`, JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
         name: searchTerm.data
@@ -125,9 +125,9 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleEditUserClick = (user: UserDisplayItem) => {
-    apiClientWithToken.post("/api/support/user/id",JSON.stringify({id:user.c_username})).then((res)=>{
+    apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/id`,JSON.stringify({id:user.c_username})).then((res)=>{
       if (res.data.code === 200){
-        setEditingUser(user);
+        setEditingUser(res.data.data);
         setIsUserModalOpen(true);
         setFeedbackMessage(null);
       }else{
@@ -137,16 +137,16 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
+    var userData = {
+      username: formData.username,
+      email: formData.email,
+      password : "",
+      is_login: formData.status == "active" ? 1 : 0,
+      role:[...formData.role]
+    }
     if (isNew) {
-      var userData = {
-        username: formData.username,
-        password: CryptoJS.SHA256(formData.password).toString(),
-        email: formData.email,
-        is_login: formData.status == "active" ? 1 : 0,
-        role:[formData.role]
-      }
-      console.log(userData);
-      apiClientWithToken.post('/api/support/user/new', JSON.stringify({ data : {...userData}})).then((res)=>{
+      userData.password  = CryptoJS.SHA256(formData.password).toString()
+      apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/new`, JSON.stringify({ data : {...userData}})).then((res)=>{
         if (res.data.code === 200){
           setPage(1);;
           getUserData(1,rowsPerPage);
@@ -156,13 +156,12 @@ const UserManagementPage: React.FC = () => {
         }
       });
     } else if (editingUser) {
-      const res = await apiClientWithToken.post('/api/support/user/update', JSON.stringify({
+      userData.password = formData.pwdedit ? CryptoJS.SHA256(formData.password).toString() : editingUser.c_password;
+      console.log(userData);
+      const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/update`, JSON.stringify({
         id: editingUser.c_username,
         data :{
-          password: CryptoJS.SHA256(formData.password).toString(),
-          email: formData.email,
-          is_login: formData.status == "active" ? 1 : 0,
-          role:[formData.role]
+          ...userData
         }
       }));
       if (res.data.code  === 200){
@@ -185,7 +184,7 @@ const UserManagementPage: React.FC = () => {
 
   const confirmDeleteUser = () => {
     if (userToDelete) {
-      apiClientWithToken.post(`/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+      apiClientWithToken.post(`${BACK_IP_PORT}/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
         if (res.data.code === 200) {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
           setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });

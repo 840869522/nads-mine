@@ -4,11 +4,12 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '../types';
 import { apiClient } from '@/utils/axios';
 import { deleteCookie, setCookie } from '@/utils/cookie';
-import { permission } from 'process';
+import { getCookie } from '@/utils/cookie';
+import { BACK_IP_PORT } from '@/constants';
 
 
 interface AuthContextType {
-  user: {user:{},role:[]} | null;
+  user: { user: {}, role: [] } | null;
   login: (username: string, Np: string) => Promise<void>; // Np to avoid password keyword for simple demo
   logout: () => void;
 }
@@ -20,7 +21,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<{user:{},role:[]} | null>(null);
+  const [user, setUser] = useState<{ user: {}; role: []; permission: [] } | null>(null);
   useEffect(() => {
     // Load any existing session from localStorage
     const storedUser = localStorage.getItem('droneSimUser');
@@ -30,21 +31,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (username: string, Np: string) => {
-    const res = await apiClient.post('/api/support/user/login', JSON.stringify({ username, password: Np }));
+    const res = await apiClient.post(`${BACK_IP_PORT}/api/support/user/login`, JSON.stringify({ username, password: Np }));
     const data = await res.data;
-    if (data.code ===  200 ) {
-      var loggedInUser = {user:data.data.user,role:data.data.role,permission:data.data.permissions};
-      if (data.data.role.includes(UserRole.ADMIN)){
-        loggedInUser = {...loggedInUser,user:data.data.user,role:UserRole.ADMIN};
-      }else if (data.data.role.includes(UserRole.STUDENT)){
-        loggedInUser = {...loggedInUser,user:data.data.user,role:UserRole.STUDENT};
-      }
+    if (data.code === 200) {
+      var loggedInUser = { user: data.data.user, role: data.data.role, permission: data.data.permissions };
+      
       setUser(loggedInUser);
       localStorage.setItem('droneSimUser', JSON.stringify(loggedInUser));
-      setCookie("_auth",data.data.token,{});
+      setCookie("_auth", data.data.token, {});
       setTimeout(()=>{
         window.location.href = "/";
-      },200);
+      },200)
     }
     else
       throw new Error(data.message || 'Invalid credentials');
@@ -52,10 +49,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     deleteCookie("_auth");
-    setTimeout(()=>{},200);
+    setTimeout(() => { }, 200);
     setUser(null);
     localStorage.removeItem('droneSimUser');
-    
+
   };
 
   return (

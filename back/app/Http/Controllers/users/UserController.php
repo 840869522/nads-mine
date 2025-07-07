@@ -82,12 +82,15 @@
                 ]);
             }
             $modelRes = UserModel::getUserById($id);
-            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+            $role = RoleModel::getUserRole($id);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE && $role['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE){
+                $modelRes['data']->role = array_map(function ($item) {return $item->c_id;},$role["data"]);  
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "message" => GlobalResponse::HTTP_STATUS_OK_MES,
                     "data" => $modelRes['data']
                 ]);
+            }
             else {
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
@@ -123,19 +126,20 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
-            $permissions = UserModel::getUserPrimissions($user->c_username);
+            $permissionRes = UserModel::getUserPrimissions($user->c_username);
             $role = RoleModel::getUserRole($user->c_username);
-            if ($permissions['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
+            if ($permissionRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
                 return response()->json([
                     "code" => GlobalResponse::$USER_LOGIN_ERROR_CODE,
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
+            $permissions = array_map(function ($item) {
+                return $item->c_permission_id ;
+            }, $permissionRes["data"]);
             $jwtRes = JWTControll::encodeJWT([
                 "id" => $user->c_username,
-                "permission" => array_map(function ($item) {
-                    return $item->c_permission_id ;
-                }, $permissions["data"])
+                "permission" => $permissions
             ]);
             if ($jwtRes["err"] != null) {
                 return response()->json([
@@ -155,9 +159,7 @@
                     "token" => $jwtRes['token'],
                     "user" => $new_user,
                     "role"=> array_map(function ($item) {return $item->c_id;},$role["data"]),
-                    "permissions"=> array_map(function ($item) {
-                        return $item->c_permission_id ;
-                    }, $permissions["data"])
+                    "permissions"=> $permissions
                 ]
             ]);
         }

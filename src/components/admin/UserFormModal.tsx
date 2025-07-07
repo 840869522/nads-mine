@@ -1,5 +1,7 @@
-import React, { useEffect, useState, ChangeEvent } from 'react';
+import React, { useEffect, useState, ChangeEvent, useActionState } from 'react';
 import {
+  Box,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -17,7 +19,9 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { User, UserRole } from '@/types';
-import { USER_ROLES_CONFIG } from '@/constants';
+import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
+import { apiClientWithToken } from '@/utils/axios';
+import { SingletonRouter } from 'next/router';
 
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
@@ -36,7 +40,7 @@ interface UserFormModalProps {
 
 const DEFAULT_FORM: UserFormData = {
   username: '',
-  role: UserRole.STUDENT,
+  role: [UserRole.STUDENT],
   email: '',
   status: 'active',
   password: '',
@@ -44,12 +48,17 @@ const DEFAULT_FORM: UserFormData = {
 
 // ---------- Component ----------
 const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, initialUser }) => {
-  const theme             = useTheme();
-  const fullScreen        = useMediaQuery(theme.breakpoints.down('sm'));
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState<UserFormData>(DEFAULT_FORM);
-  const [errors,  setErrors]    = useState<Record<string, string>>({});
-  const isNewUser               = !initialUser;
-  const [roles, setRoles] = useState([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const isNewUser = !initialUser;
+  const [countRole, setCountRole] = useState(0);
+  const [roles, setRoles] = useState<[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // ----------- Sync initial data -----------
   useEffect(() => {
@@ -57,11 +66,12 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
     if (initialUser) {
       setFormData({
-        username:  initialUser.c_username,
-        role:      initialUser.role,
-        email:     initialUser.c_email,
-        status:    initialUser.c_is_login ? "active" : "disabled",
-        password:  '',
+        pwdedit: false,
+        username: initialUser.c_username,
+        role: [...initialUser.role],
+        email: initialUser.c_email,
+        status: initialUser.c_is_login ? "active" : "disabled",
+        password: '',
       });
     } else {
       setFormData(DEFAULT_FORM);
@@ -69,17 +79,56 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
     setErrors({});
   }, [open, initialUser]);
 
+
+  useEffect(() => {
+    if (isRoleMenuOpen && currentPage >= 1 && hasMore) {
+      const loadNextPage = async () => {
+        apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/all`, JSON.stringify({ page: currentPage, pagesize: 10 })).then(res => {
+          if (res.data.code === 200) {
+            if (currentPage * 10 > res.data.data.count) {
+              setHasMore(false);
+            }
+            setCountRole(res.data.data.count);
+            setRoles((prev) => [...prev, ...res.data.data.data].filter(Boolean));
+          }
+          else
+            setHasMore(false);
+        }).finally(() => {
+          setIsLoadingMore(false);
+        })
+      };
+      loadNextPage();
+    }
+  }, [currentPage, isRoleMenuOpen, hasMore]);
+
   // ----------- Handlers -----------
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === "password")
+      setFormData(prev => ({...prev,[name]:value,["pwdedit"]:true}));
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const handleSelectChange = (e: SelectChangeEvent) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value as any }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  const handleSelectChange = (event: SelectChangeEvent<string[]>) => {
+    const selectedRoles = event.target.value as string[];
+    setFormData({
+      ...formData,
+      role: selectedRoles,
+    });
+    // const { name, value } = e.target;
+    // setFormData(prev => ({ ...prev, [name]: value as any }));
+    // if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLUListElement>) => {
+    const target = e.target as HTMLUListElement;
+    const isBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 10;
+
+    if (isBottom && hasMore && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setCurrentPage((prev) => prev + 1);
+    }
   };
 
   // ----------- Validation -----------
@@ -93,9 +142,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
     } else if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/u.test(formData.email)) {
       next.email = '邮箱格式无效';
     }
-
-    if (!formData.role) next.role = '请选择角色';
-
+    if (formData.role?.length === 0) {
+      next.role = '请选择至少一个角色';
+    }
     if (isNewUser && !formData.password?.trim()) {
       next.password = '新用户必须设置密码';
     } else if (formData.password && formData.password.length < 6) {
@@ -114,111 +163,150 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
   // ----------- UI -----------
   return (
-      <Dialog
-          open={open}
-          onClose={onClose}
-          fullWidth
-          maxWidth="sm"
-          fullScreen={fullScreen}
-          PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        {/* Title */}
-        <DialogTitle>{isNewUser ? '添加新用户' : `编辑用户: ${initialUser?.username}`}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      PaperProps={{ sx: { borderRadius: 2 } }}
+    >
+      {/* Title */}
+      <DialogTitle>{isNewUser ? '添加新用户' : `编辑用户: ${initialUser?.c_username}`}</DialogTitle>
 
-        {/* Content */}
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {/* 基本信息 */}
-            <TextField
-                autoFocus
-                fullWidth
-                name="username"
-                label="用户名"
-                variant="outlined"
-                margin="dense"
-                value={formData.username}
-                onChange={handleChange}
-                error={!!errors.username}
-                helperText={errors.username}
-                required
-            />
+      {/* Content */}
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          {/* 基本信息 */}
+          <TextField
+            autoFocus
+            fullWidth
+            disabled={!isNewUser}
+            name="username"
+            label="用户名"
+            variant="outlined"
+            margin="dense"
+            value={formData.username}
+            onChange={handleChange}
+            error={!!errors.username}
+            helperText={errors.username}
+            required
+          />
 
-            <TextField
-                fullWidth
-                name="email"
-                label="邮箱"
-                type="email"
-                variant="outlined"
-                margin="dense"
-                value={formData.email}
-                onChange={handleChange}
-                error={!!errors.email}
-                helperText={errors.email}
-                required
-            />
+          <TextField
+            fullWidth
+            name="email"
+            label="邮箱"
+            type="email"
+            variant="outlined"
+            margin="dense"
+            value={formData.email}
+            onChange={handleChange}
+            error={!!errors.email}
+            helperText={errors.email}
+            required
+          />
 
-            {/* 角色 & 密码 */}
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <FormControl fullWidth margin="dense" error={!!errors.role} required>
-                <InputLabel id="role-label">角色</InputLabel>
-                <Select
-                    labelId="role-label"
-                    name="role"
-                    label="角色"
-                    value={formData.role || ''}
-                    onChange={handleSelectChange}
-                >
-                  {Object.values(UserRole).map(r => (
-                      <MenuItem key={r} value={r}>
-                        {USER_ROLES_CONFIG[r]?.name || r}
-                      </MenuItem>
-                  ))}
-                </Select>
-                {errors.role && <FormHelperText>{errors.role}</FormHelperText>}
-              </FormControl>
-
-              <TextField
-                  fullWidth
-                  name="password"
-                  type="password"
-                  label={isNewUser ? '密码' : '新密码 (可选)'}
-                  variant="outlined"
-                  margin="dense"
-                  value={formData.password}
-                  onChange={handleChange}
-                  error={!!errors.password}
-                  helperText={errors.password}
-                  required={isNewUser}
-                  autoComplete="new-password"
-              />
-            </Stack>
-
-            {/* 状态 */}
-            <FormControl fullWidth margin="dense" error={!!errors.status}>
-              <InputLabel id="status-label">状态</InputLabel>
+          {/* 角色 & 密码 */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <FormControl fullWidth margin="dense" error={!!errors.role} required>
+              <InputLabel id="role-label">角色</InputLabel>
               <Select
-                  labelId="status-label"
-                  name="status"
-                  label="状态"
-                  value={formData.status || 'active'}
-                  onChange={handleSelectChange}
+                multiple
+                labelId="role-label"
+                name="role"
+                label="角色"
+                value={formData.role || []}
+                onChange={handleSelectChange}
+                onOpen={() => setIsRoleMenuOpen(true)}
+                onClose={() => setIsRoleMenuOpen(false)}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                    },
+                    onScroll: handleScroll,
+                  },
+                }}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((role) => (
+                      <Chip key={role} label={role} />
+                    ))}
+                  </Box>
+                )}
               >
-                <MenuItem value="active">已激活</MenuItem>
-                <MenuItem value="disabled">已禁用</MenuItem>
+                {
+                  roles.length > 0 ? (
+                    [
+                      ...roles.map(r => (
+                        <MenuItem key={r.c_id} value={r.c_id.toString()}>
+                          {r.c_id}
+                        </MenuItem>
+                      )),
+                      isLoadingMore && (
+                        <MenuItem disabled>
+                          正在加载更多...
+                        </MenuItem>
+                      ),
+                      !hasMore && (
+                        <MenuItem disabled>
+                          没有更多角色了
+                        </MenuItem>
+                      ),
+                    ].filter(Boolean)
+                  ) : (
+                    <MenuItem disabled>
+                      {isRoleMenuOpen ? '正在加载角色...' : ''}
+                    </MenuItem>
+                  )
+                }
               </Select>
-              {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
+              {errors.role && <FormHelperText>{errors.role}</FormHelperText>}
             </FormControl>
-          </Stack>
-        </DialogContent>
 
-        {/* Actions */}
-        <DialogActions sx={{ p: 2 }}>  {/* matches MUI form-dialog example */}
-          <Button onClick={onClose}>取消</Button>
-          <Button variant="contained" onClick={handleSubmit}>
-            {isNewUser ? '确认添加' : '保存更改'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <TextField
+              fullWidth
+              name="password"
+              type="password"
+              label={isNewUser ? '密码' : '新密码 (可选)'}
+              variant="outlined"
+              margin="dense"
+              value={formData.password}
+              onChange={handleChange}
+              error={!!errors.password}
+              helperText={errors.password}
+              required={isNewUser}
+              autoComplete="new-password"
+            />
+          </Stack>
+
+          {/* 状态 */}
+          <FormControl fullWidth margin="dense" error={!!errors.status}>
+            <InputLabel id="status-label">状态</InputLabel>
+            <Select
+              labelId="status-label"
+              name="status"
+              label="状态"
+              value={formData.status || 'active'}
+              onChange={handleSelectChange}
+            >
+              <MenuItem value="active">已激活</MenuItem>
+              <MenuItem value="disabled">已禁用</MenuItem>
+            </Select>
+            {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
+          </FormControl>
+        </Stack>
+      </DialogContent>
+
+      {/* Actions */}
+      <DialogActions sx={{ p: 2 }}>  {/* matches MUI form-dialog example */}
+        <Button onClick={onClose}>取消</Button>
+        <Button variant="contained" onClick={handleSubmit}>
+          {isNewUser ? '确认添加' : '保存更改'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

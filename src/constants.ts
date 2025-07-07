@@ -9,6 +9,8 @@ export interface AppPermission {
   label: string;
 }
 
+export const BACK_IP_PORT = "http://locahost:8000";
+
 
 
 export const APP_PERMISSIONS_CATEGORY = {

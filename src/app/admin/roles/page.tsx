@@ -24,7 +24,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import GppGoodIcon from '@mui/icons-material/GppGood';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { UserRole } from '@/types';
-import { USER_ROLES_CONFIG } from '@/constants';
+import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
@@ -76,7 +76,7 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const getRoleData = (page: number, pagesize: number) => {
-        apiClientWithToken.post('/api/support/role/all', JSON.stringify({ page: page, pagesize: pagesize }))
+        apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/all`, JSON.stringify({ page: page, pagesize: pagesize }))
             .then((res) => {
                 if (res.data.code === 200) {
                     setRoles(res.data.data.data);
@@ -89,7 +89,7 @@ const RoleManagementPage: React.FC = () => {
     }
 
     const handleEditRoleClick = (role: MockRole) => {
-        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`${BACK_IP_PORT}/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
                 const permision = res.data.data.map(p => p.c_id);
                 setEditingRole({ ...role, permissions: permision });
@@ -104,7 +104,7 @@ const RoleManagementPage: React.FC = () => {
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
         console.log(formData);
         if (isNew) {
-            const res = await apiClientWithToken.post('/api/support/role/new', JSON.stringify({
+            const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/new`, JSON.stringify({
                 data: {
                     id: formData.nameDisplay,
                     name: formData.description,
@@ -121,7 +121,7 @@ const RoleManagementPage: React.FC = () => {
                 setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
             }
         } else if (editingRole) {
-            const res = await apiClientWithToken.post('/api/support/role/update', JSON.stringify({
+            const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/update`, JSON.stringify({
                 id: editingRole.c_id,
                 data: {
                     name: formData.description,
@@ -155,8 +155,8 @@ const RoleManagementPage: React.FC = () => {
 
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await apiClientWithToken.post(`/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
-            const res = await apiClientWithToken.post("/api/support/role/all", JSON.stringify({ page: page, pagesize: rowsPerPage }));
+            await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
+            const res = await apiClientWithToken.post(`${BACK_IP_PORT}/api/support/role/all`, JSON.stringify({ page: page, pagesize: rowsPerPage }));
             setRoles(res.data.data.data);
             setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
         }
@@ -172,7 +172,7 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`${BACK_IP_PORT}/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
                 const permision = res.data.data.map(p => p.c_id);
                 setViewingRolePerms({ nameDisplay: role.c_id, permissions: permision });

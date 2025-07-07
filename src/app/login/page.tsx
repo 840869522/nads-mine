@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Box,
@@ -18,8 +18,11 @@ const LoginPage: React.FC = () => {
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login,logout } = useAuth();
 
+  useEffect(()=>{
+    logout();
+  },[]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

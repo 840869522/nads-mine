@@ -2,7 +2,7 @@
 export interface User {
   c_id: string;
   c_username: string;
-  role: UserRole;
+  role: string[];
 }
 
 export enum UserRole {
@@ -160,6 +160,7 @@ export interface RunningInstance {
   id: string;
   name: string;
   type: string; // <-- 这里被修改，以支持 '虚拟机', '容器', '交换机' 等多种类型
+  ipAddress: string;
   status: InstanceStatus;
   /** 端口映射，如 "80->8080" */
   ports?: string;
