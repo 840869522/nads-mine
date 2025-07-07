@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
 import { getCookie } from '@/utils/cookie';
+import path from 'path';
 
 const DRAWER_WIDTH = 250;
 
@@ -34,7 +35,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
+  useEffect(() => {;
     const permissionsData = user?.permission || [];
     const roleData = user?.role || [];
     const token = getCookie("_auth");
@@ -43,7 +44,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
         router.replace('/login');
       }
     } else {
-      const match = ROUTE_PERMISSIONS.find(r => pathname.startsWith(r.prefix));
+      const match = ROUTE_PERMISSIONS.find(r => pathname === r.prefix);
       if (match) {
         if (!roleData.includes(UserRole.ADMIN) )
           if (!permissionsData.includes(match.key)) {

@@ -60,7 +60,7 @@ const UserManagementPage: React.FC = () => {
 
   useEffect(() => {
     getUserData(page,rowsPerPage)
-  }, []);
+  }, [page,rowsPerPage]);
 
   const getUserData = (page:number,pagesize:number) =>{
     apiClientWithToken.post(`/back/api/support/user/all`, JSON.stringify({ page: page, pagesize: pagesize })).then((res) => {
@@ -107,7 +107,7 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+    setPage(newPage+1);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,6 +124,7 @@ const UserManagementPage: React.FC = () => {
   const handleEditUserClick = (user: UserDisplayItem) => {
     apiClientWithToken.post(`/back/api/support/user/id`,JSON.stringify({id:user.c_username})).then((res)=>{
       if (res.data.code === 200){
+        console.log(res.data.data);
         setEditingUser(res.data.data);
         setIsUserModalOpen(true);
         setFeedbackMessage(null);
@@ -154,8 +155,7 @@ const UserManagementPage: React.FC = () => {
       });
     } else if (editingUser) {
       userData.password = formData.pwdedit ? CryptoJS.SHA256(formData.password).toString() : editingUser.c_password;
-      console.log(userData);
-      const res = await apiClientWithToken.post(`/back/api/api/support/user/update`, JSON.stringify({
+      const res = await apiClientWithToken.post(`/back/api/support/user/update`, JSON.stringify({
         id: editingUser.c_username,
         data :{
           ...userData

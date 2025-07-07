@@ -126,6 +126,12 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
+            if ($user->is_login == 0) {
+                return response()->json([
+                    "code"=>GlobalResponse::$USER_IS_DEL_CODE,
+                    "message"=>GlobalResponse::$USER_LOGIN_IS_DEL_MES
+                ]);
+            }
             $permissionRes = UserModel::getUserPrimissions($user->c_username);
             $role = RoleModel::getUserRole($user->c_username);
             if ($permissionRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
