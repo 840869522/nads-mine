@@ -117,7 +117,48 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     // 当从工具栏拖拽一个设备到画布上时，此函数被调用。它会生成一个唯一的ID，
     // 创建一个新的节点对象，然后 dispatch 一个 'ADD_NODE' 动作。
     // 同时，它也会调用从父组件传来的 onAddNode 回调，通知父组件（ScenarioCreateDialog）状态已变更。
-    const addNode = useCallback((type: DeviceType, x: number, y: number) => { const nodeCount = nodes.filter(n => n.type === type).length + 1; const deviceDetails = TOPOLOGY_DEVICE_TYPES.find(dt => dt.type === type) || { name: '设备' }; const newNode: TopologyNode = { id: generateId(type), type, label: `${deviceDetails.name}-${nodeCount}`, x, y, config: { ...DEFAULT_NODE_CONFIG[type] } }; const action: TopologyAction = { type: 'ADD_NODE', payload: { node: newNode } }; dispatch(action); onAddNode(newNode); pushToUndoStack(action); }, [nodes, pushToUndoStack, onAddNode]);
+    // --- 【关键修改】在这里将中文标签改为英文 ---
+    const addNode = useCallback((type: DeviceType, x: number, y: number) => {
+        const nodeCount = nodes.filter(n => n.type === type).length + 1;
+        const deviceDetails = TOPOLOGY_DEVICE_TYPES.find(dt => dt.type === type) || { name: '设备' };
+        
+        let englishLabel = '';
+        // 根据中文名映射为英文名
+        switch (deviceDetails.name) {
+            case '容器':
+                englishLabel = `Container-${nodeCount}`;
+                break;
+            case '虚拟机':
+                englishLabel = `VM-${nodeCount}`;
+                break;
+            case '交换机':
+                englishLabel = `Switch-${nodeCount}`;
+                break;
+            case '路由器':
+                englishLabel = `Router-${nodeCount}`;
+                break;
+            case 'NAT网桥':
+                englishLabel = `NAT-Bridge-${nodeCount}`;
+                break;
+            default:
+                // 如果有其他类型，保留原样或指定一个通用英文名
+                englishLabel = `Device-${nodeCount}`;
+        }
+
+        const newNode: TopologyNode = {
+            id: generateId(type),
+            type,
+            label: englishLabel, // 使用新的英文标签
+            x,
+            y,
+            config: { ...DEFAULT_NODE_CONFIG[type] }
+        };
+        const action: TopologyAction = { type: 'ADD_NODE', payload: { node: newNode } };
+        dispatch(action);
+        onAddNode(newNode);
+        pushToUndoStack(action);
+    }, [nodes, pushToUndoStack, onAddNode]);
+    // --- 修改结束 ---
     const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
     const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [nodeMoveInitialPosition, pushToUndoStack]);
     const handleNodeSelect = useCallback((nodeId: string | null, event?: React.MouseEvent) => { event?.stopPropagation(); if (!nodeId) { dispatch({ type: 'CLEAR_SELECTION', payload: null }); return; } if (linkingState) { if (linkingState.startNodeId === nodeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); } else { const sourceNode = nodes.find(n => n.id === linkingState.startNodeId); const targetNode = nodes.find(n => n.id === nodeId); if (sourceNode && targetNode) { const edgeExists = edges.some(edge => (edge.source === sourceNode.id && edge.target === targetNode.id) || (edge.source === targetNode.id && edge.target === sourceNode.id)); if (!edgeExists) { const newEdge: TopologyEdge = { id: generateId('edge'), source: sourceNode.id, target: targetNode.id, config: { ...DEFAULT_EDGE_CONFIG, sourceIp: `10.0.${nodes.length + edges.length + 1}.1/24`, targetIp: `10.0.${nodes.length + edges.length + 1}.2/24` } }; const action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: newEdge } }; dispatch(action); pushToUndoStack(action); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } } else { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); dispatch({ type: 'START_LINKING', payload: { startNodeId: nodeId } }); } }, [linkingState, nodes, edges, dispatch, pushToUndoStack]);

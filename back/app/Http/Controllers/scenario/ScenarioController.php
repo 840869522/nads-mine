@@ -4,49 +4,33 @@ namespace App\Http\Controllers\scenario;
 
 use App\Http\Controllers\Controller;
 use App\Models\scenario\SceneConfig;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+
+
 
 class ScenarioController extends Controller
 {
-    /**
-     * Fetches the list of all scenarios from the database.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    /**
-     * 获取所有场景的列表，并包含完整的拓扑数据.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
+   
+    // --- 您其他的 index, store, destroy, update 方法放在这里 ---
     public function index()
     {
         try {
-            // 从数据库获取所有场景，按最新创建的排序
             $scenarios = SceneConfig::latest()->get();
-
-            // 使用 map 方法来转换数据结构，以匹配前端的需求
             $scenariosData = $scenarios->map(function ($scenario) {
                 return [
-                    'id'          => $scenario->config_id,
-                    'name'        => $scenario->name,
-                    'description' => $scenario->description ?? '无描述',
-                    'uploadDate'  => $scenario->created_at->toIso8601String(),
-                    'nodeCount'   => isset($scenario->topology_json['nodes']) ? count($scenario->topology_json['nodes']) : 0,
-                    
-                    // --- 核心修改点在这里 ---
-                    // 将完整的 topology_json 对象直接添加到返回数据中
-                    'topology_json' => $scenario->topology_json, 
+                    'id'          => $scenario->c_config_id,
+                    'name'        => $scenario->c_name,
+                    'description' => $scenario->c_description ?? '无描述',
+                    'uploadDate'  => $scenario->c_created_at->toIso8601String(),
+                    'nodeCount'   => isset($scenario->c_scene['nodes']) ? count($scenario->c_scene['nodes']) : 0,
+                    'topology_json' => $scenario->c_scene,
                 ];
             });
-
-            // 返回包含完整拓扑的场景数据数组
             return response()->json($scenariosData);
-
         } catch (\Exception $e) {
             Log::error('获取场景列表时发生错误: ' . $e->getMessage());
             return response()->json(['message' => '服务器内部错误，获取列表失败。'], 500);
@@ -85,9 +69,9 @@ class ScenarioController extends Controller
             // 使用验证后的数据创建记录。
             // 这里的 'topology_json' 字段将会接收包含 nodes 和 edges 的完整 topology 对象。
             $scenario = SceneConfig::create([
-                'name'          => $validatedData['name'],
-                'description'   => $validatedData['description'] ?? null,
-                'topology_json' => $validatedData['topology'], // 此处数据现在是完整的
+                'c_name'          => $validatedData['name'],
+                'c_description'   => $validatedData['description'] ?? null,
+                'c_scene' => $validatedData['topology'], // 此处数据现在是完整的
             ]);
 
             Log::info('新场景已存入数据库', ['id' => $scenario->id]); // 假设主键是 id
@@ -139,19 +123,18 @@ class ScenarioController extends Controller
      * 更新指定的场景资源.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\SceneConfig  $scenario  // <-- 使用了路由模型绑定
+     * @param  \App\Models\scenario\SceneConfig  $scenario
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request, SceneConfig $scenario)
     {
-        // 1. 数据验证
-        // 规则与 store 方法类似
+        // 1. 【关键修改】修改验证规则，以匹配前端发送的 'topology' 键
         $validator = Validator::make($request->all(), [
-            'name'          => 'required|string|max:100',
-            'description'   => 'nullable|string',
-            'topology'      => 'required|array',
-            'topology.nodes' => 'present|array',
-            'topology.edges' => 'present|array',
+            'name'             => 'required|string|max:100',
+            'description'      => 'nullable|string',
+            'topology'         => 'required|array', // <-- 从 'topology_json' 改为 'topology'
+            'topology.nodes'   => 'present|array',
+            'topology.edges'   => 'present|array',
         ]);
 
         if ($validator->fails()) {
@@ -160,21 +143,18 @@ class ScenarioController extends Controller
 
         $validatedData = $validator->validated();
 
-        // 2. 更新数据库记录
         try {
+            // 2. 【关键修改】手动映射数据，将 'topology' 字段的值赋给数据库的 'topology_json' 字段
             $scenario->update([
-                'name'          => $validatedData['name'],
-                'description'   => $validatedData['description'] ?? null,
-                // 注意：数据库字段名是 topology_json
-                'topology_json' => $validatedData['topology'],
+                'c_name'          => $validatedData['name'],
+                'c_description'   => $validatedData['description'] ?? null,
+                'c_scene'         => $validatedData['topology'],
             ]);
-
-            Log::info('场景已更新', ['id' => $scenario->id]);
-            // 3. 返回成功响应
+            Log::info('场景已更新', ['id' => $scenario->c_config_id]);
             return response()->json(['message' => '场景更新成功！', 'data' => $scenario]);
 
         } catch (\Exception $e) {
-            Log::error('更新场景时发生错误: ' . $e->getMessage(), ['id' => $scenario->id]);
+            Log::error('更新场景时发生错误: ' . $e->getMessage(), ['id' => $scenario->c_config_id]);
             return response()->json(['message' => '服务器内部错误，更新失败。'], 500);
         }
     }

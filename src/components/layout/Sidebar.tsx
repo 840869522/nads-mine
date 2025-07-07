@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
-import { APP_NAME, GetUserRole, USER_ROLES_CONFIG } from '../../constants';
+import { APP_NAME, USER_ROLES_CONFIG } from '../../constants';
 import { UserRole } from "../../types.ts";
 import { useThemeMode } from '../../contexts/ThemeModeContext.tsx';
 
@@ -84,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
   };
 
   const navItems: NavItemType[] = [
-    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'databoard_view' },
+    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'DASHBOARD_VIEW' },
     {
       label: "人员测试分系统",
       icon: AcademicCapIcon,
@@ -101,6 +101,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         // { to: "/scenario/envirments", label: "环境配置", icon: AdjustmentsHorizontalIcon, requiredPermission: 'SCENARIO_ENVIRONMENTS_CONFIG' },
         // --- 新增的子菜单 ---
+        // { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'SCENARIO_MANAGE' }
+          { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon },
         { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'scene_setting' }
       ]
     },

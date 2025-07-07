@@ -1,10 +1,13 @@
 <?php
 
+
     use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
+    use App\Http\Controllers\scenario\DrillController;
+    use App\Http\Controllers\scenario\InstanceController; 
     use App\Http\Controllers\ImagesController;
     use App\Http\Controllers\InstancesController;
     use App\Http\Controllers\ContainersController;
@@ -13,7 +16,6 @@
     use App\Http\Controllers\Course\CourseController;
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
-    
 
     /*
     |--------------------------------------------------------------------------
@@ -112,20 +114,20 @@
             // 获取所有队伍列表
             // GET /api/ad/team
             Route::get('/', [TeamController::class, 'index']);
-        
+
             // 创建一个新队伍
             // POST /api/ad/team
             Route::post('/', [TeamController::class, 'store']);
-        
+
             // 获取单个队伍的详细信息
             // GET /api/ad/team/{team}
             // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
             Route::get('/{team}', [TeamController::class, 'show']);
-        
+
             // 更新一个已存在的队伍
             // PUT /api/ad/team/{team}
             Route::put('/{team}', [TeamController::class, 'update']);
-        
+
             // 删除一个队伍
             // DELETE /api/ad/team/{team}
             Route::delete('/{team}', [TeamController::class, 'destroy']);
@@ -144,14 +146,14 @@
             Route::delete('/{id}',[CourseController::class,'destroy'])->middleware('can:delete-courses')->name('courses.destroy');
             Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('can:manage-courses')->name('courses.addUser');
         })->middleware('jwtcheck');
-    
+
         Route::prefix('categories')->group(function(){
             Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
             Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
             Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
             Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
         })->middleware('jwtcheck:study_');
-    
+
         Route::prefix('courses/{courseId}/resources')->group(function () {
             Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
             Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
@@ -169,15 +171,29 @@
 
 
     Route::prefix('scenarios')->group(function () {
+
+        // GET 获取所有场景列表
         Route::get('/', [ScenarioController::class, 'index']);
+        // POST 创建一个新场景
         Route::post('/', [ScenarioController::class, 'store']);
+        // DELETE  删除一个指定场景
         Route::delete('/', [ScenarioController::class, 'destroy']);
-        // PUT /api/scenarios/{scenario} - 更新一个指定的场景Add commentMore actions
-        // 我们使用 {scenario} 作为参数，Laravel 可以自动通过ID找到对应的模型实例 (Route Model Binding)
+        // PUT 修改场景
         Route::put('/{scenario}', [ScenarioController::class, 'update']);
-
-
+        //GET 获取场景
         Route::get('/{scenario}', [ScenarioController::class, 'update']);
+
+         // 启动场景
+        Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+
+
+    });
+
+    Route::prefix('scenariosinstances')->group(function () {
+        // GET /api/scenarios/instances - 获取所有场景实例列表
+        Route::get('/', [InstanceController::class, 'index']);
+        // --- 【新增】获取单个场景实例的详细信息 ---
+        Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
 
     });
 

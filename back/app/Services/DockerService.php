@@ -52,7 +52,7 @@ class DockerService
         $cfg->setAttachStdin(true);
         $cfg->setAttachStdout(true);
         $cfg->setAttachStderr(true);
-
+        
         // --- ENV & CMD ---
         if (!empty($options['cmd'])) {
             $cfg->setCmd($options['cmd']);
