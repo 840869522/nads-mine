@@ -60,7 +60,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user) return;
     const q = `?userId=${user.id}&role=${user.role}`;
     try {
-      const res = await fetch(`${API_BASE}/api/images${q}`);
+      const res = await fetch(`${API_BASE}/api/images`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setImages(data);

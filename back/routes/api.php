@@ -7,6 +7,15 @@
     use App\Http\Controllers\Users\RoleController;
     use App\Http\Controllers\scenario\ScenarioController;
     use App\Http\Controllers\scenario\DrillController;
+    use App\Http\Controllers\scenario\InstanceController; 
+    use App\Http\Controllers\ImagesController;
+    use App\Http\Controllers\InstancesController;
+    use App\Http\Controllers\ContainersController;
+    use App\Http\Controllers\ad\RefereeController;
+    use App\Http\Controllers\ad\TeamController;
+    use App\Http\Controllers\Course\CourseController;
+    use App\Http\Controllers\Course\CategoryController;
+    use App\Http\Controllers\Course\ResourceController;
 
     /*
     |--------------------------------------------------------------------------

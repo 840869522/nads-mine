@@ -102,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         // { to: "/scenario/envirments", label: "环境配置", icon: AdjustmentsHorizontalIcon, requiredPermission: 'SCENARIO_ENVIRONMENTS_CONFIG' },
         // --- 新增的子菜单 ---
         // { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'SCENARIO_MANAGE' }
-          { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon }
+          { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon },
         { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'scene_setting' }
       ]
     },

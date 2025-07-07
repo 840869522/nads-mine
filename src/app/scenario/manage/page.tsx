@@ -118,7 +118,7 @@ const ScenarioManagementPage: React.FC = () => {
     // 启动场景
     const handleStartDrill = async (scenario: Scenario) => {
         // 1. 从 useAuth Hook 获取用户名
-        const username = user?.username;
+        const username = user.user.c_username;
 
         if (!username) {
             alert('无法获取当前用户名，请确保您已登录。');
