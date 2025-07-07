@@ -29,14 +29,17 @@ sudo systemctl enable --now guacd
 
 ## 3. 前端调用方式
 
-前端收到连接信息后，通过 `/api/guac-token` 获取加密后的连接 token，再在模态框中使用 `guacamole-common-js` 连接 `/api/guac`。
-若想在独立页面中访问，也可继续使用以下地址：
+前端收到连接信息后，根据协议构造如下地址打开新窗口：
 
 ```
 /guac?type=<protocol>&hostname=<host>&port=<port>
 ```
 
-`protocol` 为 `ssh`、`rdp` 或 `vnc`，其余参数分别为目标主机及端口。`src/app/guac/page.tsx` 仍可解析这些参数并建立连接。
+- `protocol`：`ssh`、`rdp` 或 `vnc`
+- `hostname`：远程主机地址（通常为 `hypervisor`）
+- `port`：对应协议端口号
+
+`src/app/guac/page.tsx` 会解析这些参数并通过 `guacamole-common-js` 连接到 `/api/guac`，无需额外的 Guacamole 凭据即可显示远程桌面。
 
 ## 4. 下载示例镜像并一键初始化
 
@@ -68,7 +71,7 @@ ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
 `--ssh-key "$(cat ~/.ssh/id_rsa.pub)"`。
 
 执行完成后，默认端口分别为：SSH `2222`、RDP `33389`、VNC 从虚拟机 XML 中读取
-（通常为 `59xx`）。可在页面中点击对应按钮弹出远程桌面模态框，或手动访问：
+（通常为 `59xx`）。可以在浏览器中访问如下地址测试：
 
 ```
 /guac?type=ssh&hostname=hypervisor&port=2222
