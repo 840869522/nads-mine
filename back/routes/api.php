@@ -8,6 +8,7 @@
     use App\Http\Controllers\scenario\ScenarioController;
     use App\Http\Controllers\scenario\DrillController;
     use App\Http\Controllers\scenario\InstanceController;
+    use App\Http\Controllers\scenario\SwitchController;
     use App\Http\Controllers\Docker\ImagesController;
     use App\Http\Controllers\Docker\InstancesController;
     use App\Http\Controllers\Docker\ContainersController;
@@ -17,6 +18,7 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
+    
 
     /*
     |--------------------------------------------------------------------------
@@ -190,10 +192,19 @@
     });
 
     Route::prefix('scenariosinstances')->group(function () {
+        
+        
+        // GET /api/scenariosinstances/switches - 获取所有场景实例下的所有交换机【前端无该功能】
+        Route::get('/switches', [SwitchController::class, 'index']);
+
+        // GET /api/scenariosinstances/{instance}/switches - 获取指定场景实例下的交换机列表
+        // 这个路由会调用 SwitchController 的 show 方法，并自动注入对应的 SceneInstance 对象
+        Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
-        // --- 【新增】获取单个场景实例的详细信息 ---
+        // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
+
     });
 
     Route::prefix('images')->group(function () {

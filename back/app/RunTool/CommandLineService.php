@@ -141,6 +141,27 @@ class CommandLineService
         }
         return $pid;
     }
+    /**
+     * 
+     * 列出系统上所有的 OVS 网桥。
+     *
+     * @return array 返回一个包含所有网桥名称的数组。
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function listSwitches(): array
+    {
+        $command = ['ovs-vsctl', 'list-br'];
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        // 将输出的字符串按行分割，并过滤掉空行
+        $output = trim($process->getOutput());
+        return empty($output) ? [] : explode("\n", $output);
+    }
 }
 
 // // ```json
