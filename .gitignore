@@ -29,3 +29,7 @@ prisma/data.sqlite
 /prisma/data.sqlite-wal
 /package-lock.json
 /composer.phar
+scripts
+demo-images
+demo-linux.qcow2
+libvirt

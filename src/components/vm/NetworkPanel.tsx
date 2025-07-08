@@ -76,7 +76,7 @@ export default function NetworkPanel({ vmId }: NetworkPanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/php/vms/${vmId}/network/vnics`);
+      const response = await fetch(`/back/api/vms/${vmId}/network/vnics`);
       if (!response.ok) throw new Error(`Failed to fetch vNICs: ${response.status}`);
       const data: VirtualNic[] = await response.json();
       setVnics(data);
