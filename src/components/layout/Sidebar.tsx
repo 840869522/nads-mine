@@ -70,11 +70,11 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     if (currentPath.startsWith('/scenario')) initialOpenMenus["环境构建分系统"] = true;
     if (currentPath.startsWith('/drill')) initialOpenMenus["安全实验分系统"] = true; // Updated key
     if (
-      currentPath.startsWith('/admin') ||
-      currentPath.startsWith('/scenario/images') ||
-      currentPath.startsWith('/scenario/instances') ||
-      currentPath.startsWith('/scenario/vm-images') ||
-      currentPath.startsWith('/scenario/vm-instances')
+        currentPath.startsWith('/admin') ||
+        currentPath.startsWith('/scenario/images') ||
+        currentPath.startsWith('/scenario/instances') ||
+        currentPath.startsWith('/scenario/vm-images') ||
+        currentPath.startsWith('/scenario/vm-instances')
     )
       initialOpenMenus["基础支撑分系统"] = true; // Updated to open if viewing moved items
     return initialOpenMenus;
@@ -169,105 +169,105 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         const isOpen = openMenus[item.label] || false;
         const isParentActive = item.children.some(child => child.to && pathname.startsWith(child.to));
         return (
-          <React.Fragment key={item.label}>
-            <ListItemButton
-              onClick={() => handleMenuClick(item.label)}
-              sx={{ pl: isSubmenu ? 4 : 2, bgcolor: isParentActive && !isOpen ? 'action.selected' : 'inherit' }}
-            >
-              <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
-                <IconComponent style={{ height: 20, width: 20, color: 'currentColor' }} />
-              </ListItemIcon>
-              <ListItemText primary={item.label} />
-              {isOpen ? <ExpandLess /> : <ExpandMore />}
-            </ListItemButton>
-            <Collapse in={isOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {renderNavList(item.children, true)}
-              </List>
-            </Collapse>
-          </React.Fragment>
+            <React.Fragment key={item.label}>
+              <ListItemButton
+                  onClick={() => handleMenuClick(item.label)}
+                  sx={{ pl: isSubmenu ? 4 : 2, bgcolor: isParentActive && !isOpen ? 'action.selected' : 'inherit' }}
+              >
+                <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
+                  <IconComponent style={{ height: 20, width: 20, color: 'currentColor' }} />
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+                {isOpen ? <ExpandLess /> : <ExpandMore />}
+              </ListItemButton>
+              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {renderNavList(item.children, true)}
+                </List>
+              </Collapse>
+            </React.Fragment>
         );
       }
       return (
-        item.to ? (
-          <ListItemButton
-            key={item.label}
-            component={Link}
-            href={item.to}
-            selected={pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to))}
-            sx={{ pl: isSubmenu ? 4 : 2 }}
-          >
-            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
-              <IconComponent style={{ height: 20, width: 20, color: 'currentColor' }} />
-            </ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ) : null
+          item.to ? (
+              <ListItemButton
+                  key={item.label}
+                  component={Link}
+                  href={item.to}
+                  selected={pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to))}
+                  sx={{ pl: isSubmenu ? 4 : 2 }}
+              >
+                <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
+                  <IconComponent style={{ height: 20, width: 20, color: 'currentColor' }} />
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+          ) : null
       );
     });
   };
 
 
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        [`& .MuiDrawer-paper`]: {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-          bgcolor: 'background.paper',
-          borderRight: '1px solid',
-          borderColor: 'divider'
-        },
-      }}
-    >
-      <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', px: [1] }}>
-        <Link href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
-          <ComputerDesktopIconHero style={{ height: 32, width: 32, marginRight: 8, color: 'primary.main' }} />
-          <Typography variant="h6" noWrap component="div" color="primary" fontWeight="bold">
-            {APP_NAME}
-          </Typography>
-        </Link>
-      </Toolbar>
-      <Divider />
-      <List component="nav" sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-        {renderNavList(filteredNavItems)}
-      </List>
-      <Divider />
-      <Box sx={{ p: 2 }}>
-        {user && (
-          <Box component={Link} href="/profile" sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
-            <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main' }}>
-              <AccountCircleIcon />
-            </Avatar>
-            <Box>
-              <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
-              <Typography variant="caption" color="text.secondary">{
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {user.role.map((role) => (
-                    <Chip key={role} label={role} />
-                  ))}
+      <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            [`& .MuiDrawer-paper`]: {
+              width: drawerWidth,
+              boxSizing: 'border-box',
+              bgcolor: 'background.paper',
+              borderRight: '1px solid',
+              borderColor: 'divider'
+            },
+          }}
+      >
+        <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', px: [1] }}>
+          <Link href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
+            <ComputerDesktopIconHero style={{ height: 32, width: 32, marginRight: 8, color: 'primary.main' }} />
+            <Typography variant="h6" noWrap component="div" color="primary" fontWeight="bold">
+              {APP_NAME}
+            </Typography>
+          </Link>
+        </Toolbar>
+        <Divider />
+        <List component="nav" sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          {renderNavList(filteredNavItems)}
+        </List>
+        <Divider />
+        <Box sx={{ p: 2 }}>
+          {user && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
+                <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main' }}>
+                  <AccountCircleIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
+                  <Typography variant="caption" color="text.secondary">{
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {user.role.map((role) => (
+                          <Chip key={role} label={role} />
+                      ))}
+                    </Box>
+                  }</Typography>
                 </Box>
-              }</Typography>
-            </Box>
-          </Box>
-        )}
-        <ListItemButton onClick={handleLogout}>
-          <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
-            <LogoutIcon />
-          </ListItemIcon>
-          <ListItemText primary="登出" />
-        </ListItemButton>
-        <ListItemButton onClick={toggleThemeMode}>
-          <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
-            {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
-          </ListItemIcon>
-          <ListItemText primary={mode === 'dark' ? '浅色模式' : '深色模式'} />
-        </ListItemButton>
-      </Box>
-    </Drawer>
+              </Box>
+          )}
+          <ListItemButton onClick={handleLogout}>
+            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="登出" />
+          </ListItemButton>
+          <ListItemButton onClick={toggleThemeMode}>
+            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
+              {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+            </ListItemIcon>
+            <ListItemText primary={mode === 'dark' ? '浅色模式' : '深色模式'} />
+          </ListItemButton>
+        </Box>
+      </Drawer>
   );
 };
 
