@@ -42,6 +42,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Chip } from '@mui/material';
+import { link } from 'fs';
 
 
 interface NavItemType {
@@ -87,13 +88,17 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
   const navItems: NavItemType[] = [
     { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'databoard_view' },
     {
-      label: "人员测试分系统",
-      icon: AcademicCapIcon,
+      label: "基础支撑分系统",
+      icon: Cog6ToothIcon,
+      requiredPermission: 'support',
       children: [
-        { to: "/learn/quiz", label: "在线测验", icon: QuestionMarkCircleIcon, requiredPermission: 'study_test' },
-        { to: "/learn/cases", label: "课程案例", icon: FolderOpenIconHero, requiredPermission: 'study_case' },
-        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
-        { to: "/learn/learn", label: "课程学习", icon: DocumentTextIcon, requiredPermission: 'study_learn' },
+        { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'support_user' },
+        { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'support_role' },
+        { to: "/admin/permissions", label: "权限管理", icon: KeyIcon, requiredPermission: 'support_permission' },
+        { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_images_manage' }, // Moved here and renamed
+        { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'support_instances_manage' }, // Moved here and renamed
+        { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_scenario_images_manage' },
+        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'support_scenario_instances_manage' }
       ]
     },
     {
@@ -116,18 +121,15 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       ]
     },
     {
-      label: "基础支撑分系统",
-      icon: Cog6ToothIcon,
-      requiredPermission: 'support',
+      label: "人员测试分系统",
+      icon: AcademicCapIcon,
       children: [
-        { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'support_user' },
-        { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'support_role' },
-        { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_images_manage' }, // Moved here and renamed
-        { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'support_instances_manage' }, // Moved here and renamed
-        { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_scenario_images_manage' },
-        { to: "/scenario/vm-instances", label: "虚拟机实例管理", icon: ComputerDesktopIconHero, requiredPermission: 'support_scenario_instances_manage' }
+        { to: "/learn/quiz", label: "在线测验", icon: QuestionMarkCircleIcon, requiredPermission: 'study_test' },
+        { to: "/learn/cases", label: "课程案例", icon: FolderOpenIconHero, requiredPermission: 'study_case' },
+        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
+        { to: "/learn/learn", label: "课程学习", icon: DocumentTextIcon, requiredPermission: 'study_learn' },
       ]
-    },
+    }
   ];
 
   const handleMenuClick = (label: string) => {
@@ -237,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         <Divider />
         <Box sx={{ p: 2 }}>
           {user && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
+              <Box component={Link} href="/profile"  sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
                 <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main' }}>
                   <AccountCircleIcon />
                 </Avatar>

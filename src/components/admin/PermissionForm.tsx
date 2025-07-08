@@ -132,7 +132,6 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                         // 父级权限：直接渲染标题 + 子项，不使用 Accordion
                         <React.Fragment>
                             <ListItem sx={{ p: 0 }}>
-
                                 <FormControlLabel
                                     control={
                                         <Checkbox
