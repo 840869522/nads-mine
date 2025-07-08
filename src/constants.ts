@@ -7,38 +7,75 @@ export const APP_NAME = "网络安全实验平台";
 export interface AppPermission {
   key: string;
   label: string;
+  children?: AppPermission[] | null;
 }
+
+export const BACK_IP_PORT = "http://localhost:8000";
 
 
 
 export const APP_PERMISSIONS_CATEGORY = {
-  "study":"人员测试分系统",
-  "scene":"环境构建分系统",
-  "support":"基础支撑分系统",
-  "ad" :"安全使用分系统",
-  "databoard":"仪表盘"
+  "study": "人员测试分系统",
+  "scene": "环境构建分系统",
+  "support": "基础支撑分系统",
+  "ad": "安全使用分系统",
+  "databoard": "仪表盘"
 }
 
 export const APP_PERMISSIONS: AppPermission[] = [
   // Dashboard
-  { key: 'databoard_view', label: '查看仪表盘'},
+  { key: 'databoard_view', label: '查看仪表盘' },
+
 
   // Personnel Testing System (人员测试分系统)
-  { key: 'study_test', label: '访问在线测验',  },
-  { key: 'study_case', label: '访问课程案例', },
-  { key: 'study_questions', label: '管理题库', },
+  {
+    key: "study",
+    label: "人员测试分系统",
+    children: [
+      { key: 'study_test', label: '访问在线测验', },
+      { key: 'study_case', label: '课程管理', },
+      { key: 'study_learn', label: "课程学习" },
+      { key: 'study_questions', label: '管理题库', },
+    ]
+  },
 
   // Environment Construction System (环境构建分系统)
-  { key: 'scene_setting', label: '配置环境 (拓扑)' },
-  { key: 'scene_image', label: '管理镜像' },
-  { key: 'scene_instance', label: '管理实例' },
+  {
+    key: "scene",
+    label: "环境构建分系统",
+    children: [
+      { key: 'scene_setting', label: '配置环境 (拓扑)' },
+      { key: 'scene_image', label: '管理镜像' },
+      { key: 'scene_instance', label: '管理实例' },
+    ]
+  },
+
 
   // Security Usage System (安全使用分系统)
-  { key: 'ad_test', label: '访问安全演练' },
+  {
+    key: "ad",
+    label: "安全使用分系统",
+    children: [
+      { key: 'ad_test', label: '访问安全演练' },
+    ]
+  },
 
   // Admin / Base Support System (基础支撑分系统)
-  { key: 'support_user', label: '管理用户' },
-  { key: 'support_role', label: '管理角色与权限' },
+  {
+    key: "support",
+    label: "基础支撑分系统",
+    children: [
+      { key: 'support_user', label: '管理用户' ,children:[
+        {key : "support_user_get-all-user",label: "查看所有的用户"}
+      ]},
+      { key: 'support_role', label: '管理角色与权限' },
+
+      { label: "容器镜像管理", key: 'support_images_manage' }, // Moved here and renamed
+      { label: "容器实例管理", key: 'support_instances_manage' }, // Moved here and renamed
+      { label: "虚拟机镜像管理", key: 'support_scenario_images_manage' },
+      { label: "虚拟机实例管理", key: 'support_scenario_instances_manage' }
+    ]
+  }
 ];
 
 
@@ -62,38 +99,38 @@ export const USER_ROLES_CONFIG: Record<UserRole, { name: string; permissions: st
   [UserRole.ATTACKER]: {
     name: "攻击方 (红队)",
     permissions: [
-        'DASHBOARD_VIEW',
-        'DRILL_ACCESS'
+      'DASHBOARD_VIEW',
+      'DRILL_ACCESS'
     ]
   },
   [UserRole.DEFENDER]: {
     name: "防御方 (蓝队)",
     permissions: [
-        'DASHBOARD_VIEW',
-        'DRILL_ACCESS'
+      'DASHBOARD_VIEW',
+      'DRILL_ACCESS'
     ]
   },
 };
 
 
-export const GetUserRole = (data :[])=>{
-  const role_data = data?.map(item =>item==="admin" && USER_ROLES_CONFIG[UserRole.ADMIN] || null).filter(Boolean);
+export const GetUserRole = (data: []) => {
+  const role_data = data?.map(item => item === "admin" && USER_ROLES_CONFIG[UserRole.ADMIN] || null).filter(Boolean);
   return role_data;
-} 
+}
 
 export const MOCK_QUESTIONS: Question[] = [
   { id: 'q1', text: '无人机中飞行控制器的主要用途是什么？', type: 'short-answer' },
   { id: 'q2', text: '哪个频段通常用于无人机控制和视频传输？', type: 'multiple-choice', options: ['2.4 GHz', '5.8 GHz', '900 MHz', 'A和B两者皆是'] },
-  { id: 'q3', text: '在无人机安全背景下解释“GPS欺骗”的概念。', type: 'short-answer'},
-  { id: 'q4', text: '在无人机操作中，“BVLOS”代表什么？', type: 'short-answer'},
+  { id: 'q3', text: '在无人机安全背景下解释“GPS欺骗”的概念。', type: 'short-answer' },
+  { id: 'q4', text: '在无人机操作中，“BVLOS”代表什么？', type: 'short-answer' },
   { id: 'q5', text: '无人机中另一个飞行控制器的主要用途是什么？', type: 'short-answer' },
   { id: 'q6', text: '哪个是备用频段通常用于无人机控制和视频传输？', type: 'multiple-choice', options: ['2.4 GHz', '5.8 GHz', '900 MHz', 'A和B两者皆是'] },
-  { id: 'q7', text: '在无人机安全背景下重新解释“GPS欺骗”的概念。', type: 'short-answer'},
-  { id: 'q8', text: '在无人机操作中，“BVLOS”到底代表什么？', type: 'short-answer'},
+  { id: 'q7', text: '在无人机安全背景下重新解释“GPS欺骗”的概念。', type: 'short-answer' },
+  { id: 'q8', text: '在无人机操作中，“BVLOS”到底代表什么？', type: 'short-answer' },
   { id: 'q9', text: '无人机中飞行控制器的附加用途是什么？', type: 'short-answer' },
   { id: 'q10', text: '还有哪个频段通常用于无人机控制和视频传输？', type: 'multiple-choice', options: ['2.4 GHz', '5.8 GHz', '900 MHz', 'A和B两者皆是'] },
-  { id: 'q11', text: '在无人机安全背景下详细解释“GPS欺骗”的概念。', type: 'short-answer'},
-  { id: 'q12', text: '在无人机操作中，“BVLOS”究竟代表什么？', type: 'short-answer'},
+  { id: 'q11', text: '在无人机安全背景下详细解释“GPS欺骗”的概念。', type: 'short-answer' },
+  { id: 'q12', text: '在无人机操作中，“BVLOS”究竟代表什么？', type: 'short-answer' },
 ];
 
 export const INITIAL_DRONE_NODES: DroneNode[] = [
@@ -104,9 +141,9 @@ export const INITIAL_DRONE_NODES: DroneNode[] = [
 ];
 
 export const INITIAL_DOCKER_CONTAINERS: DockerContainer[] = [
-    { id: 'container-a1', nodeId: 'node-001', name: '防火墙服务', image: 'firewall:latest', status: 'running'},
-    { id: 'container-a2', nodeId: 'node-001', name: '通信中继', image: 'comms:v2', status: 'running'},
-    { id: 'container-c1', nodeId: 'node-003', name: '传感器阵列API', image: 'sensors:stable', status: 'stopped'},
+  { id: 'container-a1', nodeId: 'node-001', name: '防火墙服务', image: 'firewall:latest', status: 'running' },
+  { id: 'container-a2', nodeId: 'node-001', name: '通信中继', image: 'comms:v2', status: 'running' },
+  { id: 'container-c1', nodeId: 'node-003', name: '传感器阵列API', image: 'sensors:stable', status: 'stopped' },
 ];
 
 export const INITIAL_MANAGED_IMAGES: ManagedImage[] = [
@@ -197,7 +234,7 @@ export const INITIAL_RUNNING_INSTANCES: RunningInstance[] = [
     uptime: '0s',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
   },
-   {
+  {
     id: 'inst-container-003',
     name: '数据处理Worker (worker-beta)',
     type: 'container',
@@ -254,7 +291,7 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
   virtual_machine: {
     deviceName: '虚拟机',
     dockerImage: 'vm-qemu:latest',
-    portMappings: '22:2222'
+    portMappings: '22'
   },
   nat_bridge: {
     deviceName: 'NAT网桥',
@@ -301,7 +338,7 @@ export const MOCK_COURSE_CASES: CourseCase[] = [
     uploadDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days ago
     files: [
       { id: 'f_001_01', name: '网络协议详解.pdf', format: 'pdf', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', size: '2.5 MB' },
-      { id: 'f_001_02', name: 'Wireshark入门教程.mp4', format: 'mp4', url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4', size: '1.0 MB'}, // Adjusted size for example
+      { id: 'f_001_02', name: 'Wireshark入门教程.mp4', format: 'mp4', url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4', size: '1.0 MB' }, // Adjusted size for example
     ],
   },
   {
@@ -328,10 +365,10 @@ export const MOCK_COURSE_CASES: CourseCase[] = [
 ];
 
 export const SUPPORTED_COURSE_FILE_FORMATS: Record<CourseCaseFileFormat, string> = {
-    pdf: "application/pdf",
-    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    mp4: "video/mp4",
-    avi: "video/x-msvideo",
-    other: "*/*"
+  pdf: "application/pdf",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  mp4: "video/mp4",
+  avi: "video/x-msvideo",
+  other: "*/*"
 };

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Box,
@@ -18,8 +18,11 @@ const LoginPage: React.FC = () => {
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login,logout } = useAuth();
 
+  useEffect(()=>{
+    logout();
+  },[]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -51,7 +54,7 @@ const LoginPage: React.FC = () => {
     <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, bgcolor: 'background.default' }}>
       <Paper sx={{ p: 4, width: 360 }} elevation={3}>
         <Typography variant="h5" component="h1" align="center" gutterBottom>
-          登录到 无人机网络安全实验平台
+          登录到某网络安全实验平台
         </Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
           {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}

@@ -25,6 +25,8 @@ import Box from '@mui/material/Box';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { UserRole } from '@/types';
 import { APP_PERMISSIONS, APP_PERMISSIONS_CATEGORY, AppPermission } from '@/constants';
+import PermissionForm from './PermissionForm';
+import { Flare } from '@mui/icons-material';
 
 export interface RoleFormData {
   id?: string;
@@ -34,12 +36,12 @@ export interface RoleFormData {
 }
 
 interface MockRole {
-    id: string;
-    nameKey: UserRole;
-    nameDisplay: string;
-    description: string;
-    permissions: string[];
-    // permissionCount field removed as it's derived from permissions.length
+  id: string;
+  nameKey: UserRole;
+  nameDisplay: string;
+  description: string;
+  permissions: string[];
+  // permissionCount field removed as it's derived from permissions.length
 }
 
 
@@ -51,7 +53,7 @@ interface RoleFormModalProps {
 }
 
 const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, initialRole }) => {
-  const theme      = useTheme();
+  const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState<RoleFormData>({ nameDisplay: '', description: '', permissions: [] });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -85,12 +87,9 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
     }
   };
 
-  const handlePermissionChange = (permissionKey: string) => {
+  const handlePermissionChange = (permissionKey: string[]) => {
     setFormData(prev => {
-      const newPermissions = prev.permissions.includes(permissionKey)
-        ? prev.permissions.filter(p => p !== permissionKey)
-        : [...prev.permissions, permissionKey];
-      return { ...prev, permissions: newPermissions };
+      return { ...prev, permissions: [...permissionKey] };
     });
   };
 
@@ -105,6 +104,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
 
   const handleSubmit = () => {
     if (validate()) {
+      console.log(formData)
       onSave(formData, isNewRole);
       onClose();
     }
@@ -165,47 +165,14 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
             />
           </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" gutterBottom>
-              权限分配
-              {errors.permissions && <Typography component="span" color="error.main" sx={{fontSize: '0.75rem', ml:1}}>{errors.permissions}</Typography>}
-            </Typography>
-            <Paper variant="outlined" sx={{ maxHeight: 400, overflowY: 'auto', p:0 }}>
-              <List disablePadding>
-              {Object.entries(groupedPermissions).map(([category, permissionsInCategory], index) => (
-                <ListItem key={category} sx={{p:0, display:'block'}}>
-                  <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' }, borderBottom: index < Object.keys(groupedPermissions).length -1 ? '1px solid' : 'none', borderColor:'divider' }} disableGutters defaultExpanded>
-                    <AccordionSummary
-                      expandIcon={<ExpandMoreIcon />}
-                      aria-controls={`permissions-category-${APP_PERMISSIONS_CATEGORY[category]}-content`}
-                      id={`permissions-category-${APP_PERMISSIONS_CATEGORY[category]}-header`}
-                      sx={{bgcolor: 'action.hover', minHeight: 48, '&.Mui-expanded': { minHeight: 48 }}}
-                    >
-                      <Typography variant="subtitle1" sx={{fontWeight:'medium'}}>{APP_PERMISSIONS_CATEGORY[category]}</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                      <FormGroup>
-                        {permissionsInCategory.map(permission => (
-                          <FormControlLabel
-                            key={permission.key}
-                            control={
-                              <Checkbox
-                                checked={formData.permissions.includes(permission.key)}
-                                onChange={() => handlePermissionChange(permission.key)}
-                                name={permission.key}
-                                size="small"
-                              />
-                            }
-                            label={permission.label}
-                          />
-                        ))}
-                      </FormGroup>
-                    </AccordionDetails>
-                  </Accordion>
-                </ListItem>
-              ))}
-              </List>
-            </Paper>
+            <PermissionForm
+              initialSelected={formData.permissions}
+              onPermissionChange={handlePermissionChange}
+            >
+              {errors.permissions && <Typography component="span" color="error.main" sx={{ fontSize: '0.75rem', ml: 1 }}>{errors.permissions}</Typography>}
+            </PermissionForm>
           </Box>
+
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>

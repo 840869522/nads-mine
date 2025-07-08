@@ -55,7 +55,7 @@ const DashboardPage: React.FC = () => {
     if (!token) {
       router.replace('/login');
     }
-  }, [user, router]);
+  }, [ router]);
   useEffect(() => {
     features.forEach((f) => router.prefetch(f.path));
   }, [router]);

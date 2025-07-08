@@ -8,47 +8,49 @@ import { useAuth } from '@/hooks/useAuth';
 import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
 import { getCookie } from '@/utils/cookie';
+import path from 'path';
 
 const DRAWER_WIDTH = 250;
 
 const ROUTE_PERMISSIONS = [
-  { prefix: '/', key: 'DASHBOARD_VIEW' },
-  { prefix: '/learn/quiz', key: 'LEARN_QUIZ_ACCESS' },
-  { prefix: '/learn/cases', key: 'LEARN_CASES_ACCESS' },
-  { prefix: '/learn/docs', key: 'LEARN_QUESTION_BANK_MANAGE' },
+  { prefix: '/', key: 'databoard_view' },
+  { prefix: '/learn/quiz', key: 'study_test' },
+  { prefix: '/learn/cases', key: 'study_case' },
+  { prefix: '/learn/docs', key: 'study_questions' },
+  { prefix: "/learn/learn", key: "study_learn" },
   { prefix: '/scenario/envirments', key: 'SCENARIO_ENVIRONMENTS_CONFIG' },
-  { prefix: '/scenario/manage', key: 'SCENARIO_MANAGE' },
-  { prefix: '/drill', key: 'DRILL_ACCESS' },
-  { prefix: '/admin/users', key: 'ADMIN_USERS_MANAGE' },
-  { prefix: '/admin/roles', key: 'ADMIN_ROLES_MANAGE' },
-  { prefix: '/scenario/images', key: 'SCENARIO_IMAGES_MANAGE' },
-  { prefix: '/scenario/instances', key: 'SCENARIO_INSTANCES_MANAGE' },
-  { prefix: '/scenario/vm-images', key: 'SCENARIO_IMAGES_MANAGE' },
-  { prefix: '/scenario/vm-instances', key: 'SCENARIO_INSTANCES_MANAGE' },
+  { prefix: '/scenario/manage', key: 'scene_setting' },
+  { prefix: '/ad', key: 'ad_test' },
+  { prefix: '/ad/team', key: 'ad' },
+  { prefix: '/admin/users', key: 'support_user' },
+  { prefix: '/admin/roles', key: 'support_role' },
+  { prefix: '/scenario/images', key: 'support_images_manage' },
+  { prefix: '/scenario/instances', key: 'support_instances_manage' },
+  { prefix: '/scenario/vm-images', key: 'support_scenario_images_manage' },
+  { prefix: '/scenario/vm-instances', key: 'support_scenario_instances_manage' },
 ];
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
+  useEffect(() => {;
+    const permissionsData = user?.permission || [];
+    const roleData = user?.role || [];
     const token = getCookie("_auth");
     if (!token) {
       if (pathname !== '/login') {
         router.replace('/login');
       }
     } else {
-      // const match = ROUTE_PERMISSIONS.find(r => pathname.startsWith(r.prefix));
-      // if (match) {
-      //   const perms = GetUserRole[user.role]?.permissions || [];
-      //   if (user.role !== UserRole.ADMIN && !perms.includes(match.key)) {
-      //     router.replace('/login');
-      //     return;
-      //   }
-      // }
-      if (pathname === '/login') {
-        router.replace('/');
+      const match = ROUTE_PERMISSIONS.find(r => pathname === r.prefix);
+      if (match) {
+        if (!roleData.includes(UserRole.ADMIN) )
+          if (!permissionsData.includes(match.key)) {
+            router.replace('/');
+            return;
+          }
       }
     }
   }, [user, pathname, router]);

@@ -17,6 +17,7 @@ import {
     Tooltip,
     Alert as MuiAlert,
     TableSortLabel,
+    CircularProgress,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -24,7 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import GppGoodIcon from '@mui/icons-material/GppGood';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { UserRole } from '@/types';
-import { USER_ROLES_CONFIG } from '@/constants';
+import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
@@ -55,6 +56,7 @@ const RoleManagementPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
+    const [tableLaoding, setTableLoading] = useState(true);
 
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [roleToDelete, setRoleToDelete] = useState<MockRole | null>(null);
@@ -76,7 +78,8 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const getRoleData = (page: number, pagesize: number) => {
-        apiClientWithToken.post('/api/support/role/all', JSON.stringify({ page: page, pagesize: pagesize }))
+        setTableLoading(true);
+        apiClientWithToken.post(`/back/api/support/role/all`, JSON.stringify({ page: page, pagesize: pagesize }))
             .then((res) => {
                 if (res.data.code === 200) {
                     setRoles(res.data.data.data);
@@ -85,11 +88,14 @@ const RoleManagementPage: React.FC = () => {
                 else {
                     setFeedbackMessage({ type: "error", text: res.data.message });
                 }
+            }).finally(() => {
+                setTableLoading(false);
             });
+
     }
 
     const handleEditRoleClick = (role: MockRole) => {
-        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`/back/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
                 const permision = res.data.data.map(p => p.c_id);
                 setEditingRole({ ...role, permissions: permision });
@@ -104,7 +110,7 @@ const RoleManagementPage: React.FC = () => {
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
         console.log(formData);
         if (isNew) {
-            const res = await apiClientWithToken.post('/api/support/role/new', JSON.stringify({
+            const res = await apiClientWithToken.post(`/back/api/support/role/new`, JSON.stringify({
                 data: {
                     id: formData.nameDisplay,
                     name: formData.description,
@@ -121,7 +127,7 @@ const RoleManagementPage: React.FC = () => {
                 setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
             }
         } else if (editingRole) {
-            const res = await apiClientWithToken.post('/api/support/role/update', JSON.stringify({
+            const res = await apiClientWithToken.post(`/back/api/support/role/update`, JSON.stringify({
                 id: editingRole.c_id,
                 data: {
                     name: formData.description,
@@ -155,8 +161,8 @@ const RoleManagementPage: React.FC = () => {
 
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await apiClientWithToken.post(`/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
-            const res = await apiClientWithToken.post("/api/support/role/all", JSON.stringify({ page: page, pagesize: rowsPerPage }));
+            await apiClientWithToken.post(`/back/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
+            const res = await apiClientWithToken.post(`/back/api/support/role/all`, JSON.stringify({ page: page, pagesize: rowsPerPage }));
             setRoles(res.data.data.data);
             setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
         }
@@ -172,7 +178,7 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        apiClientWithToken.post("/api/support/permission/role", JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`/back/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
                 const permision = res.data.data.map(p => p.c_id);
                 setViewingRolePerms({ nameDisplay: role.c_id, permissions: permision });
@@ -287,55 +293,62 @@ const RoleManagementPage: React.FC = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {sortedRoles.map((role) => {
-                            const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
-                            return (
-                                <TableRow key={role.c_id} hover>
-                                    <TableCell sx={{ fontWeight: 'medium' }}>{role.c_id}</TableCell>
-                                    <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        <Tooltip title={role.c_id} placement="top-start">
-                                            <span>{role.c_name}</span>
-                                        </Tooltip>
-                                    </TableCell>
-                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_create_at}</TableCell>
-                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_update_at}</TableCell>
-                                    <TableCell align="center">
-                                        <Tooltip title={`查看 ${role.c_id} 的权限`}>
-                                            <Chip
-                                                icon={<VisibilityIcon fontSize="small" />}
-                                                label={role.c_id}
-                                                size="small"
-                                                variant="outlined"
-                                                onClick={() => handleViewPermissions(role)}
-                                                sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
-                                            />
-                                        </Tooltip>
-                                    </TableCell>
-
-                                    <TableCell align="center">
-                                        <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
-                                            <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
-                                                <EditIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
-                                            <span> {/* Span needed for disabled IconButton tooltip */}
-                                                <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
+                        {
+                            tableLaoding ? (
+                                <TableRow>
+                                    <TableCell colSpan={7} align='center' sx={{ height: "40vh" }}>
+                                        <CircularProgress />
                                     </TableCell>
                                 </TableRow>
-                            );
-                        })}
-                        {!sortedRoles.length && (
-                            <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                                    <Typography color="text.secondary">暂无角色数据。</Typography>
-                                </TableCell>
-                            </TableRow>
-                        )}
+                            ) : sortedRoles.length > 0 ? sortedRoles.map((role) => {
+                                const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
+                                return (
+                                    <TableRow key={role.c_id} hover>
+                                        <TableCell sx={{ fontWeight: 'medium' }}>{role.c_id}</TableCell>
+                                        <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <Tooltip title={role.c_id} placement="top-start">
+                                                <span>{role.c_name}</span>
+                                            </Tooltip>
+                                        </TableCell>
+                                        <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_create_at}</TableCell>
+                                        <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_update_at}</TableCell>
+                                        <TableCell align="center">
+                                            <Tooltip title={`查看 ${role.c_id} 的权限`}>
+                                                <Chip
+                                                    icon={<VisibilityIcon fontSize="small" />}
+                                                    label={role.c_id}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    onClick={() => handleViewPermissions(role)}
+                                                    sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
+                                                />
+                                            </Tooltip>
+                                        </TableCell>
+
+                                        <TableCell align="center">
+                                            <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
+                                                <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
+                                                    <EditIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
+                                                <span> {/* Span needed for disabled IconButton tooltip */}
+                                                    <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            }) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                                        <Typography color="text.secondary">暂无角色数据。</Typography>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        }
                     </TableBody>
                 </Table>
             </TableContainer>

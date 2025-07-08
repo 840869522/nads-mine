@@ -17,6 +17,7 @@ import {
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
 import {TopologyData} from "@/types.ts";
+import { useAuth } from '@/hooks/useAuth';
 // 定义场景的数据结构
 interface Scenario {
     id: string; // 文件名将作为ID
@@ -31,6 +32,7 @@ type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
 const ScenarioManagementPage: React.FC = () => {
+    const { user } = useAuth();
     const [scenarios, setScenarios] = useState<Scenario[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ const ScenarioManagementPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/scenarios');
+            const response = await fetch('/back/api/scenarios');
             if (!response.ok) {
                 throw new Error('获取场景列表失败');
             }
@@ -94,7 +96,7 @@ const ScenarioManagementPage: React.FC = () => {
         setError(null);
         try {
             // 向后端API发送DELETE请求，通过查询参数传递ID
-            const response = await fetch(`http://127.0.0.1:8000/api/scenarios?id=${deleteTarget.id}`, {
+            const response = await fetch(`/back/api/scenarios?id=${deleteTarget.id}`, {
                 method: 'DELETE',
             });
 
@@ -111,6 +113,44 @@ const ScenarioManagementPage: React.FC = () => {
         } finally {
             setIsDeleting(false);
             handleCloseDeleteDialog(); // 关闭弹窗
+        }
+    };
+    // 启动场景
+    const handleStartDrill = async (scenario: Scenario) => {
+        // 1. 从 useAuth Hook 获取用户名
+        const username = user.user.c_username;
+
+        if (!username) {
+            alert('无法获取当前用户名，请确保您已登录。');
+            return;
+        }
+
+        if (!window.confirm(`您确定要启动场景 “${scenario.name}” 的演练吗？`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/back/api/scenarios/${scenario.id}/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                // 2. 在请求体中附加上用户名
+                body: JSON.stringify({ username: username }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || '启动失败');
+            }
+
+            alert(result.message);
+
+        } catch (err: any) {
+            setError(err.message || '发生未知网络错误');
+            alert(`启动失败: ${err.message}`);
         }
     };
 
@@ -212,7 +252,12 @@ const ScenarioManagementPage: React.FC = () => {
                                         </TableCell>
                                         <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
                                         <TableCell align="right">
-                                            <Tooltip title="启动演练"><IconButton color="success" size="small"><StartIcon /></IconButton></Tooltip>
+                                            <Tooltip title="启动演练">
+                                                {/* 在这里添加 onClick 事件 */}
+                                                <IconButton color="success" size="small" onClick={() => handleStartDrill(scenario)}>
+                                                    <StartIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {/* 3. 更新删除按钮的 onClick 事件 */}
                                             <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
                                             <Tooltip title="编辑场景">

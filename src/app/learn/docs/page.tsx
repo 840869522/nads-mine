@@ -3,6 +3,7 @@ import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
+import { BACK_IP_PORT } from '@/constants';
 // import { MOCK_QUESTIONS } from '@/constants'; // 我们不再需要模拟数据
 
 interface QuestionPayload {
@@ -21,7 +22,7 @@ const AddQuestionPage: React.FC = () => {
 
   // 新增: 在页面加载时从API获取问题列表
   useEffect(() => {
-    fetch('/api/questions')
+    fetch(`${BACK_IP_PORT}/api/questions`)
         .then(res => res.json())
         .then(data => setAllQuestions(data))
         .catch(err => console.error("获取初始问题列表失败:", err));
@@ -39,7 +40,7 @@ const AddQuestionPage: React.FC = () => {
     setStatusMessage(null);
 
     try {
-      const response = await fetch('/api/questions', {
+      const response = await fetch(`${BACK_IP_PORT}/api/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: questionText }),

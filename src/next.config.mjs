@@ -12,14 +12,16 @@ const nextConfig = {
     }
     return config;
   },
-  async rewrites() {
+
+  async rewrites(){
     return [
       {
-        source: '/api/:path*',
-        destination: 'http://127.0.0.1:8000/api/:path*', // 替换为你的后端地址
-      },
+        source:"/back/:path*",
+        destination:'http://127.0.0.1:8000/:path*',
+      }
     ];
   },
+
 };
 
 export default nextConfig;
