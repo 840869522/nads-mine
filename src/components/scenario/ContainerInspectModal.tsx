@@ -9,7 +9,7 @@ const Transition = React.forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = '/api/php';
 
 interface ContainerInspectModalProps {
   open: boolean;
@@ -25,7 +25,7 @@ const ContainerInspectModal: React.FC<ContainerInspectModalProps> = ({ open, con
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`${API_BASE}/api/containers/${containerId}/inspect`)
+      fetch(`${API_BASE}/containers/${containerId}/inspect`)
         .then(res => res.json())
         .then(setData)
         .finally(() => setLoading(false));

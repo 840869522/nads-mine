@@ -21,7 +21,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = '/api/php';
 
 interface CreateContainerModalProps {
   open: boolean;
@@ -50,7 +50,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
       setImage(fixedImage);
       setImages([]);
     } else if (user) {
-      fetch(`${API_BASE}/api/images?userId=${user.id}&role=${user.role}`)
+      fetch(`${API_BASE}/images?userId=${user.id}&role=${user.role}`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -90,7 +90,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
 
   const handleSubmit = async () => {
     if (!user || !image) return;
-    await fetch(`${API_BASE}/api/containers`, {
+    await fetch(`${API_BASE}/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -134,8 +134,8 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
             <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
             {ports.map((p, idx) => (
               <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }} />
                 <TextField label="主机端口" size="small" value={p.hostPort} onChange={e => handlePortChange(idx, 'hostPort', e.target.value)} sx={{ flex: 1 }} />
+                <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }} />
                 <IconButton onClick={() => handleRemovePort(idx)} size="small"><RemoveCircleOutlineIcon /></IconButton>
               </Box>
             ))}

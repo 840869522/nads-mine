@@ -291,7 +291,7 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
   virtual_machine: {
     deviceName: '虚拟机',
     dockerImage: 'vm-qemu:latest',
-    portMappings: '22:2222'
+    portMappings: '22'
   },
   nat_bridge: {
     deviceName: 'NAT网桥',
