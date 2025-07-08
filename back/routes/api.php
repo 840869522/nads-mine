@@ -182,7 +182,6 @@
         Route::put('/{scenario}', [ScenarioController::class, 'update']);
         //GET 获取场景
         Route::get('/{scenario}', [ScenarioController::class, 'update']);
-
          // 启动场景
         Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
 
@@ -194,7 +193,6 @@
         Route::get('/', [InstanceController::class, 'index']);
         // --- 【新增】获取单个场景实例的详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
-
     });
 
     Route::prefix('images')->group(function () {

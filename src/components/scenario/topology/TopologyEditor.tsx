@@ -208,8 +208,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 
         // 3. 根据模式确定 API 的 URL 和请求方法
         const url = isEditing
-            ? `http://127.0.0.1:8000/api/scenarios/${scenarioId}`
-            : 'http://127.0.0.1:8000/api/scenarios';
+            ? `/back/api/scenarios/${scenarioId}`
+            : '/back/api/scenarios';
 
         const method = isEditing ? 'PUT' : 'POST';
 

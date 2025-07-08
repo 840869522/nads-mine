@@ -79,7 +79,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       // 获取镜像列表
       const isComputeResource = COMPUTE_RESOURCE_TYPES.includes(node.config.deviceName);
       if (isComputeResource) {
-        fetch('http://localhost:8000/api/images')
+        fetch('/back/api/images')
             .then(res => res.json())
             .then(data => setImages(data))
             .catch(err => console.error("获取镜像列表失败:", err));
