@@ -65,10 +65,15 @@ export const APP_PERMISSIONS: AppPermission[] = [
     key: "support",
     label: "基础支撑分系统",
     children: [
-      { key: 'support_user', label: '管理用户' ,children:[
-        {key : "support_user_get-all-user",label: "查看所有的用户"}
-      ]},
-      { key: 'support_role', label: '管理角色与权限' },
+      {
+        key: 'support_user', 
+        label: '管理用户', 
+        children: [
+          { key: "support_user_get-all-user", label: "查看所有的用户" }
+        ]
+      },
+      { key: 'support_role', label: '管理角色' },
+      {key: "support_permission", label: "管理权限"},
 
       { label: "容器镜像管理", key: 'support_images_manage' }, // Moved here and renamed
       { label: "容器实例管理", key: 'support_instances_manage' }, // Moved here and renamed

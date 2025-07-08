@@ -94,6 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'support_user' },
         { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'support_role' },
+        { to: "/admin/permissions", label: "权限管理", icon: KeyIcon, requiredPermission: 'support_permission' },
         { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_images_manage' }, // Moved here and renamed
         { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'support_instances_manage' }, // Moved here and renamed
         { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_scenario_images_manage' },
@@ -238,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         <Divider />
         <Box sx={{ p: 2 }}>
           {user && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
+              <Box component={Link} href="/profile"  sx={{ display: 'flex', alignItems: 'center', mb: 2, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
                 <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main' }}>
                   <AccountCircleIcon />
                 </Avatar>
