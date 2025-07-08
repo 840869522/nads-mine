@@ -20,7 +20,7 @@ import {
     MenuItem,
 } from '@mui/material';
 
-const API_BASE = '/api/php';
+const API_BASE = '/back/api';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';

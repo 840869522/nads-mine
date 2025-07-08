@@ -36,7 +36,7 @@ import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
-const API_BASE = '/api/php';
+const API_BASE = '/back/api';
 
 const ImageManagementPage: React.FC = () => {
   const { user } = useAuth();
