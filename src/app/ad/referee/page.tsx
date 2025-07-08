@@ -80,8 +80,8 @@ const RefereeManagementPage: React.FC = () => {
             try {
                 // 并行获取裁判列表和可用的用户列表
                 const [refereesResponse, usersResponse] = await Promise.all([
-                    fetch('http://127.0.0.1:8000/api/ad/referee'),
-                    fetch('http://127.0.0.1:8000/api/ad/available-users') // 假设有此API
+                    fetch('/back/api/ad/referee'),
+                    fetch('/back/api/ad/available-users') // 假设有此API
                 ]);
 
                 if (!refereesResponse.ok) throw new Error('获取裁判列表失败');
@@ -132,8 +132,8 @@ const RefereeManagementPage: React.FC = () => {
         try {
             let response;
             const url = editingReferee
-                ? `http://127.0.0.1:8000/api/ad/referee/${editingReferee.c_id}`
-                : 'http://127.0.0.1:8000/api/ad/referee';
+                ? `/back/api/ad/referee/${editingReferee.c_id}`
+                : '/back/api/ad/referee';
 
             const method = editingReferee ? 'PUT' : 'POST';
 
@@ -153,8 +153,8 @@ const RefereeManagementPage: React.FC = () => {
             // 刷新裁判和可用用户列表以保持数据同步
             // 这种方式最简单，也可以在前端手动更新 state
             const [refereesResponse, usersResponse] = await Promise.all([
-                fetch('http://127.0.0.1:8000/api/ad/referee'),
-                fetch('http://127.0.0.1:8000/api/ad/available-users')
+                fetch('/back/api/ad/referee'),
+                fetch('/back/api/ad/available-users')
             ]);
             const refereesResult = await refereesResponse.json();
             setReferees(refereesResult.data ?? []);
@@ -197,7 +197,7 @@ const RefereeManagementPage: React.FC = () => {
         setIsSubmitting(true);
         setStatusMessage(null);
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/ad/referee/${refereeToDelete.c_id}`, { method: 'DELETE' });
+            const response = await fetch(`/back/api/ad/referee/${refereeToDelete.c_id}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ message: '删除裁判失败' }));
                 throw new Error(errorData.message);

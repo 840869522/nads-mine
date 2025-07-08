@@ -69,7 +69,7 @@ const Page: React.FC = () => {
     const fetchTeams = useCallback(async () => {
         setIsLoading(true);
         try {
-            const url = new URL('http://127.0.0.1:8000/api/ad/team');
+            const url = new URL('/back/api/ad/team');
             if (debouncedSearchQuery) {
                 url.searchParams.append('search', debouncedSearchQuery);
             }
@@ -115,8 +115,8 @@ const Page: React.FC = () => {
 
         try {
             const url = editingTeam
-                ? `http://127.0.0.1:8000/api/ad/team/${editingTeam.c_id}`
-                : 'http://127.0.0.1:8000/api/ad/team';
+                ? `/back/api/ad/team/${editingTeam.c_id}`
+                : '/back/api/ad/team';
             const method = editingTeam ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
@@ -175,7 +175,7 @@ const Page: React.FC = () => {
         setIsSubmitting(true);
         setStatusMessage(null);
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/ad/team/${teamToDelete.c_id}`, {
+            const response = await fetch(`/back/api/ad/team/${teamToDelete.c_id}`, {
                 method: 'DELETE',
                 headers: { 'Accept': 'application/json' },
             });

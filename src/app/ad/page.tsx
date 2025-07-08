@@ -94,7 +94,7 @@ const DrillManagementPage: React.FC = () => {
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
     // --- 数据获取 ---
-    const API_BASE_URL = 'http://127.0.0.1:8000/api'; // 假设的API基地址
+    const API_BASE_URL = '/back/api'; // 假设的API基地址
 
     // 获取演练列表
     const fetchDrills = useCallback(async () => {
