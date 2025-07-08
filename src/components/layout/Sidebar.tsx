@@ -41,6 +41,7 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { Chip } from '@mui/material';
 
 
 interface NavItemType {
@@ -102,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         // { to: "/scenario/envirments", label: "环境配置", icon: AdjustmentsHorizontalIcon, requiredPermission: 'SCENARIO_ENVIRONMENTS_CONFIG' },
         // --- 新增的子菜单 ---
         // { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'SCENARIO_MANAGE' }
-          { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon },
+        { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon },
         { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'scene_setting' }
       ]
     },
@@ -242,7 +243,13 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
             </Avatar>
             <Box>
               <Typography variant="body2" fontWeight="medium">{user.user.c_username}</Typography>
-              <Typography variant="caption" color="text.secondary">{user.role}</Typography>
+              <Typography variant="caption" color="text.secondary">{
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {user.role.map((role) => (
+                    <Chip key={role} label={role} />
+                  ))}
+                </Box>
+              }</Typography>
             </Box>
           </Box>
         )}

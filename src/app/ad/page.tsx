@@ -119,9 +119,9 @@ const DrillManagementPage: React.FC = () => {
     const fetchFormData = async () => {
         try {
             const [teamsRes, refereesRes, scenesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/drill/team`),
-                fetch(`${API_BASE_URL}/referees`), // 假设有这个API
-                fetch(`${API_BASE_URL}/scene-configs`), // 假设有这个API
+                fetch(`${API_BASE_URL}/ad/team`),
+                fetch(`${API_BASE_URL}/ad/referees`), // 假设有这个API
+                fetch(`${API_BASE_URL}/ad/scene-configs`), // 假设有这个API
             ]);
             if (!teamsRes.ok || !refereesRes.ok || !scenesRes.ok) throw new Error('加载表单基础数据失败');
             const teamsData = await teamsRes.json();

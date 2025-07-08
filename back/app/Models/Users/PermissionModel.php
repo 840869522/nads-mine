@@ -17,7 +17,7 @@
         public static function getAllPermission(int $page = 1,int $pagesize = 10):?array {
             $offset = ( $page - 1) *$pagesize;
             $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(id) AS count FROM `c_permissions`";
+            $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions`";
             try {
                 $res  = db::select($sql,[$pagesize,$offset]);
                 $count = db::selectOne($sql_count);
@@ -52,13 +52,16 @@
         }
 
         public static function searchPermissionByName(string $name, int $page = 1,int $pagesize=10) :array {
-            $sql = "SELECT * FROM `c_permissions` WHERE c_name LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_permissions` WHERE c_name LIKE ? OR c_id LIKE ?  LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions` WHERE c_name LIKE ?  OR c_id LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
+                $count = db::select($sql_count, ['%'.$name.'%','%'.$name.'%']);
                 return [
                     "data"=>$user,
-                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "count"=> $count
                 ];
             }catch (Exception $e) {
                 Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());

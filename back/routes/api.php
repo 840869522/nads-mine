@@ -220,6 +220,7 @@
         Route::get('/{id}/binds', [ContainersController::class, 'binds']);
     });
 
+
     // Route::prefix('courses')->group(function(){
     //     Route::get('/',[CourseController::class,'index'])->middleware('can:view-courses')->name('courses.index');
     //     Route::get('/{id}',[CourseController::class,'show'])->middleware('can:view-courses')->name('courses.show');

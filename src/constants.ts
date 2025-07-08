@@ -7,6 +7,7 @@ export const APP_NAME = "网络安全实验平台";
 export interface AppPermission {
   key: string;
   label: string;
+  children?: AppPermission[] | null;
 }
 
 export const BACK_IP_PORT = "http://localhost:8000";
@@ -25,23 +26,56 @@ export const APP_PERMISSIONS: AppPermission[] = [
   // Dashboard
   { key: 'databoard_view', label: '查看仪表盘' },
 
+
   // Personnel Testing System (人员测试分系统)
-  { key: 'study_test', label: '访问在线测验', },
-  { key: 'study_case', label: '课程管理', },
-  { key: 'study_learn', label: "课程学习" },
-  { key: 'study_questions', label: '管理题库', },
+  {
+    key: "study",
+    label: "人员测试分系统",
+    children: [
+      { key: 'study_test', label: '访问在线测验', },
+      { key: 'study_case', label: '课程管理', },
+      { key: 'study_learn', label: "课程学习" },
+      { key: 'study_questions', label: '管理题库', },
+    ]
+  },
 
   // Environment Construction System (环境构建分系统)
-  { key: 'scene_setting', label: '配置环境 (拓扑)' },
-  { key: 'scene_image', label: '管理镜像' },
-  { key: 'scene_instance', label: '管理实例' },
+  {
+    key: "scene",
+    label: "环境构建分系统",
+    children: [
+      { key: 'scene_setting', label: '配置环境 (拓扑)' },
+      { key: 'scene_image', label: '管理镜像' },
+      { key: 'scene_instance', label: '管理实例' },
+    ]
+  },
+
 
   // Security Usage System (安全使用分系统)
-  { key: 'ad_test', label: '访问安全演练' },
+  {
+    key: "ad",
+    label: "安全使用分系统",
+    children: [
+      { key: 'ad_test', label: '访问安全演练' },
+    ]
+  },
 
   // Admin / Base Support System (基础支撑分系统)
-  { key: 'support_user', label: '管理用户' },
-  { key: 'support_role', label: '管理角色与权限' },
+  {
+    key: "support",
+    label: "基础支撑分系统",
+    children: [
+      { key: 'support_user', label: '管理用户' ,children:[
+        {key : "support_user_get-all-user",label: "查看所有的用户"}
+      ]},
+      { key: 'support_role', label: '管理角色与权限' },
+
+      { label: "容器镜像管理", key: 'support_images_manage' }, // Moved here and renamed
+      { label: "容器实例管理", key: 'support_instances_manage' }, // Moved here and renamed
+      { label: "虚拟机镜像管理", key: 'support_scenario_images_manage' },
+      { label: "虚拟机实例管理", key: 'support_scenario_instances_manage' }
+    ]
+  }
 ];
 
 
