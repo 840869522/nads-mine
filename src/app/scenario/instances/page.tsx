@@ -185,7 +185,7 @@ const RunningInstancesPage: React.FC = () => {
         if (!user) return;
         const q = `?userId=${user.id}&role=${user.role}`;
         try {
-            const res = await fetch(`${API_BASE}/instances${q}`);
+            const res = await fetch(`${API_BASE}/instances`);
             if (!res.ok) throw new Error('fetch failed');
             const data = await res.json();
             setInstances(data);
