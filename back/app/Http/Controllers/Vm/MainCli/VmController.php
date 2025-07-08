@@ -63,6 +63,7 @@ class VmController extends Controller
             'memory' => '--memory',
             'vcpus' => '--vcpus',
             'disk_gb' => '--disk-gb',
+            'os_variant' => '--os-variant',
             'ssh_key' => '--ssh-key',
             'admin_password' => '--admin-password',
             'static_ip' => '--static-ip',

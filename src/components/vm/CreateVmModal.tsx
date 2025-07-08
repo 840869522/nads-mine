@@ -13,6 +13,7 @@ import {
   Select,
   MenuItem
 } from "@mui/material";
+import { OS_VARIANTS } from "@/osVariants";
 
 interface VmImage {
   id: string;
@@ -35,6 +36,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
     memory: 2048,
     vcpus: 2,
     disk_gb: 20,
+    os_variant: "",
     ssh_key: "",
     admin_password: "",
     static_ip: ""
@@ -59,6 +61,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       memory: 2048,
       vcpus: 2,
       disk_gb: 20,
+      os_variant: "",
       ssh_key: "",
       admin_password: "",
       static_ip: ""
@@ -110,6 +113,19 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
             onChange={e => setForm(f => ({ ...f, vcpus: Number(e.target.value) }))} fullWidth />
           <TextField label="磁盘 (GB)" type="number" value={form.disk_gb}
             onChange={e => setForm(f => ({ ...f, disk_gb: Number(e.target.value) }))} fullWidth />
+          <FormControl fullWidth>
+            <InputLabel id="variant-label">os-variant</InputLabel>
+            <Select
+              labelId="variant-label"
+              value={form.os_variant}
+              label="os-variant"
+              onChange={e => setForm(f => ({ ...f, os_variant: e.target.value as string }))}
+            >
+              {OS_VARIANTS.map(v => (
+                <MenuItem key={v} value={v}>{v}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField label="SSH 公钥" value={form.ssh_key}
             onChange={e => setForm(f => ({ ...f, ssh_key: e.target.value }))} fullWidth multiline rows={2} />
           <TextField label="管理员密码 (Windows)" type="password" value={form.admin_password}

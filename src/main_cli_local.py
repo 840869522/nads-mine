@@ -155,6 +155,7 @@ class VMRequest(BaseModel):
     memory: int = 2048
     vcpus: int = 2
     disk_gb: int = 20
+    os_variant: Optional[str] = None
     ssh_key: Optional[str] = None
     admin_password: Optional[str] = None
     static_ip: Optional[str] = None
@@ -500,6 +501,10 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             str(req.memory),
             "--vcpus",
             str(req.vcpus),
+        ]
+        if req.os_variant:
+            cmd += ["--os-variant", req.os_variant]
+        cmd += [
             "--graphics",
             "vnc,listen=0.0.0.0,port=0",
             "--noautoconsole",
@@ -830,6 +835,7 @@ def main():
     p_create.add_argument("--memory", type=int, default=2048)
     p_create.add_argument("--vcpus", type=int, default=2)
     p_create.add_argument("--disk-gb", type=int, default=20)
+    p_create.add_argument("--os-variant")
     p_create.add_argument("--ssh-key")
     p_create.add_argument("--admin-password")
     p_create.add_argument("--static-ip")
@@ -842,6 +848,7 @@ def main():
             memory=args.memory,
             vcpus=args.vcpus,
             disk_gb=args.disk_gb,
+            os_variant=args.os_variant,
             ssh_key=args.ssh_key,
             admin_password=args.admin_password,
             static_ip=args.static_ip,
