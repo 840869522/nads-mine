@@ -100,11 +100,11 @@ const DrillManagementPage: React.FC = () => {
     const fetchDrills = useCallback(async () => {
         setIsLoading(true);
         try {
-            const url = new URL(`${API_BASE_URL}/drills`);
+            var url = `${API_BASE_URL}/drills`
             if (debouncedSearchQuery) {
-                url.searchParams.append('search', debouncedSearchQuery);
+                url = `${API_BASE_URL}/drills?search=${debouncedSearchQuery}`;
             }
-            const response = await fetch(url.toString());
+            const response = await fetch(url);
             if (!response.ok) throw new Error('获取演练列表失败');
             const result = await response.json();
             setDrills(result.data || []);
@@ -120,7 +120,7 @@ const DrillManagementPage: React.FC = () => {
         try {
             const [teamsRes, refereesRes, scenesRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/ad/team`),
-                fetch(`${API_BASE_URL}/ad/referees`), // 假设有这个API
+                fetch(`${API_BASE_URL}/ad/referee`), // 假设有这个API
                 fetch(`${API_BASE_URL}/ad/scene-configs`), // 假设有这个API
             ]);
             if (!teamsRes.ok || !refereesRes.ok || !scenesRes.ok) throw new Error('加载表单基础数据失败');

@@ -69,11 +69,11 @@ const Page: React.FC = () => {
     const fetchTeams = useCallback(async () => {
         setIsLoading(true);
         try {
-            const url = new URL('/back/api/ad/team');
+            var url = '/back/api/ad/team'
             if (debouncedSearchQuery) {
-                url.searchParams.append('search', debouncedSearchQuery);
+                url =`${url}?search=${debouncedSearchQuery}`;
             }
-            const response = await fetch(url.toString());
+            const response = await fetch(url);
             if (!response.ok) throw new Error('从服务器获取队伍列表失败');
             const result = await response.json();
             setTeams(result.data ?? []);

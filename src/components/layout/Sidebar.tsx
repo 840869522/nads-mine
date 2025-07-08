@@ -85,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
   };
 
   const navItems: NavItemType[] = [
-    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'databoard——view' },
+    { to: "/", label: "仪表盘", icon: ChartPieIcon, requiredPermission: 'databoard_view' },
     {
       label: "人员测试分系统",
       icon: AcademicCapIcon,
