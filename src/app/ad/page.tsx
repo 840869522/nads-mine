@@ -94,7 +94,7 @@ const DrillManagementPage: React.FC = () => {
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
     // --- 数据获取 ---
-    const API_BASE_URL = 'http://127.0.0.1:8000/api'; // 假设的API基地址
+    const API_BASE_URL = '/back/api'; // 假设的API基地址
 
     // 获取演练列表
     const fetchDrills = useCallback(async () => {
@@ -119,9 +119,9 @@ const DrillManagementPage: React.FC = () => {
     const fetchFormData = async () => {
         try {
             const [teamsRes, refereesRes, scenesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/drill/team`),
-                fetch(`${API_BASE_URL}/referees`), // 假设有这个API
-                fetch(`${API_BASE_URL}/scene-configs`), // 假设有这个API
+                fetch(`${API_BASE_URL}/ad/team`),
+                fetch(`${API_BASE_URL}/ad/referees`), // 假设有这个API
+                fetch(`${API_BASE_URL}/ad/scene-configs`), // 假设有这个API
             ]);
             if (!teamsRes.ok || !refereesRes.ok || !scenesRes.ok) throw new Error('加载表单基础数据失败');
             const teamsData = await teamsRes.json();

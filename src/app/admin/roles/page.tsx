@@ -17,6 +17,7 @@ import {
     Tooltip,
     Alert as MuiAlert,
     TableSortLabel,
+    CircularProgress,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -55,6 +56,7 @@ const RoleManagementPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
+    const [tableLaoding, setTableLoading] = useState(true);
 
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [roleToDelete, setRoleToDelete] = useState<MockRole | null>(null);
@@ -76,6 +78,7 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const getRoleData = (page: number, pagesize: number) => {
+        setTableLoading(true);
         apiClientWithToken.post(`/back/api/support/role/all`, JSON.stringify({ page: page, pagesize: pagesize }))
             .then((res) => {
                 if (res.data.code === 200) {
@@ -85,7 +88,10 @@ const RoleManagementPage: React.FC = () => {
                 else {
                     setFeedbackMessage({ type: "error", text: res.data.message });
                 }
+            }).finally(() => {
+                setTableLoading(false);
             });
+
     }
 
     const handleEditRoleClick = (role: MockRole) => {
@@ -287,55 +293,62 @@ const RoleManagementPage: React.FC = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {sortedRoles.map((role) => {
-                            const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
-                            return (
-                                <TableRow key={role.c_id} hover>
-                                    <TableCell sx={{ fontWeight: 'medium' }}>{role.c_id}</TableCell>
-                                    <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        <Tooltip title={role.c_id} placement="top-start">
-                                            <span>{role.c_name}</span>
-                                        </Tooltip>
-                                    </TableCell>
-                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_create_at}</TableCell>
-                                    <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_update_at}</TableCell>
-                                    <TableCell align="center">
-                                        <Tooltip title={`查看 ${role.c_id} 的权限`}>
-                                            <Chip
-                                                icon={<VisibilityIcon fontSize="small" />}
-                                                label={role.c_id}
-                                                size="small"
-                                                variant="outlined"
-                                                onClick={() => handleViewPermissions(role)}
-                                                sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
-                                            />
-                                        </Tooltip>
-                                    </TableCell>
-
-                                    <TableCell align="center">
-                                        <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
-                                            <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
-                                                <EditIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
-                                            <span> {/* Span needed for disabled IconButton tooltip */}
-                                                <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
+                        {
+                            tableLaoding ? (
+                                <TableRow>
+                                    <TableCell colSpan={7} align='center' sx={{ height: "40vh" }}>
+                                        <CircularProgress />
                                     </TableCell>
                                 </TableRow>
-                            );
-                        })}
-                        {!sortedRoles.length && (
-                            <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                                    <Typography color="text.secondary">暂无角色数据。</Typography>
-                                </TableCell>
-                            </TableRow>
-                        )}
+                            ) : sortedRoles.length > 0 ? sortedRoles.map((role) => {
+                                const isCoreRole = role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT;
+                                return (
+                                    <TableRow key={role.c_id} hover>
+                                        <TableCell sx={{ fontWeight: 'medium' }}>{role.c_id}</TableCell>
+                                        <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <Tooltip title={role.c_id} placement="top-start">
+                                                <span>{role.c_name}</span>
+                                            </Tooltip>
+                                        </TableCell>
+                                        <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_create_at}</TableCell>
+                                        <TableCell align='center' sx={{ fontWeight: 'medium' }}>{role.c_update_at}</TableCell>
+                                        <TableCell align="center">
+                                            <Tooltip title={`查看 ${role.c_id} 的权限`}>
+                                                <Chip
+                                                    icon={<VisibilityIcon fontSize="small" />}
+                                                    label={role.c_id}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    onClick={() => handleViewPermissions(role)}
+                                                    sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
+                                                />
+                                            </Tooltip>
+                                        </TableCell>
+
+                                        <TableCell align="center">
+                                            <Tooltip title={isCoreRole ? `编辑核心角色 "${role.c_id}"` : `编辑角色 "${role.c_id}"`}>
+                                                <IconButton size="small" onClick={() => handleEditRoleClick(role)} color="primary">
+                                                    <EditIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title={isCoreRole ? "核心角色不能删除" : `删除角色 "${role.c_id}"`}>
+                                                <span> {/* Span needed for disabled IconButton tooltip */}
+                                                    <IconButton size="small" onClick={() => handleDeleteRoleClick(role)} color="error" disabled={isCoreRole}>
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            }) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                                        <Typography color="text.secondary">暂无角色数据。</Typography>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        }
                     </TableBody>
                 </Table>
             </TableContainer>
