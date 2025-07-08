@@ -211,7 +211,7 @@
     });
 
     Route::prefix('containers')->group(function () {
-        Route::post('/', [ContainersController::class, 'store']);
+        Route::post('/', [ContainersController::class, 'create']);
         Route::post('/{id}', [ContainersController::class, 'action']);
         Route::get('/{id}', [ContainersController::class, 'get']);
         Route::get('/{id}/logs', [ContainersController::class, 'logs']);

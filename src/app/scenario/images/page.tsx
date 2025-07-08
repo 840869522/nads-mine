@@ -58,7 +58,6 @@ const ImageManagementPage: React.FC = () => {
 
   const fetchImages = async () => {
     if (!user) return;
-    const q = `?userId=${user.id}&role=${user.role}`;
     try {
       const res = await fetch(`${API_BASE}/images`);
       if (!res.ok) throw new Error('fetch failed');
@@ -85,15 +84,14 @@ const ImageManagementPage: React.FC = () => {
 
   const handleSaveImage = (image: ManagedImage) => {
     if (!user) return;
-    const q = `?userId=${user.id}&role=${user.role}`;
     if (editingImage) {
-      fetch(`${API_BASE}/images${q}`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
+      fetch(`${API_BASE}/images`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
         setImages(prevImages => prevImages.map(img => (img.id === image.id ? image : img)));
       });
     } else {
-      fetch(`${API_BASE}/images${q}`, { method: 'POST', body: JSON.stringify(image) })
-        .then(res => res.json())
-        .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
+      fetch(`${API_BASE}/images`, { method: 'POST', body: JSON.stringify(image) })
+          .then(res => res.json())
+          .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
     }
     handleCloseModal();
   };
@@ -111,7 +109,7 @@ const ImageManagementPage: React.FC = () => {
   const handleDeleteImage = async () => {
     if (!user || !imageToDelete) return;
     const id = imageToDelete.id;
-    const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
+    const q = `?id=${id}`;
     await fetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
     await fetchImages();
     handleCloseConfirmDialog();
@@ -150,24 +148,24 @@ const ImageManagementPage: React.FC = () => {
       renderCell: (params) => {
         const image = params.row as ManagedImage;
         return (
-          <Box sx={{
-            display: 'flex',
-            justifyContent: 'center',   // 水平居中
-            alignItems: 'center',       // 垂直居中
-            width: '90%',
-            height: '100%',             // 撑满单元格
-          }}>
-            <Tooltip title="启动">
-              <IconButton onClick={() => handleStart(image)} size="small">
-                <PlayArrowIcon fontSize="small" color="success" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="删除镜像">
-              <IconButton onClick={() => handleOpenConfirmDialog(image)} color="error" size="small">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
+            <Box sx={{
+              display: 'flex',
+              justifyContent: 'center',   // 水平居中
+              alignItems: 'center',       // 垂直居中
+              width: '90%',
+              height: '100%',             // 撑满单元格
+            }}>
+              <Tooltip title="启动">
+                <IconButton onClick={() => handleStart(image)} size="small">
+                  <PlayArrowIcon fontSize="small" color="success" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="删除镜像">
+                <IconButton onClick={() => handleOpenConfirmDialog(image)} color="error" size="small">
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
         );
       }
     }
@@ -175,117 +173,117 @@ const ImageManagementPage: React.FC = () => {
 
   const filteredImages = React.useMemo(() => {
     return images.filter(img =>
-      img.name.toLowerCase().includes(searchTerm) ||
-      img.version.toLowerCase().includes(searchTerm) ||
-      img.description.toLowerCase().includes(searchTerm)
+        img.name.toLowerCase().includes(searchTerm) ||
+        img.version.toLowerCase().includes(searchTerm) ||
+        img.description.toLowerCase().includes(searchTerm)
     );
   }, [images, searchTerm]);
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h4" component="h1">容器镜像管理</Typography>
-          <TextField
-            variant="outlined"
-            placeholder="搜索镜像..."
-            onChange={handleSearchChange}
-            size="small"
-            InputProps={{ startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            )}}
-            sx={{ width: { xs: '100%', sm: 260 } }}
-          />
-          <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            刷新
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddCircleOutlineIcon />}
-            onClick={handleOpenModal}
-          >
-            添加镜像
-          </Button>
-        </Box>
-      </Box>
-
-      {fetchError ? (
-        <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
-          {fetchError}
-        </MuiAlert>
-      ) : (
-        <Box component={Paper} sx={{ boxShadow: 3 }}>
-          <DataGrid
-            autoHeight
-            rows={filteredImages}
-            columns={columns}
-            pageSizeOptions={[5, 10, 25]}
-            paginationModel={{ pageSize: rowsPerPage, page }}
-            onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
-            columnVisibilityModel={showColumns}
-            onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
-            sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }}
-          />
-        </Box>
-      )}
-
-      <Menu anchorEl={columnAnchorEl} open={Boolean(columnAnchorEl)} onClose={() => setColumnAnchorEl(null)}>
-        {Object.entries(showColumns).map(([key, val]) => (
-          <MenuItem key={key}>
-            <FormControlLabel
-              control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary" />}
-              label={key === 'size' ? '大小' : '上传日期'}
+      <Box sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="h4" component="h1">容器镜像管理</Typography>
+            <TextField
+                variant="outlined"
+                placeholder="搜索镜像..."
+                onChange={handleSearchChange}
+                size="small"
+                InputProps={{ startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                  )}}
+                sx={{ width: { xs: '100%', sm: 260 } }}
             />
-          </MenuItem>
-        ))}
-      </Menu>
+            <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+                variant="outlined"
+                startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                onClick={handleRefresh}
+                disabled={isLoading}
+            >
+              刷新
+            </Button>
+            <Button
+                variant="contained"
+                startIcon={<AddCircleOutlineIcon />}
+                onClick={handleOpenModal}
+            >
+              添加镜像
+            </Button>
+          </Box>
+        </Box>
 
-      <ImageFormModal
-        open={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveImage}
-        image={editingImage}
-      />
+        {fetchError ? (
+            <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
+              {fetchError}
+            </MuiAlert>
+        ) : (
+            <Box component={Paper} sx={{ boxShadow: 3 }}>
+              <DataGrid
+                  autoHeight
+                  rows={filteredImages}
+                  columns={columns}
+                  pageSizeOptions={[5, 10, 25]}
+                  paginationModel={{ pageSize: rowsPerPage, page }}
+                  onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
+                  columnVisibilityModel={showColumns}
+                  onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
+                  sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }}
+              />
+            </Box>
+        )}
 
-      <CreateContainerModal
-        open={Boolean(createModalImage)}
-        onClose={() => setCreateModalImage(null)}
-        onCreated={fetchImages}
-        fixedImage={createModalImage || undefined}
-      />
+        <Menu anchorEl={columnAnchorEl} open={Boolean(columnAnchorEl)} onClose={() => setColumnAnchorEl(null)}>
+          {Object.entries(showColumns).map(([key, val]) => (
+              <MenuItem key={key}>
+                <FormControlLabel
+                    control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary" />}
+                    label={key === 'size' ? '大小' : '上传日期'}
+                />
+              </MenuItem>
+          ))}
+        </Menu>
 
-      <Dialog
-        open={isConfirmDialogOpen}
-        onClose={handleCloseConfirmDialog}
-        aria-labelledby="confirm-delete-dialog-title"
-        aria-describedby="confirm-delete-dialog-description"
-      >
-        <DialogTitle id="confirm-delete-dialog-title">确认删除镜像</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="confirm-delete-dialog-description">
-            您确定要删除镜像 "{imageToDelete?.name}" 吗？此操作无法撤销。
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px:3, pb:2}}>
-          <Button onClick={handleCloseConfirmDialog} color="secondary" variant="outlined">
-            取消
-          </Button>
-          <Button onClick={handleDeleteImage} color="error" variant="contained" autoFocus>
-            删除
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        <ImageFormModal
+            open={isModalOpen}
+            onClose={handleCloseModal}
+            onSave={handleSaveImage}
+            image={editingImage}
+        />
+
+        <CreateContainerModal
+            open={Boolean(createModalImage)}
+            onClose={() => setCreateModalImage(null)}
+            onCreated={fetchImages}
+            fixedImage={createModalImage || undefined}
+        />
+
+        <Dialog
+            open={isConfirmDialogOpen}
+            onClose={handleCloseConfirmDialog}
+            aria-labelledby="confirm-delete-dialog-title"
+            aria-describedby="confirm-delete-dialog-description"
+        >
+          <DialogTitle id="confirm-delete-dialog-title">确认删除镜像</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="confirm-delete-dialog-description">
+              您确定要删除镜像 "{imageToDelete?.name}" 吗？此操作无法撤销。
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ px:3, pb:2}}>
+            <Button onClick={handleCloseConfirmDialog} color="secondary" variant="outlined">
+              取消
+            </Button>
+            <Button onClick={handleDeleteImage} color="error" variant="contained" autoFocus>
+              删除
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
   );
 };
 
