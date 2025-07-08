@@ -1,5 +1,7 @@
 <?php
 
+
+use App\Http\Controllers\ad\AdConfigController;
 use App\Http\Controllers\ad\RefereeController;
 use App\Http\Controllers\ad\TeamController;
 use Illuminate\Support\Facades\Route;
@@ -165,6 +167,24 @@ Route::prefix('ad/team')->group(function () {
     Route::delete('/{team}', [TeamController::class, 'destroy']);
 });
 
+Route::prefix('ad')->group(function () {
+
+    // 【在这里添加新路由！】
+    // 为队伍管理模块提供一个简单的、GET方式的获取所有用户的接口
+    // 它会复用你现有的 UserController 和 getAllUser 方法
+    Route::get('/users', [UserController::class, 'getAllUser']);
+
+
+    // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
+    Route::get('available-users', [RefereeController::class, 'availableUsers']);
+
+    // 裁判的 CRUD 路由
+    Route::prefix('referee')->group(function () {
+        // ...
+    });
+
+})->middleware("jwtcheck:ad"); // 注意，我把这个路由放在了受 jwtcheck:ad 保护的组内
+
 
 Route::prefix('ad')->group(function () {
 
@@ -199,5 +219,40 @@ Route::prefix('ad')->group(function () {
     });
 
 });
+
+
+
+Route::prefix('ad/ad-configs')->group(function () {
+    // 获取所有演练配置列表 (支持搜索)
+    // GET /api/ad/ad-configs?search=...
+    Route::get('/', [AdConfigController::class, 'index']);
+
+    // 创建一个新的演练配置 (包含裁判团队)
+    // POST /api/ad/ad-configs
+    Route::post('/', [AdConfigController::class, 'store']);
+
+    // 获取单个演练配置的详细信息
+    // GET /api/ad/ad-configs/{adConfig}
+    Route::get('/{adConfig}', [AdConfigController::class, 'show']);
+
+    // 更新一个已存在的演练配置
+    // PUT /api/ad/ad-configs/{adConfig}
+    Route::put('/{adConfig}', [AdConfigController::class, 'update']);
+
+    // 删除一个演练配置
+    // DELETE /api/ad/ad-configs/{adConfig}
+    Route::delete('/{adConfig}', [AdConfigController::class, 'destroy']);
+
+    // --- 特殊操作 ---
+
+    // 开始一个演练
+    // POST /api/ad/ad-configs/{adConfig}/start
+    Route::post('/{adConfig}/start', [AdConfigController::class, 'start']);
+
+    // 停止一个演练
+    // POST /api/ad/ad-configs/{adConfig}/stop
+    Route::post('/{adConfig}/stop', [AdConfigController::class, 'stop']);
+
+})->middleware('jwtcheck:ad'); // <-- 如果需要，在这里为整个组应用中间件
 
 ?>

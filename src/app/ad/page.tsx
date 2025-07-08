@@ -23,10 +23,10 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
-import Select from '@mui/material/Select';
+import Autocomplete from '@mui/material/Autocomplete';
+import Stack from '@mui/material/Stack';
 import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
+
 // MUI 图标
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -35,144 +35,156 @@ import SearchIcon from '@mui/icons-material/Search';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
-// 假设的自定义钩子，用于实现搜索防抖
-import { useDebounce } from '@/app/hooks/useDebounce.ts';
+// 假设的自定义钩子，请确保路径正确
+import { useDebounce } from '@/app/hooks/useDebounce';
 
-// --- 类型定义：与数据库表 c_drill_configs 紧密对应 ---
-// 演练状态枚举
-enum DrillStatus {
+// --- 类型定义 (已更新为 c_ 前缀) ---
+enum AdStatus {
     PENDING = 'pending',
     RUNNING = 'running',
     FINISHED = 'finished',
     ARCHIVED = 'archived',
 }
-
-// 演练配置类型
-interface DrillConfig {
-    id: number;
-    drill_name: string;
-    description: string | null;
-    red_team_id: number;
-    blue_team_id: number;
-    referee_id: number;
-    scene_config_id: number;
-    scene_instance_id: number | null;
-    status: DrillStatus;
-    start_time: string | null;
-    end_time: string | null;
-    create_at: string;
-    update_at: string;
+interface AdReferee {
+    user_id: number;
+    username: string; // username 通常不需要c_前缀，因为它来自User对象
+    c_level: string;
+    c_expertise: string;
 }
-
-// 用于表单下拉菜单的基础数据类型
+interface AdConfig {
+    c_id: string; // 主键更新
+    c_drill_name: string;
+    c_description: string | null;
+    c_red_team_id: number;
+    c_blue_team_id: number;
+    referees: AdReferee[]; // 裁判团队的结构保持不变
+    c_scene_config_id: number | null; // 变为可选
+    c_scene_instance_id: string | null;
+    c_status: AdStatus;
+    c_start_time: string | null;
+    c_end_time: string | null;
+    c_create_at: string;
+    c_update_at: string;
+}
 interface Team { c_id: number; c_name: string; }
-interface Referee { id: number; username: string; }
-interface SceneConfig { id: number; name: string; }
+interface User { c_id: number; c_username: string; } // 主键更新
+interface SceneConfig { c_config_id: number; c_name: string; }
 
-
-const DrillManagementPage: React.FC = () => {
+const AdManagementPage: React.FC = () => {
     // === 状态管理 ===
-    const [drills, setDrills] = useState<DrillConfig[]>([]);
-    // 用于表单下拉菜单的数据
+    const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
-    const [referees, setReferees] = useState<Referee[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [sceneConfigs, setSceneConfigs] = useState<SceneConfig[]>([]);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-    // 表单/对话框状态
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingDrill, setEditingDrill] = useState<DrillConfig | null>(null);
-    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-    const [drillToDelete, setDrillToDelete] = useState<DrillConfig | null>(null);
+    const [editingAdConfig, setEditingAdConfig] = useState<AdConfig | null>(null);
+    const [selectedReferees, setSelectedReferees] = useState<AdReferee[]>([]);
 
-    // 搜索状态
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [adConfigToDelete, setAdConfigToDelete] = useState<AdConfig | null>(null);
+
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-    // --- 数据获取 ---
-    const API_BASE_URL = 'http://127.0.0.1:8000/api'; // 假设的API基地址
+    // *** 修正点：API 基地址已修正 ***
+    const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
-    // 获取演练列表
-    const fetchDrills = useCallback(async () => {
+    // --- 数据获取 (已恢复完整功能) ---
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
+        setStatusMessage(null);
         try {
-            const url = new URL(`${API_BASE_URL}/drills`);
-            if (debouncedSearchQuery) {
-                url.searchParams.append('search', debouncedSearchQuery);
-            }
-            const response = await fetch(url.toString());
-            if (!response.ok) throw new Error('获取演练列表失败');
-            const result = await response.json();
-            setDrills(result.data || []);
+            const [adConfigsRes, teamsRes, usersRes, scenesRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/ad/ad-configs?search=${debouncedSearchQuery}`),
+                fetch(`${API_BASE_URL}/ad/team`),
+                fetch(`${API_BASE_URL}/ad/users`),
+                fetch(`${API_BASE_URL}/scenarios`),
+            ]);
+
+            if (!adConfigsRes.ok) throw new Error(`获取演练列表失败: ${adConfigsRes.statusText}`);
+            if (!teamsRes.ok) throw new Error(`获取队伍列表失败: ${teamsRes.statusText}`);
+            if (!usersRes.ok) throw new Error(`获取用户列表失败: ${usersRes.statusText}`);
+            if (!scenesRes.ok) throw new Error(`获取场景列表失败: ${scenesRes.statusText}`);
+
+            const [adConfigsData, teamsData, usersData, scenesData] = await Promise.all([
+                adConfigsRes.json(),
+                teamsRes.json(),
+                usersRes.json(),
+                scenesRes.json(),
+            ]);
+
+            setAdConfigs(adConfigsData.data || []);
+            setTeams(teamsData.data || []);
+            setUsers(usersData.data || []);
+            setSceneConfigs(scenesData.data || []);
+
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
+            setAdConfigs([]);
+            setTeams([]);
+            setUsers([]);
+            setSceneConfigs([]);
         } finally {
             setIsLoading(false);
         }
     }, [debouncedSearchQuery]);
 
-    // 获取创建/编辑演练所需的表单数据（队伍、裁判、场景）
-    const fetchFormData = async () => {
-        try {
-            const [teamsRes, refereesRes, scenesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/drill/team`),
-                fetch(`${API_BASE_URL}/referees`), // 假设有这个API
-                fetch(`${API_BASE_URL}/scene-configs`), // 假设有这个API
-            ]);
-            if (!teamsRes.ok || !refereesRes.ok || !scenesRes.ok) throw new Error('加载表单基础数据失败');
-            const teamsData = await teamsRes.json();
-            const refereesData = await refereesRes.json();
-            const scenesData = await scenesRes.json();
-            setTeams(teamsData.data || []);
-            setReferees(refereesData.data || []);
-            setSceneConfigs(scenesData.data || []);
-        } catch (err) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
-        }
-    };
-
     useEffect(() => {
-        fetchDrills();
-    }, [fetchDrills]);
+        fetchData();
+    }, [fetchData]);
 
-    useEffect(() => {
-        fetchFormData();
-    }, []); // 仅在组件初次挂载时执行
 
     // --- 事件处理器 ---
-    const handleOpenForm = (drill: DrillConfig | null = null) => {
-        setEditingDrill(drill);
+    const handleOpenForm = (adConfig: AdConfig | null = null) => {
+        setEditingAdConfig(adConfig);
+        setSelectedReferees(adConfig ? adConfig.referees : []);
         setIsFormOpen(true);
         setStatusMessage(null);
     };
 
     const handleCloseForm = () => {
         setIsFormOpen(false);
-        setEditingDrill(null);
+        setEditingAdConfig(null);
+        setSelectedReferees([]);
     };
-
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        const drillData = {
-            drill_name: formData.get('drill_name') as string,
-            description: formData.get('description') as string,
-            red_team_id: Number(formData.get('red_team_id')),
-            blue_team_id: Number(formData.get('blue_team_id')),
-            referee_id: Number(formData.get('referee_id')),
-            scene_config_id: Number(formData.get('scene_config_id')),
-            start_time: formData.get('start_time') || null,
-            end_time: formData.get('end_time') || null,
+
+        const adConfigData = {
+            // *** 修正点：所有字段名已更新为 c_ 前缀 ***
+            c_drill_name: formData.get('c_drill_name') as string,
+            c_description: formData.get('c_description') as string,
+            c_red_team_id: Number(formData.get('c_red_team_id')),
+            c_blue_team_id: Number(formData.get('c_blue_team_id')),
+            c_scene_config_id: Number(formData.get('c_scene_config_id')) || null, // 允许为空
+            c_start_time: formData.get('c_start_time') || null,
+            c_end_time: formData.get('c_end_time') || null,
+            referees: selectedReferees.map(({ user_id, c_level, c_expertise }) => ({
+                user_id,
+                c_level,
+                c_expertise
+            })),
         };
 
-        // 前端验证：红蓝队不能相同，这与数据库的CHECK约束相对应
-        if (drillData.red_team_id === drillData.blue_team_id) {
-            setStatusMessage({ type: 'error', message: '红队和蓝队不能选择同一个队伍！'});
+        if (!adConfigData.c_red_team_id || !adConfigData.c_blue_team_id) {
+            setStatusMessage({ type: 'error', message: '请选择红队和蓝队！' });
+            return;
+        }
+        if (adConfigData.c_red_team_id === adConfigData.c_blue_team_id) {
+            setStatusMessage({ type: 'error', message: '红队和蓝队不能选择同一个队伍！' });
+            return;
+        }
+        if (adConfigData.referees.length === 0) {
+            setStatusMessage({ type: 'error', message: '请至少指定一名裁判！' });
             return;
         }
 
@@ -180,22 +192,22 @@ const DrillManagementPage: React.FC = () => {
         setStatusMessage(null);
 
         try {
-            const url = editingDrill
-                ? `${API_BASE_URL}/drills/${editingDrill.id}`
-                : `${API_BASE_URL}/drills`;
-            const method = editingDrill ? 'PUT' : 'POST';
+            const url = editingAdConfig
+                ? `${API_BASE_URL}/ad/ad-configs/${editingAdConfig.c_id}`
+                : `${API_BASE_URL}/ad/ad-configs`;
+            const method = editingAdConfig ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(drillData),
+                body: JSON.stringify(adConfigData),
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || '操作失败');
 
             setStatusMessage({ type: 'success', message: result.message || '操作成功！' });
             handleCloseForm();
-            await fetchDrills();
+            await fetchData();
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         } finally {
@@ -203,82 +215,83 @@ const DrillManagementPage: React.FC = () => {
         }
     };
 
-    const handleDeleteConfirmation = (drill: DrillConfig) => {
-        setDrillToDelete(drill);
+    const handleDeleteConfirmation = (adConfig: AdConfig) => {
+        setAdConfigToDelete(adConfig);
         setIsConfirmOpen(true);
     };
 
-    const handleDeleteDrill = async () => {
-        if (!drillToDelete) return;
+    const handleDeleteAdConfig = async () => {
+        if (!adConfigToDelete) return;
         try {
-            // ... 与之前示例类似的删除逻辑
-            await fetch(`${API_BASE_URL}/drills/${drillToDelete.id}`, { method: 'DELETE' });
-            setStatusMessage({ type: 'success', message: `演练 "${drillToDelete.drill_name}" 已删除。`});
-            await fetchDrills();
+            await fetch(`${API_BASE_URL}/ad/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
+            setStatusMessage({ type: 'success', message: `演练 "${adConfigToDelete.c_drill_name}" 已删除。` });
+            await fetchData();
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         } finally {
             setIsConfirmOpen(false);
-            setDrillToDelete(null);
+            setAdConfigToDelete(null);
         }
     };
 
-    // 演练状态变更处理器
-    const handleDrillAction = async (drillId: number, action: 'start' | 'stop') => {
+    const handleAdAction = async (adConfigId: string, action: 'start' | 'stop') => {
         try {
-            const response = await fetch(`${API_BASE_URL}/drills/${drillId}/${action}`, {
+            const response = await fetch(`${API_BASE_URL}/ad/ad-configs/${adConfigId}/${action}`, {
                 method: 'POST',
                 headers: { 'Accept': 'application/json' },
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || '状态变更失败');
             setStatusMessage({ type: 'success', message: result.message });
-            await fetchDrills(); // 重新加载列表以更新状态
+            await fetchData();
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         }
     };
 
-    // --- 辅助渲染函数 ---
-    const findNameById = (id: number | null, list: {id: number, name: string}[] | {c_id: number, c_name: string}[]) => {
-        if (id === null) return 'N/A';
-        // @ts-ignore
-        const item = list.find(i => (i.id || i.c_id) === id);
-        // @ts-ignore
-        return item ? (item.name || item.c_name || item.username) : `未知 (ID: ${id})`;
+    const handleRefereeChange = (index: number, field: 'c_level' | 'c_expertise', value: string) => {
+        const updatedReferees = [...selectedReferees];
+        updatedReferees[index] = { ...updatedReferees[index], [field]: value };
+        setSelectedReferees(updatedReferees);
     };
 
-    const renderStatusChip = (status: DrillStatus) => {
+    // --- 辅助渲染函数 ---
+    const findTeamNameById = (id: number | null) => {
+        if (id === null) return 'N/A';
+        const item = teams.find(i => i.c_id === id);
+        return item ? item.c_name : `未知 (ID: ${id})`;
+    };
+
+    const findSceneNameById = (id: number | null) => {
+        if (id === null) return 'N/A';
+        const item = sceneConfigs.find(i => i.c_config_id === id);
+        return item ? item.c_name : `未知 (ID: ${id})`;
+    };
+
+    const renderStatusChip = (status: AdStatus) => {
         const statusMap = {
-            [DrillStatus.PENDING]: { label: '未开始', color: 'default' as const },
-            [DrillStatus.RUNNING]: { label: '进行中', color: 'success' as const },
-            [DrillStatus.FINISHED]: { label: '已结束', color: 'primary' as const },
-            [DrillStatus.ARCHIVED]: { label: '已归档', color: 'warning' as const },
+            [AdStatus.PENDING]: { label: '未开始', color: 'default' as const },
+            [AdStatus.RUNNING]: { label: '进行中', color: 'success' as const },
+            [AdStatus.FINISHED]: { label: '已结束', color: 'primary' as const },
+            [AdStatus.ARCHIVED]: { label: '已归档', color: 'warning' as const },
         };
-        const { label, color } = statusMap[status] || statusMap[DrillStatus.PENDING];
+        const { label, color } = statusMap[status] || statusMap[AdStatus.PENDING];
         return <Chip label={label} color={color} size="small" />;
     };
 
-    // --- 渲染逻辑 ---
+    // --- 渲染逻辑 (已更新 c_ 前缀) ---
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
-            {/* 页面标题和操作区 */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h4" component="h1" fontWeight="bold">攻防演练管理</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <TextField
-                        variant="outlined" size="small" placeholder="搜索演练名称..."
-                        value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-                        sx={{ minWidth: '300px' }}
-                    />
-                    <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()}>创建新演练</Button>
+                    <TextField variant="outlined" size="small" placeholder="搜索演练名称..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ minWidth: '300px' }} />
+                    <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()} disabled={isLoading}>创建新演练</Button>
                 </Box>
             </Box>
 
             {statusMessage && <Alert severity={statusMessage.type} onClose={() => setStatusMessage(null)} sx={{ mb: 2 }}>{statusMessage.message}</Alert>}
 
-            {/* 演练列表表格 */}
             <Paper sx={{ width: '100%', overflow: 'hidden' }} elevation={2}>
                 <TableContainer sx={{ maxHeight: '70vh' }}>
                     <Table stickyHeader>
@@ -288,109 +301,120 @@ const DrillManagementPage: React.FC = () => {
                                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>状态</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>红队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>蓝队</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>裁判</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>裁判团队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>场景模板</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>计划开始时间</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>计划结束时间</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>操作</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isLoading ? (
-                                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow>
-                            ) : drills.length === 0 ? (
-                                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow>
-                            ) : (
-                                drills.map((drill) => (
-                                    <TableRow hover key={drill.id}>
-                                        <TableCell component="th" scope="row">{drill.drill_name}</TableCell>
-                                        <TableCell align="center">{renderStatusChip(drill.status)}</TableCell>
-                                        <TableCell>{findNameById(drill.red_team_id, teams)}</TableCell>
-                                        <TableCell>{findNameById(drill.blue_team_id, teams)}</TableCell>
-                                        <TableCell>{findNameById(drill.referee_id, referees)}</TableCell>
-                                        <TableCell>{findNameById(drill.scene_config_id, sceneConfigs)}</TableCell>
-                                        <TableCell>{drill.start_time ? new Date(drill.start_time).toLocaleString() : '未设置'}</TableCell>
-                                        <TableCell>{drill.end_time ? new Date(drill.end_time).toLocaleString() : '未设置'}</TableCell>
-                                        <TableCell align="right">
-                                            {drill.status === DrillStatus.PENDING && (
-                                                <Tooltip title="开始演练"><IconButton color="success" onClick={() => handleDrillAction(drill.id, 'start')}><PlayArrowIcon /></IconButton></Tooltip>
-                                            )}
-                                            {drill.status === DrillStatus.RUNNING && (
-                                                <Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleDrillAction(drill.id, 'stop')}><StopIcon /></IconButton></Tooltip>
-                                            )}
-                                            <Tooltip title="查看详情/报告"><IconButton color="info"><VisibilityIcon /></IconButton></Tooltip>
-                                            <Tooltip title="编辑"><IconButton color="primary" onClick={() => handleOpenForm(drill)} disabled={drill.status !== DrillStatus.PENDING}><EditIcon /></IconButton></Tooltip>
-                                            <Tooltip title="删除"><IconButton color="error" onClick={() => handleDeleteConfirmation(drill)} disabled={drill.status !== DrillStatus.PENDING}><DeleteIcon /></IconButton></Tooltip>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
+                            {isLoading ? ( <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
+                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
+                                    : (
+                                        adConfigs.map((adConfig) => (
+                                            <TableRow hover key={adConfig.c_id}>
+                                                <TableCell component="th" scope="row">{adConfig.c_drill_name}</TableCell>
+                                                <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
+                                                <TableCell>{findTeamNameById(adConfig.c_red_team_id)}</TableCell>
+                                                <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
+                                                <TableCell>
+                                                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                                                        {adConfig.referees.map(ref => (
+                                                            <Tooltip key={ref.user_id} title={`领域: ${ref.c_expertise}`}>
+                                                                <Chip label={`${ref.username} (${ref.c_level})`} size="small" />
+                                                            </Tooltip>
+                                                        ))}
+                                                    </Stack>
+                                                </TableCell>
+                                                <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
+                                                <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
+                                                <TableCell align="right">
+                                                    {adConfig.c_status === AdStatus.PENDING && (<Tooltip title="开始演练"><IconButton color="success" onClick={() => handleAdAction(adConfig.c_id, 'start')}><PlayArrowIcon /></IconButton></Tooltip>)}
+                                                    {adConfig.c_status === AdStatus.RUNNING && (<Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleAdAction(adConfig.c_id, 'stop')}><StopIcon /></IconButton></Tooltip>)}
+                                                    <Tooltip title="查看详情/报告"><IconButton color="info"><VisibilityIcon /></IconButton></Tooltip>
+                                                    <Tooltip title="编辑"><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status !== AdStatus.PENDING}><EditIcon /></IconButton></Tooltip>
+                                                    <Tooltip title="删除"><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status !== AdStatus.PENDING}><DeleteIcon /></IconButton></Tooltip>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                         </TableBody>
                     </Table>
                 </TableContainer>
             </Paper>
 
-            {/* 创建/编辑演练的对话框 */}
-            <Dialog key={editingDrill?.id || 'new-drill-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
+            <Dialog key={editingAdConfig?.c_id || 'new-ad-config-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
                 <form onSubmit={handleFormSubmit}>
-                    <DialogTitle>{editingDrill ? '编辑演练配置' : '创建新演练'}</DialogTitle>
+                    <DialogTitle>{editingAdConfig ? '编辑演练配置' : '创建新演练'}</DialogTitle>
                     <DialogContent>
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{statusMessage.message}</Alert>}
-                        <TextField autoFocus margin="dense" name="drill_name" label="演练名称" type="text" fullWidth required defaultValue={editingDrill?.drill_name || ''} />
-                        <TextField margin="dense" name="description" label="演练描述 (可选)" type="text" fullWidth multiline rows={3} defaultValue={editingDrill?.description || ''} />
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 1 }}>
-                            <FormControl fullWidth margin="dense" required>
-                                <InputLabel>红队</InputLabel>
-                                <Select name="red_team_id" label="红队" defaultValue={editingDrill?.red_team_id || ''}>
-                                    {teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth margin="dense" required>
-                                <InputLabel>蓝队</InputLabel>
-                                <Select name="blue_team_id" label="蓝队" defaultValue={editingDrill?.blue_team_id || ''}>
-                                    {teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth margin="dense" required>
-                                <InputLabel>裁判</InputLabel>
-                                <Select name="referee_id" label="裁判" defaultValue={editingDrill?.referee_id || ''}>
-                                    {referees.map(referee => <MenuItem key={referee.id} value={referee.id}>{referee.username}</MenuItem>)}
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth margin="dense" required>
-                                <InputLabel>场景模板</InputLabel>
-                                <Select name="scene_config_id" label="场景模板" defaultValue={editingDrill?.scene_config_id || ''}>
-                                    {sceneConfigs.map(sc => <MenuItem key={sc.id} value={sc.id}>{sc.name}</MenuItem>)}
-                                </Select>
-                            </FormControl>
+                        <TextField autoFocus margin="dense" name="c_drill_name" label="演练名称" type="text" fullWidth required defaultValue={editingAdConfig?.c_drill_name || ''} />
+                        <TextField margin="dense" name="c_description" label="演练描述 (可选)" type="text" fullWidth multiline rows={3} defaultValue={editingAdConfig?.c_description || ''} />
+                        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                            <TextField select fullWidth margin="dense" required label="红队" name="c_red_team_id" defaultValue={editingAdConfig?.c_red_team_id || ''}>
+                                {teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}
+                            </TextField>
+                            <TextField select fullWidth margin="dense" required label="蓝队" name="c_blue_team_id" defaultValue={editingAdConfig?.c_blue_team_id || ''}>
+                                {teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}
+                            </TextField>
+                        </Stack>
+                        <TextField select fullWidth margin="dense" label="场景模板 (可选)" name="c_scene_config_id" defaultValue={editingAdConfig?.c_scene_config_id || ''}>
+                            <MenuItem value=""><em>不选择场景</em></MenuItem>
+                            {sceneConfigs.map(sc => <MenuItem key={sc.c_config_id} value={sc.c_config_id}>{sc.c_name}</MenuItem>)}
+                        </TextField>
+
+                        <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
+                            <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判团队</Typography>
+                            <Autocomplete
+                                multiple
+                                options={users}
+                                getOptionLabel={(option) => option.c_username}
+                                value={selectedReferees.map(ref => users.find(u => u.c_id === ref.user_id)).filter(Boolean) as User[]}
+                                isOptionEqualToValue={(option, value) => option.c_id === value.c_id}
+                                onChange={(_event, newValue) => {
+                                    const newReferees = newValue.map(user => {
+                                        const existing = selectedReferees.find(r => r.user_id === user.c_id);
+                                        return existing || { user_id: user.c_id, username: user.c_username, c_level: 'Standard', c_expertise: 'General' };
+                                    });
+                                    setSelectedReferees(newReferees);
+                                }}
+                                renderInput={(params) => (<TextField {...params} variant="standard" label="选择用户作为裁判" placeholder="添加裁判..." />)}
+                            />
+                            <Stack spacing={2} sx={{ mt: 2 }}>
+                                {selectedReferees.map((referee, index) => (
+                                    <Paper key={referee.user_id} sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center' }} variant="outlined">
+                                        <Typography sx={{ flexShrink: 0, fontWeight: 'bold', minWidth: '100px' }}>{referee.username}</Typography>
+                                        <TextField fullWidth label="级别 (Level)" size="small" value={referee.c_level} onChange={(e) => handleRefereeChange(index, 'c_level', e.target.value)} required />
+                                        <TextField fullWidth label="负责领域 (Expertise)" size="small" value={referee.c_expertise} onChange={(e) => handleRefereeChange(index, 'c_expertise', e.target.value)} required />
+                                    </Paper>
+                                ))}
+                            </Stack>
                         </Box>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 1 }}>
-                            <TextField margin="dense" name="start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingDrill?.start_time?.slice(0, 16) || ''} />
-                            <TextField margin="dense" name="end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingDrill?.end_time?.slice(0, 16) || ''} />
-                        </Box>
+
+                        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                            <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_start_time?.slice(0, 16) || ''} />
+                            <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_end_time?.slice(0, 16) || ''} />
+                        </Stack>
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleCloseForm} disabled={isSubmitting}>取消</Button>
                         <Button type="submit" variant="contained" disabled={isSubmitting}>
-                            {isSubmitting ? <CircularProgress size={24} /> : (editingDrill ? '保存更改' : '确认创建')}
+                            {isSubmitting ? <CircularProgress size={24} /> : (editingAdConfig ? '保存更改' : '确认创建')}
                         </Button>
                     </DialogActions>
                 </form>
             </Dialog>
 
-            {/* 删除确认对话框 */}
             <Dialog open={isConfirmOpen} onClose={() => setIsConfirmOpen(false)}>
                 <DialogTitle>确认删除</DialogTitle>
-                <DialogContent>
-                    <Typography>您确定要删除演练 "{drillToDelete?.drill_name}" 吗？此操作不可撤销。</Typography>
-                </DialogContent>
+                <DialogContent><Typography>您确定要删除演练 "{adConfigToDelete?.c_drill_name}" 吗？此操作不可撤销。</Typography></DialogContent>
                 <DialogActions>
                     <Button onClick={() => setIsConfirmOpen(false)}>取消</Button>
-                    <Button onClick={handleDeleteDrill} color="error">确认删除</Button>
+                    <Button onClick={handleDeleteAdConfig} color="error">确认删除</Button>
                 </DialogActions>
             </Dialog>
         </Box>
     );
 };
 
-export default DrillManagementPage;
+export default AdManagementPage;
