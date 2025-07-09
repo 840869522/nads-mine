@@ -67,7 +67,7 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        getRoleData(page, rowsPerPage);
+        getRoleData(2, rowsPerPage);
     }, []);
 
 
@@ -108,7 +108,6 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleSaveRole = async (formData: RoleFormData, isNew: boolean) => {
-        console.log(formData);
         if (isNew) {
             const res = await apiClientWithToken.post(`/back/api/support/role/new`, JSON.stringify({
                 data: {
@@ -121,7 +120,7 @@ const RoleManagementPage: React.FC = () => {
             const data = await res.data;
             if (data.code === 200) {
                 setPage(1);
-                getRoleData(1, rowsPerPage);
+                getRoleData(2, rowsPerPage);
                 setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
             } else {
                 setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });

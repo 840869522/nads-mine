@@ -13,9 +13,7 @@ import {
     Box,
     Paper,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { APP_PERMISSIONS, AppPermission } from '@/constants';
-import { Leaderboard } from '@mui/icons-material';
 
 interface PermissionFormProps {
     permissions: AppPermission[];
@@ -31,63 +29,63 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
 }) => {
     const [selected, setSelected] = useState<string[]>(initialSelected);
 
+
+
     // 处理权限变更（勾选/取消勾选）
     const handlePermissionChange = (permissionKey: string, isChecked: boolean) => {
         var newSelected = [...selected];
 
-        // 查找权限对象
-        const permission = findPermissionByKey(permissions, permissionKey);
+        // 1. 查找目标权限及其父级
+        const returnData = findPermissionByKey(permissions, permissionKey);
+        if (!returnData) return;
+        const permission = returnData.node;
+        const directParent = returnData.parent;
         if (!permission) return;
 
         if (permission.children) {
-            // 父级权限
+            // 2.1 处理父级权限
             if (isChecked) {
                 // 勾选父级时添加所有子权限
-                newSelected.push(...[
-                    permissionKey,
-                    ...permission.children.map(c => c.key)
-                ]);
+                const allDescendants = getAllDescendantKeys(permission);
+                newSelected.push(...allDescendants);
             } else {
                 // 取消父级时移除所有子权限
-                newSelected = newSelected.filter(
-                    key =>
-                        !permission.children.some(c => key === c.key || key === permissionKey)
-                );
+                const allDescendants = getAllDescendantKeys(permission);
+                newSelected = newSelected.filter(k => !allDescendants.includes(k) && k !== permissionKey);
             }
         } else {
-            // 子级权限
-            const parentKey = permissionKey.split('.')[0]; // 例如 "study_test" -> "study"
-            const parent = findPermissionByKey(permissions, parentKey);
-            if (parent?.children) {
-                const allChildrenKeys = [parentKey, ...parent.children.map(c => c.key)];
+            // 2.2 处理子级权限
+            const updated = isChecked
+                ? [...newSelected, permissionKey]
+                : newSelected.filter(k => k !== permissionKey);
 
-                const updated = isChecked
-                    ? [...newSelected, permissionKey]
-                    : newSelected.filter(k => k !== permissionKey);
+            newSelected.length = 0;
+            newSelected.push(...updated);
 
-                // 检查是否所有子权限都被选中
-                const allChildrenSelected = parent.children.every(c =>
-                    updated.includes(c.key)
-                );
+            // 3. 向上更新所有父级权限的选中状态
+            let currentParent = directParent;
+            while (currentParent) {
+                const allChildrenSelected = currentParent?.children?.every(child => {
+                    const descendants = getAllDescendantKeys(child);
+                    return descendants.every(desc => newSelected.includes(desc));
+                });
+
+                const parentKey = currentParent.key;
 
                 if (allChildrenSelected) {
-                    // 自动选中父级权限
-                    updated.push(parentKey);
+                    if (!newSelected.includes(parentKey)) {
+                        newSelected.push(parentKey);
+                    }
                 } else {
-                    // 移除父级权限
-                    updated.filter(k => k !== parentKey);
+                    const idx = newSelected.indexOf(parentKey);
+                    if (idx > -1) {
+                        newSelected.splice(idx, 1);
+                    }
                 }
 
-                newSelected.length = 0;
-                newSelected.push(...updated);
-            } else {
-                // 非父子关系的权限直接处理
-                const idx = newSelected.indexOf(permissionKey);
-                if (idx > -1) {
-                    newSelected.splice(idx, 1);
-                } else {
-                    newSelected.push(permissionKey);
-                }
+                // 继续向上查找父级
+                const parentResult = findPermissionByKey(permissions, currentParent.key);
+                currentParent = parentResult?.parent || null;
             }
         }
 
@@ -99,20 +97,32 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
     // 递归查找权限
     const findPermissionByKey = (
         perms: AppPermission[],
-        key: string
-    ): AppPermission | undefined => {
+        key: string,
+        parent: AppPermission | null = null
+    ): { node: AppPermission | null, parent: AppPermission | null } | null => {
         for (const perm of perms) {
-            if (perm.key === key) return perm;
+            if (perm.key === key) return { node: perm, parent };
             if (perm.children) {
-                const found = findPermissionByKey(perm.children, key);
+                const found = findPermissionByKey(perm.children, key, perm);
                 if (found) return found;
             }
         }
-        return undefined;
+        return null;
     };
 
+    // 获取权限及其所有子权限的 key 列表（包括嵌套层级）
+    function getAllDescendantKeys(permission: AppPermission): string[] {
+        let keys: string[] = [permission.key];
+        if (permission.children) {
+            for (const child of permission.children) {
+                keys = keys.concat(getAllDescendantKeys(child));
+            }
+        }
+        return keys;
+    }
+
     // 渲染权限树
-    const renderPermissions = (perms: AppPermission[], level = 0) => {
+    const renderPermissions = (perms: AppPermission[], level = 2) => {
         if (perms.length === 0)
             return null;
         return perms.map((perm) => {
@@ -179,15 +189,15 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
         });
     };
     return (
-        <Box sx={{flex:1}}>
+        <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>
                 权限分配
                 {children}
             </Typography>
-            <Paper variant="outlined" sx={{ maxHeight: 400, overflowY: 'auto', p:0 }}>
+            <Paper variant="outlined" sx={{ maxHeight: 400, overflowY: 'auto', p: 0}}>
                 <List disablePadding >
-                {renderPermissions(permissions)}
-            </List>
+                    {renderPermissions(permissions)}
+                </List>
             </Paper>
         </Box>
     );
