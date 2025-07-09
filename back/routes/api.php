@@ -45,17 +45,17 @@
      * 定义基础分系统路由
      */
     Route::post("support/user/login",[UserController::class,"login"]);
-    Route::prefix("support")->group(function() {
-        Route::prefix("user")->group(function() {
+    Route::prefix("support")->middleware("jwtcheck:support")->group(function() {
+        Route::prefix("user")->middleware("jwtcheck:support_user")->group(function() {
             Route::post("/id",[UserController::class,"getUserById"]);
             Route::post("/search",[UserController::class,"searchUser"]);
             Route::post("/all",[UserController::class,"getAllUser"]);
             Route::post("/new",[UserController::class,"insertNewUser"]);
             Route::post("/update",[UserController::class,"updateUserInfo"]);
             Route::post("/delete",[UserController::class,"deleteUser"]);
-        })->middleware("jwtcheck:support_user");
+        });
 
-        Route::prefix("role")->group(function(){
+        Route::prefix("role")->middleware("jwtcheck:support_role")->group(function(){
             Route::post("/all",[RoleController::class,"getAllRole"]);
             Route::post("/id",[RoleController::class,"getRoleById"]);
             Route::post("/search",[RoleController::class,"searchRole"]);
@@ -64,9 +64,9 @@
             Route::post("/delete",[RoleController::class,"deleteRole"]);
             Route::post("/grant", [RoleController::class,"grantRoles2User"]);
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"]);
-        })->middleware("jwtcheck:support_role");
+        });
 
-        Route::prefix('permission')->group(function () {
+        Route::prefix('permission')->middleware("jwtcheck:support_permissions")->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission']);
             Route::post('/id', [PermissionController::class, 'getPermissionById']);
             Route::post("/search",[PermissionController::class,"searchPermission"]);
@@ -76,14 +76,14 @@
             Route::post('/delete', [PermissionController::class, 'deletePermission']);
             Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
             Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
-        })->middleware("jwtcheck:support_permissions");
-    })->middleware("jwtcheck:support");
+        });
+    });
 
 
     /**
      * 定义安全实验分系统路由
      */
-    Route::prefix("ad")->group(function() {
+    Route::prefix("ad")->middleware("jwtcheck:ad")->group(function() {
         // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
         // GET /api/ad/available-users
         // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
@@ -136,42 +136,42 @@
             // DELETE /api/ad/team/{team}
             Route::delete('/{team}', [TeamController::class, 'destroy']);
         });
-    })->middleware("jwtcheck:ad");
+    });
 
     /**
      * 定义人员测试分系统路由
      */
-    Route::prefix("study")->group(function () {
+    Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::prefix('courses')->group(function(){
-            Route::get('/',[CourseController::class,'index'])->middleware('can:view-courses')->name('courses.index');
-            Route::get('/{id}',[CourseController::class,'show'])->middleware('can:view-courses')->name('courses.show');
-            Route::post('/',[CourseController::class,'store'])->middleware('can:create-course')->name('courses.store');
-            Route::put('/{id}',[CourseController::class,'update'])->middleware('can:edit-courses')->name('courses.update');
-            Route::delete('/{id}',[CourseController::class,'destroy'])->middleware('can:delete-courses')->name('courses.destroy');
-            Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('can:manage-courses')->name('courses.addUser');
+            Route::get('/',[CourseController::class,'index'])->name('courses.index');
+            Route::get('/{id}',[CourseController::class,'show'])->name('courses.show');
+            Route::post('/',[CourseController::class,'store'])->name('courses.store');
+            Route::put('/{id}',[CourseController::class,'update'])->name('courses.update');
+            Route::delete('/{id}',[CourseController::class,'destroy'])->name('courses.destroy');
+            Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
         })->middleware('jwtcheck');
 
-        Route::prefix('categories')->group(function(){
+        Route::prefix('categories')->middleware('jwtcheck:study')->group(function(){
             Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
             Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
             Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
             Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
-        })->middleware('jwtcheck:study_');
+        });
 
         Route::prefix('courses/{courseId}/resources')->group(function () {
             Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
-            Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
-            Route::post('/upload', [ResourceController::class, 'upload'])->middleware('jwtcheck:manage-resources')->name('resources.upload');
-            Route::delete('/{id}', [ResourceController::class, 'destroy'])->middleware('jwtcheck:manage-resources')->name('resources.destroy');
-        })->middleware('jwtcheck');
-    })->middleware("jwtcheck:study");
+            Route::post('/', [ResourceController::class, 'store'])->name('resources.store');
+            Route::post('/upload', [ResourceController::class, 'upload'])->name('resources.upload');
+            Route::delete('/{id}', [ResourceController::class, 'destroy'])->name('resources.destroy');
+        });
+    });
 
     /**
      * 定义环境构建分系统
      */
-    Route::prefix("scene")->group(function () {
+    Route::prefix("scene")->middleware("jwtcheck:scene")->group(function () {
 
-    })->middleware("jwtcheck:scene");
+    });
 
 
     Route::prefix('scenarios')->group(function () {

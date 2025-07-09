@@ -31,8 +31,6 @@ import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
 import FileViewerModal from '@/components/coursecases/FileViewerModal';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { apiClientWithToken } from '@/utils/axios';
-import { headers } from 'next/headers';
-import { BACK_IP_PORT } from '@/constants';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -60,7 +58,8 @@ const CourseCasesPage: React.FC = () => {
       setIsLoading(true);
       try {
         // Fetch categories
-        const categoriesResponse = await apiClientWithToken.get('/api/categories');
+        const categoriesResponse = await apiClientWithToken.get('/back/api/study/categories');
+        console.log(categoriesResponse);
         const categoriesData = categoriesResponse.data;
         if (categoriesData.code === 200) {
           setCategories(categoriesData.data.map((cat: { c_category_id: string; c_category_name: string }) => cat.c_category_name));
@@ -69,7 +68,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch courses with pagination and optional keyword
-        const coursesResponse = await apiClientWithToken.get('/api/courses', {
+        const coursesResponse = await apiClientWithToken.get('/back/api/study/courses', {
           headers: {
             'Accept': 'application/json',
           },
@@ -84,7 +83,7 @@ const CourseCasesPage: React.FC = () => {
           const mappedCourses = await Promise.all(
             coursesData.data.courses.map(async (course: any) => {
               // Fetch resources for each course
-              const resourcesResponse = await apiClientWithToken.get(`/api/courses/${course.c_course_id}/resources`);
+              const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
               const resourcesData = resourcesResponse.data;
               const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
                 id: res.c_resource_id,
@@ -149,7 +148,7 @@ const CourseCasesPage: React.FC = () => {
       let courseId = id;
       if (editingCase) {
         // Update course
-        const response = await apiClientWithToken.put(`/back/api/courses/${id}`, courseData);
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${id}`, courseData);
         const data = response.data;
         if (data.code !== 200) {
           console.error('Failed to update course:', data.message);
@@ -157,7 +156,7 @@ const CourseCasesPage: React.FC = () => {
         }
       } else {
         // Create course
-        const response = await apiClientWithToken.post('/api/courses', courseData);
+        const response = await apiClientWithToken.post('/back/api/study/courses', courseData);
         const data = response.data;
         if (data.code !== 201) {
           console.error('Failed to create course:', data.message);
@@ -172,7 +171,7 @@ const CourseCasesPage: React.FC = () => {
           const formData = new FormData();
           formData.append('course_id', courseId);
           formData.append('file', file.fileObject);
-          const response = await apiClientWithToken.post(`/back/api/courses/${courseId}/resources/upload`, formData, {
+          const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -185,7 +184,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // Refresh course list
-      const coursesResponse = await apiClientWithToken.get(`/back/api/courses`, {
+      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
         params: {
           page: currentPage,
           pageSize: ITEMS_PER_PAGE,
@@ -196,7 +195,7 @@ const CourseCasesPage: React.FC = () => {
       if (coursesData.code === 200) {
         const mappedCourses = await Promise.all(
           coursesData.data.courses.map(async (course: any) => {
-            const resourcesResponse = await apiClientWithToken.get(`/back/api/courses/${course.c_course_id}/resources`);
+            const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
             const resourcesData = resourcesResponse.data;
             const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
               id: res.c_resource_id,
@@ -227,7 +226,7 @@ const CourseCasesPage: React.FC = () => {
     try {
       if (category.id) {
         // Update category
-        const response = await apiClientWithToken.put(`/back/api/categories/${category.id}`, { name: category.name });
+        const response = await apiClientWithToken.put(`/back/api/study/categories/${category.id}`, { name: category.name });
         const data = response.data;
         if (data.code === 200) {
           setCategories(prev => prev.map(cat => cat === category.id ? category.name : cat));
@@ -236,7 +235,7 @@ const CourseCasesPage: React.FC = () => {
         }
       } else {
         // Create category
-        const response = await apiClientWithToken.post(`/back/api/categories`, { name: category.name });
+        const response = await apiClientWithToken.post(`/back/api/study/categories`, { name: category.name });
         const data = response.data;
         if (data.code === 201) {
           setCategories(prev => [...prev, category.name]);
@@ -258,7 +257,7 @@ const CourseCasesPage: React.FC = () => {
         }
       });
       try {
-        const response = await apiClientWithToken.delete(`/back/api/courses/${caseToDelete.id}`);
+        const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.id}`);
         const data = response.data;
         if (data.code === 200) {
           setCourseCases(prevCases => prevCases.filter(c => c.id !== caseToDelete.id));
