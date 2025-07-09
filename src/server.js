@@ -1,15 +1,10 @@
 // server.js
-// NOTE: The Python FastAPI backend is still launched for legacy routes.
-// PHP now directly invokes `main_cli_local.py`, but this file remains
-// unchanged to keep existing Node.js functionality working.
 import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';
 import GuacamoleLite from 'guacamole-lite';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
-import { spawn as childProcessSpawn } from 'child_process';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import path from 'path';
 import process from 'process';
 
 const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
@@ -18,132 +13,118 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-//const PYTHON_API_PORT = process.env.PYTHON_API_PORT || 3010;
-//const PYTHON_API_HOST = process.env.PYTHON_API_HOST || '127.0.0.1';
-//const FASTAPI_TARGET_URL = `http://${PYTHON_API_HOST}:${PYTHON_API_PORT}`;
-
+// --- Port Definitions ---
+const MAIN_PORT = parseInt(process.env.PORT || '3000', 10);
+const GUAC_INTERNAL_PORT = parseInt(process.env.GUAC_PORT || '3001', 10); // Guac 服务的内部端口
 const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
-const PHP_API_HOST = process.env.PHP_API_HOST || '127.0.0.1';
-const PHP_TARGET_URL = `http://${PHP_API_HOST}:${PHP_API_PORT}`;
 
-let httpServer;
+// --- Target URLs for Proxies ---
+const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
+const PHP_TARGET_URL = `http://127.0.0.1:${PHP_API_PORT}`;
+
+let mainHttpServer;
 let guacServer;
-//let fastApiProcess = null; // will hold FastAPI child process
 
-// Track all open TCP sockets so we can destroy them on shutdown
 const sockets = new Set();
 
 app.prepare().then(() => {
-  /* ---------- 1. START (optionally) THE PYTHON BACKEND ---------- */
-  //let canRunPythonBackend = false;
-  //let pythonExecutable;
+  /* =================================================================
+     1. PROXY MIDDLEWARE SETUP
+     ================================================================= */
 
-  /*
-  if (process.platform === 'linux') {
-    canRunPythonBackend = true;
-    pythonExecutable = path.join(process.cwd(), '.venv', 'bin', 'python3');
-    const scriptToRun = 'main_cli.py';
-
-    console.log(`[NodeJS] Starting FastAPI with: ${pythonExecutable} ${scriptToRun}`);
-
-    fastApiProcess = childProcessSpawn(pythonExecutable, [scriptToRun], {
-      stdio: 'pipe',
-    });
-
-    fastApiProcess.stdout.on('data', (d) => {
-      console.log(`[FastAPI STDOUT]: ${d.toString().trim()}`);
-    });
-
-    fastApiProcess.stderr.on('data', (d) => {
-      console.error(`[FastAPI STDERR]: ${d.toString().trim()}`);
-    });
-
-    fastApiProcess.on('close', (code) => {
-      console.log(`[FastAPI] exited with code ${code}`);
-    });
-
-    fastApiProcess.on('error', (err) => {
-      console.error('[FastAPI] failed to start:', err);
-    });
-
-    // 让子进程不阻止 Node 退出；我们自己会 kill 它
-    fastApiProcess.unref();
-  } else {
-    console.warn(`[NodeJS] Platform '${process.platform}' detected; FastAPI backend disabled.`);
-  }
-
-  //2. PROXY MIDDLEWARE
-  const apiProxy = createProxyMiddleware({
-    target: FASTAPI_TARGET_URL,
-    changeOrigin: true,
-    pathRewrite: { '^/api/vms': '/api/vms' },
-    logLevel: dev ? 'debug' : 'info',
-    onError: (err, req, res) => {
-      console.error('Proxy error:', err);
-      if (!res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Proxy Error', error: err.message }));
-      }
-    },
-  });
-  */
-
+  // PHP 服务的代理
   const phpProxy = createProxyMiddleware({
     target: PHP_TARGET_URL,
     changeOrigin: true,
-    pathRewrite: { '^/api/php': '/api' },
+    pathRewrite: { '^/back/': '/' },
     logLevel: dev ? 'debug' : 'info',
-    onError: (err, req, res) => {
-      console.error('PHP Proxy error:', err);
-      if (!res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'PHP Proxy Error', error: err.message }));
-      }
-    },
   });
 
-  /* ---------- 3. CREATE HTTP SERVER ---------- */
-  httpServer = createServer((req, res) => {
-    /*if (req.url && req.url.startsWith('/api/vms')) {
-      if (canRunPythonBackend) {
-        return apiProxy(req, res, () => handle(req, res));
-      }
-      res.writeHead(503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Python backend unavailable on this platform.' }));
-      return;
-    }*/
+  // 为 Guacamole 服务创建一个新的代理
+  // 这个代理会将发往主服务器 /api/guac 的请求转发到内部的 Guacamole 服务器
+  const guacProxy = createProxyMiddleware({
+    target: GUAC_TARGET_URL,
+    changeOrigin: true,
+    ws: true, // 这是最关键的一步: 开启 WebSocket 代理
+    logLevel: dev ? 'debug' : 'info',
+  });
 
-    if (req.url && req.url.startsWith('/api/php')) {
-      return phpProxy(req, res, () => handle(req, res));
+
+  /* =================================================================
+     2. HTTP SERVER SETUP
+     ================================================================= */
+
+  // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
+  mainHttpServer = createServer((req, res) => {
+    const url = req.url || '';
+    if (url.startsWith('/back/')) {
+      return phpProxy(req, res);
     }
-
-    // anything else -> Next.js
+    // 主要改动 (2/3): 如果请求是发往 /api/guac，则使用 guacProxy 处理
+    // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+    if (url.startsWith('/api/guac')) {
+      return guacProxy(req, res);
+    }
+    // 其他所有请求都由 Next.js 处理
     return handle(req, res);
   });
 
-  // guacamole-lite server
+  // 独立的 Guacamole 服务器 (作为内部服务运行，不对外暴露)
+  const guacHttpServer = createServer();
   guacServer = new GuacamoleLite(
-    { server: httpServer, path: '/api/guac' },
-    { port: parseInt(process.env.GUACD_PORT || '4822', 10) },
-    {
-      crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
-      allowedUnencryptedConnectionSettings: {
-        rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
-        ssh: ['hostname', 'port', 'username', 'password'],
-        vnc: ['hostname', 'port', 'password'],
-        join: ['id']
+      { server: guacHttpServer, path: '/api/guac' },
+      { port: parseInt(process.env.GUACD_PORT || '4822', 10) },
+      {
+        crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
+        allowedUnencryptedConnectionSettings: {
+          rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
+          ssh: ['hostname', 'port', 'username', 'password'],
+          vnc: ['hostname', 'port', 'password'],
+          join: ['id']
+        }
       }
-    }
   );
+  guacServer.on('process-initial-request', (request) => {
+    // 这个事件在 WebSocket 连接建立后，与 guacd 通信之前触发
+    // 是验证连接是否到达 guacamole-lite 的最佳位置
+    console.log(`[Guac VERIFY] Received connection request. Client: ${request.socket.remoteAddress}, Path: ${request.url}`);
+    // 你可以在这里基于 request.url 或其他信息进行验证
+    // 返回 false 会拒绝连接
+    return true;
+  });
 
-  // 记录所有 TCP 连接
-  httpServer.on('connection', (socket) => {
+  guacServer.on('client-connect', (client) => {
+    // 当一个客户端成功连接到 guacd 后触发
+    console.log(`[Guac CON] Client connected. ID: ${client.id}, Protocol: ${client.settings.protocol}`);
+  });
+
+  guacServer.on('client-disconnect', (client) => {
+    // 当一个客户端断开连接时触发
+    console.log(`[Guac DISCON] Client disconnected. ID: ${client.id}`);
+  });
+
+  guacServer.on('client-error', (client, err) => {
+    // 当某个客户端发生错误时触发
+    console.error(`[Guac ERR] Client error. ID: ${client.id}, Error:`, err);
+  });
+
+  guacServer.on('guacd-error', (err) => {
+    // 当 guacamole-lite 连接 guacd 服务失败时触发
+    // 这是非常重要的日志，通常能直接指出问题
+    console.error(`[Guacd ERR] Error connecting to guacd:`, err);
+  });
+  /* =================================================================
+     3. SOCKET.IO AND CONNECTION HANDLING
+     ================================================================= */
+
+  mainHttpServer.on('connection', (socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
   });
-
-  /* ---------- 4. SOCKET.IO TERMINAL ---------- */
-  const io = new Server(httpServer, { path: '/api/terminal' });
+  mainHttpServer.on('upgrade', (req, socket, head) => {
+    console.log('[upgrade] url=', req.url);
+  });
+  const io = new Server(mainHttpServer, { path: '/api/terminal' });
 
   io.on('connection', (socket) => {
     const id = socket.handshake.query.id;
@@ -151,56 +132,39 @@ app.prepare().then(() => {
       socket.disconnect(true);
       return;
     }
-
     const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/sh'], {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 24,
-      cwd: process.env.HOME,
-      env: process.env,
+      name: 'xterm-color', cols: 80, rows: 24, cwd: process.env.HOME, env: process.env,
     });
-
     shell.onData((d) => socket.emit('output', d));
     socket.on('input', (d) => shell.write(d));
     socket.on('resize', ({ cols, rows }) => shell.resize(cols, rows));
     socket.on('disconnect', () => shell.kill());
   });
 
-  /* ---------- 5. GRACEFUL SHUTDOWN ---------- */
-  const FORCE_TIMEOUT = 5000; // 5 s 之后强退
+
+  /* =================================================================
+     4. SHUTDOWN
+     ================================================================= */
 
   async function shutdown() {
     console.log('[NodeJS] Shutting down…');
-
-    // 1) 关闭 FastAPI
-    if (fastApiProcess && !fastApiProcess.killed) {
-      console.log('[NodeJS] Killing FastAPI child process…');
-      fastApiProcess.kill('SIGINT');
-    }
-
-    // 2) 关闭 socket.io (会关闭所有 namespace / room)
     await new Promise((resolve) => io.close(resolve));
+    if (guacServer) guacServer.close();
 
-    if (guacServer) {
-      guacServer.close();
-    }
+    // 确保两个服务器都被关闭
+    await new Promise((resolve) => mainHttpServer.close(resolve));
+    await new Promise((resolve) => guacHttpServer.close(resolve));
 
-    // 3) 关闭 HTTP 服务器（停止接收新连接）
-    await new Promise((resolve) => httpServer.close(resolve));
-
-    // 4) 销毁所有仍然存活的 TCP 连接
     sockets.forEach((s) => s.destroy());
-
     console.log('[NodeJS] Cleanup done. Exiting.');
     process.exit(0);
   }
 
-  // 如果关不掉，强制退出
+  const FORCE_TIMEOUT = 3000;
   function forceExit() {
     console.warn('[NodeJS] Forced exit.');
     process.exit(1);
   }
-
   process.on('SIGINT', () => {
     shutdown().catch(console.error);
     setTimeout(forceExit, FORCE_TIMEOUT).unref();
@@ -210,14 +174,19 @@ app.prepare().then(() => {
     setTimeout(forceExit, FORCE_TIMEOUT).unref();
   });
 
-  /* ---------- 6. START THE SERVER ---------- */
-  const port = parseInt(process.env.PORT || '3000', 10);
-  httpServer.listen(port, () => {
-    console.log(`> Node.js server ready on http://localhost:${port}`);
-    //if (canRunPythonBackend) {
-    //  console.log(`> FastAPI proxied at http://localhost:${port}/api/vms`);
-    //}
-    console.log(`> PHP proxied at http://localhost:${PHP_API_PORT}/api/php`);
-    console.log(`> Terminal WebSocket at ws://localhost:${port}/api/terminal`);
+
+  /* =================================================================
+     5. START SERVERS
+     ================================================================= */
+
+  mainHttpServer.listen(MAIN_PORT, () => {
+    console.log(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
+    console.log(`> ➡️  PHP proxied from /back/`);
+    console.log(`> ➡️  Guacamole proxied from /api/guac`);
+    console.log(`> ➡️  Terminal WebSocket direct at /api/terminal`);
+  });
+
+  guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
+    console.log(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
   });
 });

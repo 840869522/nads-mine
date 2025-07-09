@@ -61,4 +61,14 @@ class SceneInstance extends Model
         // 您的命名非常规范，所以外键和主键名是一样的。
         return $this->hasMany(SceneContainerInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
+    /**
+     * 【新增的关联方法】
+     * 定义一个“场景实例”拥有多个“交换机实例”的“一对多”关联关系。
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function switches()
+    {
+        return $this->hasMany(SceneSwitchInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
+    }
 }

@@ -546,7 +546,7 @@ def get_guac_info(vm_name: str):
         pass
 
     return {
-        "host": ip or "",
+        "host": ip or "127.0.0.1",
         "ssh_port": 22,
         "rdp_port": 3389,
         "vnc_port": vnc_port,
