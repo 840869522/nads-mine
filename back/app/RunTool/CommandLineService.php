@@ -13,6 +13,32 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 class CommandLineService
 {
     /**
+     * 【新增方法】
+     * 删除一个 OVS 网桥。
+     *
+     * @param string $switchName 要删除的网桥的名称。
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败（且不是因为网桥本就不存在）。
+     */
+    public function deleteSwitch(string $switchName): void
+    {
+        $command = ['ovs-vsctl', 'del-br', $switchName];
+        \Log::info('Executing OVS command: ' . implode(' ', $command));
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            // 如果错误是因为网桥已经不存在，我们不认为这是一个致命错误，
+            // 只记录一个警告即可。对于其他错误，则抛出异常。
+            $errorOutput = $process->getErrorOutput();
+            if (str_contains($errorOutput, 'no bridge named')) {
+                \Log::warning("尝试删除一个不存在的 OVS 网桥: {$switchName}");
+            } else {
+                 throw new ProcessFailedException($process);
+            }
+        }
+    }
+    /**
      * 【新增】创建一个 OVS (Open vSwitch) 网桥。
      *
      * @param string      $switchName 要创建的交换机的名称。
