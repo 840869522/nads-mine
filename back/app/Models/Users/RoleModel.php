@@ -146,7 +146,7 @@
                     }, $data["permissions"]);
                     $permissionsModelRes = PermissionModel::grantPermission2Role($data["id"],$permissions);
                     if ($permissionsModelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
-                        RoleModel::deleteRoleById($data["id"]);
+                        $_ = RoleModel::deleteRoleById($data["id"]);
                         return [
                             "code" => GlobalResponse::$DATABASE_ERROR_CODE
                         ];

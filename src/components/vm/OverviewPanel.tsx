@@ -73,7 +73,7 @@ export default function OverviewPanel({ vmId }: OverviewPanelProps) {
     data,
     error,
     isLoading,
-  } = useSWR<OverviewData>(`/api/php/vms/${vmId}`, fetcher, {
+  } = useSWR<OverviewData>(`/back/api/vms/${vmId}`, fetcher, {
     refreshInterval: 5000, // 5 s 轮询
     keepPreviousData: true,
     refreshWhenHidden: false, // 标签页不可见时暂停

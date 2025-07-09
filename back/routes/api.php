@@ -8,6 +8,7 @@
     use App\Http\Controllers\scenario\ScenarioController;
     use App\Http\Controllers\scenario\DrillController;
     use App\Http\Controllers\scenario\InstanceController;
+    use App\Http\Controllers\scenario\SwitchController;
     use App\Http\Controllers\Docker\ImagesController;
     use App\Http\Controllers\Docker\InstancesController;
     use App\Http\Controllers\Docker\ContainersController;
@@ -43,17 +44,17 @@
      * 定义基础分系统路由
      */
     Route::post("support/user/login",[UserController::class,"login"]);
-    Route::prefix("support")->group(function() {
-        Route::prefix("user")->group(function() {
+    Route::prefix("support")->middleware("jwtcheck:support")->group(function() {
+        Route::prefix("user")->middleware("jwtcheck:support_user")->group(function() {
             Route::post("/id",[UserController::class,"getUserById"]);
             Route::post("/search",[UserController::class,"searchUser"]);
             Route::post("/all",[UserController::class,"getAllUser"]);
             Route::post("/new",[UserController::class,"insertNewUser"]);
             Route::post("/update",[UserController::class,"updateUserInfo"]);
             Route::post("/delete",[UserController::class,"deleteUser"]);
-        })->middleware("jwtcheck:support_user");
+        });
 
-        Route::prefix("role")->group(function(){
+        Route::prefix("role")->middleware("jwtcheck:support_role")->group(function(){
             Route::post("/all",[RoleController::class,"getAllRole"]);
             Route::post("/id",[RoleController::class,"getRoleById"]);
             Route::post("/search",[RoleController::class,"searchRole"]);
@@ -62,9 +63,9 @@
             Route::post("/delete",[RoleController::class,"deleteRole"]);
             Route::post("/grant", [RoleController::class,"grantRoles2User"]);
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"]);
-        })->middleware("jwtcheck:support_role");
+        });
 
-        Route::prefix('permission')->group(function () {
+        Route::prefix('permission')->middleware("jwtcheck:support_permissions")->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission']);
             Route::post('/id', [PermissionController::class, 'getPermissionById']);
             Route::post("/search",[PermissionController::class,"searchPermission"]);
@@ -74,14 +75,14 @@
             Route::post('/delete', [PermissionController::class, 'deletePermission']);
             Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
             Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
-        })->middleware("jwtcheck:support_permissions");
-    })->middleware("jwtcheck:support");
+        });
+    });
 
 
     /**
      * 定义安全实验分系统路由
      */
-    Route::prefix("ad")->group(function() {
+    Route::prefix("ad")->middleware("jwtcheck:ad")->group(function() {
         // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
         // GET /api/ad/available-users
         // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
@@ -134,44 +135,42 @@
             // DELETE /api/ad/team/{team}
             Route::delete('/{team}', [TeamController::class, 'destroy']);
         });
-    })->middleware("jwtcheck:ad");
+    });
 
     /**
      * 定义人员测试分系统路由
      */
-    Route::prefix("study")->group(function () {
+    Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::prefix('courses')->group(function(){
-            Route::get('/', [CourseController::class, 'index'])->middleware('jwtcheck:view-courses')->name('courses.index');
-            Route::get('/{id}', [CourseController::class, 'show'])->middleware('jwtcheck:view-courses')->name('courses.show');
-            Route::post('/', [CourseController::class, 'store'])->middleware('jwtcheck:create-course')->name('courses.store');
-            Route::put('/{id}', [CourseController::class, 'update'])->middleware('jwtcheck:edit-courses')->name('courses.update');
-            Route::delete('/{id}', [CourseController::class, 'destroy'])->middleware('jwtcheck:delete-courses')->name('courses.destroy');
-            Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('jwtcheck:manage-courses')->name('courses.addUser');
-        });
+            Route::get('/',[CourseController::class,'index'])->name('courses.index');
+            Route::get('/{id}',[CourseController::class,'show'])->name('courses.show');
+            Route::post('/',[CourseController::class,'store'])->name('courses.store');
+            Route::put('/{id}',[CourseController::class,'update'])->name('courses.update');
+            Route::delete('/{id}',[CourseController::class,'destroy'])->name('courses.destroy');
+            Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
+        })->middleware('jwtcheck');
 
-        Route::prefix('categories')->group(function(){
-            Route::get('/', [CategoryController::class, 'index'])->middleware('jwtcheck:view-categories')->name('categories.index');
-            Route::post('/', [CategoryController::class, 'store'])->middleware('jwtcheck:manage-categories')->name('categories.store');
-            Route::put('/{id}', [CategoryController::class, 'update'])->middleware('jwtcheck:manage-categories')->name('categories.update');
-            Route::delete('/{id}', [CategoryController::class, 'destroy'])->middleware('jwtcheck:manage-categories')->name('categories.destroy');
+        Route::prefix('categories')->middleware('jwtcheck:study')->group(function(){
+            Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
+            Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
+            Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
+            Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
         });
 
         Route::prefix('courses/{courseId}/resources')->group(function () {
-            Route::get('/', [ResourceController::class, 'index'])->middleware('jwtcheck:view-resources')->name('resources.index');
-            Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
-            Route::post('/upload', [ResourceController::class, 'upload'])->middleware('jwtcheck:manage-resources')->name('resources.upload');
-            Route::delete('/{id}', [ResourceController::class, 'destroy'])->middleware('jwtcheck:manage-resources')->name('resources.destroy');
+            Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
+            Route::post('/', [ResourceController::class, 'store'])->name('resources.store');
+            Route::post('/upload', [ResourceController::class, 'upload'])->name('resources.upload');
+            Route::delete('/{id}', [ResourceController::class, 'destroy'])->name('resources.destroy');
         });
-
-        Route::get('/resources/{resourceId}', [ResourceController::class, 'getResource'])->middleware('jwtcheck:view-resources');
-    })->middleware('jwtcheck:study');
+    });
 
     /**
      * 定义环境构建分系统
      */
-    Route::prefix("scene")->group(function () {
+    Route::prefix("scene")->middleware("jwtcheck:scene")->group(function () {
 
-    })->middleware("jwtcheck:scene");
+    });
 
 
     Route::prefix('scenarios')->group(function () {
@@ -193,10 +192,19 @@
     });
 
     Route::prefix('scenariosinstances')->group(function () {
+
+
+        // GET /api/scenariosinstances/switches - 获取所有场景实例下的所有交换机【前端无该功能】
+        Route::get('/switches', [SwitchController::class, 'index']);
+
+        // GET /api/scenariosinstances/{instance}/switches - 获取指定场景实例下的交换机列表
+        // 这个路由会调用 SwitchController 的 show 方法，并自动注入对应的 SceneInstance 对象
+        Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
-        // --- 【新增】获取单个场景实例的详细信息 ---
+        // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
+
     });
 
     Route::prefix('images')->group(function () {
@@ -214,7 +222,7 @@
     });
 
     Route::prefix('containers')->group(function () {
-        Route::post('/', [ContainersController::class, 'store']);
+        Route::post('/', [ContainersController::class, 'create']);
         Route::post('/{id}', [ContainersController::class, 'action']);
         Route::get('/{id}', [ContainersController::class, 'get']);
         Route::get('/{id}/logs', [ContainersController::class, 'logs']);

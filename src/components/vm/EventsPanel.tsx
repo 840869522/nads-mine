@@ -65,7 +65,7 @@ export default function EventsPanel({ vmId }: EventsPanelProps) {
     // queryParams.append('limit', '200'); // Example limit
 
     try {
-        const response = await fetch(`/api/php/vms/${vmId}/events?${queryParams.toString()}`);
+        const response = await fetch(`/back/api/vms/${vmId}/events?${queryParams.toString()}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch events: ${response.status} ${response.statusText}`);
       }

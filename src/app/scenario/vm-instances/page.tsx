@@ -71,7 +71,7 @@ function useVmInstances(forceRef?: React.MutableRefObject<number>) {
         isLoading,
         isValidating,
         mutate, // 若后面需要手动刷新可用
-    } = useSWR<VmInstance[]>("/api/php/vms", fetcher, {
+    } = useSWR<VmInstance[]>("/back/api/vms", fetcher, {
         // 10 s 内认为数据“新鲜”，避免短时间重复请求
         dedupingInterval: 10_000,
         keepPreviousData: true,
@@ -178,7 +178,7 @@ export default function VmPage() {
         // 动作触发即刻进入快速轮询模式
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/api/php/vms/${current.id}/actions/${action}`, {
+            const res = await fetch(`/back/api/vms/${current.id}/actions/${action}`, {
                 method: "POST",
             });
             if (!res.ok) {
@@ -187,9 +187,9 @@ export default function VmPage() {
             }
             const result = (await res.json()) as { state?: string };
             await mutate();
-            await globalMutate(`/api/php/vms/${current.id}`);
+            await globalMutate(`/back/api/vms/${current.id}`);
             if (result.state !== "shutoff") {
-                await globalMutate(`/api/php/vms/${current.id}/metrics`);
+                await globalMutate(`/back/api/vms/${current.id}/metrics`);
             }
         } catch (e: any) {
             alert(e.message || "Operation failed");
@@ -201,9 +201,10 @@ export default function VmPage() {
     const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
         if (!current) return;
         try {
-            const res = await fetch(`/api/php/vms/${current.name}/guac`);
+            const res = await fetch(`/back/api/vms/${current.name}/guac`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
+
             const port =
                 proto === 'ssh'
                     ? info.ssh_port

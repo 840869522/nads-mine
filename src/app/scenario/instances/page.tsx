@@ -117,13 +117,13 @@ const RunningInstancesPage: React.FC = () => {
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1 },
         { field: 'type', headerName: '类型', flex: 1, renderCell: (params) => (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {getTypeIcon(params.row.type)}{params.row.type === 'vm' ? '虚拟机' : '容器'}
-            </Box>
-        ) },
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {getTypeIcon(params.row.type)}{params.row.type === 'vm' ? '虚拟机' : '容器'}
+                </Box>
+            ) },
         { field: 'status', headerName: '状态', flex: 1, renderCell: (params) => (
-            <Chip label={STATUS_TRANSLATIONS[params.row.status]} color={getStatusChipColor(params.row.status)} size="small" />
-        ) },
+                <Chip label={STATUS_TRANSLATIONS[params.row.status]} color={getStatusChipColor(params.row.status)} size="small" />
+            ) },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id },
         { field: 'imageName', headerName: '镜像名', flex: 1, hide: !showColumns.imageName },
         { field: 'ports', headerName: '端口', flex: 1, hide: !showColumns.ports },
@@ -183,7 +183,6 @@ const RunningInstancesPage: React.FC = () => {
 
     const fetchInstances = React.useCallback(async () => {
         if (!user) return;
-        const q = `?userId=${user.id}&role=${user.role}`;
         try {
             const res = await fetch(`${API_BASE}/instances`);
             if (!res.ok) throw new Error('fetch failed');
@@ -277,7 +276,7 @@ const RunningInstancesPage: React.FC = () => {
                 const id = instance.id;
                 await fetch(`${API_BASE}/containers/${id}?action=delete`, { method: 'POST' });
                 if (user) {
-                    const q = `?userId=${user.id}&role=${user.role}&id=${id}`;
+                    const q = `?id=${id}`;
                     await fetch(`${API_BASE}/instances${q}`, { method: 'DELETE' });
                 }
                 fetchInstances();
@@ -314,10 +313,10 @@ const RunningInstancesPage: React.FC = () => {
                         onChange={handleSearchChange}
                         size="small"
                         InputProps={{ startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        )}}
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            )}}
                         sx={{ width: { xs: '100%', sm: 260 } }}
                     />
                     <Button startIcon={<ViewColumnIcon />} onClick={(e) => setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
@@ -352,11 +351,11 @@ const RunningInstancesPage: React.FC = () => {
                     <MenuItem key={key}>
                         <FormControlLabel control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>} label={
                             key === 'id' ? '容器 ID' :
-                            key === 'imageName' ? '镜像名' :
-                            key === 'ports' ? '端口' :
-                            key === 'cpuUsage' ? 'CPU 使用率' :
-                            key === 'memoryUsage' ? '内存使用率' :
-                            '运行时间'
+                                key === 'imageName' ? '镜像名' :
+                                    key === 'ports' ? '端口' :
+                                        key === 'cpuUsage' ? 'CPU 使用率' :
+                                            key === 'memoryUsage' ? '内存使用率' :
+                                                '运行时间'
                         } />
                     </MenuItem>
                 ))}
@@ -368,30 +367,30 @@ const RunningInstancesPage: React.FC = () => {
                     {fetchError}
                 </MuiAlert>
             ) : (
-            <Box component={Paper} sx={{ boxShadow: 3 }}>
-                <DataGrid
-                    autoHeight
-                    checkboxSelection
-                    disableRowSelectionOnClick
-                    rows={sortedAndFilteredInstances}
-                    columns={columns}
-                    pageSizeOptions={[5, 10, 25]}
-                    paginationModel={{ pageSize: rowsPerPage, page }}
-                    onPaginationModelChange={(m) => {
-                        setRowsPerPage(m.pageSize);
-                        setPage(m.page);
-                    }}
-                    rowSelectionModel={rowSelectionModel}
-                    onRowSelectionModelChange={(model) => setRowSelectionModel(model as any)}
-                    columnVisibilityModel={showColumns}
-                    onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
-                    sx={{
-                        '& .MuiDataGrid-columnHeaders': {
-                            bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
-                        }
-                    }}
-                />
-            </Box>
+                <Box component={Paper} sx={{ boxShadow: 3 }}>
+                    <DataGrid
+                        autoHeight
+                        checkboxSelection
+                        disableRowSelectionOnClick
+                        rows={sortedAndFilteredInstances}
+                        columns={columns}
+                        pageSizeOptions={[5, 10, 25]}
+                        paginationModel={{ pageSize: rowsPerPage, page }}
+                        onPaginationModelChange={(m) => {
+                            setRowsPerPage(m.pageSize);
+                            setPage(m.page);
+                        }}
+                        rowSelectionModel={rowSelectionModel}
+                        onRowSelectionModelChange={(model) => setRowSelectionModel(model as any)}
+                        columnVisibilityModel={showColumns}
+                        onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
+                        sx={{
+                            '& .MuiDataGrid-columnHeaders': {
+                                bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+                            }
+                        }}
+                    />
+                </Box>
             )}
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>

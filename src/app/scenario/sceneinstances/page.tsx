@@ -1,3 +1,4 @@
+// src/app/scenario/sceneinstances/page.tsx
 "use client";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -11,7 +12,8 @@ import {
     Visibility as ViewIcon,
     StopCircle as StopIcon,
 } from '@mui/icons-material';
-import InstanceDetailsDialog from './InstanceDetailsDialog'; // 假设文件在同级目录
+// 关键改动：导入正确的 Dialog 组件
+import InstanceDetailsDialog from './InstanceDetailsDialog';
 
 interface ScenarioInstance {
     instance_id: string;
@@ -41,9 +43,10 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
 
-    // --- 【新增】管理弹窗状态 ---
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+    // 新增 state 用于存储场景名称
+    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
 
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);
@@ -72,9 +75,10 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         fetchInstances();
     };
 
-    // --- 【关键修改】更新 handleViewDetails 函数 ---
-    const handleViewDetails = (instanceId: string) => {
-        setSelectedInstanceId(instanceId);
+    // 关键改动：传递整个 instance 对象
+    const handleViewDetails = (instance: ScenarioInstance) => {
+        setSelectedInstanceId(instance.instance_id);
+        setSelectedScenarioName(instance.scenario_name); // 保存场景名称
         setIsDetailsModalOpen(true);
     };
 
@@ -136,45 +140,29 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     <Table>
                         <TableHead>
                            <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 'bold' } }}>
-        <TableCell>实例 ID</TableCell>
-        <TableCell>
-            <TableSortLabel
-                active={orderBy === 'scenario_name'}
-                direction={orderBy === 'scenario_name' ? order : 'asc'}
-                onClick={() => handleRequestSort('scenario_name')}
-            >
-                场景名称
-            </TableSortLabel>
-        </TableCell>
-        <TableCell>
-            <TableSortLabel
-                active={orderBy === 'username'}
-                direction={orderBy === 'username' ? order : 'asc'}
-                onClick={() => handleRequestSort('username')}
-            >
-                启动用户
-            </TableSortLabel>
-        </TableCell>
-        <TableCell>
-            <TableSortLabel
-                active={orderBy === 'runtime'}
-                direction={orderBy === 'runtime' ? order : 'asc'}
-                onClick={() => handleRequestSort('runtime')}
-            >
-                创建时间
-            </TableSortLabel>
-        </TableCell>
-        <TableCell>
-             <TableSortLabel
-                active={orderBy === 'status'}
-                direction={orderBy === 'status' ? order : 'asc'}
-                onClick={() => handleRequestSort('status')}
-            >
-                状态
-            </TableSortLabel>
-        </TableCell>
-        <TableCell align="right">操作</TableCell>
-    </TableRow>
+                                <TableCell>实例 ID</TableCell>
+                                <TableCell>
+                                    <TableSortLabel active={orderBy === 'scenario_name'} direction={orderBy === 'scenario_name' ? order : 'asc'} onClick={() => handleRequestSort('scenario_name')}>
+                                        场景名称
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel active={orderBy === 'username'} direction={orderBy === 'username' ? order : 'asc'} onClick={() => handleRequestSort('username')}>
+                                        启动用户
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel active={orderBy === 'runtime'} direction={orderBy === 'runtime' ? order : 'asc'} onClick={() => handleRequestSort('runtime')}>
+                                        创建时间
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel active={orderBy === 'status'} direction={orderBy === 'status' ? order : 'asc'} onClick={() => handleRequestSort('status')}>
+                                        状态
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell align="right">操作</TableCell>
+                            </TableRow>
                         </TableHead>
                         <TableBody>
                             {isLoading ? (
@@ -194,8 +182,8 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
-                                            {/* onClick 事件现在会打开弹窗 */}
-                                            <Tooltip title="查看详情"><IconButton color="primary" size="small" onClick={() => handleViewDetails(instance.instance_id)}><ViewIcon /></IconButton></Tooltip>
+                                            {/* 关键改动：传递整个 instance 对象 */}
+                                            <Tooltip title="查看详情"><IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}><ViewIcon /></IconButton></Tooltip>
                                             <Tooltip title="停止场景"><IconButton color="error" size="small" onClick={() => handleStopInstance(instance.instance_id)}><StopIcon /></IconButton></Tooltip>
                                         </TableCell>
                                     </TableRow>
@@ -216,13 +204,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     labelRowsPerPage="每页行数:"
                 />
             </Paper>
-
-            {/* --- 【新增】在页面底部渲染弹窗组件 --- */}
+            
+            {/* 关键改动：传递 scenarioName prop */}
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
                     onClose={() => setIsDetailsModalOpen(false)}
                     instanceId={selectedInstanceId}
+                    scenarioName={selectedScenarioName} 
                 />
             )}
         </Paper>
