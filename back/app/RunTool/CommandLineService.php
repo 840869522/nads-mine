@@ -22,7 +22,7 @@ class CommandLineService
      */
     public function deleteSwitch(string $switchName): void
     {
-        $command = ['ovs-vsctl', 'del-br', $switchName];
+        $command = ['sudo', 'ovs-vsctl', 'del-br', $switchName];
         \Log::info('Executing OVS command: ' . implode(' ', $command));
         $process = new Process($command);
         $process->run();
@@ -50,7 +50,7 @@ class CommandLineService
     public function createSwitch(string $switchName, ?string $controller = null, bool $stp = false): void
     {
         // 1. 构建基础的 'ovs-vsctl add-br' 命令
-        $command = ['ovs-vsctl', 'add-br', $switchName];
+        $command = ['sudo', 'ovs-vsctl', 'add-br', $switchName];
 
         // 2. 如果需要，添加用于配置 STP 和 Controller 的参数
         // 注意: '--' 用于明确告诉 ovs-vsctl 'add-br' 命令的选项结束了，后面是 'set' 命令。
@@ -95,7 +95,7 @@ class CommandLineService
     public function createContainer(array $options): string
     {
         // 1. 构建 docker run 命令数组
-        $command = ['docker', 'run', '-d', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
+        $command = ['sudo', 'docker', 'run', '-d', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
 
         // a. 添加容器名称
         if (!empty($options['name'])) {
@@ -153,7 +153,7 @@ class CommandLineService
     public function getContainerPid(string $containerId): int
     {
         
-        $command = ['docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
+        $command = ['sudo', 'docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
         $process = new Process($command);
         $process->run();
 
@@ -176,7 +176,7 @@ class CommandLineService
      */
     public function listSwitches(): array
     {
-        $command = ['ovs-vsctl', 'list-br'];
+        $command = ['sudo', 'ovs-vsctl', 'list-br'];
         $process = new Process($command);
         $process->run();
 
