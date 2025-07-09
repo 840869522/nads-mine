@@ -141,14 +141,14 @@
      * 定义人员测试分系统路由
      */
     Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
-        Route::prefix('courses')->group(function(){
+        Route::prefix('courses')->middleware('jwtcheck')->group(function(){
             Route::get('/',[CourseController::class,'index'])->name('courses.index');
             Route::get('/{id}',[CourseController::class,'show'])->name('courses.show');
             Route::post('/',[CourseController::class,'store'])->name('courses.store');
             Route::put('/{id}',[CourseController::class,'update'])->name('courses.update');
             Route::delete('/{id}',[CourseController::class,'destroy'])->name('courses.destroy');
             Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
-        })->middleware('jwtcheck');
+        });
 
         Route::prefix('categories')->middleware('jwtcheck:study')->group(function(){
             Route::get('/', [CategoryController::class, 'index'])->name('categories.index');

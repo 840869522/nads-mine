@@ -3,7 +3,6 @@ import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
-import { BACK_IP_PORT } from '@/constants';
 // import { MOCK_QUESTIONS } from '@/constants'; // 我们不再需要模拟数据
 
 interface QuestionPayload {
@@ -12,6 +11,8 @@ interface QuestionPayload {
   type: 'short-answer' | 'multiple-choice';
   options?: string[];
 }
+
+const BACK_IP_BASE = "/back";
 
 const AddQuestionPage: React.FC = () => {
   const [allQuestions, setAllQuestions] = useState<QuestionPayload[]>([]); // 初始为空数组
@@ -22,7 +23,7 @@ const AddQuestionPage: React.FC = () => {
 
   // 新增: 在页面加载时从API获取问题列表
   useEffect(() => {
-    fetch(`${BACK_IP_PORT}/api/questions`)
+    fetch(`${BACK_IP_BASE}/api/questions`)
         .then(res => res.json())
         .then(data => setAllQuestions(data))
         .catch(err => console.error("获取初始问题列表失败:", err));
@@ -40,7 +41,7 @@ const AddQuestionPage: React.FC = () => {
     setStatusMessage(null);
 
     try {
-      const response = await fetch(`${BACK_IP_PORT}/api/questions`, {
+      const response = await fetch(`${BACK_IP_BASE}/api/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: questionText }),

@@ -22,7 +22,7 @@ const LearningPage: React.FC = () => {
   const [quizFinished, setQuizFinished] = useState<boolean>(false);
 
   useEffect(() => {
-    fetch('/api/questions').then(res => res.json()).then(setQuestions);
+    fetch('/back/api/questions').then(res => res.json()).then(setQuestions);
   }, []);
 
   // --- 分页逻辑开始 ---
