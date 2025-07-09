@@ -1,86 +1,83 @@
 <?php
-
 namespace App\Models\Course;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
 use App\Utils\GlobalResponse;
 
-class CourseModel extends Model
+class CourseModel
 {
-    protected $table = 'c_courses';
-    protected $primaryKey = 'c_course_id';
-    protected $keyType = 'string';
-    public $incrementing = false;
-
     /**
-     * Get all courses with pagination and optional keyword search.
+     * Get all courses with pagination and filters.
      *
      * @param int $page
-     * @param int $pageSize
-     * @param string|null $keyword
+     * @param int $pagesize
+     * @param ?string $keyword
+     * @param ?string $category_id
      * @return array
      */
-    public static function getAllCourses(int $page = 1, int $pageSize = 10, ?string $keyword = null): array
+    public static function getAllCourses(int $page = 1, int $pagesize = 10, ?string $keyword = null, ?string $category_id = null): array
     {
-        $offset = ($page - 1) * $pageSize;
         try {
-            $query = DB::table('c_courses');
-            $countQuery = DB::table('c_courses');
-
-            if (!empty($keyword)) {
-                $query->where(function ($q) use ($keyword) {
-                    $q->where('c_course_name', 'LIKE', "%{$keyword}%")
-                      ->orWhere('c_description', 'LIKE', "%{$keyword}%");
-                });
-                $countQuery->where(function ($q) use ($keyword) {
-                    $q->where('c_course_name', 'LIKE', "%{$keyword}%")
-                      ->orWhere('c_description', 'LIKE', "%{$keyword}%");
-                });
+            if ($page < 1 || $pagesize < 1) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Invalid pagination parameters.',
+                ];
             }
 
-            $courses = $query->limit($pageSize)->offset($offset)->get()->toArray();
-            $total = $countQuery->count();
+            $offset = ($page - 1) * $pagesize;
+            $query = DB::table('c_courses as c')
+                ->join('c_course_categories as cat', 'c.category_id', '=', 'cat.c_category_id')
+                ->select('c.c_course_id', 'c.c_course_name', 'c.c_description', 'cat.c_category_name', 'c.created_at as uploadDate', 'c.updated_at');
+
+            $countQuery = DB::table('c_courses as c')
+                ->join('c_course_categories as cat', 'c.category_id', '=', 'cat.c_category_id');
+
+            if ($keyword) {
+                $query->where('c.c_course_name', 'like', '%' . $keyword . '%');
+                $countQuery->where('c.c_course_name', 'like', '%' . $keyword . '%');
+            }
+            if ($category_id) {
+                if (!preg_match('/^\d{2}$/', $category_id)) {
+                    return [
+                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                        'message' => 'Invalid category_id format.',
+                    ];
+                }
+                $query->where('c.category_id', $category_id);
+                $countQuery->where('c.category_id', $category_id);
+            }
+
+            $courses = $query->orderBy('c.created_at', 'desc')
+                ->take($pagesize)
+                ->skip($offset)
+                ->get();
+            $count = $countQuery->count();
 
             return [
                 'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'message' => 'Courses retrieved successfully.',
                 'data' => [
                     'courses' => $courses,
-                    'total' => $total,
+                    'total' => $count,
                     'page' => $page,
-                    'pageSize' => $pageSize,
+                    'pageSize' => $pagesize,
                 ],
             ];
         } catch (QueryException $e) {
             Log::error('[DATABASE] getAllCourses: ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to retrieve courses.',
+                'message' => 'Failed to retrieve courses: ' . $e->getMessage(),
             ];
-        }
-    }
-
-    /**
-     * Get a course by ID.
-     *
-     * @param string $id
-     * @return array
-     */
-    public static function getCourseById(string $id): array
-    {
-        try {
-            $course = DB::table('c_courses')->where('c_course_id', $id)->first();
-            return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
-                'data' => $course ?: null,
-            ];
-        } catch (QueryException $e) {
-            Log::error('[DATABASE] getCourseById: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getAllCourses: ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to retrieve course.',
+                'message' => 'Unexpected error occurred.',
             ];
         }
     }
@@ -94,73 +91,115 @@ class CourseModel extends Model
     public static function insertCourse(array $data): array
     {
         try {
-            if (empty($data['name']) || empty($data['category_id']) || empty($data['c_user_id'])) {
+            // Validate required fields
+            if (empty($data['category_id']) || empty($data['c_course_name'])) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Missing required fields: name, category_id, or c_user_id.',
+                    'message' => 'Missing required fields: category_id or c_course_name.',
                 ];
             }
 
-            // Check for duplicate course name
-            if (DB::table('c_courses')->where('c_course_name', $data['name'])->exists()) {
+            // Validate category exists and format
+            if (!preg_match('/^\d{2}$/', $data['category_id'])) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Course name already exists.',
-                    'errors' => ['name' => ['The course name has already been taken.']],
+                    'message' => 'Invalid category_id format: Must be two digits.',
                 ];
             }
-
-            // Validate category_id and c_user_id existence
-            $categoryExists = DB::table('c_course_categories')->where('c_category_id', $data['category_id'])->exists();
+            $categoryExists = DB::table('c_course_categories')
+                ->where('c_category_id', $data['category_id'])
+                ->exists();
             if (!$categoryExists) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Invalid category_id: Category does not exist.',
+                    'message' => 'Category does not exist.',
                 ];
             }
 
-            $userExists = DB::table('c_users')->where('username', $data['c_user_id'])->exists();
-            if (!$userExists) {
+            // Get existing courses for this category
+            $existingCourses = DB::table('c_courses')
+                ->where('category_id', $data['category_id'])
+                ->pluck('c_course_id')
+                ->toArray();
+
+            // Extract sequence numbers and find the next available
+            $sequenceNumbers = array_map(function ($courseId) {
+                return (int) substr($courseId, -3);
+            }, $existingCourses);
+            $nextSequence = $sequenceNumbers ? max($sequenceNumbers) + 1 : 1;
+
+            if ($nextSequence > 999) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Invalid c_user_id: User does not exist.',
+                    'message' => 'Maximum number of courses reached for this category.',
+                ];
+            }
+
+            // Generate new course ID (e.g., "01001" for category "01" and sequence "001")
+            $newId = $data['category_id'] . sprintf('%03d', $nextSequence);
+
+            // Create course folder
+            $courseFolder = public_path('web/' . $data['category_id'] . '/' . $newId);
+            if (!File::makeDirectory($courseFolder, 0755, true)) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Failed to create course folder.',
                 ];
             }
 
             DB::beginTransaction();
-            // Generate a four-character course ID (e.g., '0101')
-            $existingIds = DB::table('c_courses')->pluck('c_course_id')->toArray();
-            $newId = sprintf('%04d', count($existingIds) + 1);
-
             $result = DB::insert(
-                "INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, c_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
-                [$newId, $data['name'], $data['description'] ?? null, $data['category_id'], $data['c_user_id']]
+                'INSERT INTO c_courses (c_course_id, c_course_name, c_description, category_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+                [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['category_id']]
             );
 
-            // Insert into c_courses_users
-            $userResult = DB::insert(
-                "INSERT INTO c_courses_users (c_user_id, c_course_id) VALUES (?, ?)",
-                [$data['c_user_id'], $newId]
-            );
+            if ($result && isset($data['c_user_id'])) {
+                $userExists = DB::table('c_users')->where('c_username', $data['c_user_id'])->exists();
+                if (!$userExists) {
+                    DB::rollBack();
+                    return [
+                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                        'message' => 'User does not exist.',
+                    ];
+                }
+                $userResult = DB::insert(
+                    'INSERT INTO c_users_courses (user_id, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                    [$data['c_user_id'], $newId]
+                );
+                if (!$userResult) {
+                    DB::rollBack();
+                    return [
+                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                        'message' => 'Failed to associate user with course.',
+                    ];
+                }
+            }
 
             DB::commit();
-
             return [
-                'code' => $result && $userResult ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'data' => ['c_course_id' => $newId],
+                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'message' => 'Course created successfully.',
+                'data' => ['id' => $newId],
             ];
         } catch (QueryException $e) {
             DB::rollBack();
             Log::error('[DATABASE] insertCourse: ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to insert course: ' . ($e->getCode() == 23000 ? 'Duplicate entry or invalid foreign key.' : $e->getMessage()),
+                'message' => $e->getCode() == 23000 ? 'Course name or category ID issue.' : 'Failed to create course: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] insertCourse: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
             ];
         }
     }
 
     /**
-     * Partially update a course.
+     * Update a course partially.
      *
      * @param string $id
      * @param array $data
@@ -169,58 +208,84 @@ class CourseModel extends Model
     public static function updateCoursePartial(string $id, array $data): array
     {
         try {
-            $fields = [];
-            $params = [];
-
-            if (isset($data['name']) && !empty($data['name'])) {
-                // Check for duplicate course name (excluding current course)
-                if (DB::table('c_courses')->where('c_course_name', $data['name'])->where('c_course_id', '!=', $id)->exists()) {
-                    return [
-                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                        'message' => 'Course name already exists.',
-                        'errors' => ['name' => ['The course name has already been taken.']],
-                    ];
-                }
-                $fields[] = "c_course_name = ?";
-                $params[] = $data['name'];
-            }
-
-            if (isset($data['description'])) {
-                $fields[] = "c_description = ?";
-                $params[] = $data['description'];
-            }
-
-            if (isset($data['category_id']) && !empty($data['category_id'])) {
-                if (!DB::table('c_course_categories')->where('c_category_id', $data['category_id'])->exists()) {
-                    return [
-                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                        'message' => 'Invalid category_id: Category does not exist.',
-                    ];
-                }
-                $fields[] = "c_category_id = ?";
-                $params[] = $data['category_id'];
-            }
-
-            if (empty($fields)) {
+            if (!preg_match('/^\d{5}$/', $id)) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'No valid fields provided for update.',
+                    'message' => 'Invalid course_id format.',
+                ];
+            }
+            if (!preg_match('/^\d{2}$/', $data['category_id'])) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Invalid category_id format.',
                 ];
             }
 
-            $sql = "UPDATE c_courses SET " . implode(', ', $fields) . ", updated_at = NOW() WHERE c_course_id = ?";
-            $params[] = $id;
+            $categoryExists = DB::table('c_course_categories')
+                ->where('c_category_id', $data['category_id'])
+                ->exists();
+            if (!$categoryExists) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Category does not exist.',
+                ];
+            }
 
-            $result = DB::update($sql, $params);
-            return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $result ? 'Course updated successfully.' : 'Course not found.',
-            ];
-        } catch (QueryException $e) {
-            Log::error('[DATABASE] updateCoursePartial: ' . $e->getMessage());
+            $oldCourse = DB::table('c_courses')->where('c_course_id', $id)->first();
+            if (!$oldCourse) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Course not found.',
+                ];
+            }
+
+            $oldFolder = public_path('web/' . $oldCourse->category_id . '/' . $id);
+            $newFolder = public_path('web/' . $data['category_id'] . '/' . $id);
+
+            if ($oldCourse->category_id !== $data['category_id']) {
+                if (File::exists($newFolder)) {
+                    return [
+                        'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                        'message' => 'Target folder already exists.',
+                    ];
+                }
+                if (File::exists($oldFolder)) {
+                    File::moveDirectory($oldFolder, $newFolder, true);
+                }
+            }
+
+            DB::beginTransaction();
+            $result = DB::update(
+                'UPDATE c_courses SET c_course_name = ?, c_description = ?, category_id = ?, updated_at = NOW() WHERE c_course_id = ?',
+                [$data['c_course_name'], $data['c_description'] ?? null, $data['category_id'], $id]
+            );
+
+            if ($result) {
+                DB::commit();
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'message' => 'Course updated successfully.',
+                ];
+            }
+
+            DB::rollBack();
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to update course: ' . ($e->getCode() == 23000 ? 'Invalid foreign key.' : $e->getMessage()),
+                'message' => 'Course not found.',
+            ];
+        } catch (QueryException $e) {
+            DB::rollBack();
+            Log::error('[DATABASE] updateCourse: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => $e->getCode() == 23000 ? 'Course name or category ID issue.' : 'Failed to update course: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] updateCourse: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
             ];
         }
     }
@@ -234,64 +299,175 @@ class CourseModel extends Model
     public static function deleteCourse(string $id): array
     {
         try {
-            $result = DB::delete("DELETE FROM c_courses WHERE c_course_id = ?", [$id]);
+            if (!preg_match('/^\d{5}$/', $id)) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Invalid course_id format.',
+                ];
+            }
+
+            $course = DB::table('c_courses')->where('c_course_id', $id)->first();
+            if (!$course) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Course not found.',
+                ];
+            }
+            $categoryId = $course->category_id;
+            $courseFolder = public_path('web/' . $categoryId . '/' . $id);
+
+            // Delete associated resources
+            $resources = DB::table('c_course_resources')->where('c_course_id', $id)->get();
+            foreach ($resources as $resource) {
+                ResourceModel::deleteResource($resource->c_resource_id);
+            }
+
+            DB::beginTransaction();
+            $result = DB::delete('DELETE FROM c_courses WHERE c_course_id = ?', [$id]);
+            if ($result) {
+                if (File::exists($courseFolder)) {
+                    File::deleteDirectory($courseFolder);
+                }
+                DB::commit();
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'message' => 'Course deleted successfully.',
+                ];
+            }
+            DB::rollBack();
             return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $result ? 'Course deleted successfully.' : 'Course not found.',
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Course not found.',
             ];
         } catch (QueryException $e) {
+            DB::rollBack();
             Log::error('[DATABASE] deleteCourse: ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to delete course.',
+                'message' => 'Failed to delete course: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] deleteCourse: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
             ];
         }
     }
 
     /**
-     * Add a user to a course (c_courses_users).
+     * Get a course by ID.
      *
-     * @param string $courseId
-     * @param string $c_user_id
+     * @param string $id
      * @return array
      */
-    public static function addUserToCourse(string $courseId, string $c_user_id): array
+    public static function getCourseById(string $id): array
     {
         try {
-            if (!DB::table('c_users')->where('username', $c_user_id)->exists()) {
+            if (!preg_match('/^\d{5}$/', $id)) {
                 return [
                     'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Invalid c_user_id: User does not exist.',
+                    'message' => 'Invalid course_id format.',
                 ];
             }
 
-            if (!DB::table('c_courses')->where('c_course_id', $courseId)->exists()) {
+            $course = DB::table('c_courses as c')
+                ->join('c_course_categories as cat', 'c.category_id', '=', 'cat.c_category_id')
+                ->select('c.c_course_id', 'c.c_course_name', 'c.c_description', 'cat.c_category_name', 'c.created_at as uploadDate', 'c.updated_at')
+                ->where('c.c_course_id', $id)
+                ->first();
+            if ($course) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Invalid c_course_id: Course does not exist.',
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'message' => 'Course retrieved successfully.',
+                    'data' => $course,
                 ];
             }
-
-            if (DB::table('c_courses_users')->where('c_user_id', $c_user_id)->where('c_course_id', $courseId)->exists()) {
-                return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'User is already enrolled in the course.',
-                ];
-            }
-
-            $result = DB::insert(
-                "INSERT INTO c_courses_users (c_user_id, c_course_id) VALUES (?, ?)",
-                [$c_user_id, $courseId]
-            );
             return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $result ? 'User added to course successfully.' : 'Failed to add user to course.',
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Course not found.',
             ];
         } catch (QueryException $e) {
+            Log::error('[DATABASE] getCourseById: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Failed to retrieve course: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getCourseById: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
+            ];
+        }
+    }
+
+    /**
+     * Add a user to a course.
+     *
+     * @param string $userId
+     * @param string $courseId
+     * @return array
+     */
+    public static function addUserToCourse(string $userId, string $courseId): array
+    {
+        try {
+            if (!preg_match('/^\d{5}$/', $courseId)) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Invalid course_id format.',
+                ];
+            }
+
+            $courseExists = DB::table('c_courses')->where('c_course_id', $courseId)->exists();
+            if (!$courseExists) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'Course does not exist.',
+                ];
+            }
+
+            $userExists = DB::table('c_users')->where('c_username', $userId)->exists();
+            if (!$userExists) {
+                return [
+                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'message' => 'User does not exist.',
+                ];
+            }
+
+            DB::beginTransaction();
+            $result = DB::insert(
+                'INSERT INTO c_users_courses (user_id, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                [$userId, $courseId]
+            );
+
+            if ($result) {
+                DB::commit();
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'message' => 'User added to course successfully.',
+                ];
+            }
+
+            DB::rollBack();
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Failed to add user to course.',
+            ];
+        } catch (QueryException $e) {
+            DB::rollBack();
             Log::error('[DATABASE] addUserToCourse: ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to add user to course: ' . ($e->getCode() == 23000 ? 'Duplicate entry or invalid foreign key.' : $e->getMessage()),
+                'message' => $e->getCode() == 23000 ? 'User already associated with course.' : 'Failed to add user to course: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] addUserToCourse: ' . $e->getMessage());
+            return [
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
             ];
         }
     }

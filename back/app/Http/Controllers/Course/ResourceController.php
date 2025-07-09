@@ -1,125 +1,189 @@
 <?php
-
 namespace App\Http\Controllers\Course;
 
-use Illuminate\Http\Request;
-use App\Models\Course\ResourceModel;
-use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
+use App\Models\Course\ResourceModel;
 use App\Utils\GlobalResponse;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 
 class ResourceController extends Controller
 {
-    /**
-     * Display resources for a course.
-     *
-     * @param string $courseId
-     * @return JsonResponse
-     */
-    public function index(string $courseId): JsonResponse
+    public function __construct()
     {
-        $response = ResourceModel::getResourcesByCourseId($courseId);
-        return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
+        $this->middleware('jwtcheck:view-resources')->only(['index', 'show', 'getResource']);
+        $this->middleware('jwtcheck:manage-resources')->only(['store', 'upload', 'destroy']);
+    }
+
+    /**
+     * Get resources by course ID.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function index(Request $request)
+    {
+        $validator = Validator::make($request->json()->all(), [
+            'course_id' => 'required|string|size:5|exists:c_courses,c_course_id',
+            'page' => 'integer|min:1',
+            'pageSize' => 'integer|min:1',
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $reqData = $request->json()->all();
+        $modelRes = ResourceModel::getResourcesByCourseId($reqData['course_id'], $reqData['page'] ?? 1, $reqData['pageSize'] ?? 10);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
+    }
+
+    /**
+     * Get a resource by ID.
+     *
+     * @param Request $request
+     * @param string $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function show(Request $request, $id)
+    {
+        $modelRes = ResourceModel::getResourceById($id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
+    }
+
+    /**
+     * Get a resource file by ID.
+     *
+     * @param string $id
+     * @return \Illuminate\Http\Response
+     */
+    public function getResource($id)
+    {
+        $modelRes = ResourceModel::getResourceById($id);
+        if ($modelRes['code'] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+            return response()->json($modelRes, 404);
+        }
+
+        $path = $modelRes['data']['c_resource_path'];
+        if (!Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'message' => 'Resource file not found.',
+            ], 404);
+        }
+
+        return response()->file(Storage::disk('public')->path($path));
     }
 
     /**
      * Store a new resource.
      *
      * @param Request $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
-        try {
-            $request->validate([
-                'course_id' => 'required|string|max:4|exists:c_courses,c_course_id',
-                'name' => 'required|string|max:255',
-                'path' => 'required|string|max:255',
-                'type' => 'required|string|max:50',
-                'size' => 'nullable|integer|min:0',
-            ]);
-
-            $response = ResourceModel::insertResource([
-                'course_id' => $request->input('course_id'),
-                'name' => $request->input('name'),
-                'path' => $request->input('path'),
-                'type' => $request->input('type'),
-                'size' => $request->input('size'),
-            ]);
-
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->json()->all(), [
+            'course_id' => 'required|string|size:5|exists:c_courses,c_course_id',
+            'name' => 'required|string|max:255',
+            'path' => 'required|string',
+            'type' => 'required|string',
+            'size' => 'nullable|integer|min:0',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
         }
+
+        $modelRes = ResourceModel::store($request->json()->all());
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
     }
 
     /**
-     * Upload a resource file.
+     * Upload resources for a course.
      *
      * @param Request $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function upload(Request $request): JsonResponse
+    public function upload(Request $request)
     {
-        try {
-            $request->validate([
-                'course_id' => 'required|string|max:4|exists:c_courses,c_course_id',
-                'file' => 'required|file|max:102400|mimes:pdf,doc,docx,jpg,jpeg,png,mp4', // 100MB max, restricted file types
-            ]);
-
-            $file = $request->file('file');
-            $originalName = $file->getClientOriginalName();
-            $path = $file->store('uploads/resources', 'public');
-            $type = $file->getClientMimeType();
-            $size = $file->getSize();
-
-            $response = ResourceModel::insertResource([
-                'course_id' => $request->input('course_id'),
-                'name' => $originalName,
-                'path' => $path,
-                'type' => $type,
-                'size' => $size,
-            ]);
-
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->all(), [
+            'course_id' => 'required|string|size:5|exists:c_courses,c_course_id',
+            'files.*' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
+        }
+
+        try {
+            $courseId = $request->input('course_id');
+            $files = $request->file('files');
+            $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
+            if (!$course) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    'message' => 'Course not found.',
+                ], 404);
+            }
+
+            $uploadedFiles = [];
+            foreach ($files as $file) {
+                $data = [
+                    'course_id' => $courseId,
+                    'name' => $file->getClientOriginalName(),
+                    'path' => Storage::disk('public')->putFile('web/' . $course->category_id . '/' . $courseId, $file),
+                    'type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                ];
+                $modelRes = ResourceModel::store($data);
+                if ($modelRes['code'] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                    return response()->json($modelRes, 500);
+                }
+                $uploadedFiles[] = $modelRes['data'];
+            }
+
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                'message' => 'Resources uploaded successfully.',
+                'data' => $uploadedFiles,
+            ], 201);
+        } catch (QueryException $e) {
+            Log::error('[DATABASE] uploadResource: ' . $e->getMessage());
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                'message' => 'Failed to upload resources: ' . $e->getMessage(),
+            ], 500);
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] uploadResource: ' . $e->getMessage());
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                'message' => 'Unexpected error occurred.',
+            ], 500);
         }
     }
 
     /**
-     * Remove the specified resource.
+     * Delete a resource.
      *
+     * @param Request $request
      * @param string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(string $id): JsonResponse
+    public function destroy(Request $request, $id)
     {
-        try {
-            $resource = DB::table('c_course_resources')->where('c_resource_id', $id)->first();
-            if ($resource) {
-                Storage::disk('public')->delete($resource->c_resource_path);
-            }
-            $response = ResourceModel::deleteResource($id);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('[CONTROLLER] ResourceController::destroy: ' . $e->getMessage());
-            return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Failed to delete resource.',
-                'errors' => ['server' => [$e->getMessage()]],
-            ], 500);
-        }
+        $modelRes = ResourceModel::deleteResource($id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
     }
 }

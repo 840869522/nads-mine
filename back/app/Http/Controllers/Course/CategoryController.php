@@ -1,111 +1,85 @@
 <?php
-
 namespace App\Http\Controllers\Course;
 
-use Illuminate\Http\Request;
-use App\Models\Course\CategoryModel;
-use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
+use App\Models\Course\CategoryModel;
 use App\Utils\GlobalResponse;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class CategoryController extends Controller
 {
-    /**
-     * Display a listing of categories.
-     *
-     * @return JsonResponse
-     */
-    public function index(): JsonResponse
+    public function __construct()
     {
-        $response = CategoryModel::getAllCategories();
-        return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? GlobalResponse::$HTTP_STATUS_OK_CODE : GlobalResponse::$HTTP_SERVER_ERROR_CODE);
+        $this->middleware('jwtcheck:view-categories')->only(['index']);
+        $this->middleware('jwtcheck:manage-categories')->only(['store', 'update', 'destroy']);
     }
 
     /**
-     * Store a newly created category.
+     * Get all categories.
      *
      * @param Request $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function index(Request $request)
     {
-        try {
-            $request->validate([
-                'name' => 'required|string|max:50|unique:c_course_categories,c_category_name',
-            ]);
-
-            $name = trim($request->input('name')); // Sanitize input
-            $response = CategoryModel::insertCategory($name);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$HTTP_REQUEST_ERROR_MES,
-                'errors' => $e->errors(),
-            ], 422);
-        } catch (\Exception $e) {
-            Log::error('[CONTROLLER] CategoryController::store: ' . $e->getMessage());
-            return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$DATABASE_ERROR_MES,
-                'errors' => ['server' => [$e->getMessage()]],
-            ], 500);
-        }
+        $modelRes = CategoryModel::getAllCategories();
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
     }
 
     /**
-     * Update the specified category.
+     * Store a new category.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->json()->all(), [
+            'c_category_name' => 'required|string|max:50|unique:c_course_categories,c_category_name',
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+        $modelRes = CategoryModel::insertCategory($request->json()->all());
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
+    }
+
+    /**
+     * Update a category.
      *
      * @param Request $request
      * @param string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(Request $request, $id)
     {
-        try {
-            $request->validate([
-                'name' => 'required|string|max:50|unique:c_course_categories,c_category_name,' . $id . ',c_category_id',
-            ]);
-
-            $name = trim($request->input('name')); // Sanitize input
-            $response = CategoryModel::updateCategory($id, $name);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? GlobalResponse::$HTTP_STATUS_OK_CODE : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->json()->all(), [
+            'c_category_name' => 'required|string|max:50|unique:c_course_categories,c_category_name,' . $id . ',c_category_id',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$HTTP_REQUEST_ERROR_MES,
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
-        } catch (\Exception $e) {
-            Log::error('[CONTROLLER] CategoryController::update: ' . $e->getMessage());
-            return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$DATABASE_ERROR_MES,
-                'errors' => ['server' => [$e->getMessage()]],
-            ], 500);
         }
+        $modelRes = CategoryModel::updateCategory($id, $request->json()->all());
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
     }
 
     /**
-     * Remove the specified category.
+     * Delete a category.
      *
+     * @param Request $request
      * @param string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(string $id): JsonResponse
+    public function destroy(Request $request, $id)
     {
-        try {
-            $response = CategoryModel::deleteCategory($id);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? GlobalResponse::$HTTP_STATUS_OK_CODE : GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE);
-        } catch (\Exception $e) {
-            Log::error('[CONTROLLER] CategoryController::destroy: ' . $e->getMessage());
-            return response()->json([
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$DATABASE_ERROR_MES,
-                'errors' => ['server' => [$e->getMessage()]],
-            ], 500);
-        }
+        $modelRes = CategoryModel::deleteCategory($id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
     }
 }

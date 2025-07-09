@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use App\Utils\GlobalResponse;
 use App\Utils\JWTControll;
+use Illuminate\Support\Facades\Log;
 
 class JWTCheckMiddleware{
     /**
@@ -18,6 +19,7 @@ class JWTCheckMiddleware{
      */
     public function handle(Request $request, Closure $next, $primiision = null){
         $auth = $request->header("Authorization",null);
+        Log::info($auth);
         $jwtRes =  JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {
             return response()->json([

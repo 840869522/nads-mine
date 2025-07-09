@@ -1,165 +1,145 @@
 <?php
-
 namespace App\Http\Controllers\Course;
 
-use Illuminate\Http\Request;
-use App\Models\Course\CourseModel;
-use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
+use App\Models\Course\CourseModel;
 use App\Utils\GlobalResponse;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class CourseController extends Controller
 {
-    /**
-     * Display a listing of courses.
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function index(Request $request): JsonResponse
+    public function __construct()
     {
-        try {
-            $request->validate([
-                'page' => 'integer|min:1',
-                'pageSize' => 'integer|min:1|max:100',
-                'keyword' => 'nullable|string|max:255',
-            ]);
-
-            $page = (int) $request->query('page', 1);
-            $pageSize = (int) $request->query('pageSize', 10);
-            $keyword = $request->query('keyword');
-
-            $response = CourseModel::getAllCourses($page, $pageSize, $keyword);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
-            ], 422);
-        }
+        $this->middleware('jwtcheck:view-courses')->only(['index', 'show']);
+        $this->middleware('jwtcheck:manage-courses')->only(['store', 'update', 'destroy', 'addUserToCourse']);
     }
 
     /**
-     * Display the specified course.
+     * Get all courses with pagination and filters.
      *
-     * @param string $id
-     * @return JsonResponse
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function show(string $id): JsonResponse
+    public function index(Request $request)
     {
-        $response = CourseModel::getCourseById($id);
-        return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE && $response['data'] ? 200 : 404);
+        //echo 221;die;
+        $reqData = $request->json()->all();
+        $validator = Validator::make($reqData, [
+            'page' => 'integer|min:1',
+            'pagesize' => 'integer|min:1',
+            'keyword' => 'nullable|string|max:100',
+            'category' => 'nullable|string|size:2',
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $page = $reqData['page'] ?? 1;
+        $pagesize = $reqData['pagesize'] ?? 10;
+        $keyword = $reqData['keyword'] ?? null;
+        $category_id = $reqData['category'] ?? null;
+
+        $modelRes = CourseModel::getAllCourses($page, $pagesize, $keyword, $category_id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
     }
 
     /**
      * Store a new course.
      *
      * @param Request $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
-        try {
-            $request->validate([
-                'name' => 'required|string|max:100',
-                'description' => 'nullable|string',
-                'category_id' => 'required|string|max:2|exists:c_course_categories,c_category_id',
-                'c_user_id' => 'required|string|max:50|exists:c_users,username',
-            ]);
-
-            $response = CourseModel::insertCourse([
-                'name' => $request->input('name'),
-                'description' => $request->input('description'),
-                'category_id' => $request->input('category_id'),
-                'user_id' => $request->input('c_user_id'),
-            ]);
-
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->json()->all(), [
+            'c_course_name' => 'required|string|max:100|unique:c_courses,c_course_name',
+            'c_description' => 'nullable|string',
+            'category_id' => 'required|string|size:2|exists:c_course_categories,c_category_id',
+            'c_user_id' => 'nullable|string|exists:c_users,c_username',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
         }
+        $modelRes = CourseModel::insertCourse($request->json()->all());
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
     }
 
     /**
-     * Update the specified course.
+     * Get a course by ID.
+     *
+     * @param string $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function show($id)
+    {
+        $modelRes = CourseModel::getCourseById($id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
+    }
+
+    /**
+     * Update a course.
      *
      * @param Request $request
      * @param string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(Request $request, $id)
     {
-        try {
-            $request->validate([
-                'name' => 'nullable|string|max:100',
-                'description' => 'nullable|string',
-                'category_id' => 'nullable|string|max:2|exists:c_course_categories,c_category_id',
-            ]);
-
-            $data = array_filter([
-                'name' => $request->input('name'),
-                'description' => $request->input('description'),
-                'category_id' => $request->input('category_id'),
-            ], fn($value) => !is_null($value));
-
-            if (empty($data)) {
-                return response()->json([
-                    'code' => 422,
-                    'message' => 'No fields provided for update.',
-                ], 422);
-            }
-
-            $response = CourseModel::updateCoursePartial($id, $data);
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->json()->all(), [
+            'c_course_name' => 'required|string|max:100|unique:c_courses,c_course_name,' . $id . ',c_course_id',
+            'c_description' => 'nullable|string',
+            'category_id' => 'required|string|size:2|exists:c_course_categories,c_category_id',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
         }
+        $modelRes = CourseModel::updateCoursePartial($id, $request->json()->all());
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 500);
     }
 
     /**
-     * Remove the specified course.
+     * Delete a course.
      *
      * @param string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(string $id): JsonResponse
+    public function destroy($id)
     {
-        $response = CourseModel::deleteCourse($id);
-        return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
+        $modelRes = CourseModel::deleteCourse($id);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 404);
     }
 
     /**
      * Add a user to a course.
      *
      * @param Request $request
-     * @param string $courseId
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function addUser(Request $request, string $courseId): JsonResponse
+    public function addUserToCourse(Request $request)
     {
-        try {
-            $request->validate([
-                'c_user_id' => 'required|string|max:50|exists:c_users,username',
-            ]);
-
-            $response = CourseModel::addUserToCourse($courseId, $request->input('c_user_id'));
-            return response()->json($response, $response['code'] === GlobalResponse::$DATABASE_SUCCESS_CODE ? 201 : 500);
-        } catch (ValidationException $e) {
+        $validator = Validator::make($request->json()->all(), [
+            'user_id' => 'required|string|exists:c_users,c_username',
+            'course_id' => 'required|string|size:5|exists:c_courses,c_course_id',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
-                'code' => 422,
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $validator->errors()->first(),
             ], 422);
         }
+
+        $reqData = $request->json()->all();
+        $modelRes = CourseModel::addUserToCourse($reqData['user_id'], $reqData['course_id']);
+        return response()->json($modelRes, $modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE ? 200 : 400);
     }
 }

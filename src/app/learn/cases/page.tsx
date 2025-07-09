@@ -33,6 +33,7 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import { apiClientWithToken } from '@/utils/axios';
 import { headers } from 'next/headers';
 import { BACK_IP_PORT } from '@/constants';
+import {getCookie} from "@/utils/cookie.tsx";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -60,7 +61,10 @@ const CourseCasesPage: React.FC = () => {
       setIsLoading(true);
       try {
         // Fetch categories
-        const categoriesResponse = await apiClientWithToken.get('/api/categories');
+        const token = getCookie("_auth"); // 从 axios.tsx 导入 getCookie
+        console.log("Auth Token:", token);
+        const categoriesResponse = await apiClientWithToken.get('/api/php/study/categories');
+        console.log("Categories Response:", categoriesResponse); // 调试响应
         const categoriesData = categoriesResponse.data;
         if (categoriesData.code === 200) {
           setCategories(categoriesData.data.map((cat: { c_category_id: string; c_category_name: string }) => cat.c_category_name));
@@ -69,7 +73,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch courses with pagination and optional keyword
-        const coursesResponse = await apiClientWithToken.get('/api/courses', {
+        const coursesResponse = await apiClientWithToken.get('/back/api/study/courses', {
           headers: {
             'Accept': 'application/json',
           },
@@ -82,26 +86,27 @@ const CourseCasesPage: React.FC = () => {
         const coursesData = coursesResponse.data;
         if (coursesData.code === 200) {
           const mappedCourses = await Promise.all(
-            coursesData.data.courses.map(async (course: any) => {
-              // Fetch resources for each course
-              const resourcesResponse = await apiClientWithToken.get(`/api/courses/${course.c_course_id}/resources`);
-              const resourcesData = resourcesResponse.data;
-              const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
-                id: res.c_resource_id,
-                name: res.c_resource_name,
-                format: res.c_type.split('/')[1] || 'other',
-                url: `/storage/${res.c_resource_path}`,
-                size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-              })) : [];
-              return {
-                id: course.c_course_id,
-                title: course.c_course_name,
-                description: course.c_description || '',
-                category: course.c_category_id,
-                files,
-                uploadDate: course.created_at,
-              };
-            })
+              coursesData.data.courses.map(async (course: any) => {
+                // Fetch resources for each course
+                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
+
+                const resourcesData = resourcesResponse.data;
+                const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
+                  id: res.c_resource_id,
+                  name: res.c_resource_name,
+                  format: res.c_type.split('/')[1] || 'other',
+                  url: `/back/api/study/resources/${res.c_resource_id}`,
+                  size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                })) : [];
+                return {
+                  id: course.c_course_id,
+                  title: course.c_course_name,
+                  description: course.c_description || '',
+                  category: course.c_category_id,
+                  files,
+                  uploadDate: course.created_at,
+                };
+              })
           );
           setCourseCases(mappedCourses);
         } else {
@@ -149,7 +154,7 @@ const CourseCasesPage: React.FC = () => {
       let courseId = id;
       if (editingCase) {
         // Update course
-        const response = await apiClientWithToken.put(`/back/api/courses/${id}`, courseData);
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${id}`, courseData);
         const data = response.data;
         if (data.code !== 200) {
           console.error('Failed to update course:', data.message);
@@ -157,7 +162,7 @@ const CourseCasesPage: React.FC = () => {
         }
       } else {
         // Create course
-        const response = await apiClientWithToken.post('/api/courses', courseData);
+        const response = await apiClientWithToken.post('/back/api/study/courses', courseData);
         const data = response.data;
         if (data.code !== 201) {
           console.error('Failed to create course:', data.message);
@@ -172,7 +177,7 @@ const CourseCasesPage: React.FC = () => {
           const formData = new FormData();
           formData.append('course_id', courseId);
           formData.append('file', file.fileObject);
-          const response = await apiClientWithToken.post(`/back/api/courses/${courseId}/resources/upload`, formData, {
+          const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -185,7 +190,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // Refresh course list
-      const coursesResponse = await apiClientWithToken.get(`/back/api/courses`, {
+      const coursesResponse = await apiClientWithToken.get('/back/api/study/courses', {
         params: {
           page: currentPage,
           pageSize: ITEMS_PER_PAGE,
@@ -195,25 +200,25 @@ const CourseCasesPage: React.FC = () => {
       const coursesData = coursesResponse.data;
       if (coursesData.code === 200) {
         const mappedCourses = await Promise.all(
-          coursesData.data.courses.map(async (course: any) => {
-            const resourcesResponse = await apiClientWithToken.get(`/back/api/courses/${course.c_course_id}/resources`);
-            const resourcesData = resourcesResponse.data;
-            const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
-              id: res.c_resource_id,
-              name: res.c_resource_name,
-              format: res.c_type.split('/')[1] || 'other',
-              url: `/storage/${res.c_resource_path}`,
-              size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-            })) : [];
-            return {
-              id: course.c_course_id,
-              title: course.c_course_name,
-              description: course.c_description || '',
-              category: course.c_category_id,
-              files,
-              uploadDate: course.created_at,
-            };
-          })
+            coursesData.data.courses.map(async (course: any) => {
+              const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
+              const resourcesData = resourcesResponse.data;
+              const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
+                id: res.c_resource_id,
+                name: res.c_resource_name,
+                format: res.c_type.split('/')[1] || 'other',
+                url: `/back/api/studyresources/${res.c_resource_id}`,
+                size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+              })) : [];
+              return {
+                id: course.c_course_id,
+                title: course.c_course_name,
+                description: course.c_description || '',
+                category: course.c_category_id,
+                files,
+                uploadDate: course.created_at,
+              };
+            })
         );
         setCourseCases(mappedCourses);
       }
@@ -227,7 +232,7 @@ const CourseCasesPage: React.FC = () => {
     try {
       if (category.id) {
         // Update category
-        const response = await apiClientWithToken.put(`/back/api/categories/${category.id}`, { name: category.name });
+        const response = await apiClientWithToken.put(`/back/api/study/categories/${category.id}`, { name: category.name });
         const data = response.data;
         if (data.code === 200) {
           setCategories(prev => prev.map(cat => cat === category.id ? category.name : cat));
@@ -236,7 +241,7 @@ const CourseCasesPage: React.FC = () => {
         }
       } else {
         // Create category
-        const response = await apiClientWithToken.post(`/back/api/categories`, { name: category.name });
+        const response = await apiClientWithToken.post('/back/api/study/categories', { name: category.name });
         const data = response.data;
         if (data.code === 201) {
           setCategories(prev => [...prev, category.name]);
@@ -258,7 +263,7 @@ const CourseCasesPage: React.FC = () => {
         }
       });
       try {
-        const response = await apiClientWithToken.delete(`/back/api/courses/${caseToDelete.id}`);
+        const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.id}`);
         const data = response.data;
         if (data.code === 200) {
           setCourseCases(prevCases => prevCases.filter(c => c.id !== caseToDelete.id));
@@ -314,9 +319,9 @@ const CourseCasesPage: React.FC = () => {
     setCurrentPage(1); // Reset to first page on search
   };
 
-  const filteredCases = filterCategory 
-    ? courseCases.filter(c => c.category === filterCategory)
-    : courseCases;
+  const filteredCases = filterCategory
+      ? courseCases.filter(c => c.category === filterCategory)
+      : courseCases;
 
   const pageCount = Math.ceil(filteredCases.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -324,267 +329,267 @@ const CourseCasesPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <PageWrapper>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-          <CircularProgress />
-        </Box>
-      </PageWrapper>
+        <PageWrapper>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+            <CircularProgress />
+          </Box>
+        </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper>
-      {/* Header */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 4,
-          p: 2,
-          bgcolor: 'background.paper',
-          borderRadius: 2,
-          boxShadow: 1
-        }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-            课程案例库
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            随时查看和管理课程案例
-          </Typography>
-        </Box>
-        <Box>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => handleOpenFormModal()}
-            sx={{ fontWeight: 'bold', mr: 2 }}
-          >
-            添加案例
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={() => handleOpenCategoryModal()}
-            sx={{ fontWeight: 'bold' }}
-          >
-            添加类别
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Search and Category Filter */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel id="category-filter-label">分类筛选</InputLabel>
-            <Select
-              labelId="category-filter-label"
-              id="category-filter"
-              value={filterCategory}
-              label="分类筛选"
-              onChange={handleCategoryChange}
-            >
-              <MenuItem value="">所有分类</MenuItem>
-              {categories.map(category => (
-                <MenuItem key={category} value={category}>
-                  {category}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          {filterCategory && (
-            <Chip
-              label={`当前筛选: ${filterCategory}`}
-              onDelete={() => setFilterCategory('')}
-              color="primary"
-              sx={{ height: 40, px: 2 }}
-            />
-          )}
-        </Box>
-        <TextField
-          label="搜索课程"
-          variant="outlined"
-          value={searchKeyword}
-          onChange={handleSearchChange}
-          sx={{ minWidth: 300 }}
-          placeholder="输入课程名称或描述"
-        />
-      </Box>
-
-      {filteredCases.length === 0 ? (
-        <Box sx={{ textAlign: 'center', mt: 8, p: 4, bgcolor: 'background.paper', borderRadius: 2 }}>
-          <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
-            当前筛选条件下暂无课程案例，请尝试添加或更换分类。
-          </Typography>
-        </Box>
-      ) : (
-        <>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main', '& th': { color: 'primary.contrastText' } }}>
-                  <TableCell>案例标题</TableCell>
-                  <TableCell>分类</TableCell>
-                  <TableCell>描述</TableCell>
-                  <TableCell>上传日期</TableCell>
-                  <TableCell>附件数量</TableCell>
-                  <TableCell align="right">操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {currentCases.map(courseCase => (
-                  <TableRow key={courseCase.id} hover>
-                    <TableCell sx={{ fontWeight: 'medium' }}>{courseCase.title}</TableCell>
-                    <TableCell>
-                      {categories.find(cat => cat === courseCase.category) || '未知分类'}
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 300 }}>{courseCase.description || "暂无描述"}</TableCell>
-                    <TableCell>{formatDate(courseCase.uploadDate)}</TableCell>
-                    <TableCell>
-                      <Button 
-                        variant="text" 
-                        onClick={() => handleOpenFilesDialog(courseCase)}
-                        disabled={courseCase.files.length === 0}
-                      >
-                        {courseCase.files.length} 个
-                      </Button>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button 
-                        variant="text" 
-                        color="primary" 
-                        onClick={() => handleOpenFormModal(courseCase)}
-                        sx={{ mr: 1 }}
-                      >
-                        编辑
-                      </Button>
-                      <Button 
-                        variant="text" 
-                        color="error"
-                        onClick={() => setCaseToDelete(courseCase) && setIsConfirmDialogOpen(true)}
-                      >
-                        删除
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {pageCount > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Pagination
-                count={pageCount}
-                page={currentPage}
-                onChange={handlePageChange}
-                color="primary"
-                shape="rounded"
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          )}
-
-          <Box sx={{ textAlign: 'center', mt: 2, color: 'text.secondary' }}>
-            显示 {startIndex + 1} - {Math.min(startIndex + ITEMS_PER_PAGE, filteredCases.length)} 条，共 {filteredCases.length} 条
+      <PageWrapper>
+        {/* Header */}
+        <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 4,
+              p: 2,
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              boxShadow: 1
+            }}
+        >
+          <Box>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+              课程案例库
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              随时查看和管理课程案例
+            </Typography>
           </Box>
-        </>
-      )}
+          <Box>
+            <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handleOpenFormModal()}
+                sx={{ fontWeight: 'bold', mr: 2 }}
+            >
+              添加案例
+            </Button>
+            <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => handleOpenCategoryModal()}
+                sx={{ fontWeight: 'bold' }}
+            >
+              添加类别
+            </Button>
+          </Box>
+        </Box>
 
-      <CourseCaseFormModal
-        open={isFormModalOpen}
-        onClose={handleCloseFormModal}
-        onSave={handleSaveCourseCase}
-        courseCase={editingCase}
-        categories={categories}
-      />
-
-      <CategoryFormModal
-        open={isCategoryModalOpen}
-        onClose={handleCloseCategoryModal}
-        onSave={handleSaveCategory}
-        category={editingCategory}
-      />
-
-      {viewingFile && (
-        <FileViewerModal
-          open={isFileViewerOpen}
-          onClose={handleCloseFileViewer}
-          file={viewingFile}
-        />
-      )}
-
-      <Dialog
-        open={isConfirmDialogOpen}
-        onClose={() => setIsConfirmDialogOpen(false)}
-        aria-labelledby="confirm-delete-dialog-title"
-      >
-        <DialogTitle id="confirm-delete-dialog-title">确认删除课程案例</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            您确定要删除课程案例 "{caseToDelete?.title}" 吗？此操作无法撤销，其关联的所有文件也将被移除。
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setIsConfirmDialogOpen(false)} variant="outlined">取消</Button>
-          <Button onClick={handleDeleteCourseCase} color="error" variant="contained" autoFocus>
-            删除
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 附件对话框 */}
-      <Dialog
-        open={isFilesDialogOpen}
-        onClose={handleCloseFilesDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          {selectedCaseForFiles?.title} - 附件列表
-        </DialogTitle>
-        <DialogContent>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>文件名</TableCell>
-                  <TableCell>格式</TableCell>
-                  <TableCell>大小</TableCell>
-                  <TableCell align="right">操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {selectedCaseForFiles?.files.map(file => (
-                  <TableRow key={file.id}>
-                    <TableCell>{file.name}</TableCell>
-                    <TableCell>{file.format.toUpperCase()}</TableCell>
-                    <TableCell>{file.size}</TableCell>
-                    <TableCell align="right">
-                      <Button 
-                        variant="text" 
-                        color="primary"
-                        onClick={() => handleOpenFileViewer(file)}
-                      >
-                        查看
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+        {/* Search and Category Filter */}
+        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel id="category-filter-label">分类筛选</InputLabel>
+              <Select
+                  labelId="category-filter-label"
+                  id="category-filter"
+                  value={filterCategory}
+                  label="分类筛选"
+                  onChange={handleCategoryChange}
+              >
+                <MenuItem value="">所有分类</MenuItem>
+                {categories.map(category => (
+                    <MenuItem key={category} value={category}>
+                      {category}
+                    </MenuItem>
                 ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseFilesDialog}>关闭</Button>
-        </DialogActions>
-      </Dialog>
-    </PageWrapper>
+              </Select>
+            </FormControl>
+
+            {filterCategory && (
+                <Chip
+                    label={`当前筛选: ${filterCategory}`}
+                    onDelete={() => setFilterCategory('')}
+                    color="primary"
+                    sx={{ height: 40, px: 2 }}
+                />
+            )}
+          </Box>
+          <TextField
+              label="搜索课程"
+              variant="outlined"
+              value={searchKeyword}
+              onChange={handleSearchChange}
+              sx={{ minWidth: 300 }}
+              placeholder="输入课程名称或描述"
+          />
+        </Box>
+
+        {filteredCases.length === 0 ? (
+            <Box sx={{ textAlign: 'center', mt: 8, p: 4, bgcolor: 'background.paper', borderRadius: 2 }}>
+              <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
+                当前筛选条件下暂无课程案例，请尝试添加或更换分类。
+              </Typography>
+            </Box>
+        ) : (
+            <>
+              <TableContainer component={Paper} sx={{ mb: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.main', '& th': { color: 'primary.contrastText' } }}>
+                      <TableCell>案例标题</TableCell>
+                      <TableCell>分类</TableCell>
+                      <TableCell>描述</TableCell>
+                      <TableCell>上传日期</TableCell>
+                      <TableCell>附件数量</TableCell>
+                      <TableCell align="right">操作</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {currentCases.map(courseCase => (
+                        <TableRow key={courseCase.id} hover>
+                          <TableCell sx={{ fontWeight: 'medium' }}>{courseCase.title}</TableCell>
+                          <TableCell>
+                            {categories.find(cat => cat === courseCase.category) || '未知分类'}
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 300 }}>{courseCase.description || "暂无描述"}</TableCell>
+                          <TableCell>{formatDate(courseCase.uploadDate)}</TableCell>
+                          <TableCell>
+                            <Button
+                                variant="text"
+                                onClick={() => handleOpenFilesDialog(courseCase)}
+                                disabled={courseCase.files.length === 0}
+                            >
+                              {courseCase.files.length} 个
+                            </Button>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                                variant="text"
+                                color="primary"
+                                onClick={() => handleOpenFormModal(courseCase)}
+                                sx={{ mr: 1 }}
+                            >
+                              编辑
+                            </Button>
+                            <Button
+                                variant="text"
+                                color="error"
+                                onClick={() => setCaseToDelete(courseCase) && setIsConfirmDialogOpen(true)}
+                            >
+                              删除
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {pageCount > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                        count={pageCount}
+                        page={currentPage}
+                        onChange={handlePageChange}
+                        color="primary"
+                        shape="rounded"
+                        showFirstButton
+                        showLastButton
+                    />
+                  </Box>
+              )}
+
+              <Box sx={{ textAlign: 'center', mt: 2, color: 'text.secondary' }}>
+                显示 {startIndex + 1} - {Math.min(startIndex + ITEMS_PER_PAGE, filteredCases.length)} 条，共 {filteredCases.length} 条
+              </Box>
+            </>
+        )}
+
+        <CourseCaseFormModal
+            open={isFormModalOpen}
+            onClose={handleCloseFormModal}
+            onSave={handleSaveCourseCase}
+            courseCase={editingCase}
+            categories={categories}
+        />
+
+        <CategoryFormModal
+            open={isCategoryModalOpen}
+            onClose={handleCloseCategoryModal}
+            onSave={handleSaveCategory}
+            category={editingCategory}
+        />
+
+        {viewingFile && (
+            <FileViewerModal
+                open={isFileViewerOpen}
+                onClose={handleCloseFileViewer}
+                file={viewingFile}
+            />
+        )}
+
+        <Dialog
+            open={isConfirmDialogOpen}
+            onClose={() => setIsConfirmDialogOpen(false)}
+            aria-labelledby="confirm-delete-dialog-title"
+        >
+          <DialogTitle id="confirm-delete-dialog-title">确认删除课程案例</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              您确定要删除课程案例 "{caseToDelete?.title}" 吗？此操作无法撤销，其关联的所有文件也将被移除。
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setIsConfirmDialogOpen(false)} variant="outlined">取消</Button>
+            <Button onClick={handleDeleteCourseCase} color="error" variant="contained" autoFocus>
+              删除
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* 附件对话框 */}
+        <Dialog
+            open={isFilesDialogOpen}
+            onClose={handleCloseFilesDialog}
+            maxWidth="md"
+            fullWidth
+        >
+          <DialogTitle>
+            {selectedCaseForFiles?.title} - 附件列表
+          </DialogTitle>
+          <DialogContent>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>文件名</TableCell>
+                    <TableCell>格式</TableCell>
+                    <TableCell>大小</TableCell>
+                    <TableCell align="right">操作</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedCaseForFiles?.files.map(file => (
+                      <TableRow key={file.id}>
+                        <TableCell>{file.name}</TableCell>
+                        <TableCell>{file.format.toUpperCase()}</TableCell>
+                        <TableCell>{file.size}</TableCell>
+                        <TableCell align="right">
+                          <Button
+                              variant="text"
+                              color="primary"
+                              onClick={() => handleOpenFileViewer(file)}
+                          >
+                            查看
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseFilesDialog}>关闭</Button>
+          </DialogActions>
+        </Dialog>
+      </PageWrapper>
   );
 };
 
