@@ -14,9 +14,10 @@ interface ExecTerminalModalProps {
   open: boolean;
   containerId: string | null;
   onClose: () => void;
+  zIndex: number;
 }
 
-export default function ExecTerminalModal({ open, containerId, onClose }: ExecTerminalModalProps) {
+export default function ExecTerminalModal({ open, containerId, onClose, zIndex }: ExecTerminalModalProps) {
   const theme = useTheme();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<any>(null);
@@ -212,7 +213,7 @@ export default function ExecTerminalModal({ open, containerId, onClose }: ExecTe
           dragHandleClassName="terminal-title"
           enableResizing={!minimized && !maximized}
           disableDragging={maximized}
-          style={{ zIndex: 1300, position: 'fixed' }}
+          style={{ zIndex: zIndex, position: 'fixed' }}
       >
         {paper}
       </Rnd>

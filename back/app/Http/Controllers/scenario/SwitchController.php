@@ -4,7 +4,8 @@ namespace App\Http\Controllers\scenario;
 
 use App\Http\Controllers\Controller;
 use App\Models\scenario\SceneInstance;
-use App\RunTool\CommandLineService; // 【修改点 1】: 引入命令行服务
+use App\RunTool\CommandLineService; 
+use App\Models\scenario\SceneSwitchInstance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -77,6 +78,36 @@ class SwitchController extends Controller
         } catch (\Exception $e) {
             Log::error("获取实例 {$instance->c_scene_instances_id} 的交换机列表时发生错误: " . $e->getMessage());
             return response()->json(['message' => '获取交换机列表失败。'], 500);
+        }
+    }
+        /**
+     * 删除一个指定的交换机。
+     *
+     * @param string $switchName
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function destroy(string $switchName)
+    {
+        try {
+            // 1. 从系统中删除OVS网桥
+            $this->cliService->deleteSwitch($switchName);
+            Log::info("已执行删除 OVS 网桥的命令: {$switchName}");
+
+            // 2. 【修复】: 使用查询构造器直接删除，避免主键问题
+            // 这种方式会生成正确的 SQL: DELETE FROM c_scene_switch_instances WHERE c_switch_name = ?
+            $deletedRows = SceneSwitchInstance::where('c_switch_name', $switchName)->delete();
+
+            if ($deletedRows > 0) {
+                Log::info("已从数据库中删除交换机实例记录: {$switchName}");
+            } else {
+                Log::warning("数据库中未找到交换机 '{$switchName}' 的记录，但删除命令已发送。");
+            }
+
+            return response()->json(['message' => "交换机 '{$switchName}' 已成功删除。"], 200);
+
+        } catch (\Exception $e) {
+            Log::error("删除交换机 '{$switchName}' 时发生错误: " . $e->getMessage());
+            return response()->json(['message' => '服务器内部错误，删除失败。'], 500);
         }
     }
     
