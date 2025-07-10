@@ -1,53 +1,67 @@
-'use client'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useRef, Suspense } from 'react'
-import Guacamole from 'guacamole-common-js'
+"use client";
 
-export const dynamic = 'force-dynamic'
+import { useEffect, useRef } from "react";
+import Guacamole from "guacamole-common-js";
+import crypto from "crypto"; // ⚠️ 注意：这只在 Node.js 里可用
 
-function GuacInner() {
-  const params = useSearchParams();
-  const type = params.get('type') || '';
-  const hostname = params.get('hostname') || '';
-  const port = params.get('port') || '';
-  const ref = useRef<HTMLDivElement>(null);
+const CIPHER = "aes-256-cbc";
+const SECRET_KEY = "0123456789abcdef0123456789abcdef";
 
-  useEffect(() => {
-    if (!ref.current || !type || !hostname || !port) return;
-    let client: Guacamole.Client | null = null;
-    let ignore = false;
-    const params = new URLSearchParams({ type, hostname, port }).toString();
-    fetch('/api/guac-token?' + params)
-      .then(r => r.json())
-      .then(data => {
-        if (ignore || !ref.current || !data.token) return;
-        const wsBase = window.location.origin.replace(/^http/, 'ws');
-        const ws = wsBase + '/api/guac?token=' + encodeURIComponent(data.token);
-        const tunnel = new Guacamole.WebSocketTunnel(ws);
-        tunnel.onerror = status => console.error('Tunnel error', status);
-        client = new Guacamole.Client(tunnel);
-        client.onerror = err => console.error('Client error', err);
-        client.onstatechange = state => console.log('Client state', state);
-        ref.current!.innerHTML = '';
-        ref.current!.appendChild(client.getDisplay().getElement());
-        client.connect();
-      });
-    const disconnect = () => client?.disconnect();
-    window.addEventListener('beforeunload', disconnect);
-    return () => {
-      ignore = true;
-      window.removeEventListener('beforeunload', disconnect);
-      client?.disconnect();
-    };
-  }, [type, hostname, port]);
+// 示例连接信息
+const tokenObject = {
+  connection: {
+    type: "vnc",
+    settings: {
+      hostname: "127.0.0.1",
+      port:5900
+    },
+  },
+};
 
-  return <div ref={ref} style={{width:'100vw',height:'100vh',background:'#000'}}/>;
+// ⚠️ 不推荐在前端使用
+function encryptToken(value: object): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(CIPHER, Buffer.from(SECRET_KEY), iv);
+
+  let encrypted = cipher.update(JSON.stringify(value), "utf8", "base64");
+  encrypted += cipher.final("base64");
+
+  const data = {
+    iv: iv.toString("base64"),
+    value: encrypted,
+  };
+
+  const json = JSON.stringify(data);
+  return Buffer.from(json).toString("base64");
 }
 
 export default function GuacPage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const token = encryptToken(tokenObject); // ⚠️ 实际使用中应从 API 获取
+
+    const tunnel = new Guacamole.WebSocketTunnel("ws://localhost:3001/connect-guac");
+    const client = new Guacamole.Client(tunnel);
+
+    if (containerRef.current) {
+      containerRef.current.appendChild(client.getDisplay().getElement());
+    }
+
+    client.connect("token=" + token);
+
+    window.onunload = () => {
+      client.disconnect();
+    };
+
+    return () => {
+      client.disconnect();
+    };
+  }, []);
+
   return (
-    <Suspense>
-      <GuacInner />
-    </Suspense>
+      <div style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}>
+        <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      </div>
   );
 }

@@ -103,7 +103,8 @@ class VmController extends Controller
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
-        return $this->runCli(['guac-info', $vmName]);
+        $method = $request->query('method', 'ssh');
+        return $this->runCli(['guac-info', $vmName, '--method', $method]);
     }
 
     // GET /vms/{vm_id}
