@@ -60,8 +60,8 @@ class VmImage(BaseModel):
     version: Optional[str] = None
     osType: Optional[str] = None
     architecture: Optional[str] = None
-    # 上传日期可近似使用文件的修改时间
-    uploadDate: Optional[str] = None
+    # 修改日期可近似使用文件的修改时间
+    modifiedDate: Optional[str] = None
     # 镜像状态目前固定为 available，无法直接从 libvirt 获取
     status: Optional[str] = None
 
@@ -295,7 +295,7 @@ def fetch_vm_images() -> List[VmImage]:
                 pool="default",
                 size=f"{size_mb:.1f} MB",
                 path=path,
-                uploadDate=upload_date,
+                modifiedDate=upload_date,
                 status="available",
             )
         )

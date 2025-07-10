@@ -23,7 +23,6 @@ import {
     useTheme,
 } from "@mui/material"
 import {
-    Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
     PlayArrow as StartIcon,
@@ -43,7 +42,7 @@ interface VmImage {
     architecture?: "x86_64" | "arm64"
     size: string
     description?: string
-    uploadDate?: string
+    modifiedDate?: string
     status?: "available" | "uploading" | "error"
     filePath?: string
 }
@@ -114,7 +113,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                 id: Date.now().toString(),
                 ...formData,
                 size: selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "0 MB",
-                uploadDate: new Date().toISOString(),
+                modifiedDate: new Date().toISOString(),
                 status: "available",
                 filePath: selectedFile ? `/images/${selectedFile.name}` : undefined,
             }
@@ -177,8 +176,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             ),
         },
         {
-            field: 'uploadDate',
-            headerName: '上传日期',
+            field: 'modifiedDate',
+            headerName: '修改日期',
             flex: 1,
             minWidth: 160,
             valueFormatter: params =>
@@ -229,9 +228,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                         sx={{ width: { xs: '100%', sm: 260 } }}
                     />
                 </Box>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-                    添加镜像
-                </Button>
             </Box>
 
             <Box component={Paper} sx={{ boxShadow: 3 }}>
