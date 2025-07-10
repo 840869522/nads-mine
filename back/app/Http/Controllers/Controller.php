@@ -14,7 +14,7 @@ class Controller extends BaseController
     /**
      * 统一返回值
      * @param $code int 响应编码
-     * @param $messsage string 返回信息 success ...
+     * @param $messsage string 返回信息 SUCCESS FAILED ...
      * @param $data array 返回数据
      * @author
      *@Date AM
