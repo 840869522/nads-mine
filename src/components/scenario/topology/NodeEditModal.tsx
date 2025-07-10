@@ -14,7 +14,9 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -42,7 +44,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
   const [deviceName, setDeviceName] = useState('');
   const [dockerImage, setDockerImage] = useState('');
   const [ports, setPorts] = useState<{ hostPort: string; containerPort: string }[]>([]);
-  // 新增：环境变量的状态
+  const [isTarget, setIsTarget] = useState(false); // 新增：是否为靶机的状态
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
   const [images, setImages] = useState<ManagedImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -54,6 +56,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       setLabel(node.label);
       setDeviceName(node.config.deviceName);
       setDockerImage(node.config.dockerImage);
+      setIsTarget(node.config.isTarget || false); // 新增：设置初始状态
       setErrors({});
 
       // 解析端口映射
@@ -129,6 +132,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       portMappings: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? portMappingsString : '',
       // 新增：将环境变量添加到配置中
       env: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? envString : '',
+      isTarget: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? isTarget : false, 
     };
     onSave(node.id, newConfig, label);
     onClose();
@@ -156,7 +160,11 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                       {images.map((img) => (<MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>))}
                     </Select>
                   </FormControl>
-
+                   {/* 新增：是否为靶机选项 */}
+                  <FormControlLabel
+                      control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />}
+                      label="设置为靶机"
+                  />
                   {/* 端口映射 (保持不变) */}
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>端口映射</Typography>

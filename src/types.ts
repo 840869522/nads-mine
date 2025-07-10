@@ -73,7 +73,8 @@ export interface NodeConfig {
   deviceName: string;
   dockerImage: string;
   portMappings: string;
-  env?: string; // <--- 新增此行，设为可选
+  env?: string; 
+  isTarget?: boolean; 
 }
 
 export interface TopologyNode {
