@@ -49,7 +49,31 @@ class VmController extends Controller
     // GET /vms/images
     public function listVmImages()
     {
-        return $this->runCli(['list-images']);
+        $cmd = [$this->python, $this->script, 'list-images'];
+        $process = new Process($cmd);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $err = trim($process->getErrorOutput() ?: $process->getOutput());
+            return response()->json(['error' => $err], 500);
+        }
+
+        $output = trim($process->getOutput());
+        $data = json_decode($output, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return response($output, 200)->header('Content-Type', 'application/json');
+        }
+
+        $status = $data['status_code'] ?? 200;
+        unset($data['status_code']);
+
+        if (is_array($data)) {
+            foreach ($data as &$img) {
+                unset($img['version'], $img['osType'], $img['architecture']);
+            }
+        }
+
+        return response()->json($data, $status);
     }
 
     // POST /vms/create
@@ -63,6 +87,7 @@ class VmController extends Controller
             'memory' => '--memory',
             'vcpus' => '--vcpus',
             'disk_gb' => '--disk-gb',
+            'os_variant' => '--os-variant',
             'ssh_key' => '--ssh-key',
             'admin_password' => '--admin-password',
             'static_ip' => '--static-ip',
@@ -154,5 +179,11 @@ class VmController extends Controller
     public function listVmEvents($vmId)
     {
         return $this->runCli(['events', $vmId]);
+    }
+
+    // DELETE /vms/{vm_id}
+    public function deleteVm($vmId)
+    {
+        return $this->runCli(['delete-vm', $vmId]);
     }
 }

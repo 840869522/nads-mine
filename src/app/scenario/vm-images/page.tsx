@@ -23,7 +23,6 @@ import {
     useTheme,
 } from "@mui/material"
 import {
-    Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
     PlayArrow as StartIcon,
@@ -43,7 +42,7 @@ interface VmImage {
     architecture?: "x86_64" | "arm64"
     size: string
     description?: string
-    uploadDate?: string
+    modifiedDate?: string
     status?: "available" | "uploading" | "error"
     filePath?: string
 }
@@ -101,7 +100,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     }
 
     const handleStart = (image: VmImage) => {
-        setCreateModalImage(image.filePath || (image as any).path || image.name)
+        setCreateModalImage(image.name)
     }
 
     const handleSave = () => {
@@ -114,7 +113,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                 id: Date.now().toString(),
                 ...formData,
                 size: selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "0 MB",
-                uploadDate: new Date().toISOString(),
+                modifiedDate: new Date().toISOString(),
                 status: "available",
                 filePath: selectedFile ? `/images/${selectedFile.name}` : undefined,
             }
@@ -129,7 +128,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
-        img.version?.toLowerCase().includes(search.toLowerCase()) ||
         img.description?.toLowerCase().includes(search.toLowerCase())
     )
 
@@ -168,9 +166,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
         { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
-        { field: 'version', headerName: '版本', width: 120 },
-        { field: 'osType', headerName: '操作系统', width: 120 },
-        { field: 'architecture', headerName: '架构', width: 120 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',
@@ -181,12 +176,14 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             ),
         },
         {
-            field: 'uploadDate',
-            headerName: '上传日期',
+            field: 'modifiedDate',
+            headerName: '修改日期',
             flex: 1,
             minWidth: 160,
-            valueFormatter: params =>
-                params.value ? dayjs(params.value as string).format('YYYY年M月D日') : '',
+            // Align with container pages: parse ISO string and format as locale date
+            valueFormatter: (params) => {
+                return dayjs(params).format('YYYY年M月D日');
+            }
         },
         {
             field: 'actions',
@@ -233,9 +230,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                         sx={{ width: { xs: '100%', sm: 260 } }}
                     />
                 </Box>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-                    添加镜像
-                </Button>
             </Box>
 
             <Box component={Paper} sx={{ boxShadow: 3 }}>
