@@ -29,7 +29,6 @@ import {
     Pause as PauseIcon,
     RestartAlt as ResetIcon,
     PowerSettingsNew as ForceOffIcon,
-    Visibility as ConsoleIcon,
     DesktopWindows as VncIcon,
     Terminal as SshIcon,
     LaptopWindows as RdpIcon,
@@ -201,7 +200,7 @@ export default function VmPage() {
     const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
         if (!current) return;
         try {
-            const res = await fetch(`/back/api/vms/${current.name}/guac`);
+            const res = await fetch(`/back/api/vms/${current.name}/guac?method=${proto}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
 
@@ -400,13 +399,6 @@ export default function VmPage() {
                             size="small"
                             variant="outlined"
                             sx={{ ml: "auto" }}
-                            startIcon={<ConsoleIcon />}
-                        >
-                            控制台
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="outlined"
                             color="error"
                             disabled={actionLoading}
                             onClick={handleDelete}
