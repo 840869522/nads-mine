@@ -252,10 +252,10 @@
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-    Route::prefix('examination')->group(function () {
-        Route::prefix('test')->group(function(){
-            Route::post('/', [TestController::class, 'index']);
-        });
-    });
+    // Route::prefix('examination')->group(function () {
+    //     Route::prefix('test')->group(function(){
+    //         Route::post('/', [TestController::class, 'index']);
+    //     });
+    // });
 
 ?>

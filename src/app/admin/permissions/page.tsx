@@ -26,7 +26,6 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import PermissionFormModal, { PermissionFormData } from '@/components/admin/PermissionModal';
@@ -41,7 +40,7 @@ type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_nam
 
 
 const PermissionManagementPage: React.FC = () => {
-  const [users, setUsers] = useState<PermissionDisplayItem[]>([]);
+  const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -49,7 +48,7 @@ const PermissionManagementPage: React.FC = () => {
   const [orderBy, setOrderBy] = useState<SortablePermissionsKeys>('c_id');
 
   const [count, setDataCount] = useState<number>(0);
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<PermissionFormData | null>(null);
 
   const [tableLaoding, setTableLoading] = useState(true);
@@ -58,14 +57,14 @@ const PermissionManagementPage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    getUserData(page, rowsPerPage)
+    getPermissionData(page, rowsPerPage)
   }, [page, rowsPerPage]);
 
-  const getUserData = (page: number, pagesize: number) => {
+  const getPermissionData = (page: number, pagesize: number) => {
     setTableLoading(true);
     apiClientWithToken.post(`/back/api/support/permission/all`, JSON.stringify({ page: page, pagesize: pagesize })).then((res) => {
       if (res.data.code === 200) {
-        setUsers(res.data.data.data);
+        setPermissions(res.data.data.data);
         setDataCount(res.data.data.count);
       }
     }).finally(() => {
@@ -91,11 +90,11 @@ const PermissionManagementPage: React.FC = () => {
       }));
 
       if (res.data.code === 200) {
-        setUsers(res.data.data.data);
+        setPermissions(res.data.data.data);
         setDataCount(res.data.data.count);
         setPage(1);
       }else{
-        setUsers([]);
+        setPermissions([]);
         setFeedbackMessage({ type: 'error', text: '搜索权限时发生错误' });
       }
     }finally {
@@ -118,17 +117,17 @@ const PermissionManagementPage: React.FC = () => {
     setPage(1);
   };
 
-  const handleAddUserClick = () => {
+  const handleAddPermissionClick = () => {
     setEditingPermission(null);
-    setIsUserModalOpen(true);
+    setIsPermissionModalOpen(true);
     setFeedbackMessage(null);
   };
 
-  const handleEditUserClick = (permision:PermissionDisplayItem ) => {
+  const handleEditPermissionClick = (permision:PermissionDisplayItem ) => {
     apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: permision.c_id })).then((res) => {
       if (res.data.code === 200) {
         setEditingPermission({id:res.data.data.c_id, name: res.data.data.c_name});
-        setIsUserModalOpen(true);
+        setIsPermissionModalOpen(true);
         setFeedbackMessage(null);
       } else {
         setFeedbackMessage({ type: "error", text: res.data.message });
@@ -145,7 +144,7 @@ const PermissionManagementPage: React.FC = () => {
       apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...permissionData } })).then((res) => {
         if (res.data.code === 200) {
           setPage(1);;
-          getUserData(1, rowsPerPage);
+          getPermissionData(1, rowsPerPage);
           setFeedbackMessage({ type: "success", text: `权限 "${permissionData.id}" 添加成功。` });
         } else {
           setFeedbackMessage({ type: "error", text: `权限 "${permissionData.id}" 添加失败。` })
@@ -159,7 +158,7 @@ const PermissionManagementPage: React.FC = () => {
         }
       }));
       if (res.data.code === 200) {
-        setUsers(prev => prev.map(u =>
+        setPermissions(prev => prev.map(u =>
           u.c_id === editingPermission.id ? { ...u, c_name: formData.name!,  } : u
         ));
         setFeedbackMessage({ type: 'success', text: `权限 "${formData.id}" 更新成功。` });
@@ -170,7 +169,7 @@ const PermissionManagementPage: React.FC = () => {
   };
 
 
-  const handleDeleteUserClick = (permision: PermissionDisplayItem) => {
+  const handleDeletePermissionClick = (permision: PermissionDisplayItem) => {
     setPermissionToDelete(permision);
     setIsConfirmDeleteOpen(true);
     setFeedbackMessage(null);
@@ -180,7 +179,7 @@ const PermissionManagementPage: React.FC = () => {
     if (permissionToDelete) {
       apiClientWithToken.post(`/back/api/support/permission/delete`, JSON.stringify({ id: permissionToDelete.c_id })).then((res) => {
         if (res.data.code === 200) {
-          setUsers(prev => prev.filter(u => u.c_id !== permissionToDelete.c_id));
+          setPermissions(prev => prev.filter(u => u.c_id !== permissionToDelete.c_id));
           setFeedbackMessage({ type: 'success', text: `权限 "${permissionToDelete.c_id}" 已删除。` });
         } else
           setFeedbackMessage({ type: 'error', text: `权限 "${permissionToDelete.c_id}" 删除失败。` })
@@ -191,16 +190,16 @@ const PermissionManagementPage: React.FC = () => {
   };
 
 
-  const filteredAndSortedUsers = useMemo(() => {
-    let processedUsers = [...users].sort((a, b) => {
+  const filteredAndSortedPermissions = useMemo(() => {
+    let processedpermissions = [...permissions].sort((a, b) => {
       const valA = a[orderBy];
       const valB = b[orderBy];
       if (valB < valA) return order === 'asc' ? 1 : -1;
       if (valB > valA) return order === 'asc' ? -1 : 1;
       return 0;
     });
-    return processedUsers;
-  }, [users, order, orderBy]);
+    return processedpermissions;
+  }, [permissions, order, orderBy]);
 
 
   return (
@@ -256,7 +255,7 @@ const PermissionManagementPage: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<AddCircleOutlineIcon />}
-          onClick={handleAddUserClick}
+          onClick={handleAddPermissionClick}
         >
           添加权限
         </Button>
@@ -293,19 +292,19 @@ const PermissionManagementPage: React.FC = () => {
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ) : filteredAndSortedUsers.length > 0 ?
-                filteredAndSortedUsers.map((permission) => (
+              ) : filteredAndSortedPermissions.length > 0 ?
+                filteredAndSortedPermissions.map((permission) => (
                   <TableRow key={permission.c_id} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_id}</TableCell>
                     <TableCell>{permission.c_name}</TableCell>
                     <TableCell align="center">
                       <Tooltip title="编辑权限">
-                        <IconButton size="small" onClick={() => handleEditUserClick(permission)} color="primary">
+                        <IconButton size="small" onClick={() => handleEditPermissionClick(permission)} color="primary">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="删除权限">
-                        <IconButton size="small" onClick={() => handleDeleteUserClick(permission)} color="error" disabled={permission.c_id === 'admin' /* Prevent deleting main admin for demo */}>
+                        <IconButton size="small" onClick={() => handleDeletePermissionClick(permission)} color="error" disabled={false}>
                           <DeleteIcon />
                         </IconButton>
                       </Tooltip>
@@ -336,8 +335,8 @@ const PermissionManagementPage: React.FC = () => {
       </TableContainer>
 
       <PermissionFormModal
-        open={isUserModalOpen}
-        onClose={() => setIsUserModalOpen(false)}
+        open={isPermissionModalOpen}
+        onClose={() => setIsPermissionModalOpen(false)}
         onSave={handleSaveUser}
         initialPermission={editingPermission}
       />
