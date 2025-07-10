@@ -86,13 +86,16 @@ class DrillController extends Controller
             // 【修改】从完整的场景实例UUID中截取后8位，生成一个简短且高概率唯一的标识符。
             // 这样做可以避免名称过长，同时保证了在同一时间创建的多个实例不会重名。
             $instanceShortId = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -8);
-
+            // 为交换机生成一个更短的4位ID后缀
+            $switchIdSuffix = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -5);
             // 4. 创建交换机，并应用新的命名规则
             Log::info("开始创建 OVS 网桥...", ['count' => count($switches)]);
             foreach ($switches as $switchData) {
-                // 【修改】新的命名规则: <交换机原始名称>_<场景实例ID简写>
-                // 同时替换名称中的空格为下划线，确保名称的有效性
-                $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $instanceShortId;
+                //  应用新的12字符命名规则
+                // 清理并截取原始标签，确保其长度不超过7个字符
+                $shortLabel = str_replace([' '], '_', $switchData['label']);
+                // 拼接成最终名称，总长度不超过 7 + 1 + 4 = 12 个字符
+                $switchName = $shortLabel . '_' . $switchIdSuffix;
                 $this->cliService->createSwitch($switchName);
                 Log::info("OVS 网桥 '{$switchName}' 创建成功。");
                 // 【修改点 2】: 在创建交换机后，立即使用新模型将关联记录存入数据库

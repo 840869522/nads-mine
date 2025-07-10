@@ -18,7 +18,8 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
-    
+    use App\Http\Controllers\examination\TestController;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -192,8 +193,8 @@
     });
 
     Route::prefix('scenariosinstances')->group(function () {
-        
-        
+
+        Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
         // GET /api/scenariosinstances/switches - 获取所有场景实例下的所有交换机【前端无该功能】
         Route::get('/switches', [SwitchController::class, 'index']);
 
@@ -251,6 +252,10 @@
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-
+    Route::prefix('examination')->group(function () {
+        Route::prefix('test')->group(function(){
+            Route::post('/', [TestController::class, 'index']);
+        });
+    });
 
 ?>
