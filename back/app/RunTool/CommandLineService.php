@@ -15,7 +15,57 @@ class CommandLineService
 {   
     /**
      * 
-     * 将一个容器连接到一个OVS交换机上，严格仿照用户最新的命名规则。
+     * 使用veth pair连接两个OVS交换机。
+     *
+     * @param string $switch1Name 第一个交换机的名称
+     * @param string $switch2Name 第二个交换机的名称
+     * @return void
+     * @throws ProcessFailedException
+     */
+    public function connectSwitchToSwitch(string $switch1Name, string $switch2Name): void
+    {
+        // 1. 根据两个交换机的名称，生成veth pair的端口名
+        // 为了确保名称符合Linux接口规范且唯一，我们使用简化的名称加哈希值
+        $s1Hash = substr(md5($switch1Name), 0, 4);
+        $s2Hash = substr(md5($switch2Name), 0, 4);
+        $port1 = "veth-{$s1Hash}-{$s2Hash}";
+        $port2 = "veth-{$s2Hash}-{$s1Hash}";
+
+        // 2. 创建veth pair
+        $commandCreateVeth = ['sudo', 'ip', 'link', 'add', $port1, 'type', 'veth', 'peer', 'name', $port2];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandCreateVeth));
+        $processCreateVeth = new Process($commandCreateVeth);
+        $processCreateVeth->run();
+        if (!$processCreateVeth->isSuccessful()) {
+            // 如果接口已存在，这可能不是一个致命错误，先记录日志
+            Log::warning("Could not create veth pair {$port1}<->{$port2}. Maybe it already exists?", [
+                'error' => $processCreateVeth->getErrorOutput()
+            ]);
+        }
+
+        // 3. 将veth pair的两端分别添加到两个交换机中
+        $commandAddPort1 = ['sudo', 'ovs-vsctl', 'add-port', $switch1Name, $port1];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandAddPort1));
+        (new Process($commandAddPort1))->mustRun();
+
+        $commandAddPort2 = ['sudo', 'ovs-vsctl', 'add-port', $switch2Name, $port2];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandAddPort2));
+        (new Process($commandAddPort2))->mustRun();
+
+
+        // 4. 启动这两个新创建的端口
+        $commandLinkUp1 = ['sudo', 'ip', 'link', 'set', $port1, 'up'];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp1));
+        (new Process($commandLinkUp1))->mustRun();
+
+        $commandLinkUp2 = ['sudo', 'ip', 'link', 'set', $port2, 'up'];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp2));
+        (new Process($commandLinkUp2))->mustRun();
+    }
+    
+    /**
+     * 
+     * 将一个容器连接到一个OVS交换机上，严格最新的命名规则。
      *
      * @param string      $switchName      参数1: 交换机的名称
      * @param string      $containerName   参数3: 容器的名称

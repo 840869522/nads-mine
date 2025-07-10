@@ -159,6 +159,24 @@ class DrillController extends Controller
             $sourceNode = $conn['source'];
             $targetNode = $conn['target'];
 
+            // 情况1: 连接的两端都是交换机
+            if ($sourceNode['type'] === 'switch' && $targetNode['type'] === 'switch') {
+                $switch1Info = $createdSwitchesInfo[$sourceNode['id']] ?? null;
+                $switch2Info = $createdSwitchesInfo[$targetNode['id']] ?? null;
+
+                if ($switch1Info && $switch2Info) {
+                    Log::info("检测到交换机到交换机的连接: '{$switch1Info['actual_name']}' <--> '{$switch2Info['actual_name']}'");
+                    $this->cliService->connectSwitchToSwitch(
+                        $switch1Info['actual_name'],
+                        $switch2Info['actual_name']
+                    );
+                    Log::info("成功执行交换机连接命令。");
+                } else {
+                    Log::error('无法找到连接所需的交换机节点信息，跳过连接。', ['connection' => $conn]);
+                }
+                continue; // 处理完后继续下一个循环
+            }
+            // 情况2: 连接的一端是容器，另一端是交换机 
             if ($sourceNode['type'] === 'container' && $targetNode['type'] === 'switch') {
                 $containerInfo = $createdItemsInfo[$sourceNode['id']] ?? null;
                 $switchInfo = $createdSwitchesInfo[$targetNode['id']] ?? null;
@@ -168,12 +186,12 @@ class DrillController extends Controller
                 $switchInfo = $createdSwitchesInfo[$sourceNode['id']] ?? null;
                 $ip = $targetNode['ip'] ?? null;
             } else {
-                Log::warning('跳过无效的连接（非 容器-交换机 类型）', ['source' => $sourceNode['label'], 'target' => $targetNode['label']]);
+                Log::warning('跳过未知类型的连接', ['source' => $sourceNode['type'], 'target' => $targetNode['type']]);
                 continue;
             }
 
             if (!$containerInfo || !$switchInfo) {
-                Log::error('无法找到连接所需的节点信息，跳过连接。', ['connection' => $conn]);
+                Log::error('无法找到连接所需的 容器-交换机 节点信息，跳过连接。', ['connection' => $conn]);
                 continue;
             }
             
@@ -185,7 +203,7 @@ class DrillController extends Controller
                 $ip
             );
             
-            Log::info("成功执行连接命令: '{$containerInfo['actual_name']}' <--> '{$switchInfo['actual_name']}'");
+            Log::info("成功执行 容器-交换机 连接命令: '{$containerInfo['actual_name']}' <--> '{$switchInfo['actual_name']}'");
         }
 
         Log::info("================== 所有网络连接处理完毕 ==================");
