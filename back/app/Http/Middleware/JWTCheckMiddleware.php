@@ -19,7 +19,6 @@ class JWTCheckMiddleware{
      */
     public function handle(Request $request, Closure $next, $primiision = null){
         $auth = $request->header("Authorization",null);
-        Log::info($auth);
         $jwtRes =  JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {
             return response()->json([

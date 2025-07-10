@@ -29,14 +29,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
-import { PermScanWifi } from '@mui/icons-material';
+import PermissionFormModal, { PermissionFormData } from '@/components/admin/PermissionModal';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type PermissionDisplayItem = { c_id: string; c_name: string;  };
 
-const CORE_PERMISSIONS = [
 
-];
 
 type Order = 'asc' | 'desc';
 type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_name' >;
@@ -52,11 +50,11 @@ const PermissionManagementPage: React.FC = () => {
 
   const [count, setDataCount] = useState<number>(0);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<PermissionDisplayItem | null>(null);
+  const [editingPermission, setEditingPermission] = useState<PermissionFormData | null>(null);
 
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<PermissionDisplayItem | null>(null);
+  const [permissionToDelete, setPermissionToDelete] = useState<PermissionDisplayItem | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -98,14 +96,14 @@ const PermissionManagementPage: React.FC = () => {
         setPage(1);
       }else{
         setUsers([]);
-        setFeedbackMessage({ type: 'error', text: '搜索用户时发生错误' });
+        setFeedbackMessage({ type: 'error', text: '搜索权限时发生错误' });
       }
     }finally {
       setTableLoading(false);
     }
   };
 
-  const handleRequestSort = (property: SortableUserKeys) => {
+  const handleRequestSort = (property : SortablePermissionsKeys) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
@@ -121,16 +119,15 @@ const PermissionManagementPage: React.FC = () => {
   };
 
   const handleAddUserClick = () => {
-    setEditingUser(null);
+    setEditingPermission(null);
     setIsUserModalOpen(true);
     setFeedbackMessage(null);
   };
 
-  const handleEditUserClick = (user: UserDisplayItem) => {
-    apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: user.c_username })).then((res) => {
+  const handleEditUserClick = (permision:PermissionDisplayItem ) => {
+    apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: permision.c_id })).then((res) => {
       if (res.data.code === 200) {
-        console.log(res.data.data);
-        setEditingUser(res.data.data);
+        setEditingPermission({id:res.data.data.c_id, name: res.data.data.c_name});
         setIsUserModalOpen(true);
         setFeedbackMessage(null);
       } else {
@@ -139,62 +136,58 @@ const PermissionManagementPage: React.FC = () => {
     })
   };
 
-  const handleSaveUser = async (formData: UserFormData, isNew: boolean) => {
-    var userData = {
-      username: formData.username,
-      email: formData.email,
-      password: "",
-      is_login: formData.status == "active" ? 1 : 0,
-      role: [...formData.role]
+  const handleSaveUser = async (formData: PermissionFormData, isNew: boolean) => {
+    var permissionData = {
+      id: formData.id,
+      name : formData.name
     }
     if (isNew) {
-      apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...userData } })).then((res) => {
+      apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...permissionData } })).then((res) => {
         if (res.data.code === 200) {
           setPage(1);;
           getUserData(1, rowsPerPage);
-          setFeedbackMessage({ type: "success", text: `用户 "${formData.username}" 添加成功。` });
+          setFeedbackMessage({ type: "success", text: `权限 "${permissionData.id}" 添加成功。` });
         } else {
-          setFeedbackMessage({ type: "error", text: `用户 "${formData.username}" 添加失败。` })
+          setFeedbackMessage({ type: "error", text: `权限 "${permissionData.id}" 添加失败。` })
         }
       });
-    } else if (editingUser) {
-      userData.password = formData.pwdedit ? CryptoJS.SHA256(formData.password).toString() : editingUser.c_password;
+    } else if (editingPermission) {
       const res = await apiClientWithToken.post(`/back/api/support/permission/update`, JSON.stringify({
-        id: editingUser.c_username,
+        id: editingPermission.id,
         data: {
-          ...userData
+          ...permissionData
         }
       }));
       if (res.data.code === 200) {
         setUsers(prev => prev.map(u =>
-          u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+          u.c_id === editingPermission.id ? { ...u, c_name: formData.name!,  } : u
         ));
-        setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
+        setFeedbackMessage({ type: 'success', text: `权限 "${formData.id}" 更新成功。` });
       } else {
-        setFeedbackMessage({ type: 'error', text: `用户 "${formData.username}" 更新失败。` });
+        setFeedbackMessage({ type: 'error', text: `权限 "${formData.id}" 更新失败。` });
       }
     }
   };
 
 
-  const handleDeleteUserClick = (user: UserDisplayItem) => {
-    setUserToDelete(user);
+  const handleDeleteUserClick = (permision: PermissionDisplayItem) => {
+    setPermissionToDelete(permision);
     setIsConfirmDeleteOpen(true);
     setFeedbackMessage(null);
   };
 
   const confirmDeleteUser = () => {
-    if (userToDelete) {
-      apiClientWithToken.post(`/back/api/support/permission/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
+    if (permissionToDelete) {
+      apiClientWithToken.post(`/back/api/support/permission/delete`, JSON.stringify({ id: permissionToDelete.c_id })).then((res) => {
         if (res.data.code === 200) {
-          setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
-          setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });
+          setUsers(prev => prev.filter(u => u.c_id !== permissionToDelete.c_id));
+          setFeedbackMessage({ type: 'success', text: `权限 "${permissionToDelete.c_id}" 已删除。` });
         } else
-          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.c_username}" 删除失败。` })
+          setFeedbackMessage({ type: 'error', text: `权限 "${permissionToDelete.c_id}" 删除失败。` })
       });
     }
     setIsConfirmDeleteOpen(false);
-    setUserToDelete(null);
+    setPermissionToDelete(null);
   };
 
 
@@ -213,10 +206,10 @@ const PermissionManagementPage: React.FC = () => {
   return (
     <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
       <Typography variant="h4" component="h1" gutterBottom>
-        用户管理
+        权限管理
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        此页面用于管理平台用户账户、分配角色以及查看用户活动。
+        此页面用于管理平台权限、查看权限活动。
       </Typography>
 
       {feedbackMessage && (
@@ -230,7 +223,7 @@ const PermissionManagementPage: React.FC = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="搜索用户..."
+            placeholder="搜索权限..."
             value={searchTerm.data}
             onChange={handleSearchChange}
             onKeyDown={(e) => {
@@ -265,11 +258,11 @@ const PermissionManagementPage: React.FC = () => {
           startIcon={<AddCircleOutlineIcon />}
           onClick={handleAddUserClick}
         >
-          添加用户
+          添加权限
         </Button>
       </Box>
       <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
-        <Table aria-label="用户列表">
+        <Table aria-label="权限列表">
           <TableHead sx={{ bgcolor: 'action.focus' }}>
             <TableRow>
               {[
@@ -306,12 +299,12 @@ const PermissionManagementPage: React.FC = () => {
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_id}</TableCell>
                     <TableCell>{permission.c_name}</TableCell>
                     <TableCell align="center">
-                      <Tooltip title="编辑用户">
+                      <Tooltip title="编辑权限">
                         <IconButton size="small" onClick={() => handleEditUserClick(permission)} color="primary">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="删除用户">
+                      <Tooltip title="删除权限">
                         <IconButton size="small" onClick={() => handleDeleteUserClick(permission)} color="error" disabled={permission.c_id === 'admin' /* Prevent deleting main admin for demo */}>
                           <DeleteIcon />
                         </IconButton>
@@ -322,7 +315,7 @@ const PermissionManagementPage: React.FC = () => {
                 : (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                      <Typography color="text.secondary">没有找到匹配的用户。</Typography>
+                      <Typography color="text.secondary">没有找到匹配的权限。</Typography>
                     </TableCell>
                   </TableRow>
                 )
@@ -342,27 +335,27 @@ const PermissionManagementPage: React.FC = () => {
         />
       </TableContainer>
 
-      <UserFormModal
+      <PermissionFormModal
         open={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
         onSave={handleSaveUser}
-        initialUser={editingUser}
+        initialPermission={editingPermission}
       />
 
-      {userToDelete && (
+      {permissionToDelete && (
         <ConfirmActionDialog
           open={isConfirmDeleteOpen}
           onClose={() => setIsConfirmDeleteOpen(false)}
-          title="确认删除用户"
-          message={`您确定要删除用户 "${userToDelete?.c_username}" 吗？此操作无法撤销。`}
+          title="确认删除权限"
+          message={`您确定要删除权限 "${permissionToDelete?.c_id}" 吗？此操作无法撤销。`}
           onConfirm={confirmDeleteUser}
         />
       )}
 
-      <MuiAlert severity="info" sx={{ mt: 4 }}>
+      {/* <MuiAlert severity="info" sx={{ mt: 4 }}>
         <Typography variant="subtitle2" gutterBottom>系统安全提示</Typography>
-        用户的密码将通过安全的哈希算法进行加密存储。所有用户操作均会记录审计日志，确保系统安全可追溯。请定期审查用户权限，遵循最小权限原则。
-      </MuiAlert>
+        权限的密码将通过安全的哈希算法进行加密存储。所有权限操作均会记录审计日志，确保系统安全可追溯。请定期审查权限权限，遵循最小权限原则。
+      </MuiAlert> */}
     </Paper>
   );
 };

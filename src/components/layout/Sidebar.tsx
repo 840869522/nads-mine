@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { APP_NAME, USER_ROLES_CONFIG } from '../../constants';
-import { UserRole } from "../../types.ts";
 import { useThemeMode } from '../../contexts/ThemeModeContext.tsx';
 
 import Box from '@mui/material/Box';
@@ -33,6 +32,8 @@ import CommandLineIcon from '@heroicons/react/24/outline/CommandLineIcon';
 import Cog6ToothIcon from '@heroicons/react/24/outline/Cog6ToothIcon';
 import UserGroupIcon from '@heroicons/react/24/outline/UserGroupIcon';
 import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
+import ArrowLeftEndOnRectangleIcon  from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
+
 
 
 import ExpandLess from '@mui/icons-material/ExpandLess';
@@ -42,7 +43,6 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Chip } from '@mui/material';
-import { link } from 'fs';
 
 
 interface NavItemType {
@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         { to: "/admin/users", label: "用户管理", icon: UserGroupIcon, requiredPermission: 'support_user' },
         { to: "/admin/roles", label: "角色管理", icon: KeyIcon, requiredPermission: 'support_role' },
-        { to: "/admin/permissions", label: "权限管理", icon: KeyIcon, requiredPermission: 'support_permission' },
+        { to: "/admin/permissions", label: "权限管理", icon: ArrowLeftEndOnRectangleIcon, requiredPermission: 'support_permission' },
         { to: "/scenario/images", label: "容器镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_images_manage' }, // Moved here and renamed
         { to: "/scenario/instances", label: "容器实例管理", icon: CommandLineIcon, requiredPermission: 'support_instances_manage' }, // Moved here and renamed
         { to: "/scenario/vm-images", label: "虚拟机镜像管理", icon: ArchiveBoxIconHero, requiredPermission: 'support_scenario_images_manage' },
