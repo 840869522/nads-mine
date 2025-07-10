@@ -155,4 +155,10 @@ class VmController extends Controller
     {
         return $this->runCli(['events', $vmId]);
     }
+
+    // DELETE /vms/{vm_id}
+    public function deleteVm($vmId)
+    {
+        return $this->runCli(['delete-vm', $vmId]);
+    }
 }

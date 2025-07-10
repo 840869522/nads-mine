@@ -633,6 +633,17 @@ def manage_vm_lifecycle(vm_id: str, action: str):
     _wait_for_state(vm_id, target_state)
     return LifecycleActionResponse(message="ok", vm_id=vm_id, action=action, state=target_state)
 
+def delete_vm(vm_id: str):
+    try:
+        try:
+            run_virsh("destroy", vm_id)
+        except RuntimeError:
+            pass
+        run_virsh("undefine", vm_id, "--remove-all-storage")
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+    return {"message": "deleted"}
+
 def list_vm_snapshots(vm_id: str):
     snaps: List[Snapshot] = []
     try:
@@ -857,6 +868,10 @@ def main():
     p_get = sub.add_parser("get-vm")
     p_get.add_argument("vm_id")
     p_get.set_defaults(func=lambda a: get_vm_info(a.vm_id))
+
+    p_delete = sub.add_parser("delete-vm")
+    p_delete.add_argument("vm_id")
+    p_delete.set_defaults(func=lambda a: delete_vm(a.vm_id))
 
     p_lifecycle = sub.add_parser("lifecycle")
     p_lifecycle.add_argument("vm_id")

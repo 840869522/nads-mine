@@ -262,6 +262,7 @@
         Route::post('/create', [$c, 'createVm']);
         Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
         Route::get('/{vm_id}', [$c, 'getVmInfo']);
+        Route::delete('/{vm_id}', [$c, 'deleteVm']);
         Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
         Route::get('/{vm_id}/snapshots', [$c, 'listVmSnapshots']);
         Route::post('/{vm_id}/snapshots', [$c, 'createVmSnapshot']);
