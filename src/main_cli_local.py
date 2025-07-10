@@ -208,6 +208,9 @@ def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
 
 def _size_to_mb(size: float, unit: str) -> float:
     unit = unit.lower()
+    if unit.startswith("b"):
+        # values reported without a unit are bytes
+        return size / (1024 * 1024)
     if unit.startswith("g"):
         return size * 1024
     if unit.startswith("k"):
@@ -723,11 +726,21 @@ def list_vm_disks(vm_id: str):
         alloc_gb = 0
         for l in info_out.splitlines():
             if l.startswith("Capacity:"):
-                val, unit = l.split()[1:3]
-                capacity_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    capacity_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    capacity_gb = float(val) / (1024 * 1024 * 1024)
             elif l.startswith("Allocation:"):
-                val, unit = l.split()[1:3]
-                alloc_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    alloc_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    alloc_gb = float(val) / (1024 * 1024 * 1024)
         disks.append(
             Disk(
                 id=target,
