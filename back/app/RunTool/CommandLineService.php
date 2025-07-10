@@ -4,6 +4,7 @@ namespace App\RunTool;
 
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 命令行执行服务
@@ -11,9 +12,72 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
  * 封装所有通过命令行与系统（如 Docker, OVS）交互的逻辑。
  */
 class CommandLineService
-{
+{   
     /**
-     * 【新增方法】
+     * 
+     * 将一个容器连接到一个OVS交换机上，严格仿照用户最新的命名规则。
+     *
+     * @param string      $switchName      参数1: 交换机的名称
+     * @param string      $containerName   参数3: 容器的名称
+     * @param string|null $ipAddress       参数4: 分配给容器的IP地址
+     *
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function connectContainerToSwitch(string $switchName, string $containerName, ?string $ipAddress = null): void
+    {
+        // === 生成参数2：新生成的pair名称 ===
+
+        // 1. 处理交换机名称部分
+        $baseSwitchName = explode('_', $switchName)[0];
+        $switchPrefix = substr($baseSwitchName, 0, 2); // 交换机前两个字符
+        $switchSuffix = substr($baseSwitchName, -2);   // 交换机最后一个字符
+        $switchPart = $switchPrefix . $switchSuffix;
+
+        // 2. 处理容器名称部分
+        $baseContainerName = explode('_', $containerName)[0];
+        $containerPrefix = substr($baseContainerName, 0, 2); // 容器前两个字符
+        $containerSuffix = substr($baseContainerName, -2);   // 容器最后一个字符
+        $containerPart = $containerPrefix . $containerSuffix;
+        
+        // 3. 交换机唯一哈希部分
+        $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
+
+        // 4. 拼接成最终的配对名称 (e.g., "SwhCo1da10")
+        $pairName = $switchPart . $containerPart . $switchHash;
+
+        // === 构建严格的四参数命令 ===
+        $command = [
+            'sudo',
+            'ovs-docker',
+            'add-port',
+            $switchName,      // 参数1: 交换机名称
+            $pairName,        // 参数2: 新生成的pair名称
+            $containerName,   // 参数3: 容器名称
+        ];
+
+        // 添加可选的IP地址参数
+        if ($ipAddress) {
+            $command[] = '--ipaddress=' . $ipAddress; // 参数4
+        }
+
+        Log::info('Executing OVS network connection command (V4 Rule): ' . implode(' ', $command));
+
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            Log::error("Failed to connect container '{$containerName}' to switch '{$switchName}'", [
+                'error' => $process->getErrorOutput(),
+                'output' => $process->getOutput(),
+            ]);
+            throw new ProcessFailedException($process);
+        }
+    }
+
+    
+    /**
+     * 
      * 删除一个 OVS 网桥。
      *
      * @param string $switchName 要删除的网桥的名称。
@@ -39,7 +103,7 @@ class CommandLineService
         }
     }
     /**
-     * 【新增】创建一个 OVS (Open vSwitch) 网桥。
+     * 创建一个 OVS (Open vSwitch) 网桥。
      *
      * @param string      $switchName 要创建的交换机的名称。
      * @param string|null $controller 可选，外部 SDN 控制器的 "ip:port"。
@@ -95,7 +159,7 @@ class CommandLineService
     public function createContainer(array $options): string
     {
         // 1. 构建 docker run 命令数组
-        $command = ['sudo', 'docker', 'run', '-d', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
+        $command = ['sudo', 'docker', 'run', '-itd', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
 
         // a. 添加容器名称
         if (!empty($options['name'])) {
