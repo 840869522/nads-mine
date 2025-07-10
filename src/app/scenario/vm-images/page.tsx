@@ -180,8 +180,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             headerName: '修改日期',
             flex: 1,
             minWidth: 160,
-            valueFormatter: params =>
-                params.value ? dayjs(params.value as string).format('YYYY年M月D日') : '',
+            valueFormatter: ({ value }) =>
+                value ? dayjs(value as string).format('YYYY年M月D日') : '',
         },
         {
             field: 'actions',
