@@ -152,6 +152,7 @@ class EventLog(BaseModel):
 class VMRequest(BaseModel):
     vm_name: Optional[str] = None
     base_image: str
+    os_variant: Optional[str] = None
     memory: int = 2048
     vcpus: int = 2
     disk_gb: int = 20
@@ -431,6 +432,7 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
         )
 
         guest_os = detect_os(req.base_image) if req.base_image else "linux"
+        os_variant = req.os_variant or ("ubuntu24.04" if guest_os == "linux" else "win10")
 
         if guest_os == "windows":
             if not req.admin_password:
@@ -500,6 +502,8 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             str(req.memory),
             "--vcpus",
             str(req.vcpus),
+            "--os-variant",
+            os_variant,
             "--graphics",
             "vnc,listen=0.0.0.0,port=0",
             "--noautoconsole",
@@ -841,6 +845,7 @@ def main():
     p_create.add_argument("--memory", type=int, default=2048)
     p_create.add_argument("--vcpus", type=int, default=2)
     p_create.add_argument("--disk-gb", type=int, default=20)
+    p_create.add_argument("--os-variant")
     p_create.add_argument("--ssh-key")
     p_create.add_argument("--admin-password")
     p_create.add_argument("--static-ip")
@@ -853,6 +858,7 @@ def main():
             memory=args.memory,
             vcpus=args.vcpus,
             disk_gb=args.disk_gb,
+            os_variant=args.os_variant,
             ssh_key=args.ssh_key,
             admin_password=args.admin_password,
             static_ip=args.static_ip,
