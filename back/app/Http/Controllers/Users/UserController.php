@@ -26,10 +26,10 @@
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "message" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" =>[ 
+                    "data" =>[
                         'data' =>$modelRes['data'],
                         'count'=> $modelRes['count']
-                    ] 
+                    ]
                 ]);
             else {
                 return response()->json([
@@ -84,7 +84,7 @@
             $modelRes = UserModel::getUserById($id);
             $role = RoleModel::getUserRole($id);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE && $role['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE){
-                $modelRes['data']->role = array_map(function ($item) {return $item->c_id;},$role["data"]);  
+                $modelRes['data']->role = array_map(function ($item) {return $item->c_id;},$role["data"]);
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                     "message" => GlobalResponse::HTTP_STATUS_OK_MES,

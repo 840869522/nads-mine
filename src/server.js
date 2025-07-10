@@ -41,7 +41,7 @@ app.prepare().then(() => {
   });
 
   // 为 Guacamole 服务创建一个新的代理
-  // 这个代理会将发往主服务器 /api/guac 的请求转发到内部的 Guacamole 服务器
+  // 这个代理会将发往主服务器 /connect-guac 的请求转发到内部的 Guacamole 服务器
   const guacProxy = createProxyMiddleware({
     target: GUAC_TARGET_URL,
     changeOrigin: true,
@@ -57,14 +57,16 @@ app.prepare().then(() => {
   // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
   mainHttpServer = createServer((req, res) => {
     const url = req.url || '';
+    // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
+    // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+    if (url.startsWith('/connect-guac')) {
+      console.log("find guac req！！！！！！！！！！！！！")
+      return guacProxy(req, res);
+    }
     if (url.startsWith('/back/')) {
       return phpProxy(req, res);
     }
-    // 主要改动 (2/3): 如果请求是发往 /api/guac，则使用 guacProxy 处理
-    // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
-    if (url.startsWith('/api/guac')) {
-      return guacProxy(req, res);
-    }
+
     // 其他所有请求都由 Next.js 处理
     return handle(req, res);
   });
@@ -72,47 +74,22 @@ app.prepare().then(() => {
   // 独立的 Guacamole 服务器 (作为内部服务运行，不对外暴露)
   const guacHttpServer = createServer();
   guacServer = new GuacamoleLite(
-      { server: guacHttpServer, path: '/api/guac' },
-      { port: parseInt(process.env.GUACD_PORT || '4822', 10) },
+      { server: guacHttpServer, path: '/connect-guac' },
+      { port: 4822 },
       {
         crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
         allowedUnencryptedConnectionSettings: {
           rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
           ssh: ['hostname', 'port', 'username', 'password'],
           vnc: ['hostname', 'port', 'password'],
-          join: ['id']
-        }
+          join: ['id','width','height','dpi']
+        },
+        log: { level: 'VERBOSE' },
       }
   );
-  guacServer.on('process-initial-request', (request) => {
-    // 这个事件在 WebSocket 连接建立后，与 guacd 通信之前触发
-    // 是验证连接是否到达 guacamole-lite 的最佳位置
-    console.log(`[Guac VERIFY] Received connection request. Client: ${request.socket.remoteAddress}, Path: ${request.url}`);
-    // 你可以在这里基于 request.url 或其他信息进行验证
-    // 返回 false 会拒绝连接
-    return true;
-  });
-
-  guacServer.on('client-connect', (client) => {
-    // 当一个客户端成功连接到 guacd 后触发
-    console.log(`[Guac CON] Client connected. ID: ${client.id}, Protocol: ${client.settings.protocol}`);
-  });
-
-  guacServer.on('client-disconnect', (client) => {
-    // 当一个客户端断开连接时触发
-    console.log(`[Guac DISCON] Client disconnected. ID: ${client.id}`);
-  });
-
-  guacServer.on('client-error', (client, err) => {
-    // 当某个客户端发生错误时触发
-    console.error(`[Guac ERR] Client error. ID: ${client.id}, Error:`, err);
-  });
-
-  guacServer.on('guacd-error', (err) => {
-    // 当 guacamole-lite 连接 guacd 服务失败时触发
-    // 这是非常重要的日志，通常能直接指出问题
-    console.error(`[Guacd ERR] Error connecting to guacd:`, err);
-  });
+  guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
+  guacServer.on('error', (c,e) => console.error('[Guac ERR]', e));
+  guacServer.on('close', (c) =>   console.log('[Guac END]', c.connectionId));
   /* =================================================================
      3. SOCKET.IO AND CONNECTION HANDLING
      ================================================================= */
@@ -123,6 +100,14 @@ app.prepare().then(() => {
   });
   mainHttpServer.on('upgrade', (req, socket, head) => {
     console.log('[upgrade] url=', req.url);
+    if (req.url.startsWith('/connect-guac')) {
+         // 把升级请求交给同一个 guacProxy 实例处理
+      console.log("find guac req！！！！！！！！！！！！！")
+   guacProxy.upgrade(req, socket, head);
+   } else {
+     // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
+        console.log('[upgrade] non-guac ws →', req.url);
+     }
   });
   const io = new Server(mainHttpServer, { path: '/api/terminal' });
 
@@ -182,7 +167,7 @@ app.prepare().then(() => {
   mainHttpServer.listen(MAIN_PORT, () => {
     console.log(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
     console.log(`> ➡️  PHP proxied from /back/`);
-    console.log(`> ➡️  Guacamole proxied from /api/guac`);
+    console.log(`> ➡️  Guacamole proxied from /connect-guac`);
     console.log(`> ➡️  Terminal WebSocket direct at /api/terminal`);
   });
 

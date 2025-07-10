@@ -13,6 +13,7 @@ import {
   Select,
   MenuItem
 } from "@mui/material";
+import { OS_VARIANTS } from "@/constants/osVariants";
 
 interface VmImage {
   id: string;
@@ -32,6 +33,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   const [form, setForm] = useState({
     vm_name: "",
     base_image: "",
+    os_variant: "",
     memory: 2048,
     vcpus: 2,
     disk_gb: 20,
@@ -43,7 +45,8 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   useEffect(() => {
     if (!open) return;
     if (fixedImage) {
-      setForm(f => ({ ...f, base_image: fixedImage }));
+      const name = fixedImage.split('/').pop() || fixedImage;
+      setForm(f => ({ ...f, base_image: name }));
       setImages([]);
     } else {
       fetch("/back/api/vms/images")
@@ -56,6 +59,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
     setForm({
       vm_name: "",
       base_image: fixedImage || "",
+      os_variant: "",
       memory: 2048,
       vcpus: 2,
       disk_gb: 20,
@@ -97,11 +101,24 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
                 onChange={e => setForm(f => ({ ...f, base_image: e.target.value }))}
               >
                 {images.map(img => (
-                  <MenuItem key={img.id} value={img.path}>{img.name}</MenuItem>
+                  <MenuItem key={img.id} value={img.name}>{img.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
           )}
+          <FormControl fullWidth>
+            <InputLabel id="variant-label">os-variant</InputLabel>
+            <Select
+              labelId="variant-label"
+              value={form.os_variant}
+              label="os-variant"
+              onChange={e => setForm(f => ({ ...f, os_variant: e.target.value }))}
+            >
+              {OS_VARIANTS.map(v => (
+                <MenuItem key={v} value={v}>{v}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField label="实例名称" value={form.vm_name}
             onChange={e => setForm(f => ({ ...f, vm_name: e.target.value }))} fullWidth />
           <TextField label="内存 (MB)" type="number" value={form.memory}

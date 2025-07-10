@@ -1,0 +1,210 @@
+<?php
+
+
+namespace App\Http\Controllers\Course;
+
+use App\Models\Course\QuestionsModel;
+use App\Models\Course\QuestionsOptionsModel;
+use Illuminate\Http\Request;
+use App\Models\Course\CategoryModel;
+use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Controller;
+use App\Utils\GlobalResponse;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
+
+class TestController extends Controller
+{
+
+    /**
+     * Notes:增加题库接口
+     * User: zhangnan
+     * DateTime: 2025/7/10 16:20
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function question_add(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $c_course_id     = trim($request->input('course_id'));
+            $c_question     = trim($request->input('question'));
+            $c_answer     = trim($request->input('answer'));
+            $c_tag     = trim($request->input('tag'));
+            $type     = $request->input('type');
+            $content     = $request->input('content');
+            $validated_data = array(
+                'id' => 'required|max:50',
+                'course_id' => 'required',
+                'question' => 'required',
+                'answer' => 'required',
+                'type' => 'required|integer|in:1,2,3,4',
+                'tag' => 'required|max:50'
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.max'=>"id字段超限",
+                'course_id.required'=>"course_id 字段不能为空",
+                'question.required'=>"question 字段不能为空",
+                'answer.required'=>"answer 字段不能为空",
+                'type.required'=>"type 字段不能为空",
+                'type.integer'=>"type 字段类型错误",
+                'type.in'=>"type 字段参数错误",
+                'tag.required'=>"tag 字段不能为空",
+                'tag.max'=>"tag 字段超限",
+            );
+            if(in_array($type,[1,2])){
+                $validated_data['content']='required|array';
+                $validated_data['content.*.key']='required|max:4';
+                $validated_data['content.*.option']='required';
+                $validated_msg['content.required']='单选、多选选项不能为空';
+                $validated_msg['content.array']='单选、多选选项格式错误';
+                $validated_msg['content.*.key.required']='选项key不能为空';
+                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.option.required']='选项内容不能为空';
+            }
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            if(in_array($type,[1,2])){
+                $QuestionsOptionsMod = new QuestionsOptionsModel();
+                $verify_answer = 0;
+                foreach($content as $k=>$v){
+
+                    $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key']);
+                    if(!$verify_options_only){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
+                    }
+                    if($v['option']==$c_answer){
+                        $verify_answer=1;
+                    }
+                }
+                if($verify_answer==0){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"答案不在选项中");
+                }
+            }
+
+            $mod = new QuestionsModel();
+            $verify = $mod->verify_c_id_only($c_id);
+            if(!$verify){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+            }
+
+            $res = $mod->create_question_info($c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目插入失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    public function question_up(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $c_course_id     = trim($request->input('course_id'));
+            $c_question     = trim($request->input('question'));
+            $c_answer     = trim($request->input('answer'));
+            $c_tag     = trim($request->input('tag'));
+            $type     = $request->input('type');
+            $content     = $request->input('content');
+            $validated_data = array(
+                'id' => 'required|max:50|exists:c_questions,c_id',
+                'course_id' => 'required',
+                'question' => 'required',
+                'answer' => 'required',
+                'type' => 'required|integer|in:1,2,3,4',
+                'tag' => 'required|max:50'
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.max'=>"id字段超限",
+                'id.exists'=>"id不存在",
+                'course_id.required'=>"course_id 字段不能为空",
+                'question.required'=>"question 字段不能为空",
+                'answer.required'=>"answer 字段不能为空",
+                'type.required'=>"type 字段不能为空",
+                'type.integer'=>"type 字段类型错误",
+                'type.in'=>"type 字段参数错误",
+                'tag.required'=>"tag 字段不能为空",
+                'tag.max'=>"tag 字段超限",
+            );
+            if(in_array($type,[1,2])){
+                $validated_data['content']='required|array';
+                $validated_data['content.*.key']='required|max:4';
+                $validated_data['content.*.option']='required';
+                $validated_msg['content.required']='单选、多选选项不能为空';
+                $validated_msg['content.array']='单选、多选选项格式错误';
+                $validated_msg['content.*.key.required']='选项key不能为空';
+                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.option.required']='选项内容不能为空';
+            }
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            if(in_array($type,[1,2])){
+                if(empty($content)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
+                }else{
+                    $QuestionsOptionsMod = new QuestionsOptionsModel();
+                    $verify_answer = 0;
+                    foreach($content as $k=>$v){
+
+                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key'],$c_id);
+                        if(!$verify_options_only){
+                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
+                        }
+                        if($v['option']==$c_answer){
+                            $verify_answer=1;
+                        }
+                    }
+                    if($verify_answer==0){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"答案不在选项中");
+                    }
+                }
+            }
+
+            $mod = new QuestionsModel();
+            $info = $mod->get_question_info_by_c_id($c_id);
+            $res = $mod->update_question_info($info,$c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目修改失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+
+    public function question_del(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|exists:c_questions,c_id',
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.exists'=>"id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+
+            $mod = new QuestionsModel();
+            $res = $mod->del_question_info($c_id);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目删除失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+
+
+}

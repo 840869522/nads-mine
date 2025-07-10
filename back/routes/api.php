@@ -18,7 +18,7 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
-    use App\Http\Controllers\examination\TestController;
+    use App\Http\Controllers\Course\TestController;
 
 
     /*
@@ -240,6 +240,7 @@
         Route::post('/create', [$c, 'createVm']);
         Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
         Route::get('/{vm_id}', [$c, 'getVmInfo']);
+        Route::delete('/{vm_id}', [$c, 'deleteVm']);
         Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
         Route::get('/{vm_id}/snapshots', [$c, 'listVmSnapshots']);
         Route::post('/{vm_id}/snapshots', [$c, 'createVmSnapshot']);
@@ -252,10 +253,12 @@
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-    // Route::prefix('examination')->group(function () {
-    //     Route::prefix('test')->group(function(){
-    //         Route::post('/', [TestController::class, 'index']);
-    //     });
-    // });
+    Route::prefix('study')->group(function () {
+        Route::prefix('test')->group(function(){
+            Route::post('/question_add', [TestController::class, 'question_add']);
+            Route::post('/question_up', [TestController::class, 'question_up']);
+            Route::post('/question_del', [TestController::class, 'question_del']);
+        });
+    });
 
 ?>

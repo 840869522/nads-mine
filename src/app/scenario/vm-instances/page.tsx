@@ -218,6 +218,25 @@ export default function VmPage() {
         setActionAnchor(null);
     };
 
+    const handleDelete = async () => {
+        if (!current) return;
+        if (!window.confirm(`确定删除虚拟机 ${current.name}？`)) return;
+        setActionLoading(true);
+        try {
+            const res = await fetch(`/back/api/vms/${current.id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || res.statusText);
+            }
+            await mutate();
+            setCurrent(null);
+        } catch (e: any) {
+            alert(e.message || 'Failed to delete');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
             {/* ---------- 顶栏 ---------- */}
@@ -384,6 +403,15 @@ export default function VmPage() {
                             startIcon={<ConsoleIcon />}
                         >
                             控制台
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            disabled={actionLoading}
+                            onClick={handleDelete}
+                        >
+                            删除
                         </Button>
                         <Button
                             size="small"
