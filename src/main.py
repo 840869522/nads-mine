@@ -250,9 +250,15 @@ def fetch_vm_images() -> List[VmImage]:
             path = vol.path()
             # 使用文件的修改时间作为上传日期的近似值
             try:
-                mtime = os.path.getmtime(path)
+                result = subprocess.run(
+                    ["stat", "-c", "%Y", path],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                mtime = int(result.stdout.strip())
                 upload_date = datetime.fromtimestamp(mtime).isoformat()
-            except OSError:
+            except Exception:
                 upload_date = None
 
             # 使用 guestfs 解析镜像文件获取更多元信息

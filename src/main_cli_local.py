@@ -283,9 +283,15 @@ def fetch_vm_images() -> List[VmImage]:
                 size_mb = _size_to_mb(float(val), unit)
                 break
         try:
-            mtime = os.path.getmtime(path)
+            result = subprocess.run(
+                ["stat", "-c", "%Y", path],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            mtime = int(result.stdout.strip())
             upload_date = datetime.fromtimestamp(mtime).isoformat()
-        except OSError:
+        except Exception:
             upload_date = None
 
         images.append(
