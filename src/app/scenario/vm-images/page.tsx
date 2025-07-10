@@ -101,7 +101,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     }
 
     const handleStart = (image: VmImage) => {
-        setCreateModalImage(image.filePath || (image as any).path || image.name)
+        setCreateModalImage(image.name)
     }
 
     const handleSave = () => {
@@ -129,7 +129,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
-        img.version?.toLowerCase().includes(search.toLowerCase()) ||
         img.description?.toLowerCase().includes(search.toLowerCase())
     )
 
@@ -168,9 +167,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
         { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
-        { field: 'version', headerName: '版本', width: 120 },
-        { field: 'osType', headerName: '操作系统', width: 120 },
-        { field: 'architecture', headerName: '架构', width: 120 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',

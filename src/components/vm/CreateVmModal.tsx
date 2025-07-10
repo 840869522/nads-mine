@@ -45,7 +45,8 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   useEffect(() => {
     if (!open) return;
     if (fixedImage) {
-      setForm(f => ({ ...f, base_image: fixedImage }));
+      const name = fixedImage.split('/').pop() || fixedImage;
+      setForm(f => ({ ...f, base_image: name }));
       setImages([]);
     } else {
       fetch("/back/api/vms/images")
@@ -100,7 +101,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
                 onChange={e => setForm(f => ({ ...f, base_image: e.target.value }))}
               >
                 {images.map(img => (
-                  <MenuItem key={img.id} value={img.path}>{img.name}</MenuItem>
+                  <MenuItem key={img.id} value={img.name}>{img.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>

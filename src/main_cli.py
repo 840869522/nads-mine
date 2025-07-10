@@ -300,7 +300,6 @@ def fetch_vm_images() -> List[VmImage]:
         except OSError:
             upload_date = None
 
-        meta = _get_image_metadata(path)
         images.append(
             VmImage(
                 id=vol_name,
@@ -310,9 +309,6 @@ def fetch_vm_images() -> List[VmImage]:
                 path=path,
                 uploadDate=upload_date,
                 status="available",
-                version=meta.get("version"),
-                osType=meta.get("osType"),
-                architecture=meta.get("architecture"),
             )
         )
     return images

@@ -288,7 +288,6 @@ def fetch_vm_images() -> List[VmImage]:
         except OSError:
             upload_date = None
 
-        meta = _get_image_metadata(path)
         images.append(
             VmImage(
                 id=vol_name,
@@ -298,9 +297,6 @@ def fetch_vm_images() -> List[VmImage]:
                 path=path,
                 uploadDate=upload_date,
                 status="available",
-                version=meta.get("version"),
-                osType=meta.get("osType"),
-                architecture=meta.get("architecture"),
             )
         )
     return images
@@ -434,7 +430,8 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             tempfile.TemporaryDirectory(prefix=f"{vm}-ci-")
         )
 
-        guest_os = detect_os(req.base_image) if req.base_image else "linux"
+        base_image_path = os.path.join(POOL_DIR, req.base_image)
+        guest_os = detect_os(base_image_path) if req.base_image else "linux"
         os_variant = req.os_variant or ("ubuntu24.04" if guest_os == "linux" else "win10")
 
         if guest_os == "windows":
@@ -489,10 +486,12 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             with open(os.path.join(tmpdir, name), "w") as fp:
                 fp.write(content)
 
+        overlay_path = os.path.join(POOL_DIR, f"{vm}.qcow2")
         disk_opts: list[str] = [
+            f"path={overlay_path}",
             f"size={req.disk_gb}",
             "format=qcow2",
-            # f"backing_store={req.base_image},backing_format=qcow2",
+            f"backing_store={base_image_path},backing_format=qcow2",
         ]
 
         cmd = [
