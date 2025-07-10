@@ -60,8 +60,8 @@ class VmImage(BaseModel):
     version: Optional[str] = None
     osType: Optional[str] = None
     architecture: Optional[str] = None
-    # 上传日期可近似使用文件的修改时间
-    uploadDate: Optional[str] = None
+    # 修改日期可近似使用文件的修改时间
+    modifiedDate: Optional[str] = None
     # 镜像状态目前固定为 available，无法直接从 libvirt 获取
     status: Optional[str] = None
 
@@ -208,6 +208,9 @@ def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
 
 def _size_to_mb(size: float, unit: str) -> float:
     unit = unit.lower()
+    if unit.startswith("b"):
+        # values reported without a unit are bytes
+        return size / (1024 * 1024)
     if unit.startswith("g"):
         return size * 1024
     if unit.startswith("k"):
@@ -285,7 +288,6 @@ def fetch_vm_images() -> List[VmImage]:
         except OSError:
             upload_date = None
 
-        meta = _get_image_metadata(path)
         images.append(
             VmImage(
                 id=vol_name,
@@ -293,11 +295,8 @@ def fetch_vm_images() -> List[VmImage]:
                 pool="default",
                 size=f"{size_mb:.1f} MB",
                 path=path,
-                uploadDate=upload_date,
+                modifiedDate=upload_date,
                 status="available",
-                version=meta.get("version"),
-                osType=meta.get("osType"),
-                architecture=meta.get("architecture"),
             )
         )
     return images
@@ -431,7 +430,8 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             tempfile.TemporaryDirectory(prefix=f"{vm}-ci-")
         )
 
-        guest_os = detect_os(req.base_image) if req.base_image else "linux"
+        base_image_path = os.path.join(POOL_DIR, req.base_image)
+        guest_os = detect_os(base_image_path) if req.base_image else "linux"
         os_variant = req.os_variant or ("ubuntu24.04" if guest_os == "linux" else "win10")
 
         if guest_os == "windows":
@@ -486,10 +486,12 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             with open(os.path.join(tmpdir, name), "w") as fp:
                 fp.write(content)
 
+        overlay_path = os.path.join(POOL_DIR, f"{vm}.qcow2")
         disk_opts: list[str] = [
+            f"path={overlay_path}",
             f"size={req.disk_gb}",
             "format=qcow2",
-            # f"backing_store={req.base_image},backing_format=qcow2",
+            f"backing_store={base_image_path},backing_format=qcow2",
         ]
 
         cmd = [
@@ -550,7 +552,7 @@ def get_guac_info(vm_name: str):
         pass
 
     return {
-        "host": ip or "127.0.0.1",
+        "host": ip or "192.168.200.10",
         "ssh_port": 22,
         "rdp_port": 3389,
         "vnc_port": vnc_port,
@@ -643,7 +645,7 @@ def delete_vm(vm_id: str):
             run_virsh("destroy", vm_id)
         except RuntimeError:
             pass
-        run_virsh("undefine", vm_id, "--remove-all-storage")
+        run_virsh("undefine", vm_id, "--remove-all-storage","--snapshots-metadata")
     except RuntimeError as e:
         raise HTTPException(500, str(e))
     return {"message": "deleted"}
@@ -721,19 +723,34 @@ def list_vm_disks(vm_id: str):
             continue
         capacity_gb = 0
         alloc_gb = 0
+        fmt = ""
         for l in info_out.splitlines():
             if l.startswith("Capacity:"):
-                val, unit = l.split()[1:3]
-                capacity_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    capacity_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    capacity_gb = float(val) / (1024 * 1024 * 1024)
             elif l.startswith("Allocation:"):
-                val, unit = l.split()[1:3]
-                alloc_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    alloc_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    alloc_gb = float(val) / (1024 * 1024 * 1024)
+            elif l.startswith("Format:"):
+                parts_info = l.split()
+                if len(parts_info) >= 2:
+                    fmt = parts_info[1]
         disks.append(
             Disk(
                 id=target,
                 target=target,
                 source=path,
-                format="",  # unknown
+                format=fmt,
                 bus="virtio",
                 capacity_gb=int(capacity_gb),
                 allocated_gb=int(alloc_gb),
