@@ -63,6 +63,7 @@ class VmController extends Controller
             'memory' => '--memory',
             'vcpus' => '--vcpus',
             'disk_gb' => '--disk-gb',
+            'os_variant' => '--os-variant',
             'ssh_key' => '--ssh-key',
             'admin_password' => '--admin-password',
             'static_ip' => '--static-ip',
@@ -154,5 +155,11 @@ class VmController extends Controller
     public function listVmEvents($vmId)
     {
         return $this->runCli(['events', $vmId]);
+    }
+
+    // DELETE /vms/{vm_id}
+    public function deleteVm($vmId)
+    {
+        return $this->runCli(['delete-vm', $vmId]);
     }
 }

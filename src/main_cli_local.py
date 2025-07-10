@@ -152,6 +152,7 @@ class EventLog(BaseModel):
 class VMRequest(BaseModel):
     vm_name: Optional[str] = None
     base_image: str
+    os_variant: Optional[str] = None
     memory: int = 2048
     vcpus: int = 2
     disk_gb: int = 20
@@ -431,6 +432,7 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
         )
 
         guest_os = detect_os(req.base_image) if req.base_image else "linux"
+        os_variant = req.os_variant or ("ubuntu24.04" if guest_os == "linux" else "win10")
 
         if guest_os == "windows":
             if not req.admin_password:
@@ -500,6 +502,8 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
             str(req.memory),
             "--vcpus",
             str(req.vcpus),
+            "--os-variant",
+            os_variant,
             "--graphics",
             "vnc,listen=0.0.0.0,port=0",
             "--noautoconsole",
@@ -632,6 +636,17 @@ def manage_vm_lifecycle(vm_id: str, action: str):
     target_state = "running" if action in ["start", "resume", "reboot"] else "paused" if action == "pause" else "shut off"
     _wait_for_state(vm_id, target_state)
     return LifecycleActionResponse(message="ok", vm_id=vm_id, action=action, state=target_state)
+
+def delete_vm(vm_id: str):
+    try:
+        try:
+            run_virsh("destroy", vm_id)
+        except RuntimeError:
+            pass
+        run_virsh("undefine", vm_id, "--remove-all-storage")
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+    return {"message": "deleted"}
 
 def list_vm_snapshots(vm_id: str):
     snaps: List[Snapshot] = []
@@ -830,6 +845,7 @@ def main():
     p_create.add_argument("--memory", type=int, default=2048)
     p_create.add_argument("--vcpus", type=int, default=2)
     p_create.add_argument("--disk-gb", type=int, default=20)
+    p_create.add_argument("--os-variant")
     p_create.add_argument("--ssh-key")
     p_create.add_argument("--admin-password")
     p_create.add_argument("--static-ip")
@@ -842,6 +858,7 @@ def main():
             memory=args.memory,
             vcpus=args.vcpus,
             disk_gb=args.disk_gb,
+            os_variant=args.os_variant,
             ssh_key=args.ssh_key,
             admin_password=args.admin_password,
             static_ip=args.static_ip,
@@ -857,6 +874,10 @@ def main():
     p_get = sub.add_parser("get-vm")
     p_get.add_argument("vm_id")
     p_get.set_defaults(func=lambda a: get_vm_info(a.vm_id))
+
+    p_delete = sub.add_parser("delete-vm")
+    p_delete.add_argument("vm_id")
+    p_delete.set_defaults(func=lambda a: delete_vm(a.vm_id))
 
     p_lifecycle = sub.add_parser("lifecycle")
     p_lifecycle.add_argument("vm_id")
