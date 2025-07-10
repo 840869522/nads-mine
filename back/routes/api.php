@@ -18,7 +18,7 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
-    use App\Http\Controllers\examination\TestController;
+    use App\Http\Controllers\Course\TestController;
 
 
     /*
@@ -274,9 +274,11 @@
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-    Route::prefix('examination')->group(function () {
+    Route::prefix('study')->group(function () {
         Route::prefix('test')->group(function(){
-            Route::post('/', [TestController::class, 'index']);
+            Route::post('/question_add', [TestController::class, 'question_add']);
+            Route::post('/question_up', [TestController::class, 'question_up']);
+            Route::post('/question_del', [TestController::class, 'question_del']);
         });
     });
 
