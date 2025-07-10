@@ -645,7 +645,7 @@ def delete_vm(vm_id: str):
             run_virsh("destroy", vm_id)
         except RuntimeError:
             pass
-        run_virsh("undefine", vm_id, "--remove-all-storage")
+        run_virsh("undefine", vm_id, "--remove-all-storage","--snapshots-metadata")
     except RuntimeError as e:
         raise HTTPException(500, str(e))
     return {"message": "deleted"}
