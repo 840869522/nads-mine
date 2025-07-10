@@ -180,8 +180,9 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             headerName: '修改日期',
             flex: 1,
             minWidth: 160,
-            valueFormatter: params =>
-                params.value ? dayjs(params.value as string).format('YYYY年M月D日') : '',
+            // Align with container pages: parse ISO string and format as locale date
+            valueFormatter: ({ value }) =>
+                value ? new Date(value as string).toLocaleDateString('zh-CN') : '',
         },
         {
             field: 'actions',
