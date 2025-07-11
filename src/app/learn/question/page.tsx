@@ -8,6 +8,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
+import QuestionModalForm, { QuestionFormData } from "@/components/learning/QuestionModalForm";
 
 
 
@@ -29,6 +30,7 @@ const QuestionPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [order, setOrder] = useState<Order>("asc");
     const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
+    const [questionToEdit, setQuesionToEdit] = useState(null);
 
     const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | "error", text: string } | null>(null);
     const [tableLaoding, setTableLoading] = useState<boolean>(true);
@@ -79,12 +81,15 @@ const QuestionPage: React.FC = () => {
     };
 
     const handleAddQuestionClick = () => {
-
+        setIsQuestionModalOpen(true);
+        setQuesionToEdit(null);
+        console.log(123);
     }
 
     const confirmDeleteQuestion = () => {
 
     };
+
 
 
 
@@ -94,6 +99,11 @@ const QuestionPage: React.FC = () => {
 
     const handelDeleteQuestionClick = (question: QuestionDisplayItem) => {
         setIsQuestionModalOpen(true);
+    }
+
+
+    const onSave = (data: QuestionFormData, isNew : boolean)=>{
+
     }
 
     const filteredAndSortedQuestions = useMemo(() => {
@@ -235,12 +245,12 @@ const QuestionPage: React.FC = () => {
 
             {/* 编辑试题modal */}
 
-            {/* <QuestionModalForm
+            <QuestionModalForm
                 open={isQuestionsModalOpen}
-                onSave={}
-                onCancle={()=>setIsQuestionModalOpen(false)}
-                initialQuestion={ }
-            /> */}
+                onSave={onSave}
+                onClose={()=>setIsQuestionModalOpen(false)}
+                initialQuestion={questionToEdit}
+            />
 
 
             {questionToDelete && (
