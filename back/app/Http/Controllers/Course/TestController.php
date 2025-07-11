@@ -85,14 +85,14 @@ class TestController extends Controller
             $mod = new QuestionsModel();
             $verify = $mod->verify_c_id_only($c_id);
             if(!$verify){
-                return $this->_response(422,"主键已存在");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
             }
 
             $res = $mod->create_question_info($c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
             if(!$res){
-                return $this->_response(422,"题目插入失败");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目插入失败");
             }
-            return $this->_response(900,"success");
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
@@ -168,9 +168,9 @@ class TestController extends Controller
             $info = $mod->get_question_info_by_c_id($c_id);
             $res = $mod->update_question_info($info,$c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
             if(!$res){
-                return $this->_response(422,"题目修改失败");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目修改失败");
             }
-            return $this->_response(900,"success");
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
@@ -195,9 +195,9 @@ class TestController extends Controller
             $mod = new QuestionsModel();
             $res = $mod->del_question_info($c_id);
             if(!$res){
-                return $this->_response(422,"题目删除失败");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目删除失败");
             }
-            return $this->_response(900,"success");
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());

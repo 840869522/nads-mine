@@ -193,8 +193,8 @@
         }
 
         public static function deletePermission(string $id) :array {
-            $sql = "DELETE * FROM  c_permissions WHERE c_id = ?";
-            $sql_role_permissions = "DELETE * FROM c_roles_permissions WHERE c_permission_id = ? ";
+            $sql = "DELETE FROM  c_permissions WHERE c_id = ?";
+            $sql_role_permissions = "DELETE FROM c_roles_permissions WHERE c_permission_id = ? ";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);

@@ -26,8 +26,6 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { User, UserRole } from '@/types';
-import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
@@ -129,7 +127,6 @@ const UserManagementPage: React.FC = () => {
   const handleEditUserClick = (user: UserDisplayItem) => {
     apiClientWithToken.post(`/back/api/support/user/id`, JSON.stringify({ id: user.c_username })).then((res) => {
       if (res.data.code === 200) {
-        console.log(res.data.data);
         setEditingUser(res.data.data);
         setIsUserModalOpen(true);
         setFeedbackMessage(null);

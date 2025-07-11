@@ -137,7 +137,7 @@ class CommandLineService
     public function deleteSwitch(string $switchName): void
     {
         $command = ['sudo', 'ovs-vsctl', 'del-br', $switchName];
-        \Log::info('Executing OVS command: ' . implode(' ', $command));
+        Log::info('Executing OVS command: ' . implode(' ', $command));
         $process = new Process($command);
         $process->run();
 
@@ -146,7 +146,7 @@ class CommandLineService
             // 只记录一个警告即可。对于其他错误，则抛出异常。
             $errorOutput = $process->getErrorOutput();
             if (str_contains($errorOutput, 'no bridge named')) {
-                \Log::warning("尝试删除一个不存在的 OVS 网桥: {$switchName}");
+                Log::warning("尝试删除一个不存在的 OVS 网桥: {$switchName}");
             } else {
                  throw new ProcessFailedException($process);
             }
@@ -187,7 +187,7 @@ class CommandLineService
             }
         }
 
-        \Log::info('Executing OVS command: ' . implode(' ', $command));
+        Log::info('Executing OVS command: ' . implode(' ', $command));
 
         // 5. 执行命令
         $process = new Process($command);
@@ -238,7 +238,7 @@ class CommandLineService
         }
         $command[] = $options['image'];
 
-        \Log::info('Executing Docker command: ' . implode(' ', $command));
+        Log::info('Executing Docker command: ' . implode(' ', $command));
 
         // 2. 执行命令
         $process = new Process($command);

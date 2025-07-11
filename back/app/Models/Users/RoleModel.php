@@ -67,12 +67,15 @@
         }
 
         public static function searchRoleByName(string $name, int $page = 1,int $pagesize=10) :array {
-            $sql = "SELECT * FROM `c_roles` WHERE c_name LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT * FROM `c_roles` WHERE c_name LIKE ? OR c_id LIKE ? LIMIT ? OFFSET ?";
             $offset = ($page - 1) * $pagesize;
+            $sql_count  = "SELECT COUNT(c_id) AS count FROM `c_roles` WHERE c_name LIKE ? OR c_id LIKE ?";
             try {
-                $user = db::select($sql, ['%'.$name.'%',$pagesize, $offset]);
+                $role = db::select($sql, ['%'.$name.'%','%'.$name.'%',$pagesize, $offset]);
+                $count = db::selectOne($sql_count,['%'.$name.'%','%'.$name.'%']);
                 return [
-                    "data"=>$user,
+                    "data"=>$role,
+                    "count"=>$count->count,
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch (Exception $e) {

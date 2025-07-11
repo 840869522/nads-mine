@@ -13,9 +13,9 @@ class Controller extends BaseController
 
     /**
      * 统一返回值
-     * @param $err_no int 错误编码
-     * @param $err_msg string 错误信息
-     * @param $data array 返回信息
+     * @param $code int 响应编码
+     * @param $messsage string 返回信息 SUCCESS FAILED ...
+     * @param $data array 返回数据
      * @author
      *@Date AM
      */
@@ -25,7 +25,7 @@ class Controller extends BaseController
 
         $res = [
             'code'=> $code,
-            'err_msg'=> $message,
+            'message'=> $message,
             'data'=> $data
         ];
 
