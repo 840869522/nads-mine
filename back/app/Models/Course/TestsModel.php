@@ -12,6 +12,9 @@ class TestsModel extends Model{
     protected $table = 'c_tests';
     public $timestamps = false;
     protected $primaryKey = 'c_id';
+    protected $casts = [
+        'c_id' => 'string', // 指定ID为主键（如果是UUID）
+    ];
     public $pageSize = 20;
 
 
@@ -30,7 +33,7 @@ class TestsModel extends Model{
     public function create_test_info($c_name="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
     {
         $mod = new TestsModel();
-        $mod->c_id = Str::uuid();
+        $mod->c_id = Str::uuid()->toString();;
         $mod->c_name = $c_name;
         $mod->c_description = $c_description;
         $mod->c_paper_count = $c_paper_count;
@@ -139,6 +142,7 @@ class TestsModel extends Model{
             $pageSize = $this->pageSize;
         }
         $mod = new TestsModel();
+        $count = $mod->count();
         if(empty($page)){
             $list = $mod->paginate($pageSize);
         }else{
@@ -148,6 +152,7 @@ class TestsModel extends Model{
         $res = array(
             'page'=>$page,
             'pageSize'=>$pageSize,
+            'count'=>$count,
             'data'=>$data
         );
         return $res;

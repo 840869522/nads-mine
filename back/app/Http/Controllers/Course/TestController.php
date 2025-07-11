@@ -325,6 +325,13 @@ class TestController extends Controller
     }
 
 
+    /**
+     * Notes:修改测试
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:14
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function test_update(Request $request)
     {
         try {
@@ -372,6 +379,86 @@ class TestController extends Controller
                 return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试修改失败");
             }
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:测试删除
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:34
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_del(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.exists'=>"id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+
+            $mod = new TestsModel();
+            $res = $mod->del_test_info($c_id);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试删除失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:测试列表
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:54
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_list(Request $request)
+    {
+        $page     = intval($request->input('page'));
+        $pageSize     = intval($request->input('pageSize'));
+        $mod = new TestsModel();
+        $res = $mod->get_test_list($pageSize,$page);
+
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
+    }
+
+
+    /**
+     * Notes:获取测试详情
+     * User: zhangnan
+     * DateTime: 2025/7/11 17:01
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_info(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.exists'=>"id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new TestsModel();
+            $info = $mod->get_test_info($c_id);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
