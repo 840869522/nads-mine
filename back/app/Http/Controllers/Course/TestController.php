@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Course;
 
 use App\Models\Course\QuestionsModel;
 use App\Models\Course\QuestionsOptionsModel;
+use App\Models\Course\TestsModel;
 use Illuminate\Http\Request;
 use App\Models\Course\CategoryModel;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +36,7 @@ class TestController extends Controller
             $content     = $request->input('content');
             $validated_data = array(
                 'id' => 'required|max:50',
-                'course_id' => 'required',
+                'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
                 'type' => 'required|integer|in:1,2,3,4',
@@ -45,6 +46,7 @@ class TestController extends Controller
                 'id.required'=>"id不能为空",
                 'id.max'=>"id字段超限",
                 'course_id.required'=>"course_id 字段不能为空",
+                'course_id.exists'=>"course_id 不存在",
                 'question.required'=>"question 字段不能为空",
                 'answer.required'=>"answer 字段不能为空",
                 'type.required'=>"type 字段不能为空",
@@ -100,6 +102,14 @@ class TestController extends Controller
     }
 
 
+    /**
+     * 修改题目
+     * Notes:
+     * User: zhangnan
+     * DateTime: 2025/7/11 13:27
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function question_up(Request $request)
     {
         try {
@@ -112,7 +122,7 @@ class TestController extends Controller
             $content     = $request->input('content');
             $validated_data = array(
                 'id' => 'required|max:50|exists:c_questions,c_id',
-                'course_id' => 'required',
+                'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
                 'type' => 'required|integer|in:1,2,3,4',
@@ -123,6 +133,7 @@ class TestController extends Controller
                 'id.max'=>"id字段超限",
                 'id.exists'=>"id不存在",
                 'course_id.required'=>"course_id 字段不能为空",
+                'course_id.exists'=>"course_id 不存在",
                 'question.required'=>"question 字段不能为空",
                 'answer.required'=>"answer 字段不能为空",
                 'type.required'=>"type 字段不能为空",
@@ -178,7 +189,14 @@ class TestController extends Controller
     }
 
 
-
+    /**
+     * 删除题目
+     * Notes:
+     * User: zhangnan
+     * DateTime: 2025/7/11 13:27
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function question_del(Request $request)
     {
         try {
@@ -211,19 +229,24 @@ class TestController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
-    public function qusetion_list(Request $request)
+    public function question_list(Request $request)
     {
         $page     = intval($request->input('page'));
         $pageSize     = intval($request->input('pageSize'));
         $mod = new QuestionsModel();
         $res = $mod->get_question_list($pageSize,$page);
 
-        return $this->_response(900,"success",$res);
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
     }
 
-
-
-    public function qusetion_info(Request $request)
+    /**
+     * Notes:获取详情数据
+     * User: zhangnan
+     * DateTime: 2025/7/11 13:28
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function question_info(Request $request)
     {
         try {
             $c_id     = trim($request->input('id'));
@@ -237,7 +260,118 @@ class TestController extends Controller
             $validatedData = $request->validate($validated_data, $validated_msg);
             $mod = new QuestionsModel();
             $info = $mod->get_question_info_by_c_id($c_id,1);
-            return $this->_response(900,"success",$info);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:添加测试
+     * User: zhangnan
+     * DateTime: 2025/7/11 14:21
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_add(Request $request)
+    {
+        try {
+            $c_name     = trim($request->input('name'));
+            $c_description     = trim($request->input('description'));
+            $c_paper_count     = trim($request->input('paper_count'));
+            $c_start     = trim($request->input('start'));
+            $c_end     = trim($request->input('end'));
+            $c_course_id     = trim($request->input('course_id'));
+            $validated_data = array(
+                'name' => 'required|max:100',
+                'description' => 'required',
+                'paper_count' => 'required|integer|max:11',
+                'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
+                'end' => 'required|date_format:Y-m-d H:i:s|after:now',
+                'course_id' => 'required|exists:c_courses,c_course_id',
+            );
+            $validated_msg = array(
+                'name.required'=>"名称不能为空",
+                'name.max'=>"名称字数超限",
+                'description.required'=>"描述不能为空",
+                'paper_count.required'=>"试卷数不能为空",
+                'paper_count.integer'=>"试卷数数据格式不正确",
+                'paper_count.max'=>"试卷数超限",
+                'start.required'=>"测试开始时间不能为空",
+                'start.date_format'=>"测试开始时间不格式不正确",
+                'start.after'=>"测试开始时间不能小于当前日期",
+                'start.before'=>"测试结束时间不能小于测试开始时间",
+                'end.required'=>"测试结束时间不能为空",
+                'end.date_format'=>"测试结束时间不格式不正确",
+                'end.after'=>"测试结束时间不能小于当前日期",
+                'course_id.required'=>"课程id不能为空",
+                'course_id.exists'=>"课程id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+
+            $mod = new TestsModel();
+
+            $res = $mod->create_test_info($c_name,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试插入失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    public function test_update(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $c_name     = trim($request->input('name'));
+            $c_description     = trim($request->input('description'));
+            $c_paper_count     = trim($request->input('paper_count'));
+            $c_start     = trim($request->input('start'));
+            $c_end     = trim($request->input('end'));
+            $c_course_id     = trim($request->input('course_id'));
+            $validated_data = array(
+                'id' => 'required|exists:c_tests,c_id',
+                'name' => 'required|max:100',
+                'description' => 'required',
+                'paper_count' => 'required|integer|max:11',
+                'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
+                'end' => 'required|date_format:Y-m-d H:i:s|after:now',
+                'course_id' => 'required|exists:c_courses,c_course_id',
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.exists'=>"id不存在",
+                'name.required'=>"名称不能为空",
+                'name.max'=>"名称字数超限",
+                'description.required'=>"描述不能为空",
+                'paper_count.required'=>"试卷数不能为空",
+                'paper_count.integer'=>"试卷数数据格式不正确",
+                'paper_count.max'=>"试卷数超限",
+                'start.required'=>"测试开始时间不能为空",
+                'start.date_format'=>"测试开始时间不格式不正确",
+                'start.after'=>"测试开始时间不能小于当前日期",
+                'start.before'=>"测试结束时间不能小于测试开始时间",
+                'end.required'=>"测试结束时间不能为空",
+                'end.date_format'=>"测试结束时间不格式不正确",
+                'end.after'=>"测试结束时间不能小于当前日期",
+                'course_id.required'=>"课程id不能为空",
+                'course_id.exists'=>"课程id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+
+            $mod = new TestsModel();
+            $info = $mod->get_test_info($c_id);
+            $res = $mod->update_test_info($info,$c_name,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试修改失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());

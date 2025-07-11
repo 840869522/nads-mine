@@ -182,6 +182,7 @@ class QuestionsModel extends Model{
             $pageSize = $this->pageSize;
         }
         $mod = new QuestionsModel();
+        $count = $mod->count();
         if(empty($page)){
             $list = $mod->paginate($pageSize);
         }else{
@@ -195,6 +196,7 @@ class QuestionsModel extends Model{
         $res = array(
             'page'=>$page,
             'pageSize'=>$pageSize,
+            'count'=>$count,
             'data'=>$data
         );
         return $res;
