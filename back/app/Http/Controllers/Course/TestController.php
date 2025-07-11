@@ -260,6 +260,7 @@ class TestController extends Controller
             $validatedData = $request->validate($validated_data, $validated_msg);
             $mod = new QuestionsModel();
             $info = $mod->get_question_info_by_c_id($c_id,1);
+            Log::info($info);
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
 
         } catch (ValidationException $e) {

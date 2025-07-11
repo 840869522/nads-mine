@@ -10,14 +10,24 @@ import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
 import QuestionModalForm, { QuestionFormData } from "@/components/learning/QuestionModalForm";
 
-
+type SelectOption = {
+    c_id: string,
+    c_question_id: string,
+    c_content: string
+}
 
 type QuestionDisplayItem = {
     c_id: string,
-
+    c_course_id: string,
+    c_question: string,
+    c_type: string,
+    c_tag: string,
+    c_create_at: string,
+    connect: SelectOption[]
 }
+
 type Order = `asc` | `desc`;
-type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id">;
+type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
 
 
 const BACK_BASE_URL = "/back/api/";
@@ -42,22 +52,24 @@ const QuestionPage: React.FC = () => {
 
 
     useEffect(() => {
-        if (searchTerm.data.)
+        if (searchTerm.data.trim())
+            getQuestionDataByName(page, rowsPerPage, searchTerm.data);
+        else
+            getQuestionData(page, rowsPerPage);
 
-        
-    }, [page,rowsPerPage, searchTerm]);
+    }, [page, rowsPerPage, searchTerm]);
 
 
-    const getQuestionData = (page:number, pagesize:number)=>{
+    const getQuestionData = (page: number, pagesize: number) => {
         setTableLoading(true);
-        apiClientWithToken.post(`/back/api/study/test/question_list`,JSON.stringify({
-            page:page,
-            pagesize:pagesize
+        apiClientWithToken.post(`/back/api/study/test/question_list`, JSON.stringify({
+            page: page,
+            pagesize: pagesize
         })).then(res => {
-            if (res.data.code === 200){
+            if (res.data.code === 200) {
                 setQuestions(res.data.data.data);
                 setQuestionsCount(res.data.data.count);
-            }else {
+            } else {
                 setQuestions([]);
                 setQuestionsCount(0);
             }
@@ -68,16 +80,16 @@ const QuestionPage: React.FC = () => {
         })
     }
 
-    const getQuestionDataByName = (page:number, pagesize:number,searchName:string)=>{
+    const getQuestionDataByName = (page: number, pagesize: number, searchName: string) => {
         setTableLoading(true);
-        apiClientWithToken.post(`/back/api/study/test/question_list`,JSON.stringify({
-            page:page,
-            pagesize:pagesize
+        apiClientWithToken.post(`/back/api/study/test/question_list`, JSON.stringify({
+            page: page,
+            pagesize: pagesize
         })).then(res => {
-            if (res.data.code === 200){
+            if (res.data.code === 200) {
                 setQuestions(res.data.data.data);
                 setQuestionsCount(res.data.data.count);
-            }else {
+            } else {
                 setQuestions([]);
                 setQuestionsCount(0);
             }
@@ -129,7 +141,15 @@ const QuestionPage: React.FC = () => {
 
 
     const handleEditQuestionClick = (question: QuestionDisplayItem) => {
-        setIsQuestionModalOpen(true);
+        apiClientWithToken.post("/back/api/study/test/question_info", JSON.stringify({
+            id: question.c_id
+        })).then((res) => {
+            if (res.data.code === 200) {
+
+            }
+        }).finally(() => {
+            setIsQuestionModalOpen(true);
+        })
     };
 
     const handelDeleteQuestionClick = (question: QuestionDisplayItem) => {
@@ -137,7 +157,7 @@ const QuestionPage: React.FC = () => {
     }
 
 
-    const onSave = (data: QuestionFormData, isNew : boolean)=>{
+    const onSave = (data: QuestionFormData, isNew: boolean) => {
 
     }
 
@@ -221,7 +241,11 @@ const QuestionPage: React.FC = () => {
                         <TableRow>
                             {[
                                 { id: 'c_id', label: '试题id' },
-                                // { id: 'c_name', label: '描述' },
+                                { id: 'c_course_id', label: '课程id' },
+                                { id: "c_question", label: "题干" },
+                                { id: "c_type", label: "类型" },
+                                { id: "c_tag", label: "标签" },
+                                { id: "c_create_at", label: "创建时间" }
                             ].map((headCell) => (
                                 <TableCell
                                     key={headCell.id}
@@ -253,6 +277,21 @@ const QuestionPage: React.FC = () => {
                                         <TableCell sx={{ fontWeight: "medium" }}>
                                             {question.c_id}
                                         </TableCell>
+                                        <TableCell>
+                                            {question.c_course_id}
+                                        </TableCell>
+                                        <TableCell>
+                                            {question.c_question}
+                                        </TableCell>
+                                        <TableCell>
+                                            {question.c_type}
+                                        </TableCell>
+                                        <TableCell>
+                                            {question.c_tag}
+                                        </TableCell>
+                                        <TableCell>
+                                            {question.c_create_at}
+                                        </TableCell>
                                         <TableCell align="center">
                                             <Tooltip title="编辑权限">
                                                 <IconButton size="small" onClick={() => handleEditQuestionClick(question)} color="primary">
@@ -283,7 +322,7 @@ const QuestionPage: React.FC = () => {
             <QuestionModalForm
                 open={isQuestionsModalOpen}
                 onSave={onSave}
-                onClose={()=>setIsQuestionModalOpen(false)}
+                onClose={() => setIsQuestionModalOpen(false)}
                 initialQuestion={questionToEdit}
             />
 

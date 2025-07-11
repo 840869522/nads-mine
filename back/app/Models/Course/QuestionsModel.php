@@ -82,6 +82,7 @@ class QuestionsModel extends Model{
     {
         $mod = new QuestionsModel();
         $find = $mod->where('c_id',$c_id)->first();
+        Log::info($find);
         if(empty($find)){
             return false;
         }
