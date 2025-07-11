@@ -1,5 +1,4 @@
 <?php
-namespace App\Helper;
 use Illuminate\Support\Facades\DB;
 
 function udate($format = 'u', $utimestamp = null) {
