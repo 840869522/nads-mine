@@ -9,6 +9,9 @@ use App\Utils\GlobalResponse;
 
 class QuestionsOptionsModel extends Model{
     protected $table = 'c_question_options';
+    protected $casts = [
+        'c_id' => 'string', // 指定ID为主键（如果是UUID）
+    ];
     public $timestamps = false;
 
 

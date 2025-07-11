@@ -11,6 +11,9 @@ class QuestionsModel extends Model{
     protected $table = 'c_questions';
     public $timestamps = false;
     protected $primaryKey = 'c_id';
+    protected $casts = [
+        'c_id' => 'string', // 指定ID为主键（如果是UUID）
+    ];
     public $pageSize = 20;
 
     /**
