@@ -11,6 +11,7 @@ class QuestionsModel extends Model{
     protected $table = 'c_questions';
     public $timestamps = false;
     protected $primaryKey = 'c_id';
+    public $pageSize = 20;
 
     /**
      * Notes:添加题目
@@ -77,12 +78,16 @@ class QuestionsModel extends Model{
      * @param $c_id
      * @return false
      */
-    public function get_question_info_by_c_id($c_id="")
+    public function get_question_info_by_c_id($c_id="",$type=0)
     {
         $mod = new QuestionsModel();
         $find = $mod->where('c_id',$c_id)->first();
         if(empty($find)){
             return false;
+        }
+        if($type==1){
+            $QuestionsOptionsMod = new QuestionsOptionsModel();
+            $find->connect = $QuestionsOptionsMod->get_question_options_by_question_id($find->c_id);
         }
         return $find;
     }
@@ -161,6 +166,38 @@ class QuestionsModel extends Model{
             DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','question_log');
             return false;
         }
+    }
+
+    /**
+     * Notes:获取题目列表
+     * User: zhangnan
+     * DateTime: 2025/7/11 10:22
+     * @param $pageSize
+     * @param $page
+     * @return mixed
+     */
+    public function get_question_list($pageSize=0,$page=0)
+    {
+        if(empty($pageSize)){
+            $pageSize = $this->pageSize;
+        }
+        $mod = new QuestionsModel();
+        if(empty($page)){
+            $list = $mod->paginate($pageSize);
+        }else{
+            $list = $mod->paginate($pageSize, ['*'], 'page', $page);
+        }
+        $list->each(function($item){
+            $QuestionsOptionsMod = new QuestionsOptionsModel();
+            $item->connect = $QuestionsOptionsMod->get_question_options_by_question_id($item->c_id);
+        });
+        $data = $list->items();
+        $res = array(
+            'page'=>$page,
+            'pageSize'=>$pageSize,
+            'data'=>$data
+        );
+        return $res;
     }
 
 }
