@@ -35,7 +35,7 @@ class TestController extends Controller
             $type     = $request->input('type');
             $content     = $request->input('content');
             $validated_data = array(
-                'id' => 'required|max:50',
+                'id' => 'required|string|max:50',
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
@@ -44,6 +44,7 @@ class TestController extends Controller
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.max'=>"id字段超限",
                 'course_id.required'=>"course_id 字段不能为空",
                 'course_id.exists'=>"course_id 不存在",
@@ -121,7 +122,7 @@ class TestController extends Controller
             $type     = $request->input('type');
             $content     = $request->input('content');
             $validated_data = array(
-                'id' => 'required|max:50|exists:c_questions,c_id',
+                'id' => 'required|max:50|string|exists:c_questions,c_id',
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
@@ -132,6 +133,7 @@ class TestController extends Controller
                 'id.required'=>"id不能为空",
                 'id.max'=>"id字段超限",
                 'id.exists'=>"id不存在",
+                'id.string'=>"id类型错误",
                 'course_id.required'=>"course_id 字段不能为空",
                 'course_id.exists'=>"course_id 不存在",
                 'question.required'=>"question 字段不能为空",
@@ -202,10 +204,11 @@ class TestController extends Controller
         try {
             $c_id     = trim($request->input('id'));
             $validated_data = array(
-                'id' => 'required|exists:c_questions,c_id',
+                'id' => 'required|string|exists:c_questions,c_id',
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.exists'=>"id不存在",
             );
             $validatedData = $request->validate($validated_data, $validated_msg);
@@ -251,10 +254,11 @@ class TestController extends Controller
         try {
             $c_id     = trim($request->input('id'));
             $validated_data = array(
-                'id' => 'required|exists:c_questions,c_id',
+                'id' => 'required|string|exists:c_questions,c_id',
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.exists'=>"id不存在",
             );
             $validatedData = $request->validate($validated_data, $validated_msg);
@@ -343,7 +347,7 @@ class TestController extends Controller
             $c_end     = trim($request->input('end'));
             $c_course_id     = trim($request->input('course_id'));
             $validated_data = array(
-                'id' => 'required|exists:c_tests,c_id',
+                'id' => 'required|string|exists:c_tests,c_id',
                 'name' => 'required|max:100',
                 'description' => 'required',
                 'paper_count' => 'required|integer|max:11',
@@ -353,6 +357,7 @@ class TestController extends Controller
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.exists'=>"id不存在",
                 'name.required'=>"名称不能为空",
                 'name.max'=>"名称字数超限",
@@ -398,10 +403,11 @@ class TestController extends Controller
         try {
             $c_id     = trim($request->input('id'));
             $validated_data = array(
-                'id' => 'required|exists:c_tests,c_id',
+                'id' => 'required|string|exists:c_tests,c_id',
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.exists'=>"id不存在",
             );
             $validatedData = $request->validate($validated_data, $validated_msg);
@@ -449,10 +455,11 @@ class TestController extends Controller
         try {
             $c_id     = trim($request->input('id'));
             $validated_data = array(
-                'id' => 'required|exists:c_tests,c_id',
+                'id' => 'required|string|exists:c_tests,c_id',
             );
             $validated_msg = array(
                 'id.required'=>"id不能为空",
+                'id.string'=>"id类型错误",
                 'id.exists'=>"id不存在",
             );
             $validatedData = $request->validate($validated_data, $validated_msg);
