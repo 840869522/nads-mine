@@ -258,8 +258,8 @@
             Route::post('/question_add', [TestController::class, 'question_add']);
             Route::post('/question_up', [TestController::class, 'question_up']);
             Route::post('/question_del', [TestController::class, 'question_del']);
-            Route::post("/qusetion_list", [TestController::class , "qusetion_list"]);
-            Route::post("/qusetion_info", [TestController::class , "qusetion_info"]);
+            Route::post('/question_list', [TestController::class, 'qusetion_list']);
+            Route::post('/question_info', [TestController::class, 'qusetion_info']);
         });
     });
 

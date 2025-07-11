@@ -42,15 +42,51 @@ const QuestionPage: React.FC = () => {
 
 
     useEffect(() => {
-        setTableLoading(true);
-        apiClientWithToken.post(`${BACK_BASE_URL}study/`).then(res => {
+        if (searchTerm.data.)
 
+        
+    }, [page,rowsPerPage, searchTerm]);
+
+
+    const getQuestionData = (page:number, pagesize:number)=>{
+        setTableLoading(true);
+        apiClientWithToken.post(`/back/api/study/test/question_list`,JSON.stringify({
+            page:page,
+            pagesize:pagesize
+        })).then(res => {
+            if (res.data.code === 200){
+                setQuestions(res.data.data.data);
+                setQuestionsCount(res.data.data.count);
+            }else {
+                setQuestions([]);
+                setQuestionsCount(0);
+            }
         }).finally(() => {
             setTimeout(() => {
                 setTableLoading(false);
             }, 300);
         })
-    }, []);
+    }
+
+    const getQuestionDataByName = (page:number, pagesize:number,searchName:string)=>{
+        setTableLoading(true);
+        apiClientWithToken.post(`/back/api/study/test/question_list`,JSON.stringify({
+            page:page,
+            pagesize:pagesize
+        })).then(res => {
+            if (res.data.code === 200){
+                setQuestions(res.data.data.data);
+                setQuestionsCount(res.data.data.count);
+            }else {
+                setQuestions([]);
+                setQuestionsCount(0);
+            }
+        }).finally(() => {
+            setTimeout(() => {
+                setTableLoading(false);
+            }, 300);
+        })
+    }
 
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
@@ -83,7 +119,6 @@ const QuestionPage: React.FC = () => {
     const handleAddQuestionClick = () => {
         setIsQuestionModalOpen(true);
         setQuesionToEdit(null);
-        console.log(123);
     }
 
     const confirmDeleteQuestion = () => {
