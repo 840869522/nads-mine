@@ -130,6 +130,12 @@ class DrillController extends Controller
                     'env'   => $containerData['env'],
                 ];
 
+                $flag = null;
+                if ($containerData['isTarget']) {
+                    $flag = 'flag{' . Str::uuid()->toString() . '}';
+                    $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
+                }
+
                 $containerId = $this->cliService->createContainer($options);
                 $pid = $this->cliService->getContainerPid($containerId);
 
@@ -137,8 +143,9 @@ class DrillController extends Controller
                 SceneContainerInstance::create([
                     'c_container_id'       => $containerId,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                    'c_flag'               => $flag,
                 ]);
-                Log::info("容器实例关联记录已创建", ['instance_id' => $sceneInstance->c_scene_instances_id, 'container_id' => $containerId]);
+                Log::info("容器实例关联记录已创建", ['instance_id' => $sceneInstance->c_scene_instances_id, 'container_id' => $containerId, 'flag' => $flag]);
                 
                 // 记录创建成功的信息，并返回给前端
                 $createdItemsInfo[$containerData['id']] = [
