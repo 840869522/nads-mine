@@ -33,3 +33,5 @@ scripts
 demo-images
 demo-linux.qcow2
 libvirt
+src/.venv
+images
