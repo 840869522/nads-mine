@@ -204,6 +204,49 @@ class TestController extends Controller
         }
     }
 
+    /**
+     * Notes:获取题目列表
+     * User: zhangnan
+     * DateTime: 2025/7/11 10:53
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function qusetion_list(Request $request)
+    {
+        $page     = intval($request->input('page'));
+        $pageSize     = intval($request->input('pageSize'));
+        $mod = new QuestionsModel();
+        $res = $mod->get_question_list($pageSize,$page);
+
+        return $this->_response(900,"success",$res);
+    }
+
+
+
+    public function qusetion_info(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|exists:c_questions,c_id',
+            );
+            $validated_msg = array(
+                'id.required'=>"id不能为空",
+                'id.exists'=>"id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new QuestionsModel();
+            $info = $mod->get_question_info_by_c_id($c_id,1);
+            return $this->_response(900,"success",$info);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+
+
 
 
 

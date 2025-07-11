@@ -110,5 +110,20 @@ class QuestionsOptionsModel extends Model{
     }
 
 
+    /**
+     * Notes:通过题目获取选项
+     * User: zhangnan
+     * DateTime: 2025/7/11 10:39
+     * @param $c_question_id
+     * @return mixed
+     */
+    public function get_question_options_by_question_id($c_question_id="")
+    {
+        $mod = new QuestionsOptionsModel();
+        $res = $mod->where('c_question_id',$c_question_id)->get();
+        return $res;
+    }
+
+
 }
 ?>
