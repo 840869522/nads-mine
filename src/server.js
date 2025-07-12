@@ -78,6 +78,9 @@ app.prepare().then(() => {
       { port: 4822 },
       {
         crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
+        connectionDefaultSettings: {
+          rdp: { 'audio': ['audio/L16'] }
+        },
         allowedUnencryptedConnectionSettings: {
           rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
           ssh: ['hostname', 'port', 'username', 'password'],

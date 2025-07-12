@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const CIPHER = 'AES-256-CBC';
-const KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
+const KEY = process.env.GUAC_KEY || 'MySuperSecretKeyForParamsToken12';
 
 function encryptToken(value: any) {
   const iv = crypto.randomBytes(16);
