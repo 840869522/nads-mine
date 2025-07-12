@@ -14,6 +14,55 @@ use Illuminate\Support\Facades\Log;
 class CommandLineService
 {   
     /**
+     * 需要定义脚本位置全局
+     * 通过调用外部Shell脚本创建虚拟机并将其连接到指定的交换机。
+     *
+     * @param array $options 包含创建虚拟机所需参数的关联数组。
+     * - 'id': 数据库自增ID (用于脚本的num参数)
+     * - 'image': 镜像名称
+     * - 'ip': 虚拟机的IP地址
+     * - 'scene_instance_id': 场景实例ID
+     * - 'flag': 靶机flag, 或 "NULL" 字符串
+     * - 'switch_name': 【新增】要连接的OVS交换机的名称
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function createVm(array $options): void
+    {
+        // 1. 使用 base_path() 生成脚本的绝对路径
+        // 1. 使用 app_path() 替代 base_path() 来生成正确的脚本绝对路径
+        $scriptPath = app_path('RunTool/vmscript/newvm_switch.sh');
+        // 2. 准备6个命令行参数
+        $args = [
+            $options['id'],
+            $options['image'],
+            $options['ip'],
+            $options['scene_instance_id'],
+            $options['flag'] ?? 'NULL',
+            $options['switch_name'], // 新增第6个参数：交换机名称
+        ];
+        
+        // 3. 准备并执行命令
+        $command = array_merge([$scriptPath], $args);
+        Log::info('Executing VM creation shell script (6-param version): ' . implode(' ', $command));
+        
+        $process = new Process($command);
+        $process->setTimeout(360);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $errorOutput = $process->getErrorOutput() ?: $process->getOutput();
+            Log::error("Failed to execute VM creation script for vm '{$options['id']}'", [
+                'error' => $errorOutput,
+            ]);
+            throw new ProcessFailedException($process);
+        }
+        
+        Log::info("VM creation script for vm '{$options['id']}' executed successfully.", [
+            'output' => $process->getOutput()
+        ]);
+    }
+    /**
      * 
      * 使用veth pair连接两个OVS交换机。
      *
@@ -197,6 +246,50 @@ class CommandLineService
         if (!$process->isSuccessful()) {
             throw new ProcessFailedException($process);
         }
+        // 2. 为新的 OVS 网桥定义一个 libvirt 网络
+        $networkXmlPath = "/tmp/{$switchName}-net.xml";
+        $networkXmlContent = <<<XML
+<network>
+  <name>{$switchName}</name>
+  <forward mode='bridge'/>
+  <bridge name='{$switchName}'/>
+  <virtualport type='openvswitch'/>
+</network>
+XML;
+
+        // 写入临时的 XML 配置文件
+        file_put_contents($networkXmlPath, $networkXmlContent);
+
+        // 3. 使用 virsh 命令定义、自启动并启动网络
+        // 定义网络，如果网络已存在则忽略错误
+        $netDefineCmd = ['sudo', 'virsh', 'net-define', $networkXmlPath];
+        Log::info('Executing libvirt command: ' . implode(' ', $netDefineCmd));
+        $netDefineProcess = new Process($netDefineCmd);
+        $netDefineProcess->run();
+        if (!$netDefineProcess->isSuccessful() && !str_contains($netDefineProcess->getErrorOutput(), 'already exists')) {
+            throw new ProcessFailedException($netDefineProcess);
+        }
+
+        // 设置网络为自启动，如果已配置则忽略错误
+        $netAutostartCmd = ['sudo', 'virsh', 'net-autostart', $switchName];
+        Log::info('Executing libvirt command: ' . implode(' ', $netAutostartCmd));
+        $netAutostartProcess = new Process($netAutostartCmd);
+        $netAutostartProcess->run();
+        if (!$netAutostartProcess->isSuccessful() && !str_contains($netAutostartProcess->getErrorOutput(), 'already configured')) {
+            throw new ProcessFailedException($netAutostartProcess);
+        }
+
+        // 启动网络，如果已激活则忽略错误
+        $netStartCmd = ['sudo', 'virsh', 'net-start', $switchName];
+        Log::info('Executing libvirt command: ' . implode(' ', $netStartCmd));
+        $netStartProcess = new Process($netStartCmd);
+        $netStartProcess->run();
+        if (!$netStartProcess->isSuccessful() && !str_contains($netStartProcess->getErrorOutput(), 'already active')) {
+            throw new ProcessFailedException($netStartProcess);
+        }
+
+        // 4. 清理临时的 XML 文件
+        unlink($networkXmlPath);
     }
 
     /**

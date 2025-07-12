@@ -8,7 +8,7 @@ class TopologyParser
      * 解析拓扑数据数组.
      *
      * @param array $topology 包含 'nodes' 和 'edges' 键的拓扑数据数组。
-     * @return array 返回一个包含三个键的关联数组。
+     * @return array 返回一个包含四个键的关联数组: 'containers', 'vms', 'switches', 'connections'。
      */
     public static function parse(array $topology): array
     {
@@ -18,52 +18,57 @@ class TopologyParser
         }
 
         $containersToCreate = [];
+        $vmsToCreate = [];
         $switchesToCreate = [];
         $connectionsToMake = [];
 
         // 第一次遍历：分离出所有需要创建的节点
         foreach ($topology['nodes'] ?? [] as $node) {
             $config = $node['config'] ?? [];
+            
+            $ports = [];
+            if (!empty($config['portMappings'])) {
+                $portPairs = explode(',', $config['portMappings']);
+                foreach ($portPairs as $pair) {
+                    $parts = explode(':', $pair);
+                    if (count($parts) === 2 && trim($parts[0]) && trim($parts[1])) {
+                        $ports[] = ['hostPort' => trim($parts[0]), 'containerPort' => trim($parts[1])];
+                    }
+                }
+            }
+
+            $envs = [];
+            if (!empty($config['env'])) {
+                $envPairs = explode(',', $config['env']);
+                foreach ($envPairs as $pair) {
+                    $parts = explode('=', $pair, 2);
+                    if (count($parts) === 2 && trim($parts[0])) {
+                        $envs[] = ['key' => trim($parts[0]), 'value' => trim($parts[1])];
+                    }
+                }
+            }
+            
+            // 【关键逻辑】优先使用 'Image' 键，如果不存在则使用 'dockerImage' 作为备用
+            $imageName = $config['Image'] ?? $config['dockerImage'] ?? null;
 
             switch ($node['type']) {
                 case 'container':
-                case 'virtual_machine':
-                    // --- 解析端口映射 ---
-                    // 即使有多条（如 "80:80,3306:3306"），explode 也能正确处理
-                    $ports = [];
-                    if (!empty($config['portMappings'])) {
-                        // 1. 使用逗号将字符串分割成多个端口映射对
-                        $portPairs = explode(',', $config['portMappings']);
-                        foreach ($portPairs as $pair) {
-                            // 2. 使用冒号将每一对分割成主机端口和容器端口
-                            $parts = explode(':', $pair);
-                            if (count($parts) === 2 && trim($parts[0]) && trim($parts[1])) {
-                                $ports[] = ['hostPort' => trim($parts[0]), 'containerPort' => trim($parts[1])];
-                            }
-                        }
-                    }
-
-                    // --- 解析环境变量 ---
-                    // 这里的逻辑与端口映射完全相同，可以处理多条环境变量
-                    $envs = [];
-                    if (!empty($config['env'])) {
-                        // 1. 使用逗号将字符串分割成多个环境变量对
-                        $envPairs = explode(',', $config['env']);
-                        foreach ($envPairs as $pair) {
-                            // 2. 使用等号将每一对分割成键和值
-                            $parts = explode('=', $pair, 2); // limit 为 2，确保值中的等号不会被分割
-                            if (count($parts) === 2 && trim($parts[0])) {
-                                $envs[] = ['key' => trim($parts[0]), 'value' => trim($parts[1])];
-                            }
-                        }
-                    }
-
                     $containersToCreate[] = [
                         'id'           => $node['id'],
                         'label'        => $node['label'],
-                        'image'        => $config['dockerImage'] ?? null,
-                        'portMappings' => $ports, // 返回解析后的数组
-                        'env'          => $envs,  // 返回解析后的数组
+                        'image'        => $imageName, // 使用修正后的镜像名
+                        'portMappings' => $ports,
+                        'env'          => $envs,
+                        'isTarget'     => $config['isTarget'] ?? false,
+                    ];
+                    break;
+
+                case 'virtual_machine':
+                    $vmsToCreate[] = [
+                        'id'           => $node['id'],
+                        'label'        => $node['label'],
+                        'image'        => $imageName, // 使用修正后的镜像名
+                        'portMappings' => $ports,
                         'isTarget'     => $config['isTarget'] ?? false,
                     ];
                     break;
@@ -99,8 +104,9 @@ class TopologyParser
 
         return [
             'containers' => $containersToCreate,
-            'switches' => $switchesToCreate,
-            'connections' => $connectionsToMake,
+            'vms'        => $vmsToCreate,
+            'switches'   => $switchesToCreate,
+            'connections'=> $connectionsToMake,
         ];
     }
 }
