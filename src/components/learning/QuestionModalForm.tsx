@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -21,22 +21,40 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DynamicOptionInputs from "@/components/input/DynamicOptionInputs";
+import { Sttring2Array } from "@/utils/string";
+
+export type SelectOption = {
+    c_id: string,
+    c_question_id?: string,
+    c_content: string
+}
+
+export type QuestionDisplayItem = {
+    c_id: string,
+    c_course_id: string,
+    c_question: string,
+    c_answer: string,
+    c_type: string,
+    c_tag: string,
+    c_create_at: string,
+    connect: SelectOption[]
+}
 
 export type QuestionFormData = {
     id: string;
     question: string;
     answer: string;
-    type: "single" | "multiple" | "true_false" | "essay";
+    type: "single" | "multiple" | "true_false" | "essay" | string;
     tags: string[];
     courseName: string;
-    options: { option: string; description: string }[];
+    options: SelectOption[];
 };
 
 export type QuestionModalProps = {
     open: boolean;
     onClose: () => void;
     onSave: (data: QuestionFormData, isNew: boolean) => void;
-    initialQuestion: QuestionFormData | null;
+    initialQuestion: QuestionDisplayItem | null;
 };
 
 const QuestionModalForm: React.FC<QuestionModalProps> = ({
@@ -49,13 +67,13 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
     const [formData, setFormData] = useState<QuestionFormData>({
-        id: initialQuestion?.id || '',
-        question: initialQuestion?.question || '',
-        answer: initialQuestion?.answer || '',
-        type: initialQuestion?.type || 'single',
-        tags: initialQuestion?.tags || [''],
-        courseName: initialQuestion?.courseName || '',
-        options: initialQuestion?.options || [{ option: '', description: '' }],
+        id: "",
+        question: "",
+        answer: "",
+        type: "single",
+        tags: [''],
+        courseName: "",
+        options: [{ c_id: "", c_content: "" }]
     });
 
     const [errors, setErrors] = useState<Record<string, string | string[]>>({
@@ -69,6 +87,33 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     });
 
     const isNew = !initialQuestion;
+
+    useEffect(() => {
+        if (open) {
+            if (initialQuestion) {
+                setFormData({
+                    id: initialQuestion?.c_id,
+                    question: initialQuestion?.c_question,
+                    answer: initialQuestion?.c_answer,
+                    type: initialQuestion?.c_type,
+                    tags: Sttring2Array(initialQuestion?.c_tag),
+                    courseName: initialQuestion?.c_course_id,
+                    options: initialQuestion.connect,
+                });
+            } else {
+                setFormData({
+                    id: "",
+                    question: "",
+                    answer: "",
+                    type: "single",
+                    tags: [''],
+                    courseName: "",
+                    options: [{ c_id: "", c_content: "" }]
+                })
+            }
+            setErrors({});
+        }
+    }, [initialQuestion, open]);
 
     // 类型选项映射
     const typeOptions = [
@@ -109,7 +154,6 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         const value = e.target.value as QuestionFormData['type'];
         setFormData({ ...formData, type: value });
         setErrors({ ...errors, type: '' });
-        console.log(formData);
 
         if (value !== 'single' && value !== 'multiple') {
             setFormData({ ...formData, options: [], type: value });
@@ -120,7 +164,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     const handleAddOption = () => {
         setFormData({
             ...formData,
-            options: [...formData.options, { option: '', description: '' }],
+            options: [...formData.options, { c_id: '', c_content: '', c_question_id: formData.id }],
         });
         const newErrors = errors.options ? [...errors.options, ''] : [''];
         setErrors({ ...errors, options: newErrors });
@@ -152,7 +196,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 newErrors.options = ['至少添加一个选项'];
             } else {
                 const optionErrors = formData.options.map((opt) => {
-                    if (!opt.option.trim() || !opt.description.trim()) {
+                    if (!opt.c_id.trim() || !opt.c_content.trim()) {
                         return '选项和描述不能为空';
                     }
                     return '';
@@ -160,14 +204,16 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 newErrors.options = optionErrors;
             }
         }
-
         setErrors(newErrors);
-        return Object.values(newErrors).every((val) => val === '');
+        console.log(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
     // 提交表单
     const handleSubmit = () => {
+        console.log(validateForm());
         if (validateForm()) {
+            console.log(111);
             onSave(formData, isNew);
             onClose();
         }
@@ -213,7 +259,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                         size="small"
                         sx={{ mb: 2 }}
                     />
-                    
+
 
                     {/* 类型选择 */}
                     <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
@@ -236,7 +282,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
 
 
                     {/* 选项输入（仅在单选/多选时显示） */}
-                    {['single', 'multiple'].includes(formData.type) && (
+                    {['single', 'multiple','true_false'].includes(formData.type) && (
                         <Box mb={2}>
                             <DynamicOptionInputs
                                 options={formData.options}
@@ -249,19 +295,23 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                     )}
 
                     {/* 答案 */}
-                    <TextField
-                        fullWidth
-                        label="答案"
-                        value={formData.answer}
-                        onChange={(e) => handleInputChange('answer', e.target.value)}
-                        error={!!errors.answer}
-                        helperText={errors.answer}
-                        multiline
-                        rows={2}
-                        variant="outlined"
-                        size="small"
-                        sx={{ mb: 2 }}
-                    />
+                    {
+                        !['essay'].includes(formData.type) && (
+                            <TextField
+                                fullWidth
+                                label="答案"
+                                value={formData.answer}
+                                onChange={(e) => handleInputChange('answer', e.target.value)}
+                                error={!!errors.answer}
+                                helperText={errors.answer}
+                                multiline
+                                rows={2}
+                                variant="outlined"
+                                size="small"
+                                sx={{ mb: 2 }}
+                            />
+                        )
+                    }
 
 
                     {/* 标签管理 */}

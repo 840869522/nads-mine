@@ -39,7 +39,7 @@ class TestController extends Controller
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
-                'type' => 'required|integer|in:1,2,3,4',
+                'type' => 'required|string|in:single,multiple,true_false,essay',
                 'tag' => 'required|max:50'
             );
             $validated_msg = array(
@@ -126,7 +126,7 @@ class TestController extends Controller
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
-                'type' => 'required|integer|in:1,2,3,4',
+                'type' => 'required|string|in:single,multiple,true_false,essay',
                 'tag' => 'required|max:50'
             );
             $validated_msg = array(

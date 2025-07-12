@@ -11,15 +11,13 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import { SelectOption } from '../learning/QuestionModalForm';
 
-type OptionField = {
-    option: string;
-    description: string;
-};
+
 
 type DynamicOptionInputsProps = {
-    options: OptionField[];
-    onChange: (options: OptionField[]) => void;
+    options: SelectOption[];
+    onChange: (options: SelectOption[]) => void;
     onAdd: () => void;
     onRemove: (index: number) => void;
     errors?: string[];
@@ -33,7 +31,7 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
         errors = [],
     }) => {
     // 处理输入值变化
-    const handleInputChange = (index: number, field: 'option' | 'description', value: string) => {
+    const handleInputChange = (index: number, field: 'c_id' | 'c_content', value: string) => {
         const newOptions = [...options];
         newOptions[index] = { ...newOptions[index], [field]: value };
         onChange(newOptions);
@@ -99,9 +97,9 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
                             <TextField
                                 fullWidth
                                 label={`选项 ${index + 1}`}
-                                value={item.option}
+                                value={item.c_id}
                                 onChange={(e) =>
-                                    handleInputChange(index, 'option', e.target.value)
+                                    handleInputChange(index, 'c_id', e.target.value)
                                 }
                                 error={!!errors[index]}
                                 helperText={errors[index]}
@@ -113,9 +111,9 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
                             <TextField
                                 fullWidth
                                 label={`描述 ${index + 1}`}
-                                value={item.description}
+                                value={item.c_content}
                                 onChange={(e) =>
-                                    handleInputChange(index, 'description', e.target.value)
+                                    handleInputChange(index, 'c_content', e.target.value)
                                 }
                                 error={!!errors[index]}
                                 helperText={errors[index]}

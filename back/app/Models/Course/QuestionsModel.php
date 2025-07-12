@@ -27,7 +27,7 @@ class QuestionsModel extends Model{
      * @param $c_tag
      * @return bool
      */
-    public function create_question_info($c_id="",$c_course_id="",$c_question="",$c_answer="",$c_tag="",$type=0,$content=[])
+    public function create_question_info($c_id="",$c_course_id="",$c_question="",$c_answer="",$c_tag="",$type="single",$content=[])
     {
         DB::beginTransaction();
         $mod = new QuestionsModel();
@@ -43,10 +43,12 @@ class QuestionsModel extends Model{
                 return false;
             }
             $question_options_mod = new QuestionsOptionsModel();
-            $question_options_res = $question_options_mod->create_question_options_info($c_id,$content);
-            if(!$question_options_res){
-                DB::rollback();
-                return false;
+            if (in_array($type,['single',"multiple","true_false"])){
+                $question_options_res = $question_options_mod->create_question_options_info($c_id,$content);
+                if(!$question_options_res){
+                    DB::rollback();
+                    return false;
+                }
             }
             DB::commit();
             return true;

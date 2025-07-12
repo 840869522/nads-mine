@@ -8,23 +8,9 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
-import QuestionModalForm, { QuestionFormData } from "@/components/learning/QuestionModalForm";
-
-type SelectOption = {
-    c_id: string,
-    c_question_id: string,
-    c_content: string
-}
-
-type QuestionDisplayItem = {
-    c_id: string,
-    c_course_id: string,
-    c_question: string,
-    c_type: string,
-    c_tag: string,
-    c_create_at: string,
-    connect: SelectOption[]
-}
+import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
+import { Array2String } from "@/utils/string";
+import { SnippetFolderRounded } from "@mui/icons-material";
 
 type Order = `asc` | `desc`;
 type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
@@ -40,7 +26,7 @@ const QuestionPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState<number>(5);
     const [order, setOrder] = useState<Order>("asc");
     const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
-    const [questionToEdit, setQuesionToEdit] = useState(null);
+    const [questionToEdit, setQuesionToEdit] = useState<QuestionDisplayItem | null>(null);
 
     const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | "error", text: string } | null>(null);
     const [tableLaoding, setTableLoading] = useState<boolean>(true);
@@ -141,15 +127,8 @@ const QuestionPage: React.FC = () => {
 
 
     const handleEditQuestionClick = (question: QuestionDisplayItem) => {
-        apiClientWithToken.post("/back/api/study/test/question_info", JSON.stringify({
-            id: question.c_id
-        })).then((res) => {
-            if (res.data.code === 200) {
-
-            }
-        }).finally(() => {
-            setIsQuestionModalOpen(true);
-        })
+        setQuesionToEdit(question);
+        setIsQuestionModalOpen(true);
     };
 
     const handelDeleteQuestionClick = (question: QuestionDisplayItem) => {
@@ -157,8 +136,34 @@ const QuestionPage: React.FC = () => {
     }
 
 
-    const onSave = (data: QuestionFormData, isNew: boolean) => {
-
+    const handelSaveQuestion = (data: QuestionFormData, isNew: boolean) => {
+        var requestData = {
+            id: data.id,
+            question: data.question,
+            course_id : data.courseName,
+            answer :data.type === "essay" ? "*" : data.answer,
+            type: data.type,
+            tag: Array2String(data.tags),
+            connect : data.options,
+        }
+        console.log(requestData);
+        if (isNew) {
+            apiClientWithToken.post("/back/api/study/test/question_add",JSON.stringify(requestData)).then(res=>{
+                if (res.data.code === 200){
+                    setFeedbackMessage({type:"success",text:`添加题目 ${requestData.id} ${res.data.message}`});
+                }else{
+                    setFeedbackMessage({type:"error",text:`添加题目 ${requestData.id} ${res.data.message}`});
+                }
+            })
+        }else{
+            apiClientWithToken.post("/back/api/study/test/question_up",JSON.stringify(requestData)).then(res=>{
+                if (res.data.code === 200){
+                    setFeedbackMessage({type:"success",text:`修改题目 ${requestData.id} ${res.data.message}`});
+                }else{
+                    setFeedbackMessage({type:"error",text:`修改题目 ${requestData.id} ${res.data.message}`});
+                }
+            })
+        }
     }
 
     const filteredAndSortedQuestions = useMemo(() => {
@@ -321,7 +326,7 @@ const QuestionPage: React.FC = () => {
 
             <QuestionModalForm
                 open={isQuestionsModalOpen}
-                onSave={onSave}
+                onSave={handelSaveQuestion}
                 onClose={() => setIsQuestionModalOpen(false)}
                 initialQuestion={questionToEdit}
             />
