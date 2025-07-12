@@ -45,7 +45,6 @@ import StoragePanel from "@/components/vm/StoragePanel";
 import NetworkPanel from "@/components/vm/NetworkPanel";
 import EventsPanel from "@/components/vm/EventsPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
-import GuacModal from "@/components/vm/GuacModal";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -123,11 +122,6 @@ export default function VmPage() {
     );
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
-    const [guacInfo, setGuacInfo] = React.useState<{
-        type: 'ssh' | 'rdp' | 'vnc';
-        host: string;
-        port: number;
-    } | null>(null);
 
     /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
     React.useEffect(() => {
@@ -210,7 +204,8 @@ export default function VmPage() {
                     : proto === 'rdp'
                     ? info.rdp_port
                     : info.vnc_port;
-            setGuacInfo({ type: proto, host: info.host, port: Number(port) });
+            const url = `/guac?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
+            window.open(url, '_blank');
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
@@ -465,15 +460,6 @@ export default function VmPage() {
                 <CircularProgress color="inherit" />
             </Backdrop>
             <CreateVmModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => mutate()} />
-            {guacInfo && (
-                <GuacModal
-                    open
-                    onClose={() => setGuacInfo(null)}
-                    type={guacInfo.type}
-                    hostname={guacInfo.host}
-                    port={guacInfo.port}
-                />
-            )}
         </Box>
     );
 }

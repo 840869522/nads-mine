@@ -19,11 +19,16 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get('type');
   const hostname = searchParams.get('hostname');
   const port = searchParams.get('port');
+  const username = searchParams.get('username');
+  const password = searchParams.get('password');
   if (!type || !hostname || !port) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 });
   }
+  const settings: Record<string, any> = { hostname, port };
+  if (username) settings.username = username;
+  if (password) settings.password = password;
   const tokenObj = {
-    connection: { type, settings: { hostname, port } }
+    connection: { type, settings }
   };
   const token = encryptToken(tokenObj);
   return NextResponse.json({ token });

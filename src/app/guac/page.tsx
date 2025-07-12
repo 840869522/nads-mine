@@ -10,19 +10,24 @@ function GuacInner() {
   const type = params.get('type') || '';
   const hostname = params.get('hostname') || '';
   const port = params.get('port') || '';
+  const username = params.get('username') || '';
+  const password = params.get('password') || '';
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ref.current || !type || !hostname || !port) return;
     let client: Guacamole.Client | null = null;
     let ignore = false;
-    const params = new URLSearchParams({ type, hostname, port }).toString();
-    fetch('/api/guac-token?' + params)
+    const queryInit: Record<string, string> = { type, hostname, port };
+    if (username) queryInit.username = username;
+    if (password) queryInit.password = password;
+    const qs = new URLSearchParams(queryInit).toString();
+    fetch('/api/token-guac?' + qs)
       .then(r => r.json())
       .then(data => {
         if (ignore || !ref.current || !data.token) return;
-        const wsBase = window.location.origin.replace(/^http/, 'ws');
-        const ws = wsBase + '/api/guac?token=' + encodeURIComponent(data.token);
+        const wsBase = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+        const ws = wsBase + '/connect-guac?token=' + encodeURIComponent(data.token);
         const tunnel = new Guacamole.WebSocketTunnel(ws);
         tunnel.onerror = status => console.error('Tunnel error', status);
         client = new Guacamole.Client(tunnel);
