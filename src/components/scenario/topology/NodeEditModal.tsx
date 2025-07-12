@@ -29,7 +29,7 @@ interface ManagedImage {
   version: string;
 }
 
-const COMPUTE_RESOURCE_TYPES = ['容器', '虚拟机'];
+const COMPUTE_RESOURCE_TYPES = ['容器'];
 
 interface NodeEditModalProps {
   isOpen: boolean;
@@ -55,7 +55,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       // 设置基础信息
       setLabel(node.label);
       setDeviceName(node.config.deviceName);
-      setDockerImage(node.config.dockerImage);
+      setDockerImage(node.config.Image || '');
       setIsTarget(node.config.isTarget || false); // 新增：设置初始状态
       setErrors({});
 
@@ -128,7 +128,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
 
     const newConfig: NodeConfig = {
       deviceName,
-      dockerImage: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? dockerImage : '',
+      Image: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? dockerImage : '',
       portMappings: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? portMappingsString : '',
       // 新增：将环境变量添加到配置中
       env: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? envString : '',

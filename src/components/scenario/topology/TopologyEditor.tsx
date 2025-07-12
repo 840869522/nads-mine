@@ -14,6 +14,7 @@ import TopologyToolbar from './TopologyToolbar';//包含一个 TopologyToolbar�
 import TopologyCanvas from './TopologyCanvas';//可视化画布
 import NodeEditModal from './NodeEditModal';
 import EdgeEditModal from './EdgeEditModal';
+import VirtualMachineEditModal from './VirtualMachineEditModal'; // 新增：导入VM编辑模态框
 import Card from '../../ui/Card';
 import SaveScenarioModal from './SaveScenarioModal';//
 
@@ -44,6 +45,8 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'UPDATE_NODE_CONFIG': { const { nodeId, newConfig, newLabel } = action.payload; return { ...state, nodes: state.nodes.map(n => n.id === nodeId ? { ...n, config: newConfig, label: newLabel } : n), }; }
         case 'ADD_EDGE': { const newEdge = action.payload.edge as TopologyEdge; return { ...state, edges: [...state.edges, newEdge], linkingState: null, selectedElement: null }; }
         case 'UPDATE_EDGE_CONFIG': { const { edgeId, newConfig } = action.payload; return { ...state, edges: state.edges.map(e => e.id === edgeId ? { ...e, config: newConfig } : e), }; }
+        
+
         case 'DELETE_NODE': { const { nodeId } = action.payload; return { ...state, nodes: state.nodes.filter(n => n.id !== nodeId), edges: state.edges.filter(e => e.source !== nodeId && e.target !== nodeId), selectedElement: state.selectedElement?.id === nodeId ? null : state.selectedElement, }; }
         case 'DELETE_EDGE': { const { edgeId } = action.payload; return { ...state, edges: state.edges.filter(e => e.id !== edgeId), selectedElement: state.selectedElement?.id === edgeId ? null : state.selectedElement, }; }
         case 'SELECT_ELEMENT': return { ...state, selectedElement: action.payload.element, linkingState: null };
@@ -76,7 +79,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     // 所有节点和边的实时、完整信息，都统一存储在 TopologyEditor 组件的 currentTopologyState
     // 这个状态对象中的 nodes 和 edges 数组里。handleConfirmSave 函数正是从这里读取数据的。
     const [currentTopologyState, dispatch] = useReducer(topologyReducer, initialTopologyState);
-
+    const [isVMEditModalOpen, setIsVMEditModalOpen] = useState(false); // 新增：VM模态框状态
+    const [editingVMNode, setEditingVMNode] = useState<TopologyNode | null>(null); // 新增：正在编辑的VM节点状态
 
     const { nodes, edges, selectedElement, linkingState } = currentTopologyState;
     const [undoStack, setUndoStack] = useState<TopologyAction[]>([]);
@@ -164,7 +168,33 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     const handleNodeSelect = useCallback((nodeId: string | null, event?: React.MouseEvent) => { event?.stopPropagation(); if (!nodeId) { dispatch({ type: 'CLEAR_SELECTION', payload: null }); return; } if (linkingState) { if (linkingState.startNodeId === nodeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); } else { const sourceNode = nodes.find(n => n.id === linkingState.startNodeId); const targetNode = nodes.find(n => n.id === nodeId); if (sourceNode && targetNode) { const edgeExists = edges.some(edge => (edge.source === sourceNode.id && edge.target === targetNode.id) || (edge.source === targetNode.id && edge.target === sourceNode.id)); if (!edgeExists) { const newEdge: TopologyEdge = { id: generateId('edge'), source: sourceNode.id, target: targetNode.id, config: { ...DEFAULT_EDGE_CONFIG, sourceIp: `10.0.${nodes.length + edges.length + 1}.1/24`, targetIp: `10.0.${nodes.length + edges.length + 1}.2/24` } }; const action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: newEdge } }; dispatch(action); pushToUndoStack(action); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } } else { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); dispatch({ type: 'START_LINKING', payload: { startNodeId: nodeId } }); } }, [linkingState, nodes, edges, dispatch, pushToUndoStack]);
     const handleEdgeSelect = useCallback((edgeId: string | null) => { if (edgeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: edgeId, type: 'edge' } } }); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } }, [dispatch]);
     const handleCanvasClick = useCallback(() => { dispatch({ type: 'CLEAR_SELECTION', payload: null }); }, [dispatch]);
-    const handleNodeDoubleClick = (nodeId: string) => { const node = nodes.find(n => n.id === nodeId); if (node) { setEditingNode(node); setIsNodeEditModalOpen(true); } };
+
+    const saveVMChanges = (nodeId: string, newConfig: NodeConfig, newLabel: string) => {
+        const oldNode = nodes.find(n => n.id === nodeId);
+        if (oldNode) {
+            const action: TopologyAction = {
+                type: 'UPDATE_NODE_CONFIG',
+                payload: { nodeId, oldConfig: oldNode.config, oldLabel: oldNode.label, newConfig, newLabel }
+            };
+            dispatch(action);
+            onUpdateNode({ ...oldNode, config: newConfig, label: newLabel });
+            pushToUndoStack(action);
+        }
+        setIsVMEditModalOpen(false);
+        setEditingVMNode(null);
+    };
+    const handleNodeDoubleClick = (nodeId: string) => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (node) {
+            if (node.type === 'virtual_machine') {
+                setEditingVMNode(node);
+                setIsVMEditModalOpen(true);
+            } else {
+                setEditingNode(node);
+                setIsNodeEditModalOpen(true);
+            }
+        }
+    };
     const handleEdgeDoubleClick = (edgeId: string) => { const edge = edges.find(e => e.id === edgeId); if (edge) { setEditingEdge(edge); setIsEdgeEditModalOpen(true); } };
     const saveNodeChanges = (nodeId: string, newConfig: NodeConfig, newLabel: string) => { const oldNode = nodes.find(n => n.id === nodeId); if (oldNode) { const action: TopologyAction = { type: 'UPDATE_NODE_CONFIG', payload: { nodeId, oldConfig: oldNode.config, oldLabel: oldNode.label, newConfig, newLabel } }; dispatch(action); onUpdateNode({ ...oldNode, config: newConfig, label: newLabel }); pushToUndoStack(action); } setIsNodeEditModalOpen(false); setEditingNode(null); };
     const saveEdgeChanges = (edgeId: string, newConfig: EdgeConfig) => { const oldEdge = edges.find(e => e.id === edgeId); if (oldEdge) { const action: TopologyAction = { type: 'UPDATE_EDGE_CONFIG', payload: { edgeId, oldConfig: oldEdge.config, newConfig } }; dispatch(action); pushToUndoStack(action); } setIsEdgeEditModalOpen(false); setEditingEdge(null); };
@@ -313,6 +343,12 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 onClose={() => setIsNodeEditModalOpen(false)}
                 node={editingNode}
                 onSave={saveNodeChanges}
+            />
+            <VirtualMachineEditModal
+                isOpen={isVMEditModalOpen}
+                onClose={() => setIsVMEditModalOpen(false)}
+                node={editingVMNode}
+                onSave={saveVMChanges}
             />
             <EdgeEditModal
                 isOpen={isEdgeEditModalOpen}
