@@ -4,6 +4,7 @@ import { Paper, Grid, TextField, Button, Typography, Box, Chip, Stack } from "@m
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Paragliding } from "@mui/icons-material";
+import { ColorMap } from "@/utils/color";
 
 const roleColors = ['primary', 'secondary', 'success', 'error', 'info', 'warning'] as const;
 
@@ -271,7 +272,7 @@ const PersonalPage: React.FC = () => {
                                                 key={role}
                                                 label={role}
                                                 size="small"
-                                                color={roleColors[index % roleColors.length]}
+                                                color={ColorMap[index % ColorMap.length]}
                                                 sx={{ m: 0.5 }}
                                             />
                                         ))}
