@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
-const KEY = Buffer.from(process.env.GUAC_KEY || 'MySuperSecretKeyForParamsToken12')
+const KEY = Buffer.from(process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef')
 
 function generateToken(obj: any) {
   const iv = crypto.randomBytes(16)
