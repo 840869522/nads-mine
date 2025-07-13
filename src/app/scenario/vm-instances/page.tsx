@@ -417,7 +417,8 @@ export default function VmPage() {
                         onChange={(_, v) => setTab(v)}
                         sx={{ borderBottom: 1, borderColor: "divider", pl: 2 }}
                     >
-                        {["概览", "快照", "存储", "网络", "事件"].map((l) => (
+                        {/*{["概览", "快照", "存储", "网络", "事件"].map((l) => (*/}
+                        {["概览"].map((l) => (
                             <Tab key={l} label={l} />
                         ))}
                     </Tabs>
@@ -425,10 +426,12 @@ export default function VmPage() {
                     {/* --- Panels --- */}
                     <Box sx={{ flex: 1, p: 2 }}>
                         {tab === 0 && current && <OverviewPanel vmId={current.id} />}
+                        {/*
                         {tab === 1 && current && <SnapshotsPanel vmId={current.id} />}
                         {tab === 2 && current && <StoragePanel vmId={current.id} />}
                         {tab === 3 && current && <NetworkPanel vmId={current.id} />}
                         {tab === 4 && current && <EventsPanel vmId={current.id} />}
+                        */}
                     </Box>
                 </Box>
             )}
