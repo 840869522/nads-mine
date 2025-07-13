@@ -9,14 +9,19 @@ html, body {
     margin: 0;
     font-family: Arial, sans-serif;
 }
-#app            { display: flex; flex-direction: column; height: 100%; }
-#toolbar        { height: 48px; background: #222; color: #fff; padding: 0 15px;
-    display: flex; align-items: center; }
-#display        { flex: 1; background: #000;                 /* 画面背景 */
-    display: flex; justify-content: center;    /* 横向居中 */
-    align-items:   center; overflow: hidden; } /* 纵向居中 */
-/* 让 scale 之后以左上角为基准，防止模糊 */
-#display > *    { transform-origin: top left; }
+
+#display{
+    flex-grow:1;
+    width:100%;
+    background:#000;         /* 盖掉白边 */
+    display:flex;            /* 让画面水平垂直居中（可选）*/
+    justify-content:center;
+    align-items:center;
+}
+#display > div {               /* Guacamole 根元素就是 #display 里的第一个 <div> */
+    transform-origin: top left;/* 保证 scale 后 (0,0) 仍是左上角 */
+}
+
 #app-container {
     height: 100%;
     width: 100%;
@@ -144,11 +149,6 @@ button:hover {
     cursor: pointer;
 }
 
-#display {
-    flex-grow: 1;
-    width: 100%;
-    cursor: default;
-}
 
 .guac-hide-cursor {
     cursor: url('data:image/gif;base64,R0lGODlhIAAgAIABAAAAAP///yH5BAEKAAEALAAAAAAgACAAAAIfRI6py+0Po5y02ouz3rz7D4biSJbmIabqyrbuC8dmAQA7'), default;
@@ -330,6 +330,29 @@ const displayUuid = document.getElementById('display-uuid');
 let currentClient = null; // Store the current Guacamole client
 let currentKeyboard = null; // Store the keyboard handler
 let pasteEventListener = null; // Store the paste event listener reference
+let currentScale = 1;
+function fitDisplay() {                    // ← 新增
+    if (!currentClient) return;            // 客户端还没建立时跳过
+    const display = currentClient.getDisplay();
+    const elem    = display.getElement();  // 根 <div>
+    const parent  = elem.parentElement;    // #display
+
+    // 父容器可用尺寸
+    const availW  = parent.clientWidth;
+    const availH  = parent.clientHeight;
+
+    // 远端实际分辨率
+    const remoteW = display.getWidth();
+    const remoteH = display.getHeight();
+    if (!remoteW || !remoteH) return;      // 远端还没回报分辨率
+
+    // 取最小比例，保证完整显示
+    const scale   = Math.min(availW / remoteW, availH / remoteH);
+
+    // 让 Guacamole 做缩放，同时修正鼠标坐标
+    display.scale(scale);
+    currentScale = scale;
+}
 
 // Helper function to get selected radio value
 function getSelectedRadioValue(name) {
@@ -525,7 +548,10 @@ function initializeGuacamoleClient(token, protocol) {
         // Add client display to the page
         const displayDiv = document.getElementById("display");
         displayDiv.appendChild(client.getDisplay().getElement());
-
+        // 绑定缩放逻辑
+        client.getDisplay().onresize = fitDisplay; // 远端分辨率变化时
+        fitDisplay();                              // 首次连接立即适配
+        window.addEventListener('resize', fitDisplay); // 浏览器窗口变化时
         // Set up error handler
         client.onerror = function (error) {
             console.error("Guacamole error:", error);
@@ -595,9 +621,16 @@ function initializeGuacamoleClient(token, protocol) {
 
         // Set up mouse
         const mouse = new Guacamole.Mouse(client.getDisplay().getElement());
-        mouse.onEach(['mousedown', 'mouseup', 'mousemove', 'mousewheel'],
-            e => client.sendMouseState(e.state));
-
+        //mouse.onEach(['mousedown', 'mouseup', 'mousemove', 'mousewheel'],
+        //    e => client.sendMouseState(e.state));
+        mouse.onEach(['mousedown','mouseup','mousemove','mousewheel'], e => {
+            const fixed = {
+                ...e.state,
+                x: Math.round(e.state.x / currentScale),
+                y: Math.round(e.state.y / currentScale)
+            };
+            client.sendMouseState(fixed);
+        });
         // Set up keyboard
         const keyboard = new Guacamole.Keyboard(window);
         keyboard.onkeydown = keysym => client.sendKeyEvent(1, keysym);

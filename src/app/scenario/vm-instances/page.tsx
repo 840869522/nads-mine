@@ -205,6 +205,7 @@ export default function VmPage() {
                     ? info.rdp_port
                     : info.vnc_port;
             const url = `/index.html?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
+            //const url = `/guac?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
             window.open(url, '_blank');
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
