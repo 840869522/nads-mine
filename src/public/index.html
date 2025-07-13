@@ -71,6 +71,7 @@ html, body {
     display: flex;
 }
 
+/*
 #join-connection-details {
     display: none;
     flex-direction: column;
@@ -80,6 +81,7 @@ html, body {
 #join-connection-details.visible {
     display: flex;
 }
+*/
 
 label {
     margin-bottom: 5px;
@@ -110,7 +112,7 @@ button:hover {
 }
 
 #display-screen {
-    display: none;
+    display: flex; /* show display by default */
     flex-direction: column;
     height: 100%;
     width: 100%;
@@ -192,7 +194,8 @@ button:hover {
 </head>
 <body>
 <div id="app-container">
-    <!-- Connection Screen -->
+    <!-- Connection Screen (disabled) -->
+    <!--
     <div id="connection-screen">
         <div id="connection-form">
             <h2 class="form-header">Guacamole Remote Connection</h2>
@@ -204,10 +207,12 @@ button:hover {
                         <input type="radio" id="connection-type-new" name="connection-type" value="new">
                         <label for="connection-type-new">New Connection</label>
                     </div>
+                    <!--
                     <div class="radio-option">
                         <input type="radio" id="connection-type-join" name="connection-type" value="join">
                         <label for="connection-type-join">Join Connection</label>
                     </div>
+                    -->
                 </div>
             </div>
 
@@ -254,6 +259,7 @@ button:hover {
                 </div>
             </div>
 
+            <!--
             <div id="join-connection-details">
                 <div class="form-row">
                     <label for="connection-id">Connection ID:</label>
@@ -266,12 +272,14 @@ button:hover {
                     </div>
                 </div>
             </div>
+            -->
 
             <div class="form-row" style="margin-top: 20px;">
                 <button id="connect-button">Connect</button>
             </div>
         </div>
     </div>
+    -->
 
     <!-- Display Screen -->
     <div id="display-screen">
@@ -311,7 +319,7 @@ async function generateGuacamoleToken(tokenObj) {
 </script>
 <script>
 // DOM elements
-const connectionScreen = document.getElementById('connection-screen');
+// const connectionScreen = document.getElementById('connection-screen');
 const displayScreen = document.getElementById('display-screen');
 const connectTargetRadios = document.querySelectorAll('input[name="connect-target"]');
 const remoteHostDetailsDiv = document.getElementById('remote-host-details');
@@ -322,9 +330,9 @@ const connectionTypeRadios = document.querySelectorAll('input[name="connection-t
 const remoteHostnameInput = document.getElementById('remote-hostname');
 const remoteUsernameInput = document.getElementById('remote-username');
 const remotePasswordInput = document.getElementById('remote-password');
-const joinConnectionDetailsDiv = document.getElementById('join-connection-details');
-const connectionIdInput = document.getElementById('connection-id');
-const readOnlyCheckbox = document.getElementById('read-only');
+// const joinConnectionDetailsDiv = document.getElementById('join-connection-details');
+// const connectionIdInput = document.getElementById('connection-id');
+// const readOnlyCheckbox = document.getElementById('read-only');
 const displayUuid = document.getElementById('display-uuid');
 
 let currentClient = null; // Store the current Guacamole client
@@ -355,174 +363,90 @@ function fitDisplay() {                    // ← 新增
 }
 
 // Helper function to get selected radio value
-function getSelectedRadioValue(name) {
-    const el = document.querySelector(`input[name="${name}"]:checked`);
-    return el ? el.value : null;
+/*
+ * Legacy form-based connection logic has been disabled. Parameters are now
+ * provided via query string when this page is embedded from the VM management
+ * interface.
+ */
+
+function getConnectionParams() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Accept protocol from either "protocol" or legacy "type"
+    const protoParam = params.get('protocol') || params.get('type');
+    const protocol = (protoParam || 'rdp').toLowerCase();
+
+    // Hostname may be provided as "host" or "hostname"
+    const hostParam = params.get('host') || params.get('hostname');
+    const hostname = hostParam || 'localhost';
+
+    // Validate numeric port
+    let port = parseInt(params.get('port'), 10);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        port = protocol === 'rdp' ? 3389 : 5900;
+    }
+
+    return {
+        protocol,
+        hostname,
+        port,
+        username: params.get('username') || '',
+        password: params.get('password') || ''
+    };
 }
 
-// Centralised form visibility handler ----------------------------------
-function updateFormVisibility() {
-    const mode = getSelectedRadioValue('connection-type');
+async function autoConnect() {
+    const cfg = getConnectionParams();
 
-    if (!mode) {
-        // Nothing selected – hide everything except connection-type row
-        document.getElementById('connect-target').closest('.form-row').style.display = 'none';
-        document.getElementById('protocol').closest('.form-row').style.display = 'none';
-        remoteHostDetailsDiv.classList.remove('visible');
-        joinConnectionDetailsDiv.classList.remove('visible');
-        joinConnectionDetailsDiv.hidden = true;
-        return;
+    const settings = {
+        hostname: cfg.hostname,
+        username: cfg.username,
+        password: cfg.password,
+        port: cfg.port
+    };
+
+    if (cfg.protocol === 'rdp') {
+        Object.assign(settings, {
+            "ignore-cert": true,
+            "security": "any",
+            "enable-drive": true,
+            "drive-path": "/tmp/guac-drive",
+            "create-drive-path": true,
+            "enable-printing": true,
+            "audio": ["audio/L16;rate=44100"]
+        });
+    } else if (cfg.protocol === 'vnc') {
+        Object.assign(settings, {
+            autoretry: 3,
+            color_depth: 24,
+            swap_red_blue: false,
+            connect_timeout: 15
+        });
     }
 
-    if (mode === 'join') {
-        // Hide everything related to new connections
-        document.getElementById('connect-target').closest('.form-row').style.display = 'none';
-        document.getElementById('protocol').closest('.form-row').style.display = 'none';
-        remoteHostDetailsDiv.classList.remove('visible');
-
-        // Show join-specific section
-        joinConnectionDetailsDiv.classList.add('visible');
-        joinConnectionDetailsDiv.hidden = false;
-    } else {
-        // Show new-connection inputs
-        document.getElementById('connect-target').closest('.form-row').style.display = '';
-        document.getElementById('protocol').closest('.form-row').style.display = '';
-        joinConnectionDetailsDiv.classList.remove('visible');
-        joinConnectionDetailsDiv.hidden = true;
-
-        // Show remote host details only when "Remote Host" is chosen
-        if (getSelectedRadioValue('connect-target') === 'remote-host') {
-            remoteHostDetailsDiv.classList.add('visible');
-            remoteHostDetailsDiv.hidden = false;
-        } else {
-            remoteHostDetailsDiv.classList.remove('visible');
-            remoteHostDetailsDiv.hidden = true;
+    const tokenObj = {
+        connection: {
+            type: cfg.protocol,
+            settings
         }
-    }
+    };
+
+    const displayDiv = document.getElementById('display');
+    while (displayDiv.firstChild) displayDiv.removeChild(displayDiv.firstChild);
+
+    const token = await generateGuacamoleToken(tokenObj);
+    initializeGuacamoleClient(token, cfg.protocol, settings);
 }
-
-// Bind the visibility handler to all relevant radio groups
-[...connectionTypeRadios, ...connectTargetRadios, ...protocolRadios].forEach(radio => {
-    radio.addEventListener('change', updateFormVisibility);
-});
-
-// Initialise form visibility on page load
-updateFormVisibility();
-
-// Connect button click handler
-connectButton.addEventListener('click', async () => {
-    const mode = getSelectedRadioValue('connection-type');
-    let tokenObj;
-    let protocol = null;
-
-    if (mode === 'join') {
-        // Handle joining an existing connection
-        const connectionId = connectionIdInput.value.trim();
-        if (!connectionId) {
-            alert('Please enter a connection ID to join');
-            return;
-        }
-
-        tokenObj = {
-            connection: {
-                join: connectionId,
-                settings: {
-                    'read-only': readOnlyCheckbox.checked
-                }
-            }
-        };
-    } else {
-        protocol = getSelectedRadioValue('protocol');
-        if (!protocol) {
-            alert('Please select a protocol');
-            return;
-        }
-        // Handle regular connection
-        const target = getSelectedRadioValue('connect-target');
-        let connectionSettings;
-
-        // Base connection settings
-        connectionSettings = {
-            hostname: target === 'test-host' ? 'desktop-linux' : remoteHostnameInput.value,
-            username: target === 'test-host' ? 'testuser' : remoteUsernameInput.value,
-            password: target === 'test-host' ? 'Passw0rd!' : remotePasswordInput.value,
-        };
-
-        if (protocol === 'rdp') {
-            Object.assign(connectionSettings, {
-                "ignore-cert": true,
-                "security": "any",
-                "enable-drive": true,
-                "drive-path": "/tmp/guac-drive",
-                "create-drive-path": true,
-                "enable-printing": true,
-                "audio": ["audio/L16;rate=44100"]
-            });
-        }
-
-        // Add VNC-specific settings
-        if (protocol === 'vnc') {
-            Object.assign(connectionSettings, {
-                port: 5900,
-                autoretry: 3,
-                color_depth: 24,
-                swap_red_blue: false,
-                connect_timeout: 15
-            });
-        }
-
-        tokenObj = {
-            connection: {
-                type: protocol,
-                settings: connectionSettings
-            }
-        };
-    }
-
-    try {
-        // Clear previous display if any
-        const displayDiv = document.getElementById('display');
-        while (displayDiv.firstChild) {
-            displayDiv.removeChild(displayDiv.firstChild);
-        }
-
-        console.log("Generating token for:", tokenObj);
-        if (mode === 'join') {
-            console.log(`Joining existing connection: ${tokenObj.connection.join}, read-only: ${tokenObj.connection.settings['read-only']}`);
-        } else {
-            const settings = tokenObj.connection.settings;
-            console.log(`Connecting with ${protocol.toUpperCase()} to ${settings.hostname}:${settings.port || (protocol === 'rdp' ? '3389' : '5900')}`);
-        }
-        const token = await generateGuacamoleToken(tokenObj);
-        console.log("Token generated, initializing Guacamole...");
-
-        // Initialize Guacamole client
-        initializeGuacamoleClient(token, mode === 'join' ? 'join' : protocol);
-    } catch (error) {
-        console.error("Failed to connect:", error);
-        alert("Connection failed: " + error.message);
-
-        // Switch back to connection screen on error
-        displayScreen.style.display = 'none';
-        connectionScreen.style.display = 'flex';
-    }
-});
 
 // Function to initialize Guacamole client
-function initializeGuacamoleClient(token, protocol) {
-    // Switch to display screen before initializing to avoid UI jumping
-    connectionScreen.style.display = 'none';
+function initializeGuacamoleClient(token, protocol, params) {
+    // Switch to display screen before initializing
     displayScreen.style.display = 'flex';
 
     // Update display title with connection info
     const displayTitle = document.getElementById('display-title');
-    if (protocol === 'join') {
-        const connectionId = connectionIdInput.value.trim();
-        const readOnly = readOnlyCheckbox.checked ? ' (read-only)' : '';
-        displayTitle.textContent = `Joined connection: ${connectionId}${readOnly}`;
-    } else {
-        const target = getSelectedRadioValue('connect-target');
-        displayTitle.textContent = `Connected to: ${target === 'test-host' ? 'Test Host' : remoteHostnameInput.value} (${protocol.toUpperCase()})`;
+    if (displayTitle && params) {
+        displayTitle.textContent = `Connected to: ${params.hostname} (${protocol.toUpperCase()})`;
     }
 
     try {
@@ -532,7 +456,7 @@ function initializeGuacamoleClient(token, protocol) {
         // Set up onuuid event handler to log connection ID
         tunnel.onuuid = function (uuid) {
             console.log("Connection UUID received:", uuid);
-            console.log("This UUID can be used to join this session from another client");
+            // console.log("This UUID can be used to join this session from another client");
 
             // Show UUID in the header and store for copying
             if (displayUuid) {
@@ -669,17 +593,13 @@ function initializeGuacamoleClient(token, protocol) {
         console.error("Error initializing Guacamole:", error);
         alert("Error initializing Guacamole: " + error.message);
         displayScreen.style.display = 'none';
-        connectionScreen.style.display = 'flex';
     }
 }
 
 // Close button click handler
 closeButton.addEventListener('click', () => {
     cleanupGuacamole();
-
-    // Switch back to connection screen
     displayScreen.style.display = 'none';
-    connectionScreen.style.display = 'flex';
 });
 
 // Function to properly clean up all Guacamole resources
@@ -772,7 +692,9 @@ if (displayUuid) {
 // Handle page unloads to clean up any active sessions
 window.addEventListener('beforeunload', () => {
     cleanupGuacamole();
-}); 
+});
+
+window.addEventListener('DOMContentLoaded', autoConnect);
 </script>
 </body>
 </html>
