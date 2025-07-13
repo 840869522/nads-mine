@@ -207,12 +207,11 @@ button:hover {
                         <input type="radio" id="connection-type-new" name="connection-type" value="new">
                         <label for="connection-type-new">New Connection</label>
                     </div>
-                    <!--
                     <div class="radio-option">
                         <input type="radio" id="connection-type-join" name="connection-type" value="join">
                         <label for="connection-type-join">Join Connection</label>
                     </div>
-                    -->
+
                 </div>
             </div>
 
@@ -259,7 +258,7 @@ button:hover {
                 </div>
             </div>
 
-            <!--
+
             <div id="join-connection-details">
                 <div class="form-row">
                     <label for="connection-id">Connection ID:</label>
@@ -272,7 +271,7 @@ button:hover {
                     </div>
                 </div>
             </div>
-            -->
+
 
             <div class="form-row" style="margin-top: 20px;">
                 <button id="connect-button">Connect</button>
@@ -383,7 +382,7 @@ function getConnectionParams() {
     // Validate numeric port
     let port = parseInt(params.get('port'), 10);
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-        port = protocol === 'rdp' ? 3389 : 5900;
+        port = protocol === 'rdp' ? 3389 : port;
     }
 
     return {
