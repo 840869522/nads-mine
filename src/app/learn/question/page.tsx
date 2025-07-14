@@ -10,7 +10,7 @@ import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
 import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
 import { Array2String } from "@/utils/string";
-import { SnippetFolderRounded } from "@mui/icons-material";
+import { toast } from "react-toastify";
 
 type Order = `asc` | `desc`;
 type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
@@ -94,21 +94,22 @@ const QuestionPage: React.FC = () => {
     const handleSearchSubmit = async () => {
         setTableLoading(true);
         try {
-            const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
-                page: 1,
-                pagesize: rowsPerPage,
-                name: searchTerm.data
-            }));
+            toast.error("search is not supported and will support son", )
+            // const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
+            //     page: 1,
+            //     pagesize: rowsPerPage,
+            //     name: searchTerm.data
+            // }));
 
-            if (res.data.code === 200) {
-                setQuestions(res.data.data.data);
-                setQuestionsCount(res.data.data.count);
-                setPage(1);
-            } else {
-                setQuestions([]);
-                setFeedbackMessage({ type: 'error', text: '搜索权限时发生错误' });
-                setQuestionsCount(0);
-            }
+            // if (res.data.code === 200) {
+            //     setQuestions(res.data.data.data);
+            //     setQuestionsCount(res.data.data.count);
+            //     setPage(1);
+            // } else {
+            //     setQuestions([]);
+            //     setFeedbackMessage({ type: 'error', text: '搜索权限时发生错误' });
+            //     setQuestionsCount(0);
+            // }
         } finally {
             setTableLoading(false);
         }
@@ -120,7 +121,7 @@ const QuestionPage: React.FC = () => {
     }
 
     const confirmDeleteQuestion = () => {
-
+        
     };
 
 
@@ -141,12 +142,11 @@ const QuestionPage: React.FC = () => {
             id: data.id,
             question: data.question,
             course_id : data.courseName,
-            answer :data.type === "essay" ? "*" : data.answer,
+            answer :data.type === 4 ? "*" : data.answer,
             type: data.type,
             tag: Array2String(data.tags),
             connect : data.options,
         }
-        console.log(requestData);
         if (isNew) {
             apiClientWithToken.post("/back/api/study/test/question_add",JSON.stringify(requestData)).then(res=>{
                 if (res.data.code === 200){
@@ -202,7 +202,7 @@ const QuestionPage: React.FC = () => {
                     <TextField
                         variant="outlined"
                         size="small"
-                        placeholder="搜索权限..."
+                        placeholder="搜索试题..."
                         value={searchTerm.data}
                         onChange={handleSearchChange}
                         onKeyDown={(e) => {

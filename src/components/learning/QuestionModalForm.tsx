@@ -21,7 +21,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DynamicOptionInputs from "@/components/input/DynamicOptionInputs";
-import { Sttring2Array } from "@/utils/string";
+import { String2Array } from "@/utils/string";
 
 export type SelectOption = {
     c_id: string,
@@ -34,7 +34,7 @@ export type QuestionDisplayItem = {
     c_course_id: string,
     c_question: string,
     c_answer: string,
-    c_type: string,
+    c_type: number,
     c_tag: string,
     c_create_at: string,
     connect: SelectOption[]
@@ -44,7 +44,7 @@ export type QuestionFormData = {
     id: string;
     question: string;
     answer: string;
-    type: "single" | "multiple" | "true_false" | "essay" | string;
+    type: 1 | 2 | 3 | 4 | number;
     tags: string[];
     courseName: string;
     options: SelectOption[];
@@ -70,7 +70,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         id: "",
         question: "",
         answer: "",
-        type: "single",
+        type: 1,
         tags: [''],
         courseName: "",
         options: [{ c_id: "", c_content: "" }]
@@ -96,7 +96,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                     question: initialQuestion?.c_question,
                     answer: initialQuestion?.c_answer,
                     type: initialQuestion?.c_type,
-                    tags: Sttring2Array(initialQuestion?.c_tag),
+                    tags: String2Array(initialQuestion?.c_tag),
                     courseName: initialQuestion?.c_course_id,
                     options: initialQuestion.connect,
                 });
@@ -105,7 +105,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                     id: "",
                     question: "",
                     answer: "",
-                    type: "single",
+                    type: 1,
                     tags: [''],
                     courseName: "",
                     options: [{ c_id: "", c_content: "" }]
@@ -117,10 +117,10 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
 
     // 类型选项映射
     const typeOptions = [
-        { value: 'single', label: '单选题' },
-        { value: 'multiple', label: '多选题' },
-        { value: 'true_false', label: '判断题' },
-        { value: 'essay', label: '主观题' },
+        { value: 1, label: '单选题' },
+        { value: 2, label: '多选题' },
+        { value: 3, label: '判断题' },
+        { value: 4, label: '主观题' },
     ];
 
     // 输入变化处理
@@ -150,12 +150,12 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     };
 
     // 类型选择处理
-    const handleTypeChange = (e: React.ChangeEvent<{ value: string }>) => {
+    const handleTypeChange = (e: React.ChangeEvent<{ value: number }>) => {
         const value = e.target.value as QuestionFormData['type'];
         setFormData({ ...formData, type: value });
         setErrors({ ...errors, type: '' });
 
-        if (value !== 'single' && value !== 'multiple') {
+        if (value !== 1 && value !== 2) {
             setFormData({ ...formData, options: [], type: value });
         }
     };
@@ -191,7 +191,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         if (!formData.courseName.trim()) newErrors.courseName = '课程名不能为空';
 
         // 选项校验（仅在单选/多选时）
-        if (['single', 'multiple'].includes(formData.type)) {
+        if ([1, 2].includes(formData.type)) {
             if (formData.options.length === 0) {
                 newErrors.options = ['至少添加一个选项'];
             } else {
@@ -202,6 +202,8 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                     return '';
                 });
                 newErrors.options = optionErrors;
+                if (optionErrors.every(error => error === ""))
+                    delete newErrors.options
             }
         }
         setErrors(newErrors);
@@ -213,7 +215,10 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     const handleSubmit = () => {
         console.log(validateForm());
         if (validateForm()) {
-            console.log(111);
+            formData.options = formData.options.map(opt => {
+                const newOpt = { key: opt.c_id, option: opt.c_content }
+                return newOpt;
+            })
             onSave(formData, isNew);
             onClose();
         }
@@ -282,7 +287,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
 
 
                     {/* 选项输入（仅在单选/多选时显示） */}
-                    {['single', 'multiple','true_false'].includes(formData.type) && (
+                    {[1, 2].includes(formData.type) && (
                         <Box mb={2}>
                             <DynamicOptionInputs
                                 options={formData.options}

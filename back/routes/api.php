@@ -20,7 +20,6 @@
     use App\Http\Controllers\Vm\MainCli\VmController;
     use App\Http\Controllers\Course\TestController;
 
-
     /*
     |--------------------------------------------------------------------------
     | API Routes
@@ -42,9 +41,17 @@
      */
 
     /**
+     * 较为特殊的路由
+     */
+    Route::prefix("")->group(function () {
+        Route::post("support/user/login",[UserController::class,"login"]);
+        Route::post("support/user/update_pwd",[UserController::class,"updateUserPassword"])->middleware("jwtcheck");
+        Route::post("support/user/up_common",[UserController::class, "updateUserEmail"])->middleware("jwtcheck");
+    });
+
+    /**
      * 定义基础分系统路由
      */
-    Route::post("support/user/login",[UserController::class,"login"]);
     Route::prefix("support")->middleware("jwtcheck:support")->group(function() {
         Route::prefix("user")->middleware("jwtcheck:support_user")->group(function() {
             Route::post("/id",[UserController::class,"getUserById"]);

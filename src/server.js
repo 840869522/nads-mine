@@ -78,13 +78,16 @@ app.prepare().then(() => {
       { port: 4822 },
       {
         crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
+        connectionDefaultSettings: {
+          rdp: { 'audio': ['audio/L16'] }
+        },
         allowedUnencryptedConnectionSettings: {
           rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
           ssh: ['hostname', 'port', 'username', 'password'],
           vnc: ['hostname', 'port', 'password'],
           join: ['id','width','height','dpi']
         },
-        log: { level: 'VERBOSE' },
+        log: { level: 'DEBUG' },
       }
   );
   guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
