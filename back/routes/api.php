@@ -18,7 +18,8 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
-    use App\Http\Controllers\examination\TestController;
+    use App\Http\Controllers\Course\TestController;
+
 
 
     /*
@@ -66,7 +67,7 @@
             Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"]);
         });
 
-        Route::prefix('permission')->middleware("jwtcheck:support_permissions")->group(function () {
+        Route::prefix('permission')->middleware("jwtcheck:support_permission")->group(function () {
             Route::post('/all', [PermissionController::class, 'getAllPermission']);
             Route::post('/id', [PermissionController::class, 'getPermissionById']);
             Route::post("/search",[PermissionController::class,"searchPermission"]);
@@ -206,7 +207,7 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
 
     Route::prefix('scenariosinstances')->group(function () {
 
-
+        Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
         // GET /api/scenariosinstances/switches - 获取所有场景实例下的所有交换机【前端无该功能】
         Route::get('/switches', [SwitchController::class, 'index']);
 
@@ -243,6 +244,8 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::get('/{id}/binds', [ContainersController::class, 'binds']);
     });
 
+
+
     Route::prefix('vms')->group(function () {
         $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
         Route::get('/', [$c, 'listVms']);
@@ -250,6 +253,7 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::post('/create', [$c, 'createVm']);
         Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
         Route::get('/{vm_id}', [$c, 'getVmInfo']);
+        Route::delete('/{vm_id}', [$c, 'deleteVm']);
         Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
         Route::get('/{vm_id}/snapshots', [$c, 'listVmSnapshots']);
         Route::post('/{vm_id}/snapshots', [$c, 'createVmSnapshot']);
@@ -262,9 +266,18 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-    Route::prefix('examination')->group(function () {
+    Route::prefix('study')->group(function () {
         Route::prefix('test')->group(function(){
-            Route::post('/', [TestController::class, 'index']);
+            Route::post('/question_add', [TestController::class, 'question_add']);
+            Route::post('/question_up', [TestController::class, 'question_up']);
+            Route::post('/question_del', [TestController::class, 'question_del']);
+            Route::post('/question_list', [TestController::class, 'question_list']);
+            Route::post('/question_info', [TestController::class, 'question_info']);
+            Route::post('/test_add', [TestController::class, 'test_add']);
+            Route::post('/test_update', [TestController::class, 'test_update']);
+            Route::post('/test_del', [TestController::class, 'test_del']);
+            Route::post('/test_list', [TestController::class, 'test_list']);
+            Route::post('/test_info', [TestController::class, 'test_info']);
         });
     });
 

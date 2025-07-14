@@ -66,7 +66,7 @@ class VmImage(BaseModel):
     osType: Optional[str] = None
     architecture: Optional[str] = None
     # 上传日期可近似使用文件的修改时间
-    uploadDate: Optional[str] = None
+    modifiedDate: Optional[str] = None
     # 镜像状态目前固定为 available，无法直接从 libvirt 获取
     status: Optional[str] = None
 
@@ -220,6 +220,9 @@ def _get_image_metadata(path: str) -> dict[str, Optional[str]]:
 
 def _size_to_mb(size: float, unit: str) -> float:
     unit = unit.lower()
+    if unit.startswith("b"):
+        # values reported without a unit are bytes
+        return size / (1024 * 1024)
     if unit.startswith("g"):
         return size * 1024
     if unit.startswith("k"):
@@ -297,7 +300,6 @@ def fetch_vm_images() -> List[VmImage]:
         except OSError:
             upload_date = None
 
-        meta = _get_image_metadata(path)
         images.append(
             VmImage(
                 id=vol_name,
@@ -305,11 +307,8 @@ def fetch_vm_images() -> List[VmImage]:
                 pool="default",
                 size=f"{size_mb:.1f} MB",
                 path=path,
-                uploadDate=upload_date,
+                modifiedDate=upload_date,
                 status="available",
-                version=meta.get("version"),
-                osType=meta.get("osType"),
-                architecture=meta.get("architecture"),
             )
         )
     return images
@@ -724,19 +723,34 @@ def list_vm_disks(vm_id: str):
             continue
         capacity_gb = 0
         alloc_gb = 0
+        fmt = ""
         for l in info_out.splitlines():
             if l.startswith("Capacity:"):
-                val, unit = l.split()[1:3]
-                capacity_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    capacity_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    capacity_gb = float(val) / (1024 * 1024 * 1024)
             elif l.startswith("Allocation:"):
-                val, unit = l.split()[1:3]
-                alloc_gb = _size_to_mb(float(val), unit) / 1024
+                parts_info = l.split()
+                if len(parts_info) >= 3:
+                    val, unit = parts_info[1:3]
+                    alloc_gb = _size_to_mb(float(val), unit) / 1024
+                elif len(parts_info) >= 2:
+                    val = parts_info[1]
+                    alloc_gb = float(val) / (1024 * 1024 * 1024)
+            elif l.startswith("Format:"):
+                parts_info = l.split()
+                if len(parts_info) >= 2:
+                    fmt = parts_info[1]
         disks.append(
             Disk(
                 id=target,
                 target=target,
                 source=path,
-                format="",  # unknown
+                format=fmt,
                 bus="virtio",
                 capacity_gb=int(capacity_gb),
                 allocated_gb=int(alloc_gb),

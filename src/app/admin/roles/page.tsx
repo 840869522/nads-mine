@@ -18,19 +18,20 @@ import {
     Alert as MuiAlert,
     TableSortLabel,
     CircularProgress,
+    TablePagination,
+    InputAdornment,
+    TextField,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import GppGoodIcon from '@mui/icons-material/GppGood';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { UserRole } from '@/types';
-import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import RoleFormModal, { RoleFormData } from '@/components/admin/RoleFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
 import { apiClientWithToken } from '@/utils/axios';
-import { json } from 'stream/consumers';
+import SearchIcon from '@mui/icons-material/Search';
 
 
 interface MockRole {
@@ -58,6 +59,8 @@ const RoleManagementPage: React.FC = () => {
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
     const [tableLaoding, setTableLoading] = useState(true);
 
+
+    const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [roleToDelete, setRoleToDelete] = useState<MockRole | null>(null);
     const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -67,8 +70,8 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        getRoleData(2, rowsPerPage);
-    }, []);
+        getRoleData(page, rowsPerPage);
+    }, [page, rowsPerPage]);
 
 
     const handleAddRoleClick = () => {
@@ -76,6 +79,16 @@ const RoleManagementPage: React.FC = () => {
         setIsRoleModalOpen(true);
         setFeedbackMessage(null);
     };
+
+    const handleChangePage = (event: unknown, newPage: number) => {
+        setPage(newPage + 1);
+    };
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(1);
+    };
+
 
     const getRoleData = (page: number, pagesize: number) => {
         setTableLoading(true);
@@ -91,8 +104,34 @@ const RoleManagementPage: React.FC = () => {
             }).finally(() => {
                 setTableLoading(false);
             });
-
     }
+
+    const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
+        setPage(1);
+    };
+
+    const handleSearchSubmit = async () => {
+        setTableLoading(true);
+        try {
+            const res = await apiClientWithToken.post(`/back/api/support/role/search`, JSON.stringify({
+                page: 1,
+                pagesize: rowsPerPage,
+                name: searchTerm.data
+            }));
+
+            if (res.data.code === 200) {
+                setRoles(res.data.data.data);
+                setCount(res.data.data.count);
+                setPage(1);
+            }
+        } catch (error) {
+            console.error('搜索失败:', error);
+            setFeedbackMessage({ type: 'error', text: '搜索用户时发生错误' });
+        } finally {
+            setTableLoading(false);
+        }
+    };
 
     const handleEditRoleClick = (role: MockRole) => {
         apiClientWithToken.post(`/back/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
@@ -120,7 +159,7 @@ const RoleManagementPage: React.FC = () => {
             const data = await res.data;
             if (data.code === 200) {
                 setPage(1);
-                getRoleData(2, rowsPerPage);
+                getRoleData(1, rowsPerPage);
                 setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
             } else {
                 setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
@@ -229,7 +268,41 @@ const RoleManagementPage: React.FC = () => {
                 </MuiAlert>
             )}
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+                    <TextField
+                        variant="outlined"
+                        size="small"
+                        placeholder="搜索用户..."
+                        value={searchTerm.data}
+                        onChange={handleSearchChange}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                handleSearchSubmit();
+                            }
+                        }}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            ),
+                            endAdornment: tableLaoding ? (
+                                <CircularProgress size={20} />
+                            ) : null
+                        }}
+                        sx={{ minWidth: { sm: 300 } }}
+                    />
+                    <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleSearchSubmit}
+                        disabled={tableLaoding}
+                        sx={{ ml: 1, minWidth: 80 }}
+                    >
+                        搜索
+                    </Button>
+                </Box>
                 <Button
                     variant="contained"
                     startIcon={<AddCircleOutlineIcon />}
@@ -350,6 +423,17 @@ const RoleManagementPage: React.FC = () => {
                         }
                     </TableBody>
                 </Table>
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25]}
+                    component="div"
+                    count={count}
+                    rowsPerPage={rowsPerPage}
+                    page={page - 1}
+                    onPageChange={handleChangePage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    labelRowsPerPage="每页行数:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`}
+                />
             </TableContainer>
 
             <RoleFormModal

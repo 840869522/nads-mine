@@ -1,4 +1,4 @@
-// src/app/scenario/sceneinstances/SwitchInstancesTab.tsx
+// src/app/scenario/sceneinstances/all-switches/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -13,39 +13,34 @@ import {
     IconButton,
 } from '@mui/material';
 import { DataGrid, GridColDef, GridRowsProp } from '@mui/x-data-grid';
-import { Refresh as RefreshIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon, Delete as DeleteIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import Link from 'next/link';
 
+// API 基础路径
 const API_BASE = "/back";
 
+// 定义交换机数据类型
 interface SwitchInstance {
-    id: string;
+    id: string; // 使用 switch_name 作为唯一的 id
     switch_name: string;
-    instance_id: string;
     source: string;
 }
 
-interface SwitchInstancesTabProps {
-    instanceId: string | null;
-}
-
-const SwitchInstancesTab: React.FC<SwitchInstancesTabProps> = ({ instanceId }) => {
+const AllSwitchesPage: React.FC = () => {
     const theme = useTheme();
     const [switches, setSwitches] = useState<GridRowsProp>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // ⭐ 新增：追踪正在被删除的行的 ID，用于显示加载状态
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-
-    const fetchSwitches = useCallback(async () => {
-        if (!instanceId) {
-            setSwitches([]);
-            return;
-        }
+    // 获取所有交换机数据 (逻辑不变)
+    const fetchAllSwitches = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const url = `${API_BASE}/api/scenariosinstances/${instanceId}/switches`;
+            const url = `${API_BASE}/api/scenariosinstances/switches`;
             const response = await fetch(url);
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -60,23 +55,24 @@ const SwitchInstancesTab: React.FC<SwitchInstancesTabProps> = ({ instanceId }) =
         } finally {
             setIsLoading(false);
         }
-    }, [instanceId]);
+    }, []);
 
     useEffect(() => {
-        fetchSwitches();
-    }, [fetchSwitches]);
-
-    // [MODIFICATION START] 更新删除处理函数以调用 API
+        fetchAllSwitches();
+    }, [fetchAllSwitches]);
+    
+    // ⭐ 修改：为删除按钮添加实际功能
     const handleDeleteSwitch = async (switchId: string, switchName: string) => {
         const isConfirmed = window.confirm(`您确定要删除交换机 "${switchName}" 吗？此操作无法恢复。`);
-        if (!isConfirmed || !instanceId) {
+        if (!isConfirmed) {
             return;
         }
 
-        setDeletingId(switchId); // 开始删除，设置加载状态
+        setDeletingId(switchId); // 设置当前行正在删除中
 
         try {
-            // 假设的 API 端点，请确保后端已实现
+            // 假设删除交换机的 API 端点是 DELETE /api/scenariosinstances/switches/{switch_name}
+            // ！！！请确保您的后端实现了此接口 ！！！
             const url = `${API_BASE}/api/scenariosinstances/switches/${switchName}`;
             const response = await fetch(url, {
                 method: 'DELETE',
@@ -87,44 +83,30 @@ const SwitchInstancesTab: React.FC<SwitchInstancesTabProps> = ({ instanceId }) =
                 throw new Error(errorData.detail || errorData.message || `删除失败，状态码: ${response.status}`);
             }
 
-            // 从前端状态中移除，实现界面实时更新
+            // 删除成功后，从前端状态中移除该行
             setSwitches((prevSwitches) => prevSwitches.filter(s => s.id !== switchId));
 
         } catch (err: any) {
+            // 如果删除失败，显示错误提示
             alert(`删除失败: ${err.message}`);
         } finally {
-            setDeletingId(null); // 结束删除，重置加载状态
+            setDeletingId(null); // 重置删除状态
         }
     };
-    // [MODIFICATION END]
     
+    // ⭐ 修改：更新列定义以在删除时显示加载动画
     const columns: GridColDef[] = [
         {
             field: 'switch_name',
             headerName: '交换机名称',
-            flex: 1,
-            renderCell: (params) => (
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {params.value}
-                </Typography>
-            ),
-        },
-        {
-            field: 'instance_id',
-            headerName: '场景实例 ID',
             flex: 1.5,
-            renderCell: (params) => (
-                 <Tooltip title={params.value}>
-                    <code>{params.value}</code>
-                </Tooltip>
-            )
+            renderCell: (params) => <Typography variant="body2" sx={{ fontWeight: 500 }}>{params.value}</Typography>,
         },
         {
             field: 'source',
             headerName: '来源',
-            width: 150,
+            flex: 1,
         },
-        // [MODIFICATION START] 更新“操作”列以显示加载状态
         {
             field: 'actions',
             headerName: '操作',
@@ -140,7 +122,7 @@ const SwitchInstancesTab: React.FC<SwitchInstancesTabProps> = ({ instanceId }) =
                             <CircularProgress size={24} />
                         ) : (
                             <Tooltip title="删除交换机">
-                                <div>
+                                <div> {/* 用于包裹 disabled 的 IconButton，确保 Tooltip 生效 */}
                                     <IconButton
                                         color="error"
                                         size="small"
@@ -156,59 +138,45 @@ const SwitchInstancesTab: React.FC<SwitchInstancesTabProps> = ({ instanceId }) =
                 );
             }
         }
-        // [MODIFICATION END]
     ];
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
-                <Typography variant="h6" component="h2">
-                    交换机列表
-                </Typography>
-                <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
-                    onClick={fetchSwitches}
-                    disabled={isLoading || !instanceId}
-                >
-                    {isLoading ? '刷新中...' : '刷新'}
+        <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
+            {/* ... 页面标题和刷新按钮部分保持不变 ... */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2 }}>
+                <Box>
+                    <Button component={Link} href="/scenario/sceneinstances" startIcon={<ArrowBackIcon />} sx={{ mb: 1 }}>
+                        返回实例列表
+                    </Button>
+                    <Typography variant="h4" component="h1" fontWeight="bold">
+                        所有交换机
+                    </Typography>
+                </Box>
+                <Button variant="outlined" startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />} onClick={fetchAllSwitches} disabled={isLoading}>
+                    {isLoading ? '加载中...' : '刷新'}
                 </Button>
             </Box>
 
-            {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {error}
-                </Alert>
-            )}
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-            <Paper sx={{ height: 'calc(100vh - 350px)', width: '100%' }}>
+            <Paper elevation={2} sx={{ height: '75vh', width: '100%' }}>
                 <DataGrid
                     rows={switches}
                     columns={columns}
                     loading={isLoading}
-                    autoHeight={false}
                     disableRowSelectionOnClick
                     slots={{
                       noRowsOverlay: () => (
                         <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Typography color="text.secondary">
-                            {instanceId ? '没有找到交换机数据' : '请先选择一个场景实例'}
-                          </Typography>
+                          <Typography color="text.secondary">没有找到任何交换机</Typography>
                         </Box>
                       ),
                     }}
-                    sx={{
-                        border: 0,
-                        '& .MuiDataGrid-columnHeaders': {
-                            backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
-                            fontWeight: 'bold',
-                        },
-                    }}
+                    sx={{ border: 0 }}
                 />
             </Paper>
-        </Box>
+        </Paper>
     );
 };
 
-export default SwitchInstancesTab;
+export default AllSwitchesPage;

@@ -25,7 +25,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -206,13 +205,6 @@ const ImageManagementPage: React.FC = () => {
                 disabled={isLoading}
             >
               刷新
-            </Button>
-            <Button
-                variant="contained"
-                startIcon={<AddCircleOutlineIcon />}
-                onClick={handleOpenModal}
-            >
-              添加镜像
             </Button>
           </Box>
         </Box>

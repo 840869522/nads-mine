@@ -10,14 +10,15 @@ use Illuminate\Support\Facades\Log;
 
 class JWTCheckMiddleware{
     /**
-     * Handle an incoming request.
+     * Handle an incoming request. Using to check jwt token and process permission
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response | \Illuminate\Http\RedirectResponse)  $next
      * @param  string $primission
      * @return \Illuminate\Http\Response | \Illuminate\Http\RedirectResponse
      */
-    public function handle(Request $request, Closure $next, $permission = null){
+    public function handle(Request $request, Closure $next, $primiision = null){
+        $path = $request->path();
         $auth = $request->header("Authorization",null);
         $jwtRes =  JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {
@@ -29,9 +30,8 @@ class JWTCheckMiddleware{
         $request->merge([
             "token_data"=>$jwtRes["data"]
         ]);
-        if ($permission){
-            Log::info($permission, $jwtRes["data"]["permission"]);
-            if (!in_array($permission, $jwtRes["data"]["permission"])){
+        if ($primiision){
+            if (!in_array($primiision, $jwtRes["data"]["permission"])){
                 return response()->json([
                     'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                     "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES

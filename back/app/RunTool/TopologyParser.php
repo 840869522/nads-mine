@@ -64,6 +64,7 @@ class TopologyParser
                         'image'        => $config['dockerImage'] ?? null,
                         'portMappings' => $ports, // 返回解析后的数组
                         'env'          => $envs,  // 返回解析后的数组
+                        'isTarget'     => $config['isTarget'] ?? false,
                     ];
                     break;
                 

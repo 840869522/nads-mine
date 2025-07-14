@@ -1,70 +1,182 @@
 "use client";
-import React, { useEffect, useRef } from 'react';
-import { Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import Guacamole from 'guacamole-common-js';
 
-// ... interface GuacModalProps ...
+import React, {
+    useRef,
+    useCallback,
+    useEffect,
+    useState,
+} from "react";
+import {
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
+    CircularProgress,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import Guacamole from "guacamole-common-js";
 
-export default function GuacModal({ open, onClose, type, hostname, port }: GuacModalProps) {
-    const ref = useRef<HTMLDivElement>(null);
+export interface GuacModalProps {
+    open: boolean;
+    onClose: () => void;
+    /** rdp / vnc / ssh */
+    type: "ssh" | "rdp" | "vnc";
+    hostname: string;
+    port: number;
+    /** 以下字段可选，仅 ssh/rdp 需要 */
+    username?: string;
+    password?: string;
+}
 
-    useEffect(() => {
-        // 关键检查点
-        if (!open || !ref.current) {
-            // 如果因为这个原因退出，我们也需要知道
-            // alert(`useEffect exited early. open=${open}, ref.current=${ref.current}`);
-            return;
-        }
+/**
+ * GuacModal — 全功能 Guacamole 前端组件
+ *
+ * 功能
+ * 1. Portal 渲染完成后才初始化 `Guacamole.Client`
+ * 2. 自动绑定 Mouse / Keyboard，支持剪贴板与滚轮
+ * 3. 根据窗口大小与 DPI 实时 sendSize，保证最佳显示
+ * 4. 模态关闭或组件卸载时完整清理，防止内存与事件泄漏
+ * 5. HTTPS 环境下自动使用 wss:// WebSocket
+ */
+export default function GuacModal(props: GuacModalProps) {
+    const { open, onClose, type, hostname, port, username, password } = props;
 
-        // [金丝雀测试] 使用 alert 强制弹窗，它不可能被忽略
-        alert('GuacModal useEffect IS RUNNING!');
+    /* -------- refs -------- */
+    const containerRef = useRef<HTMLDivElement>(null);
+    const clientRef = useRef<Guacamole.Client | null>(null);
+    const mouseRef = useRef<Guacamole.Mouse | null>(null);
+    const keyboardRef = useRef<Guacamole.Keyboard | null>(null);
+    const resizedRef = useRef(false);
 
-        let client: Guacamole.Client | null = null;
-        let ignore = false;
+    /* -------- state -------- */
+    const [connecting, setConnecting] = useState(false);
 
-        const params = new URLSearchParams({ type, hostname, port: String(port) }).toString();
+    /* -------- helpers -------- */
+    /** 发送显示尺寸给远端 */
+    const sendResize = useCallback(() => {
+        const client = clientRef.current;
+        const el = containerRef.current;
+        if (!client || !el) return;
+        const width = el.clientWidth;
+        const height = el.clientHeight;
+        const dpi = Math.round(window.devicePixelRatio * 96);
+        client.sendSize(width, height, dpi);
+    }, []);
 
-        alert(`Step 1: Fetching token with params: ${params}`);
+    /** 初始化鼠标 & 键盘 */
+    const bindInput = useCallback((displayEl: HTMLElement, client: Guacamole.Client) => {
+        // Mouse
+        const mouse = new Guacamole.Mouse(displayEl);
+        const send = (state: any) => client.sendMouseState(state);
+        mouse.onmousedown = send;
+        mouse.onmouseup = send;
+        mouse.onmousemove = send;
+        mouse.onwheel = send as any;
+        mouseRef.current = mouse;
 
-        fetch('/api/guac-token?' + params)
-            .then(r => r.json())
-            .then(data => {
-                alert(`Step 2: Token fetch returned. Data has token: ${!!data.token}`);
-                if (ignore || !ref.current || !data.token) return;
+        // Keyboard (绑 document，避免焦点丢失)
+        const keyboard = new Guacamole.Keyboard(document);
+        keyboard.onkeydown = (ks) => client.sendKeyEvent(1, ks);
+        keyboard.onkeyup = (ks) => client.sendKeyEvent(0, ks);
+        keyboardRef.current = keyboard;
+    }, []);
 
-                const wsBase = window.location.origin.replace(/^http/, 'ws');
-                const ws = wsBase + '/api/guac?token=' + encodeURIComponent(data.token);
+    /** 建立连接 */
+    const connect = useCallback(() => {
+        if (!containerRef.current || connecting) return;
+        setConnecting(true);
 
-                alert(`Step 3: Connecting WebSocket to: ${ws}`);
-
-                const tunnel = new Guacamole.WebSocketTunnel(ws);
-                tunnel.onerror = status => alert(`Tunnel ERROR: ${JSON.stringify(status)}`);
-                client = new Guacamole.Client(tunnel);
-                client.onerror = err => alert(`Client ERROR: ${JSON.stringify(err)}`);
-                client.onstatechange = state => console.log('Client state', state); // 状态变化仍然用 console, alert太烦
-                ref.current!.innerHTML = '';
-                ref.current!.appendChild(client.getDisplay().getElement());
-                client.connect();
-                alert('Step 4: client.connect() has been called.');
-            })
-            .catch(err => {
-                alert(`CRITICAL ERROR: Token fetch failed! ${err.message}`);
-            });
-
-        const disconnect = () => client?.disconnect();
-        window.addEventListener('beforeunload', disconnect);
-        return () => {
-            ignore = true;
-            window.removeEventListener('beforeunload', disconnect);
-            client?.disconnect();
+        const paramsInit: Record<string, string> = {
+            type,
+            hostname,
+            port: String(port),
         };
-    }, [open, type, hostname, port]);
+        if (username) paramsInit.username = username;
+        if (password) paramsInit.password = password;
 
+        const params = new URLSearchParams(paramsInit).toString();
+
+        fetch("/api/token-guac?" + params)
+            .then((r) => {
+                if (!r.ok) throw new Error("Token request failed");
+                return r.json();
+            })
+            .then((data) => {
+                if (!data.token) throw new Error("Token not found");
+
+                const wsBase =
+                    (window.location.protocol === "https:" ? "wss://" : "ws://") +
+                    window.location.host;
+                const wsUrl = `${wsBase}/connect-guac?token=${encodeURIComponent(
+                    data.token
+                )}`;
+
+                const tunnel = new Guacamole.WebSocketTunnel(wsUrl);
+                const client = new Guacamole.Client(tunnel);
+
+                clientRef.current = client;
+
+                client.onstatechange = (state) => {
+                    if (state === 3 /*CONNECTED*/) {
+                        sendResize();
+                        resizedRef.current = true;
+                    }
+                };
+                client.onerror = (err) => console.error("[Guac] error →", err);
+
+                // attach display
+                const displayEl = client.getDisplay().getElement();
+                containerRef.current!.innerHTML = "";
+                containerRef.current!.appendChild(displayEl);
+
+                // input
+                bindInput(displayEl, client);
+
+                client.connect();
+            })
+            .catch((err) => console.error("[Guac] connect failed →", err))
+            .finally(() => setConnecting(false));
+    }, [bindInput, connecting, hostname, password, port, sendResize, type, username]);
+
+    /* -------- effect: resize listener -------- */
+    useEffect(() => {
+        if (!open) return;
+
+        const onResize = () => {
+            if (clientRef.current) sendResize();
+        };
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, [open, sendResize]);
+
+    /* -------- effect: cleanup on close -------- */
+    useEffect(() => {
+        if (!open) return;
+
+        return () => {
+            // Disconnect client
+            clientRef.current?.disconnect();
+            clientRef.current = null;
+
+            // Remove input helpers
+            mouseRef.current = null;
+            keyboardRef.current = null;
+
+            // Clear DOM
+            if (containerRef.current) containerRef.current.innerHTML = "";
+        };
+    }, [open]);
+
+    /* -------- UI -------- */
     if (!open) return null;
 
     return (
-        <Dialog open={open} onClose={onClose} fullScreen>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullScreen
+            TransitionProps={{ onEntered: connect }}
+        >
             <DialogTitle sx={{ m: 0, p: 1 }}>
                 远程连接
                 <IconButton
@@ -72,16 +184,35 @@ export default function GuacModal({ open, onClose, type, hostname, port }: GuacM
                     color="inherit"
                     onClick={onClose}
                     aria-label="close"
-                    sx={{ position: 'absolute', right: 8, top: 8 }}
+                    sx={{ position: "absolute", right: 8, top: 8 }}
                 >
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
-            <DialogContent sx={{ p: 0 }}>
-                <div ref={ref} style={{ width: '100%', height: '100%', background: '#000' }} />
+
+            <DialogContent sx={{ p: 0, position: "relative" }}>
+                {/* 连接指示 */}
+                {connecting && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "rgba(0,0,0,0.4)",
+                            zIndex: 10,
+                        }}
+                    >
+                        <CircularProgress size={48} />
+                    </div>
+                )}
+
+                <div
+                    ref={containerRef}
+                    style={{ width: "100%", height: "100%", background: "#000" }}
+                />
             </DialogContent>
         </Dialog>
     );
 }
-
-
