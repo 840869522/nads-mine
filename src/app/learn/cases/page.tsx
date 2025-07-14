@@ -21,114 +21,205 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
-import Pagination from '@mui/material/Pagination';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import IconButton from '@mui/material/IconButton';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import AddIcon from '@mui/icons-material/Add';
+import Pagination from '@mui/material/Pagination';
 
-import { CourseCase, CourseCaseFile } from '@/types';
+import { CourseCase, CourseCaseResource, Category, Experiment } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
 import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
-import FileViewerModal from '@/components/coursecases/FileViewerModal';
+import ExperimentFormModal from '@/components/coursecases/ExperimentFormModal';
 import PageWrapper from '@/components/layout/PageWrapper';
+import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import { apiClientWithToken } from '@/utils/axios';
-import { headers } from 'next/headers';
 import { BACK_IP_PORT } from '@/constants';
-import {getCookie} from "@/utils/cookie.tsx";
+import { getCookie } from '@/utils/cookie';
 
-const ITEMS_PER_PAGE = 10;
+const highlightText = (text: string, keyword: string) => {
+  if (!keyword || !text) return text;
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<span style="color: red">$1</span>');
+};
 
 const CourseCasesPage: React.FC = () => {
   const [courseCases, setCourseCases] = useState<CourseCase[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [sceneConfigs, setSceneConfigs] = useState<{ c_config_id: number; c_name: string }[]>([]); // 修改：c_config_name 改为 c_name
   const [isLoading, setIsLoading] = useState(true);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isExperimentModalOpen, setIsExperimentModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<CourseCase | null>(null);
-  const [editingCategory, setEditingCategory] = useState<{ id: string; name: string } | null>(null);
-  const [isFileViewerOpen, setIsFileViewerOpen] = useState(false);
-  const [viewingFile, setViewingFile] = useState<CourseCaseFile | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingExperiment, setEditingExperiment] = useState<Experiment | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [isResourceViewerOpen, setIsResourceViewerOpen] = useState(false);
+  const [viewingResource, setViewingResource] = useState<CourseCaseResource | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState<CourseCase | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [experimentToDelete, setExperimentToDelete] = useState<Experiment | null>(null);
+  const [filterCategoryId, setFilterCategoryId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedCaseForFiles, setSelectedCaseForFiles] = useState<CourseCase | null>(null);
-  const [isFilesDialogOpen, setIsFilesDialogOpen] = useState(false);
+  const [selectedCaseForResources, setSelectedCaseForResources] = useState<CourseCase | null>(null);
+  const [isResourcesDialogOpen, setIsResourcesDialogOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [tempSearch, setTempSearch] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [totalCases, setTotalCases] = useState<number>(0);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [tabValue, setTabValue] = useState(0);
 
-  // Fetch categories and courses on mount or when search/filter changes
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setErrorMessage('');
       try {
-        // Fetch categories
-        const token = getCookie("_auth"); // 从 axios.tsx 导入 getCookie
-        console.log("Auth Token:", token);
-        const categoriesResponse = await apiClientWithToken.get('/api/php/study/categories');
-        console.log("Categories Response:", categoriesResponse); // 调试响应
-        const categoriesData = categoriesResponse.data;
-        if (categoriesData.code === 200) {
-          setCategories(categoriesData.data.map((cat: { c_category_id: string; c_category_name: string }) => cat.c_category_name));
-        } else {
-          console.error('Failed to fetch categories:', categoriesData.message);
+        const token = getCookie('_auth');
+        if (!token) {
+          setErrorMessage('未登录，请先登录');
+          window.location.href = '/login';
+          setIsLoading(false);
+          return;
         }
 
-        // Fetch courses with pagination and optional keyword
-        const coursesResponse = await apiClientWithToken.get('/back/api/study/courses', {
-          headers: {
-            'Accept': 'application/json',
-          },
-          params: {
-            page: currentPage,
-            pageSize: ITEMS_PER_PAGE,
-            ...(searchKeyword && { keyword: searchKeyword }),
-          },
+        // Fetch categories
+        const categoriesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/categories`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const categoriesData = categoriesResponse.data;
+        if (categoriesData.code === 200) {
+          setCategories(categoriesData.data.map((cat: { c_category_id: string; c_category_name: string }) => ({
+            c_category_id: cat.c_category_id,
+            c_category_name: cat.c_category_name,
+          })) || []);
+        } else {
+          setErrorMessage(`获取类别失败: ${categoriesData.message || '未知错误'}`);
+        }
+
+        // Fetch scene configs
+        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/scene-configs`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const sceneConfigsData = sceneConfigsResponse.data;
+        if (sceneConfigsData.code === 200) {
+          setSceneConfigs(sceneConfigsData.data.map((config: { c_config_id: number; c_name: string }) => ({
+            c_config_id: config.c_config_id,
+            c_name: config.c_name, // 修改：c_config_name 改为 c_name
+          })) || []);
+        } else {
+          setErrorMessage(`获取场景配置失败: ${sceneConfigsData.message || '未知错误'}`);
+        }
+
+        // Fetch courses
+        const params = {
+          page: currentPage,
+          pageSize: itemsPerPage,
+          ...(searchKeyword && { keyword: searchKeyword }),
+          ...(filterCategoryId && { c_category_id: filterCategoryId }),
+        };
+        const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params,
         });
         const coursesData = coursesResponse.data;
-        if (coursesData.code === 200) {
+        if (coursesData.code === 200 || coursesData.code === 900) {
           const mappedCourses = await Promise.all(
-              coursesData.data.courses.map(async (course: any) => {
-                // Fetch resources for each course
-                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
-
-                const resourcesData = resourcesResponse.data;
-                const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
-                  id: res.c_resource_id,
-                  name: res.c_resource_name,
-                  format: res.c_type.split('/')[1] || 'other',
-                  url: `/back/api/study/resources/${res.c_resource_id}`,
-                  size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                })) : [];
+              (coursesData.data.courses || []).map(async (course: any) => {
+                let resources: CourseCaseResource[] = [];
+                let experiments: Experiment[] = [];
+                try {
+                  const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const resourcesData = resourcesResponse.data;
+                  if (resourcesData.code === 200) {
+                    resources = (resourcesData.data.resources || []).map((res: any) => ({
+                      c_resource_id: res.c_resource_id,
+                      c_resource_name: res.c_resource_name,
+                      c_type: res.c_type.split('/')[1] || 'other',
+                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                    }));
+                  }
+                } catch (error: any) {
+                  console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
+                }
+                try {
+                  const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const experimentsData = experimentsResponse.data;
+                  if (experimentsData.code === 200) {
+                    experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
+                      c_experiment_id: exp.c_experiment_id,
+                      c_experiment_name: exp.c_experiment_name,
+                      c_description: exp.c_description || '',
+                      c_config_id: exp.c_config_id,
+                      c_name: exp.c_name || '', // 修改：c_config_name 改为 c_name
+                      resources: (exp.resources || []).map((res: any) => ({
+                        c_resource_id: res.c_resource_id,
+                        c_resource_name: res.c_resource_name,
+                        c_type: res.c_type.split('/')[1] || 'other',
+                        c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                        c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                      })),
+                      created_at: exp.created_at || new Date().toISOString(),
+                    }));
+                  }
+                } catch (error: any) {
+                  console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
+                }
                 return {
-                  id: course.c_course_id,
-                  title: course.c_course_name,
-                  description: course.c_description || '',
-                  category: course.c_category_id,
-                  files,
-                  uploadDate: course.created_at,
+                  c_course_id: course.c_course_id,
+                  c_course_name: course.c_course_name,
+                  c_description: course.c_description || '',
+                  c_category_id: course.c_category_id,
+                  c_category_name: course.c_category_name,
+                  resources,
+                  experiments,
+                  created_at: course.created_at || new Date().toISOString(),
+                  highlightedTitle: highlightText(course.c_course_name, searchKeyword),
+                  highlightedDescription: highlightText(course.c_description || '', searchKeyword),
                 };
               })
           );
           setCourseCases(mappedCourses);
+          setTotalCases(coursesData.data.total || 0);
         } else {
-          console.error('Failed to fetch courses:', coursesData.message);
+          setErrorMessage(`获取课程失败: ${coursesData.message || '未知错误'}`);
         }
-      } catch (error) {
+      } catch (error: any) {
+        setErrorMessage(error.response?.data?.message || error.message || '加载数据失败');
         console.error('Error fetching data:', error);
       } finally {
         setIsLoading(false);
       }
     };
     fetchData();
-  }, [currentPage, searchKeyword]);
+  }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
   const handleOpenFormModal = (courseCase?: CourseCase) => {
     setEditingCase(courseCase || null);
     setIsFormModalOpen(true);
   };
 
-  const handleOpenCategoryModal = (category?: { id: string; name: string }) => {
+  const handleOpenCategoryModal = (category?: Category) => {
     setEditingCategory(category || null);
     setIsCategoryModalOpen(true);
+  };
+
+  const handleOpenExperimentModal = (courseId: string, experiment?: Experiment) => {
+    setSelectedCourseId(courseId);
+    setEditingExperiment(experiment || null);
+    setIsExperimentModalOpen(true);
   };
 
   const handleCloseFormModal = () => {
@@ -141,154 +232,443 @@ const CourseCasesPage: React.FC = () => {
     setEditingCategory(null);
   };
 
-  const handleSaveCourseCase = async (savedCase: CourseCase) => {
+  const handleCloseExperimentModal = () => {
+    setIsExperimentModalOpen(false);
+    setEditingExperiment(null);
+    setSelectedCourseId(null);
+  };
+
+  const handleSaveExperiment = async (experiment: Experiment, courseId: string) => {
     try {
-      const { id, title, description, category, files, uploadDate } = savedCase;
-      const courseData = {
-        name: title,
-        description,
-        category_id: category,
-        user_id: localStorage.getItem('user_id') || 'default_user',
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      if (!courseId || courseId === 'new') {
+        throw new Error('请先保存课程后再添加实验');
+      }
+
+      console.log('Saving experiment:', {
+        courseId,
+        experimentData: {
+          c_experiment_name: experiment.c_experiment_name,
+          c_description: experiment.c_description,
+          c_config_id: experiment.c_config_id,
+        },
+      });
+
+      const experimentData = {
+        c_experiment_name: experiment.c_experiment_name,
+        c_description: experiment.c_description,
+        c_config_id: experiment.c_config_id,
       };
 
-      let courseId = id;
-      if (editingCase) {
-        // Update course
-        const response = await apiClientWithToken.put(`/back/api/study/courses/${id}`, courseData);
-        const data = response.data;
-        if (data.code !== 200) {
-          console.error('Failed to update course:', data.message);
-          return;
-        }
-      } else {
-        // Create course
-        const response = await apiClientWithToken.post('/back/api/study/courses', courseData);
+      let experimentId = experiment.c_experiment_id;
+      if (experiment.c_experiment_id.startsWith('temp-id-')) {
+        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, experimentData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const data = response.data;
         if (data.code !== 201) {
-          console.error('Failed to create course:', data.message);
-          return;
+          throw new Error(`创建实验失败: ${data.message || '未知错误'}`);
+        }
+        experimentId = data.data.c_experiment_id;
+      } else {
+        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = response.data;
+        if (data.code !== 200) {
+          throw new Error(`更新实验失败: ${data.message || '未知错误'}`);
+        }
+      }
+
+      if (experiment.resources?.length > 0) {
+        for (const resource of experiment.resources) {
+          if (resource.fileObject) {
+            const formData = new FormData();
+            formData.append('c_course_id', courseId);
+            formData.append('c_experiment_id', experimentId);
+            formData.append('file', resource.fileObject);
+            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const data = response.data;
+            if (data.code !== 201) {
+              console.warn('Failed to upload experiment resource:', data.message);
+            }
+          }
+        }
+      }
+
+      // Refresh experiment list
+      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const experimentsData = coursesResponse.data;
+      if (experimentsData.code === 200) {
+        setCourseCases(prev =>
+            prev.map(course => {
+              if (course.c_course_id === courseId) {
+                return {
+                  ...course,
+                  experiments: experimentsData.data.experiments.map((exp: any) => ({
+                    c_experiment_id: exp.c_experiment_id,
+                    c_experiment_name: exp.c_experiment_name,
+                    c_description: exp.c_description,
+                    c_config_id: exp.c_config_id,
+                    c_name: exp.c_name, // 修改：c_config_name 改为 c_name
+                    resources: exp.resources || [],
+                    created_at: exp.created_at,
+                  })),
+                };
+              }
+              return course;
+            })
+        );
+      } else {
+        throw new Error(`刷新实验列表失败: ${experimentsData.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '保存实验失败';
+      setErrorMessage(message);
+      console.error('Error saving experiment:', error.response?.status, error.response?.data, error.config?.url);
+    }
+    handleCloseExperimentModal();
+  };
+
+  const handleSaveCourseCase = async (savedCase: CourseCase) => {
+    try {
+      const { c_course_id, c_course_name, c_description, c_category_id, resources } = savedCase;
+      const courseData = {
+        c_course_id,
+        c_course_name,
+        c_description,
+        c_category_id,
+      };
+
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+
+      let courseId = c_course_id;
+      if (editingCase) {
+        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${c_course_id}`, courseData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = response.data;
+        if (data.code !== 200) {
+          throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
+        }
+      } else {
+        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses`, courseData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = response.data;
+        if (data.code !== 201) {
+          throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
         }
         courseId = data.data.c_course_id;
       }
 
-      // Handle file uploads
-      for (const file of files) {
-        if (file.fileObject) {
-          const formData = new FormData();
-          formData.append('course_id', courseId);
-          formData.append('file', file.fileObject);
-          const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-          const data = response.data;
-          if (data.code !== 201) {
-            console.error('Failed to upload file:', data.message);
+      if (resources.length > 0) {
+        for (const resource of resources) {
+          if (resource.fileObject) {
+            const formData = new FormData();
+            formData.append('c_course_id', courseId);
+            formData.append('file', resource.fileObject);
+            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/resources/upload`, formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const data = response.data;
+            if (data.code !== 201) {
+              console.warn('Failed to upload resource:', data.message);
+            }
           }
         }
       }
 
       // Refresh course list
-      const coursesResponse = await apiClientWithToken.get('/back/api/study/courses', {
+      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+        headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
-          pageSize: ITEMS_PER_PAGE,
+          pageSize: itemsPerPage,
           ...(searchKeyword && { keyword: searchKeyword }),
+          ...(filterCategoryId && { c_category_id: filterCategoryId }),
         },
       });
       const coursesData = coursesResponse.data;
-      if (coursesData.code === 200) {
+      if (coursesData.code === 200 || coursesData.code === 900) {
         const mappedCourses = await Promise.all(
-            coursesData.data.courses.map(async (course: any) => {
-              const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`);
-              const resourcesData = resourcesResponse.data;
-              const files = resourcesData.code === 200 ? resourcesData.data.map((res: any) => ({
-                id: res.c_resource_id,
-                name: res.c_resource_name,
-                format: res.c_type.split('/')[1] || 'other',
-                url: `/back/api/studyresources/${res.c_resource_id}`,
-                size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-              })) : [];
+            (coursesData.data.courses || []).map(async (course: any) => {
+              let resources: CourseCaseResource[] = [];
+              let experiments: Experiment[] = [];
+              try {
+                const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                const resourcesData = resourcesResponse.data;
+                if (resourcesData.code === 200) {
+                  resources = (resourcesData.data.resources || []).map((res: any) => ({
+                    c_resource_id: res.c_resource_id,
+                    c_resource_name: res.c_resource_name,
+                    c_type: res.c_type.split('/')[1] || 'other',
+                    c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                  }));
+                }
+              } catch (error: any) {
+                console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
+              }
+              try {
+                const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                const experimentsData = experimentsResponse.data;
+                if (experimentsData.code === 200) {
+                  experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
+                    c_experiment_id: exp.c_experiment_id,
+                    c_experiment_name: exp.c_experiment_name,
+                    c_description: exp.c_description || '',
+                    c_config_id: exp.c_config_id,
+                    c_name: exp.c_name || '', // 修改：c_config_name 改为 c_name
+                    resources: (exp.resources || []).map((res: any) => ({
+                      c_resource_id: res.c_resource_id,
+                      c_resource_name: res.c_resource_name,
+                      c_type: res.c_type.split('/')[1] || 'other',
+                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                    })),
+                    created_at: exp.created_at || new Date().toISOString(),
+                  }));
+                }
+              } catch (error: any) {
+                console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
+              }
               return {
-                id: course.c_course_id,
-                title: course.c_course_name,
-                description: course.c_description || '',
-                category: course.c_category_id,
-                files,
-                uploadDate: course.created_at,
+                c_course_id: course.c_course_id,
+                c_course_name: course.c_course_name,
+                c_description: course.c_description || '',
+                c_category_id: course.c_category_id,
+                c_category_name: course.c_category_name,
+                resources,
+                experiments,
+                created_at: course.created_at || new Date().toISOString(),
+                highlightedTitle: highlightText(course.c_course_name, searchKeyword),
+                highlightedDescription: highlightText(course.c_description || '', searchKeyword),
               };
             })
         );
         setCourseCases(mappedCourses);
+        setTotalCases(coursesData.data.total || 0);
+      } else {
+        throw new Error(`刷新课程列表失败: ${coursesData.message || '未知错误'}`);
       }
-    } catch (error) {
-      console.error('Error saving course case:', error);
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '保存课程案例失败';
+      setErrorMessage(message);
+      console.error('Error saving course case:', error.response?.status, error.response?.data, error.config?.url);
     }
     handleCloseFormModal();
   };
 
-  const handleSaveCategory = async (category: { id?: string; name: string }) => {
+  const handleSaveCategory = async (category: Category) => {
     try {
-      if (category.id) {
-        // Update category
-        const response = await apiClientWithToken.put(`/back/api/study/categories/${category.id}`, { name: category.name });
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      if (!category.c_category_name || category.c_category_name.trim() === '') {
+        throw new Error('类别名称不能为空');
+      }
+      if (category.c_category_name.length > 50) {
+        throw new Error('类别名称不能超过50个字符');
+      }
+
+      if (category.c_category_id) {
+        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/categories/${category.c_category_id}`, {
+          c_category_name: category.c_category_name,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const data = response.data;
         if (data.code === 200) {
-          setCategories(prev => prev.map(cat => cat === category.id ? category.name : cat));
+          setCategories(prev => prev.map(cat => (cat.c_category_id === category.c_category_id ? category : cat)));
         } else {
-          console.error('Failed to update category:', data.message);
+          throw new Error(`更新类别失败: ${data.message || '未知错误'}`);
         }
       } else {
-        // Create category
-        const response = await apiClientWithToken.post('/back/api/study/categories', { name: category.name });
+        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/categories`, {
+          c_category_name: category.c_category_name,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const data = response.data;
         if (data.code === 201) {
-          setCategories(prev => [...prev, category.name]);
+          setCategories(prev => [...prev, { c_category_id: data.data.c_category_id, c_category_name: category.c_category_name }]);
         } else {
-          console.error('Failed to create category:', data.message);
+          throw new Error(`创建类别失败: ${data.message || '未知错误'}`);
         }
       }
-    } catch (error) {
-      console.error('Error saving category:', error);
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '保存类别失败';
+      setErrorMessage(message);
+      console.error('Error saving category:', error.response?.status, error.response?.data, error.config?.url);
     }
     handleCloseCategoryModal();
   };
 
   const handleDeleteCourseCase = async () => {
     if (caseToDelete) {
-      caseToDelete.files.forEach(file => {
-        if (file.url && file.url.startsWith('blob:')) {
-          URL.revokeObjectURL(file.url);
-        }
-      });
       try {
-        const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.id}`);
+        const token = getCookie('_auth');
+        if (!token) {
+          throw new Error('未登录，请先登录');
+        }
+        caseToDelete.resources.forEach(resource => {
+          if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
+            URL.revokeObjectURL(resource.c_resource_path);
+          }
+        });
+        const response = await apiClientWithToken.delete(`${BACK_IP_PORT}/api/study/courses/${caseToDelete.c_course_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const data = response.data;
         if (data.code === 200) {
-          setCourseCases(prevCases => prevCases.filter(c => c.id !== caseToDelete.id));
+          setCourseCases(prevCases => prevCases.filter(c => c.c_course_id !== caseToDelete.c_course_id));
         } else {
-          console.error('Failed to delete course:', data.message);
+          throw new Error(`删除课程失败: ${data.message || '未知错误'}`);
         }
-      } catch (error) {
-        console.error('Error deleting course case:', error);
+      } catch (error: any) {
+        const message = error.response?.data?.message || error.message || '删除课程案例失败';
+        setErrorMessage(message);
+        console.error('Error deleting course case:', error.response?.status, error.response?.data, error.config?.url);
       }
     }
     setCaseToDelete(null);
     setIsConfirmDialogOpen(false);
   };
 
-  const handleOpenFileViewer = (file: CourseCaseFile) => {
-    if (!file.url && file.fileObject) {
-      file.url = URL.createObjectURL(file.fileObject);
+  const handleDeleteExperiment = async () => {
+    if (experimentToDelete && selectedCaseForResources) {
+      try {
+        const token = getCookie('_auth');
+        if (!token) {
+          throw new Error('未登录，请先登录');
+        }
+        const response = await apiClientWithToken.delete(
+            `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+        );
+        const data = response.data;
+        if (data.code === 200) {
+          setCourseCases(prev =>
+              prev.map(course => {
+                if (course.c_course_id === selectedCaseForResources.c_course_id) {
+                  return {
+                    ...course,
+                    experiments: course.experiments?.filter(exp => exp.c_experiment_id !== experimentToDelete.c_experiment_id) || [],
+                  };
+                }
+                return course;
+              })
+          );
+        } else {
+          throw new Error(`删除实验失败: ${data.message || '未知错误'}`);
+        }
+      } catch (error: any) {
+        const message = error.response?.data?.message || error.message || '删除实验失败';
+        setErrorMessage(message);
+        console.error('Error deleting experiment:', error.response?.status, error.response?.data, error.config?.url);
+      }
     }
-    setViewingFile(file);
-    setIsFileViewerOpen(true);
+    setExperimentToDelete(null);
+    setIsConfirmDialogOpen(false);
   };
 
-  const handleCloseFileViewer = () => {
-    setIsFileViewerOpen(false);
-    setViewingFile(null);
+  const handleDeleteResource = async (resource: CourseCaseResource, isExperimentResource: boolean, experimentId?: string) => {
+    try {
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      if (!selectedCaseForResources) {
+        throw new Error('未选择课程');
+      }
+
+      let url = '';
+      if (isExperimentResource && experimentId) {
+        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentId}/resources/${resource.c_resource_id}`;
+      } else {
+        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/resources/${resource.c_resource_id}`;
+      }
+
+      const response = await apiClientWithToken.delete(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = response.data;
+      if (data.code === 200) {
+        setCourseCases(prev =>
+            prev.map(course => {
+              if (course.c_course_id === selectedCaseForResources.c_course_id) {
+                if (isExperimentResource && experimentId) {
+                  return {
+                    ...course,
+                    experiments: course.experiments?.map(exp => {
+                      if (exp.c_experiment_id === experimentId) {
+                        return {
+                          ...exp,
+                          resources: exp.resources.filter(r => r.c_resource_id !== resource.c_resource_id),
+                        };
+                      }
+                      return exp;
+                    }) || [],
+                  };
+                } else {
+                  return {
+                    ...course,
+                    resources: course.resources.filter(r => r.c_resource_id !== resource.c_resource_id),
+                  };
+                }
+              }
+              return course;
+            })
+        );
+      } else {
+        throw new Error(`删除资源失败: ${data.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '删除资源失败';
+      setErrorMessage(message);
+      console.error('Error deleting resource:', error.response?.status, error.response?.data, error.config?.url);
+    }
+  };
+
+  const handleOpenResourceViewer = (resource: CourseCaseResource) => {
+    let updatedResource = resource;
+    if (!resource.c_resource_path && resource.fileObject) {
+      updatedResource = { ...resource, c_resource_path: URL.createObjectURL(resource.fileObject) };
+    }
+    setViewingResource(updatedResource);
+    setIsResourceViewerOpen(true);
+  };
+
+  const handleCloseResourceViewer = () => {
+    if (viewingResource?.c_resource_path && viewingResource.c_resource_path.startsWith('blob:') && viewingResource.fileObject) {
+      URL.revokeObjectURL(viewingResource.c_resource_path);
+    }
+    setIsResourceViewerOpen(false);
+    setViewingResource(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -296,36 +676,62 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handleCategoryChange = (event: SelectChangeEvent) => {
-    setFilterCategory(event.target.value as string);
-    setCurrentPage(1); // Reset to first page
+    setFilterCategoryId(event.target.value as string);
+    setCurrentPage(1);
   };
 
-  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
+  const handleItemsPerPageChange = (event: SelectChangeEvent) => {
+    setItemsPerPage(Number(event.target.value));
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
     setCurrentPage(page);
   };
 
-  const handleOpenFilesDialog = (courseCase: CourseCase) => {
-    setSelectedCaseForFiles(courseCase);
-    setIsFilesDialogOpen(true);
+  const handleOpenResourcesDialog = (courseCase: CourseCase) => {
+    setSelectedCaseForResources(courseCase);
+    setIsResourcesDialogOpen(true);
+    setTabValue(0);
   };
 
-  const handleCloseFilesDialog = () => {
-    setIsFilesDialogOpen(false);
-    setSelectedCaseForFiles(null);
+  const handleCloseResourcesDialog = () => {
+    setIsResourcesDialogOpen(false);
+    setSelectedCaseForResources(null);
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchKeyword(event.target.value);
-    setCurrentPage(1); // Reset to first page on search
+    setTempSearch(event.target.value);
   };
 
-  const filteredCases = filterCategory
-      ? courseCases.filter(c => c.category === filterCategory)
-      : courseCases;
+  const handleSearchSubmit = () => {
+    setSearchKeyword(tempSearch);
+    setCurrentPage(1);
+  };
 
-  const pageCount = Math.ceil(filteredCases.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentCases = filteredCases.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const getPageNumbers = () => {
+    const totalPages = Math.ceil(totalCases / itemsPerPage);
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return { pageNumbers, totalPages };
+  };
+
+  const { pageNumbers, totalPages } = getPageNumbers();
 
   if (isLoading) {
     return (
@@ -339,7 +745,11 @@ const CourseCasesPage: React.FC = () => {
 
   return (
       <PageWrapper>
-        {/* Header */}
+        {errorMessage && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage('')}>
+              {errorMessage}
+            </Alert>
+        )}
         <Box
             sx={{
               display: 'flex',
@@ -349,158 +759,303 @@ const CourseCasesPage: React.FC = () => {
               p: 2,
               bgcolor: 'background.paper',
               borderRadius: 2,
-              boxShadow: 1
+              boxShadow: 1,
             }}
         >
           <Box>
             <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-              课程案例库
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              随时查看和管理课程案例
+              课程案例管理
             </Typography>
           </Box>
-          <Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
                 variant="contained"
-                color="primary"
+                startIcon={<AddIcon />}
                 onClick={() => handleOpenFormModal()}
-                sx={{ fontWeight: 'bold', mr: 2 }}
             >
-              添加案例
+              添加课程
             </Button>
             <Button
-                variant="contained"
-                color="secondary"
+                variant="outlined"
+                startIcon={<AddIcon />}
                 onClick={() => handleOpenCategoryModal()}
-                sx={{ fontWeight: 'bold' }}
             >
               添加类别
             </Button>
           </Box>
         </Box>
-
-        {/* Search and Category Filter */}
-        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel id="category-filter-label">分类筛选</InputLabel>
-              <Select
-                  labelId="category-filter-label"
-                  id="category-filter"
-                  value={filterCategory}
-                  label="分类筛选"
-                  onChange={handleCategoryChange}
-              >
-                <MenuItem value="">所有分类</MenuItem>
-                {categories.map(category => (
-                    <MenuItem key={category} value={category}>
-                      {category}
-                    </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {filterCategory && (
-                <Chip
-                    label={`当前筛选: ${filterCategory}`}
-                    onDelete={() => setFilterCategory('')}
-                    color="primary"
-                    sx={{ height: 40, px: 2 }}
-                />
-            )}
-          </Box>
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel id="category-filter-label">类别</InputLabel>
+            <Select
+                labelId="category-filter-label"
+                value={filterCategoryId}
+                label="类别"
+                onChange={handleCategoryChange}
+            >
+              <MenuItem value="">所有类别</MenuItem>
+              {categories.map(category => (
+                  <MenuItem key={category.c_category_id} value={category.c_category_id}>
+                    {category.c_category_name}
+                  </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
               label="搜索课程"
               variant="outlined"
-              value={searchKeyword}
+              value={tempSearch}
               onChange={handleSearchChange}
-              sx={{ minWidth: 300 }}
-              placeholder="输入课程名称或描述"
+              onKeyPress={event => {
+                if (event.key === 'Enter') handleSearchSubmit();
+              }}
+              sx={{ flexGrow: 1, maxWidth: 400 }}
+          />
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel id="items-per-page-label">每页条数</InputLabel>
+            <Select
+                labelId="items-per-page-label"
+                value={itemsPerPage.toString()}
+                label="每页条数"
+                onChange={handleItemsPerPageChange}
+            >
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={20}>20</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>课程名称</TableCell>
+                <TableCell>描述</TableCell>
+                <TableCell>类别</TableCell>
+                <TableCell>创建时间</TableCell>
+                <TableCell>操作</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {courseCases.map(course => (
+                  <TableRow key={course.c_course_id}>
+                    <TableCell>
+                      <span dangerouslySetInnerHTML={{ __html: course.highlightedTitle || course.c_course_name }} />
+                    </TableCell>
+                    <TableCell>
+                      <span dangerouslySetInnerHTML={{ __html: course.highlightedDescription || course.c_description || '-' }} />
+                    </TableCell>
+                    <TableCell>{course.c_category_name}</TableCell>
+                    <TableCell>{formatDate(course.created_at)}</TableCell>
+                    <TableCell>
+                      <IconButton onClick={() => handleOpenFormModal(course)} title="编辑">
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                          onClick={() => {
+                            setCaseToDelete(course);
+                            setIsConfirmDialogOpen(true);
+                          }}
+                          title="删除"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                      <IconButton
+                          onClick={() => handleOpenResourcesDialog(course)}
+                          title="查看资源和实验"
+                      >
+                        <VisibilityIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+          <Pagination
+              count={totalPages}
+              page={currentPage}
+              onChange={handlePageChange}
+              color="primary"
           />
         </Box>
-
-        {filteredCases.length === 0 ? (
-            <Box sx={{ textAlign: 'center', mt: 8, p: 4, bgcolor: 'background.paper', borderRadius: 2 }}>
-              <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
-                当前筛选条件下暂无课程案例，请尝试添加或更换分类。
-              </Typography>
-            </Box>
-        ) : (
-            <>
-              <TableContainer component={Paper} sx={{ mb: 3 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: 'primary.main', '& th': { color: 'primary.contrastText' } }}>
-                      <TableCell>案例标题</TableCell>
-                      <TableCell>分类</TableCell>
-                      <TableCell>描述</TableCell>
-                      <TableCell>上传日期</TableCell>
-                      <TableCell>附件数量</TableCell>
-                      <TableCell align="right">操作</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {currentCases.map(courseCase => (
-                        <TableRow key={courseCase.id} hover>
-                          <TableCell sx={{ fontWeight: 'medium' }}>{courseCase.title}</TableCell>
-                          <TableCell>
-                            {categories.find(cat => cat === courseCase.category) || '未知分类'}
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 300 }}>{courseCase.description || "暂无描述"}</TableCell>
-                          <TableCell>{formatDate(courseCase.uploadDate)}</TableCell>
-                          <TableCell>
-                            <Button
-                                variant="text"
-                                onClick={() => handleOpenFilesDialog(courseCase)}
-                                disabled={courseCase.files.length === 0}
-                            >
-                              {courseCase.files.length} 个
-                            </Button>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button
-                                variant="text"
-                                color="primary"
-                                onClick={() => handleOpenFormModal(courseCase)}
-                                sx={{ mr: 1 }}
-                            >
-                              编辑
-                            </Button>
-                            <Button
-                                variant="text"
-                                color="error"
-                                onClick={() => setCaseToDelete(courseCase) && setIsConfirmDialogOpen(true)}
-                            >
-                              删除
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {pageCount > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                    <Pagination
-                        count={pageCount}
-                        page={currentPage}
-                        onChange={handlePageChange}
-                        color="primary"
-                        shape="rounded"
-                        showFirstButton
-                        showLastButton
-                    />
+        <Dialog open={isConfirmDialogOpen} onClose={() => setIsConfirmDialogOpen(false)}>
+          <DialogTitle>确认删除</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              {experimentToDelete
+                  ? `确定要删除实验 "${experimentToDelete.c_experiment_name}" 吗？此操作不可撤销。`
+                  : `确定要删除课程 "${caseToDelete?.c_course_name}" 吗？此操作不可撤销。`}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setIsConfirmDialogOpen(false)}>取消</Button>
+            <Button
+                onClick={experimentToDelete ? handleDeleteExperiment : handleDeleteCourseCase}
+                color="error"
+                variant="contained"
+            >
+              删除
+            </Button>
+          </DialogActions>
+        </Dialog>
+        <Dialog open={isResourcesDialogOpen} onClose={handleCloseResourcesDialog} maxWidth="md" fullWidth>
+          <DialogTitle>
+            {selectedCaseForResources?.c_course_name} 的资源和实验
+          </DialogTitle>
+          <DialogContent>
+            <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
+              <Tab label="课程资源" />
+              <Tab label="实验" />
+            </Tabs>
+            {tabValue === 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle1">课程资源</Typography>
+                  {selectedCaseForResources?.resources.length ? (
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>资源名称</TableCell>
+                            <TableCell>类型</TableCell>
+                            <TableCell>大小</TableCell>
+                            <TableCell>操作</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedCaseForResources.resources.map(resource => (
+                              <TableRow key={resource.c_resource_id}>
+                                <TableCell>{resource.c_resource_name}</TableCell>
+                                <TableCell>{resource.c_type}</TableCell>
+                                <TableCell>{resource.c_size}</TableCell>
+                                <TableCell>
+                                  <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                  <IconButton
+                                      onClick={() => handleDeleteResource(resource, false)}
+                                      title="删除"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                  ) : (
+                      <Typography>无课程资源</Typography>
+                  )}
+                </Box>
+            )}
+            {tabValue === 1 && (
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="subtitle1">实验列表</Typography>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id)}
+                    >
+                      添加实验
+                    </Button>
                   </Box>
-              )}
-
-              <Box sx={{ textAlign: 'center', mt: 2, color: 'text.secondary' }}>
-                显示 {startIndex + 1} - {Math.min(startIndex + ITEMS_PER_PAGE, filteredCases.length)} 条，共 {filteredCases.length} 条
-              </Box>
-            </>
-        )}
-
+                  {selectedCaseForResources?.experiments?.length ? (
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>实验名称</TableCell>
+                            <TableCell>描述</TableCell>
+                            <TableCell>场景配置</TableCell>
+                            <TableCell>创建时间</TableCell>
+                            <TableCell>操作</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedCaseForResources.experiments.map(experiment => (
+                              <TableRow key={experiment.c_experiment_id}>
+                                <TableCell>{experiment.c_experiment_name}</TableCell>
+                                <TableCell>{experiment.c_description || '-'}</TableCell>
+                                <TableCell>{experiment.c_name || '-'}</TableCell> {/* 修改：c_config_name 改为 c_name */}
+                                <TableCell>{formatDate(experiment.created_at)}</TableCell>
+                                <TableCell>
+                                  <IconButton
+                                      onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id, experiment)}
+                                      title="编辑"
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton
+                                      onClick={() => {
+                                        setExperimentToDelete(experiment);
+                                        setIsConfirmDialogOpen(true);
+                                      }}
+                                      title="删除"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                  <IconButton
+                                      onClick={() => handleOpenResourcesDialog({ ...selectedCaseForResources!, experiments: [experiment] })}
+                                      title="查看实验资源"
+                                  >
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                  ) : (
+                      <Typography>无实验</Typography>
+                  )}
+                  {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle1">实验资源</Typography>
+                        <Table>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>实验名称</TableCell>
+                              <TableCell>资源名称</TableCell>
+                              <TableCell>类型</TableCell>
+                              <TableCell>大小</TableCell>
+                              <TableCell>操作</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {selectedCaseForResources.experiments
+                                .filter(exp => exp.resources.length > 0)
+                                .map(exp =>
+                                    exp.resources.map(resource => (
+                                        <TableRow key={`${exp.c_experiment_id}-${resource.c_resource_id}`}>
+                                          <TableCell>{exp.c_experiment_name}</TableCell>
+                                          <TableCell>{resource.c_resource_name}</TableCell>
+                                          <TableCell>{resource.c_type}</TableCell>
+                                          <TableCell>{resource.c_size}</TableCell>
+                                          <TableCell>
+                                            <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                              <VisibilityIcon />
+                                            </IconButton>
+                                            <IconButton
+                                                onClick={() => handleDeleteResource(resource, true, exp.c_experiment_id)}
+                                                title="删除"
+                                            >
+                                              <DeleteIcon />
+                                            </IconButton>
+                                          </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                          </TableBody>
+                        </Table>
+                      </Box>
+                  )}
+                </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseResourcesDialog}>关闭</Button>
+          </DialogActions>
+        </Dialog>
         <CourseCaseFormModal
             open={isFormModalOpen}
             onClose={handleCloseFormModal}
@@ -508,89 +1063,28 @@ const CourseCasesPage: React.FC = () => {
             courseCase={editingCase}
             categories={categories}
         />
-
         <CategoryFormModal
             open={isCategoryModalOpen}
             onClose={handleCloseCategoryModal}
             onSave={handleSaveCategory}
             category={editingCategory}
         />
-
-        {viewingFile && (
-            <FileViewerModal
-                open={isFileViewerOpen}
-                onClose={handleCloseFileViewer}
-                file={viewingFile}
-            />
-        )}
-
-        <Dialog
-            open={isConfirmDialogOpen}
-            onClose={() => setIsConfirmDialogOpen(false)}
-            aria-labelledby="confirm-delete-dialog-title"
-        >
-          <DialogTitle id="confirm-delete-dialog-title">确认删除课程案例</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              您确定要删除课程案例 "{caseToDelete?.title}" 吗？此操作无法撤销，其关联的所有文件也将被移除。
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setIsConfirmDialogOpen(false)} variant="outlined">取消</Button>
-            <Button onClick={handleDeleteCourseCase} color="error" variant="contained" autoFocus>
-              删除
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* 附件对话框 */}
-        <Dialog
-            open={isFilesDialogOpen}
-            onClose={handleCloseFilesDialog}
-            maxWidth="md"
-            fullWidth
-        >
-          <DialogTitle>
-            {selectedCaseForFiles?.title} - 附件列表
-          </DialogTitle>
-          <DialogContent>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>文件名</TableCell>
-                    <TableCell>格式</TableCell>
-                    <TableCell>大小</TableCell>
-                    <TableCell align="right">操作</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {selectedCaseForFiles?.files.map(file => (
-                      <TableRow key={file.id}>
-                        <TableCell>{file.name}</TableCell>
-                        <TableCell>{file.format.toUpperCase()}</TableCell>
-                        <TableCell>{file.size}</TableCell>
-                        <TableCell align="right">
-                          <Button
-                              variant="text"
-                              color="primary"
-                              onClick={() => handleOpenFileViewer(file)}
-                          >
-                            查看
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseFilesDialog}>关闭</Button>
-          </DialogActions>
-        </Dialog>
+        <ExperimentFormModal
+            open={isExperimentModalOpen}
+            onClose={handleCloseExperimentModal}
+            onSave={handleSaveExperiment}
+            experiment={editingExperiment}
+            courseId={selectedCourseId || 'new'}
+            sceneConfigs={sceneConfigs}
+        />
+        <ResourceViewerModal
+            open={isResourceViewerOpen}
+            onClose={handleCloseResourceViewer}
+            resource={viewingResource}
+        />
       </PageWrapper>
   );
 };
 
 export default CourseCasesPage;
+

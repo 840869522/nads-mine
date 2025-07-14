@@ -16,7 +16,7 @@ export interface Question {
   id: string;
   text: string;
   type: 'multiple-choice' | 'short-answer';
-  options?: string[]; 
+  options?: string[];
 }
 
 export interface GeminiEvaluationResult {
@@ -29,14 +29,14 @@ export interface DroneNode {
   id: string;
   name: string;
   status: 'online' | 'offline' | 'compromised' | 'under-attack';
-  ipAddress: string; 
+  ipAddress: string;
   assignedTeam?: TeamColor;
 }
 
 export interface DockerContainer {
   id: string;
   name: string;
-  nodeId: string; 
+  nodeId: string;
   image: string;
   status: 'running' | 'stopped' | 'error';
 }
@@ -48,7 +48,7 @@ export enum TeamColor {
 
 export interface Team {
   color: TeamColor;
-  members: User[]; 
+  members: User[];
   nodes: DroneNode[];
 }
 
@@ -57,16 +57,16 @@ export interface AttackLogEntry {
   timestamp: Date;
   team: TeamColor;
   action: string;
-  target?: string; 
+  target?: string;
   result?: 'success' | 'failure' | 'pending';
 }
 
-export type DeviceType = 
-  | 'container' 
-  | 'switch' 
-  | 'virtual_machine' 
-  | 'nat_bridge' 
-  | 'router';
+export type DeviceType =
+    | 'container'
+    | 'switch'
+    | 'virtual_machine'
+    | 'nat_bridge'
+    | 'router';
 
 //场景node编辑
 export interface NodeConfig {
@@ -94,8 +94,8 @@ export interface EdgeConfig {
 
 export interface TopologyEdge {
   id: string;
-  source: string; 
-  target: string; 
+  source: string;
+  target: string;
   config: EdgeConfig;
 }
 
@@ -105,22 +105,22 @@ export interface TopologyData {
 }
 
 export type TopologyActionType =
-  | 'ADD_NODE'
-  | 'DELETE_NODE'
-  | 'MOVE_NODE'
-  | 'UPDATE_NODE_CONFIG'
-  | 'ADD_EDGE'
-  | 'DELETE_EDGE'
-  | 'UPDATE_EDGE_CONFIG'
-  | 'BATCH_DELETE' 
-  | 'SELECT_ELEMENT'
-  | 'CLEAR_SELECTION'
-  | 'START_LINKING'
-  | 'LOAD_TOPOLOGY';
+    | 'ADD_NODE'
+    | 'DELETE_NODE'
+    | 'MOVE_NODE'
+    | 'UPDATE_NODE_CONFIG'
+    | 'ADD_EDGE'
+    | 'DELETE_EDGE'
+    | 'UPDATE_EDGE_CONFIG'
+    | 'BATCH_DELETE'
+    | 'SELECT_ELEMENT'
+    | 'CLEAR_SELECTION'
+    | 'START_LINKING'
+    | 'LOAD_TOPOLOGY';
 
 export interface TopologyAction {
   type: TopologyActionType;
-  payload: any; 
+  payload: any;
 }
 
 export interface ManagedImage {
@@ -134,27 +134,41 @@ export interface ManagedImage {
   uploadDate: string; // ISO string date
 }
 
-// New types for Course Cases
-export type CourseCaseFileFormat = 'pdf' | 'pptx' | 'docx' | 'mp4' | 'avi' | 'other';
-
-export interface CourseCaseFile {
-  id: string;
-  name: string;
-  format: CourseCaseFileFormat;
-  url: string; // For local preview: URL.createObjectURL(file), for storage: actual file path/URL
-  size?: string; // e.g., "1.2 MB"
-  fileObject?: File; // Temporary storage of the actual file object for upload
-}
-
 export interface CourseCase {
-  id: string;
-  title: string;
-  description: string;
-  category: string; // Matches one of COURSE_CASE_CATEGORIES
-  uploadDate: string; // ISO string date
-  files: CourseCaseFile[];
+  c_course_id: string;
+  c_course_name: string;
+  c_description: string;
+  c_category_id: string;
+  c_category_name: string;
+  resources: CourseCaseResource[];
+  experiments?: Experiment[];
+  created_at: string;
+  highlightedTitle?: string;
+  highlightedDescription?: string;
 }
 
+export interface CourseCaseResource {
+  c_resource_id: string;
+  c_resource_name: string;
+  c_type: CourseCaseResourceFormat;
+  c_resource_path: string;
+  c_size?: string;
+  fileObject?: File;
+}
+export interface Category {
+  c_category_id: string;
+  c_category_name: string;
+}
+export type CourseCaseResourceFormat = 'pdf' | 'mp4' | 'avi' | 'pptx' | 'docx' | 'other';
+export interface Experiment {
+  c_experiment_id: string;
+  c_experiment_name: string;
+  c_description?: string;
+  c_config_id: number;
+  c_name?: string;
+  resources: CourseCaseResource[];
+  created_at: string;
+}
 // New type for Running Instances
 export type InstanceStatus = 'running' | 'paused' | 'stopped' | 'error' | 'starting' | 'stopping' | 'deleting';
 

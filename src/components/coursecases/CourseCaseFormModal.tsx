@@ -28,18 +28,18 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import DescriptionIcon from '@mui/icons-material/Description';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import { CourseCase, CourseCaseFile, CourseCaseFileFormat } from '../../types';
-import { SUPPORTED_COURSE_FILE_FORMATS } from '../../constants';
+import { Category, CourseCase, CourseCaseResource, CourseCaseResourceFormat } from '../../types';
+import { SUPPORTED_COURSE_RESOURCE_FORMATS } from '../../constants';
 
 interface CourseCaseFormModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (courseCase: CourseCase) => void;
   courseCase: CourseCase | null;
-  categories: string[];
+  categories: Category[];
 }
 
-const getFileFormat = (fileName: string): CourseCaseFileFormat => {
+const getResourceFormat = (fileName: string): CourseCaseResourceFormat => {
   const extension = fileName.split('.').pop()?.toLowerCase();
   switch (extension) {
     case 'pdf': return 'pdf';
@@ -51,7 +51,7 @@ const getFileFormat = (fileName: string): CourseCaseFileFormat => {
   }
 };
 
-const getFileIcon = (format: CourseCaseFileFormat) => {
+const getResourceIcon = (format: CourseCaseResourceFormat) => {
   switch (format) {
     case 'pdf': return <PictureAsPdfIcon />;
     case 'mp4': case 'avi': return <VideocamIcon />;
@@ -63,191 +63,236 @@ const getFileIcon = (format: CourseCaseFileFormat) => {
 const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose, onSave, courseCase, categories }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<string>('');
-  const [files, setFiles] = useState<CourseCaseFile[]>([]);
+  const [c_course_name, setCourseName] = useState('');
+  const [c_description, setDescription] = useState('');
+  const [c_category_id, setCategoryId] = useState<string>('');
+  const [resources, setResources] = useState<CourseCaseResource[]>([]);
   const [selectedRawFiles, setSelectedRawFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    resources.forEach(resource => {
+      if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
+        URL.revokeObjectURL(resource.c_resource_path);
+      }
+    });
+
     if (courseCase) {
-      setTitle(courseCase.title);
-      setDescription(courseCase.description);
-      setCategory(courseCase.category);
-      setFiles(courseCase.files.map(f => ({ ...f })));
+      setCourseName(courseCase.c_course_name || '');
+      setDescription(courseCase.c_description || '');
+      setCategoryId(courseCase.c_category_id ?? '');
+      setResources(courseCase.resources.map(r => ({ ...r })));
     } else {
-      setTitle('');
+      setCourseName('');
       setDescription('');
-      setCategory(categories.length > 0 ? categories[0] : '');
-      setFiles([]);
+      setCategoryId(categories.length > 0 && categories[0].c_category_id ? categories[0].c_category_id : '');
+      setResources([]);
     }
     setSelectedRawFiles([]);
     setErrors({});
+    return () => {
+      resources.forEach(resource => {
+        if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
+          URL.revokeObjectURL(resource.c_resource_path);
+        }
+      });
+    };
   }, [courseCase, open, categories]);
+
+  // 当 categories 更新 同步 c_category_id
+  useEffect(() => {
+    if (categories.length > 0 && !categories.some(cat => cat.c_category_id === c_category_id)) {
+      setCategoryId(categories[0].c_category_id || '');
+    }
+  }, [categories, c_category_id]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newRawFilesArray = Array.from(e.target.files);
       setSelectedRawFiles(prev => [...prev, ...newRawFilesArray]);
-      const newCourseCaseFiles: CourseCaseFile[] = newRawFilesArray.map(rawFile => ({
-        id: `new-${rawFile.name}-${Date.now()}`,
-        name: rawFile.name,
-        format: getFileFormat(rawFile.name),
-        url: '',
-        size: `${(rawFile.size / (1024 * 1024)).toFixed(2)} MB`,
+      const newCourseCaseResources: CourseCaseResource[] = newRawFilesArray.map(rawFile => ({
+        c_resource_id: `new-${rawFile.name}-${Date.now()}`,
+        c_resource_name: rawFile.name,
+        c_type: getResourceFormat(rawFile.name),
+        c_resource_path: '',
+        c_size: `${(rawFile.size / (1024 * 1024)).toFixed(2)} MB`,
         fileObject: rawFile,
       }));
-      setFiles(prev => [...prev, ...newCourseCaseFiles]);
+      setResources(prev => [...prev, ...newCourseCaseResources]);
       e.target.value = '';
     }
   };
 
-  const handleRemoveFile = (fileIdToRemove: string) => {
-    const fileToRemove = files.find(f => f.id === fileIdToRemove);
-    if (fileToRemove?.url && fileToRemove.url.startsWith('blob:')) {
-      URL.revokeObjectURL(fileToRemove.url);
+  const handleRemoveResource = (resourceIdToRemove: string) => {
+    const resourceToRemove = resources.find(r => r.c_resource_id === resourceIdToRemove);
+    if (resourceToRemove?.c_resource_path && resourceToRemove.c_resource_path.startsWith('blob:')) {
+      URL.revokeObjectURL(resourceToRemove.c_resource_path);
     }
-    setFiles(prevFiles => prevFiles.filter(file => file.id !== fileIdToRemove));
-    setSelectedRawFiles(prevRaw => prevRaw.filter(rawFile => `new-${rawFile.name}-${Date.now()}` !== fileIdToRemove && rawFile.name !== fileToRemove?.name));
+    setResources(prevResources => prevResources.filter(resource => resource.c_resource_id !== resourceIdToRemove));
+    setSelectedRawFiles(prevRaw => prevRaw.filter(rawFile => `new-${rawFile.name}-${Date.now()}` !== resourceIdToRemove && rawFile.name !== resourceToRemove?.c_resource_name));
   };
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!title.trim()) newErrors.title = '案例标题不能为空。';
-    if (!category.trim()) newErrors.category = '请选择一个案例分类。';
-    if (files.length === 0) newErrors.files = '请至少上传一个文件。';
+    if (!c_course_name.trim()) newErrors.c_course_name = '课程标题不能为空。';
+    if (!c_category_id && categories.length > 0) newErrors.c_category_id = '请选择一个课程分类。';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
     if (validate()) {
-      const processedFiles = files.map(file => {
-        if (file.fileObject && !file.url) {
-          return { ...file, url: URL.createObjectURL(file.fileObject) };
+      const processedResources = resources.map(resource => {
+        if (resource.fileObject && !resource.c_resource_path) {
+          return { ...resource, c_resource_path: URL.createObjectURL(resource.fileObject) };
         }
-        return file;
+        return resource;
       });
 
       const saveData: CourseCase = {
-        id: courseCase?.id || `temp-id-${Date.now()}`,
-        title,
-        description,
-        category,
-        files: processedFiles,
-        uploadDate: courseCase?.uploadDate || new Date().toISOString(),
+        c_course_id: courseCase?.c_course_id || `temp-id-${Date.now()}`,
+        c_course_name,
+        c_description,
+        c_category_id: c_category_id ?? '',
+        c_category_name: categories.find(cat => cat.c_category_id === c_category_id)?.c_category_name || '',
+        resources: processedResources,
+        created_at: courseCase?.created_at || new Date().toISOString(),
       };
       onSave(saveData);
     }
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullWidth
-      maxWidth="md"
-      fullScreen={fullScreen}
-      PaperProps={{ component: 'form', onSubmit: (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); handleSubmit(); }, sx: { borderRadius: 2 } }}
-    >
-      <DialogTitle>
-        {courseCase ? '编辑课程案例' : '添加新课程案例'}
-      </DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          <TextField
-            autoFocus
-            name="title"
-            label="案例标题"
-            fullWidth
-            variant="outlined"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            error={!!errors.title}
-            helperText={errors.title}
-            required
-          />
-          <FormControl fullWidth variant="outlined" error={!!errors.category} required>
-            <InputLabel id="case-category-label">案例分类</InputLabel>
-            <Select
-              labelId="case-category-label"
-              name="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as string)}
-              label="案例分类"
-            >
-              {categories.map(cat => (
-                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-              ))}
-            </Select>
-            {errors.category && <FormHelperText>{errors.category}</FormHelperText>}
-          </FormControl>
-          <TextField
-            name="description"
-            label="案例描述 (可选)"
-            fullWidth
-            multiline
-            rows={3}
-            variant="outlined"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <Box mt={1}>
-            <Typography variant="subtitle1" gutterBottom color={errors.files ? "error" : "text.primary"}>
-              案例文件
-            </Typography>
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<CloudUploadIcon />}
-              sx={{ mb: 1 }}
-            >
-              选择文件上传
-              <input 
-                type="file" 
-                hidden 
-                multiple 
-                onChange={handleFileChange} 
-                accept={Object.values(SUPPORTED_COURSE_FILE_FORMATS).join(',')}
-              />
-            </Button>
-            {errors.files && <FormHelperText error>{errors.files}</FormHelperText>}
-            {files.length > 0 && (
-              <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 1 }}>
-                {files.map((file) => (
-                  <ListItem
-                    key={file.id}
-                    secondaryAction={
-                      <IconButton edge="end" aria-label="delete file" onClick={() => handleRemoveFile(file.id)} color="error">
-                        <DeleteIcon fontSize="small"/>
-                      </IconButton>
-                    }
-                    sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      {getFileIcon(file.format)}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={file.name} 
-                      primaryTypographyProps={{ variant: 'body2', noWrap: true, maxWidth: 'calc(100% - 50px)' }}
-                      secondary={file.size || '未知大小'}
-                      secondaryTypographyProps={{ variant: 'caption' }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Box>
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose}>取消</Button>
-        <Button type="submit" variant="contained">
-          {courseCase ? '保存更改' : '确认添加'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      <Dialog
+          open={open}
+          onClose={onClose}
+          fullWidth
+          maxWidth="md"
+          fullScreen={fullScreen}
+          PaperProps={{ component: 'form', onSubmit: (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); handleSubmit(); }, sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle>
+          {courseCase ? '编辑课程' : '添加新课程'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
+                autoFocus
+                name="c_course_name"
+                label="课程标题"
+                fullWidth
+                variant="outlined"
+                value={c_course_name}
+                onChange={(e) => setCourseName(e.target.value)}
+                error={!!errors.c_course_name}
+                helperText={errors.c_course_name}
+                required
+            />
+            <FormControl fullWidth variant="outlined" error={!!errors.c_category_id} required={categories.length > 0}>
+              <InputLabel id="course-category-label">课程分类</InputLabel>
+              <Select
+                  labelId="course-category-label"
+                  name="c_category_id"
+                  value={c_category_id ?? ''}
+                  onChange={(e) => setCategoryId(e.target.value as string)}
+                  label="课程分类"
+                  disabled={categories.length === 0}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 250, // 设置最大高度
+                      },
+                    },
+                  }}
+              >
+                {categories.length === 0 ? (
+                    <MenuItem value="" disabled>
+                      无可用分类
+                    </MenuItem>
+                ) : (
+                    [
+                      <MenuItem key="placeholder" value="" disabled>
+                        请选择分类
+                      </MenuItem>,
+                      ...categories
+                          .filter(cat => cat.c_category_id)
+                          .map(cat => (
+                              <MenuItem key={cat.c_category_id} value={cat.c_category_id}>
+                                {cat.c_category_name}
+                              </MenuItem>
+                          ))
+                    ]
+                )}
+              </Select>
+              {errors.c_category_id && <FormHelperText>{errors.c_category_id}</FormHelperText>}
+              {categories.length === 0 && (
+                  <FormHelperText>请先添加分类</FormHelperText>
+              )}
+            </FormControl>
+            <TextField
+                name="c_description"
+                label="课程描述 (可选)"
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                value={c_description}
+                onChange={(e) => setDescription(e.target.value)}
+            />
+            <Box mt={1}>
+              <Typography variant="subtitle1" gutterBottom color="text.primary">
+                课程资源（可选）
+              </Typography>
+              <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<CloudUploadIcon />}
+                  sx={{ mb: 1 }}
+              >
+                选择文件上传
+                <input
+                    type="file"
+                    hidden
+                    multiple
+                    onChange={handleFileChange}
+                    accept={Object.values(SUPPORTED_COURSE_RESOURCE_FORMATS).join(',')}
+                />
+              </Button>
+              {resources.length > 0 && (
+                  <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 1 }}>
+                    {resources.map((resource) => (
+                        <ListItem
+                            key={resource.c_resource_id}
+                            secondaryAction={
+                              <IconButton edge="end" aria-label="delete resource" onClick={() => handleRemoveResource(resource.c_resource_id)} color="error">
+                                <DeleteIcon fontSize="small"/>
+                              </IconButton>
+                            }
+                            sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 36 }}>
+                            {getResourceIcon(resource.c_type)}
+                          </ListItemIcon>
+                          <ListItemText
+                              primary={resource.c_resource_name}
+                              primaryTypographyProps={{ variant: 'body2', noWrap: true, maxWidth: 'calc(100% - 50px)' }}
+                              secondary={resource.c_size || '未知大小'}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                          />
+                        </ListItem>
+                    ))}
+                  </List>
+              )}
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={onClose}>取消</Button>
+          <Button type="submit" variant="contained" disabled={categories.length === 0 && !c_category_id}>
+            {courseCase ? '保存更改' : '确认添加'}
+          </Button>
+        </DialogActions>
+      </Dialog>
   );
 };
 

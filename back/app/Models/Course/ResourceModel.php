@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models\Course;
 
 use Illuminate\Database\Eloquent\Model;
@@ -17,20 +16,13 @@ class ResourceModel extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    /**
-     * Get resources by course ID with pagination.
-     *
-     * @param string $courseId
-     * @param int $page
-     * @param int $pageSize
-     * @return array
-     */
     public static function getResourcesByCourseId(string $courseId, int $page = 1, int $pageSize = 10): array
     {
         try {
+            DB::connection()->getPdo();
             if (!DB::table('c_courses')->where('c_course_id', $courseId)->exists()) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Invalid course_id: Course does not exist.',
                 ];
             }
@@ -50,7 +42,7 @@ class ResourceModel extends Model
             }, $resources);
 
             return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'code' => 200,
                 'message' => 'Resources retrieved successfully.',
                 'data' => [
                     'resources' => $resources,
@@ -60,46 +52,51 @@ class ResourceModel extends Model
                 ],
             ];
         } catch (QueryException $e) {
-            Log::error('[DATABASE] getResourcesByCourseId: ' . $e->getMessage());
+            Log::error('[DATABASE] getResourcesByCourseId: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'code' => 500,
                 'message' => 'Failed to retrieve resources: ' . $e->getMessage(),
+                'error_details' => [
+                    'sql_error' => $e->getMessage(),
+                    'sql_code' => $e->getCode(),
+                ],
             ];
         } catch (\Exception $e) {
-            Log::error('[GENERAL] getResourcesByCourseId: ' . $e->getMessage());
+            Log::error('[GENERAL] getResourcesByCourseId: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Unexpected error occurred.',
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+                'error_details' => [
+                    'error' => $e->getMessage(),
+                ],
             ];
         }
     }
 
-    /**
-     * Store a new resource.
-     *
-     * @param array $data
-     * @return array
-     */
     public static function store(array $data): array
     {
         try {
-            if (empty($data['course_id']) || empty($data['name']) || empty($data['path']) || empty($data['type'])) {
+            if (empty($data['c_course_id']) || empty($data['name']) || empty($data['path']) || empty($data['type'])) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Missing required fields: course_id, name, path, or type.',
                 ];
             }
 
             if (!DB::table('c_courses')->where('c_course_id', $data['course_id'])->exists()) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Invalid course_id: Course does not exist.',
                 ];
             }
 
             if (DB::table('c_course_resources')->where('c_course_id', $data['course_id'])->where('c_resource_name', $data['name'])->exists()) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Resource name already exists for this course.',
                     'errors' => ['name' => ['The resource name has already been taken.']],
                 ];
@@ -107,7 +104,7 @@ class ResourceModel extends Model
 
             if (!Storage::disk('public')->exists($data['path'])) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Invalid resource path: File does not exist.',
                 ];
             }
@@ -118,7 +115,7 @@ class ResourceModel extends Model
                 "INSERT INTO c_course_resources (c_resource_id, c_course_id, c_resource_name, c_resource_path, c_type, c_size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 [
                     $resourceId,
-                    $data['course_id'],
+                    $data['c_course_id'],
                     mb_convert_encoding($data['name'], 'UTF-8', 'UTF-8'),
                     mb_convert_encoding($data['path'], 'UTF-8', 'UTF-8'),
                     mb_convert_encoding($data['type'], 'UTF-8', 'UTF-8'),
@@ -129,14 +126,14 @@ class ResourceModel extends Model
             if (!$result) {
                 DB::rollBack();
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 500,
                     'message' => 'Failed to create resource.',
                 ];
             }
 
             DB::commit();
             return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'code' => 201,
                 'message' => 'Resource created successfully.',
                 'data' => [
                     'c_resource_id' => $resourceId,
@@ -148,33 +145,31 @@ class ResourceModel extends Model
             ];
         } catch (QueryException $e) {
             DB::rollBack();
-            Log::error('[DATABASE] store: ' . $e->getMessage());
+            Log::error('[DATABASE] store: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'code' => 500,
                 'message' => 'Failed to store resource: ' . ($e->getCode() == 23000 ? 'Invalid course_id.' : $e->getMessage()),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('[GENERAL] store: ' . $e->getMessage());
+            Log::error('[GENERAL] store: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Unexpected error occurred.',
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
             ];
         }
     }
 
-    /**
-     * Delete a resource by ID.
-     *
-     * @param string $id
-     * @return array
-     */
     public static function deleteResource(string $id): array
     {
         try {
             if (!Str::isUuid($id)) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Invalid resource_id: Must be a valid UUID.',
                 ];
             }
@@ -182,7 +177,7 @@ class ResourceModel extends Model
             $resource = DB::table('c_course_resources')->where('c_resource_id', $id)->first();
             if (!$resource) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 404,
                     'message' => 'Resource not found.',
                 ];
             }
@@ -192,50 +187,47 @@ class ResourceModel extends Model
             if (!$result) {
                 DB::rollBack();
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 404,
                     'message' => 'Resource not found.',
                 ];
             }
 
             DB::commit();
-            // Delete file after transaction commit
             if (Storage::disk('public')->exists($resource->c_resource_path)) {
                 Storage::disk('public')->delete($resource->c_resource_path);
             }
 
             return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'code' => 200,
                 'message' => 'Resource deleted successfully.',
             ];
         } catch (QueryException $e) {
             DB::rollBack();
-            Log::error('[DATABASE] deleteResource: ' . $e->getMessage());
+            Log::error('[DATABASE] deleteResource: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'code' => 500,
                 'message' => 'Failed to delete resource: ' . $e->getMessage(),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('[GENERAL] deleteResource: ' . $e->getMessage());
+            Log::error('[GENERAL] deleteResource: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Unexpected error occurred.',
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
             ];
         }
     }
 
-    /**
-     * Get a resource by ID.
-     *
-     * @param string $id
-     * @return array
-     */
     public static function getResourceById(string $id): array
     {
         try {
             if (!Str::isUuid($id)) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 422,
                     'message' => 'Invalid resource_id: Must be a valid UUID.',
                 ];
             }
@@ -243,13 +235,13 @@ class ResourceModel extends Model
             $resource = DB::table('c_course_resources')->where('c_resource_id', $id)->first();
             if (!$resource) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                    'code' => 404,
                     'message' => 'Resource not found.',
                 ];
             }
 
             return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'code' => 200,
                 'message' => 'Resource retrieved successfully.',
                 'data' => [
                     'c_resource_id' => $resource->c_resource_id,
@@ -260,16 +252,20 @@ class ResourceModel extends Model
                 ],
             ];
         } catch (QueryException $e) {
-            Log::error('[DATABASE] getResourceById: ' . $e->getMessage());
+            Log::error('[DATABASE] getResourceById: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
+                'code' => 500,
                 'message' => 'Failed to retrieve resource: ' . $e->getMessage(),
             ];
         } catch (\Exception $e) {
-            Log::error('[GENERAL] getResourceById: ' . $e->getMessage());
+            Log::error('[GENERAL] getResourceById: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => 'Unexpected error occurred.',
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
             ];
         }
     }

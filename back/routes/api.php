@@ -18,6 +18,7 @@
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
+    use App\Http\Controllers\examination\TestController;
 
 
     /*
@@ -140,31 +141,42 @@
     /**
      * 定义人员测试分系统路由
      */
-    Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
-        Route::prefix('courses')->group(function(){
-            Route::get('/',[CourseController::class,'index'])->name('courses.index');
-            Route::get('/{id}',[CourseController::class,'show'])->name('courses.show');
-            Route::post('/',[CourseController::class,'store'])->name('courses.store');
-            Route::put('/{id}',[CourseController::class,'update'])->name('courses.update');
-            Route::delete('/{id}',[CourseController::class,'destroy'])->name('courses.destroy');
-            Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
-        })->middleware('jwtcheck');
-
-        Route::prefix('categories')->middleware('jwtcheck:study')->group(function(){
-            Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
-            Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
-            Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
-            Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
-        });
-
-        Route::prefix('courses/{courseId}/resources')->group(function () {
-            Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
-            Route::post('/', [ResourceController::class, 'store'])->name('resources.store');
-            Route::post('/upload', [ResourceController::class, 'upload'])->name('resources.upload');
-            Route::delete('/{id}', [ResourceController::class, 'destroy'])->name('resources.destroy');
-        });
+Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
+    Route::prefix('courses')->group(function(){
+        Route::get('/',[CourseController::class,'index']);
+        Route::get('/{id}',[CourseController::class,'show']);
+        Route::post('/',[CourseController::class,'store']);
+        Route::put('/{id}',[CourseController::class,'update']);
+        Route::delete('/{id}',[CourseController::class,'destroy']);
+        Route::post('/{courseId}/users', [CourseController::class, 'addUser']);
     });
 
+    Route::prefix('categories')->group(function(){
+        Route::get('/', [CategoryController::class, 'index']);
+        Route::post('/', [CategoryController::class, 'store']);
+        Route::put('/{id}', [CategoryController::class, 'update']);
+        Route::delete('/{id}', [CategoryController::class, 'destroy']);
+    });
+
+    Route::prefix('courses/{courseId}/resources')->group(function () {
+        Route::get('/', [ResourceController::class, 'index']);
+        Route::post('/', [ResourceController::class, 'store']);
+        Route::post('/upload', [ResourceController::class, 'upload']);
+        Route::delete('/{id}', [ResourceController::class, 'destroy']);
+        Route::prefix('{courseId}/experiments')->group(function () {
+            Route::get('/', [ExperimentController::class, 'index']);
+            Route::post('/', [ExperimentController::class, 'store']);
+            Route::put('/{experimentId}', [ExperimentController::class, 'update']);
+            Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
+            Route::prefix('{experimentId}/resources')->group(function () {
+                Route::get('/', [ExperimentResourceController::class, 'index']);
+                Route::post('/', [ExperimentResourceController::class, 'store']);
+                Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+                Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
+            });
+        });
+    });
+});
     /**
      * 定义环境构建分系统
      */
@@ -230,30 +242,6 @@
         Route::get('/{id}/binds', [ContainersController::class, 'binds']);
     });
 
-
-    // Route::prefix('courses')->group(function(){
-    //     Route::get('/',[CourseController::class,'index'])->middleware('can:view-courses')->name('courses.index');
-    //     Route::get('/{id}',[CourseController::class,'show'])->middleware('can:view-courses')->name('courses.show');
-    //     Route::post('/',[CourseController::class,'store'])->middleware('can:create-course')->name('courses.store');
-    //     Route::put('/{id}',[CourseController::class,'update'])->middleware('can:edit-courses')->name('courses.update');
-    //     Route::delete('/{id}',[CourseController::class,'destroy'])->middleware('can:delete-courses')->name('courses.destroy');
-    //     Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->middleware('can:manage-courses')->name('courses.addUser');
-    // })->middleware('jwtcheck');
-
-    // Route::prefix('categories')->group(function(){
-    //     Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
-    //     Route::post('/', [CategoryController::class, 'store'])->middleware('jwtcheck:manage-categories')->name('categories.store');
-    //     Route::put('/{id}', [CategoryController::class, 'update'])->middleware('jwtcheck:manage-categories')->name('categories.update');
-    //     Route::delete('/{id}', [CategoryController::class, 'destroy'])->middleware('jwtcheck:manage-categories')->name('categories.destroy');
-    // })->middleware('jwtcheck');
-
-    // Route::prefix('courses/{courseId}/resources')->group(function () {
-    //     Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
-    //     Route::post('/', [ResourceController::class, 'store'])->middleware('jwtcheck:manage-resources')->name('resources.store');
-    //     Route::post('/upload', [ResourceController::class, 'upload'])->middleware('jwtcheck:manage-resources')->name('resources.upload');
-    //     Route::delete('/{id}', [ResourceController::class, 'destroy'])->middleware('jwtcheck:manage-resources')->name('resources.destroy');
-    // })->middleware('jwtcheck');
-
     Route::prefix('vms')->group(function () {
         $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
         Route::get('/', [$c, 'listVms']);
@@ -273,6 +261,10 @@
         Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
     });
 
-
+    Route::prefix('examination')->group(function () {
+        Route::prefix('test')->group(function(){
+            Route::post('/', [TestController::class, 'index']);
+        });
+    });
 
 ?>
