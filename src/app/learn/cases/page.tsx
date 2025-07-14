@@ -52,7 +52,7 @@ const highlightText = (text: string, keyword: string) => {
 const CourseCasesPage: React.FC = () => {
   const [courseCases, setCourseCases] = useState<CourseCase[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [sceneConfigs, setSceneConfigs] = useState<{ c_config_id: number; c_name: string }[]>([]); // 修改：c_config_name 改为 c_name
+  const [sceneConfigs, setSceneConfigs] = useState<{ c_config_id: number; c_name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -105,14 +105,14 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch scene configs
-        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/scene-configs`, {
+        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/scene/scenarios`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const sceneConfigsData = sceneConfigsResponse.data;
         if (sceneConfigsData.code === 200) {
           setSceneConfigs(sceneConfigsData.data.map((config: { c_config_id: number; c_name: string }) => ({
             c_config_id: config.c_config_id,
-            c_name: config.c_name, // 修改：c_config_name 改为 c_name
+            c_name: config.c_name,
           })) || []);
         } else {
           setErrorMessage(`获取场景配置失败: ${sceneConfigsData.message || '未知错误'}`);
@@ -163,7 +163,7 @@ const CourseCasesPage: React.FC = () => {
                       c_experiment_name: exp.c_experiment_name,
                       c_description: exp.c_description || '',
                       c_config_id: exp.c_config_id,
-                      c_name: exp.c_name || '', // 修改：c_config_name 改为 c_name
+                      c_name: exp.c_name || '',
                       resources: (exp.resources || []).map((res: any) => ({
                         c_resource_id: res.c_resource_id,
                         c_resource_name: res.c_resource_name,
@@ -320,7 +320,7 @@ const CourseCasesPage: React.FC = () => {
                     c_experiment_name: exp.c_experiment_name,
                     c_description: exp.c_description,
                     c_config_id: exp.c_config_id,
-                    c_name: exp.c_name, // 修改：c_config_name 改为 c_name
+                    c_name: exp.c_name,
                     resources: exp.resources || [],
                     created_at: exp.created_at,
                   })),
@@ -439,7 +439,7 @@ const CourseCasesPage: React.FC = () => {
                     c_experiment_name: exp.c_experiment_name,
                     c_description: exp.c_description || '',
                     c_config_id: exp.c_config_id,
-                    c_name: exp.c_name || '', // 修改：c_config_name 改为 c_name
+                    c_name: exp.c_name || '',
                     resources: (exp.resources || []).map((res: any) => ({
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
@@ -976,7 +976,7 @@ const CourseCasesPage: React.FC = () => {
                               <TableRow key={experiment.c_experiment_id}>
                                 <TableCell>{experiment.c_experiment_name}</TableCell>
                                 <TableCell>{experiment.c_description || '-'}</TableCell>
-                                <TableCell>{experiment.c_name || '-'}</TableCell> {/* 修改：c_config_name 改为 c_name */}
+                                <TableCell>{experiment.c_name || '-'}</TableCell>
                                 <TableCell>{formatDate(experiment.created_at)}</TableCell>
                                 <TableCell>
                                   <IconButton

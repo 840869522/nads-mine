@@ -163,17 +163,18 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::post('/', [ResourceController::class, 'store']);
         Route::post('/upload', [ResourceController::class, 'upload']);
         Route::delete('/{id}', [ResourceController::class, 'destroy']);
-        Route::prefix('{courseId}/experiments')->group(function () {
-            Route::get('/', [ExperimentController::class, 'index']);
-            Route::post('/', [ExperimentController::class, 'store']);
-            Route::put('/{experimentId}', [ExperimentController::class, 'update']);
-            Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
-            Route::prefix('{experimentId}/resources')->group(function () {
-                Route::get('/', [ExperimentResourceController::class, 'index']);
-                Route::post('/', [ExperimentResourceController::class, 'store']);
-                Route::post('/upload', [ExperimentResourceController::class, 'upload']);
-                Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
-            });
+    });
+
+    Route::prefix('courses/{courseId}/experiments')->group(function () {
+        Route::get('/', [ExperimentController::class, 'index']);
+        Route::post('/', [ExperimentController::class, 'store']);
+        Route::put('/{experimentId}', [ExperimentController::class, 'update']);
+        Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
+        Route::prefix('{experimentId}/resources')->group(function () {
+            Route::get('/', [ExperimentResourceController::class, 'index']);
+            Route::post('/', [ExperimentResourceController::class, 'store']);
+            Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+            Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
         });
     });
 });
