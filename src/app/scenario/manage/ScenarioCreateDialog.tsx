@@ -44,7 +44,7 @@ const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClo
         }
         const newInstance: RunningInstance = {
             id: `inst-${id}`, name: label, type: instanceType, status: status,
-            ports: config.portMappings || '-', imageName: config.dockerImage,
+            ports: config.portMappings || '-', imageName: config.Image,
             cpuUsage: isComputeResource ? '0%' : '-', memoryUsage: isComputeResource ? '0MB / 1GB' : '-',
             diskUsage: isComputeResource ? '0GB / 20GB' : '-', uptime: '0s',
             nodeId: id, createdAt: new Date().toISOString(),
@@ -61,7 +61,7 @@ const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClo
     const handleUpdateNode = useCallback((node: TopologyNode) => {
         setInstances(prev => prev.map(inst => {
             if (inst.nodeId === node.id) {
-                return { ...inst, name: node.label, imageName: node.config.dockerImage, ports: node.config.portMappings || '-' };
+                return { ...inst, name: node.label, imageName: node.config.Image, ports: node.config.portMappings || '-' };
             }
             return inst;
         }));
