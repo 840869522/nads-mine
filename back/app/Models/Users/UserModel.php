@@ -110,7 +110,7 @@ use Nette\Schema\Expect;
 
         public static function insertNewUser(array $data): array{
             try {
-                $sql = "INSERT INTO `c_users`(c_username,c_password,c_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(c_username,c_password,c_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,?,NOW(),NOW())";
                 db::beginTransaction();
                 $res = db::insert($sql, [$data['username'], $data['password'], $data["email"], $data["is_login"]]);
                 if ($res) {

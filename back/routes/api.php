@@ -19,7 +19,6 @@
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
     use App\Http\Controllers\Course\TestController;
-use Illuminate\Foundation\Auth\User;
 
     /*
     |--------------------------------------------------------------------------
@@ -44,7 +43,7 @@ use Illuminate\Foundation\Auth\User;
     /**
      * 较为特殊的路由
      */
-    Route::group(function () {
+    Route::prefix("")->group(function () {
         Route::post("support/user/login",[UserController::class,"login"]);
         Route::post("support/user/update_pwd",[UserController::class,"updateUserPassword"])->middleware("jwtcheck");
         Route::post("support/user/up_common",[UserController::class, "updateUserEmail"])->middleware("jwtcheck");
