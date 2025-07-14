@@ -21,7 +21,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = '/api/php';
+const API_BASE = '/back/api';
 
 interface CreateContainerModalProps {
   open: boolean;

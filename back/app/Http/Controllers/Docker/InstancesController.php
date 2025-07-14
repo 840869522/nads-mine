@@ -56,11 +56,11 @@ class InstancesController extends Controller
             $ports = [];
 
             // 尝试通过 listContainers() 提取端口（常规路径）
-            foreach ($info->getPorts() ?? [] as $p) {
+            /*foreach ($info->getPorts() ?? [] as $p) {
                 $private = $p->getPrivatePort();
                 $public  = $p->getPublicPort();
                 $ports[] = $public ? "{$public}:{$private}" : "{$private}";
-            }
+            }*/
 
             // 如果 list 中没端口，fallback 到 inspect
             if (true) {
