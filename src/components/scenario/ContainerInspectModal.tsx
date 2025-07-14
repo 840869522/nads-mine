@@ -9,7 +9,7 @@ const Transition = React.forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-const API_BASE = '/api/php';
+const API_BASE = '/back/api';
 
 interface ContainerInspectModalProps {
   open: boolean;
