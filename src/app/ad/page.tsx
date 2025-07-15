@@ -106,7 +106,7 @@ const AdManagementPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-    const API_BASE_URL = 'http://127.0.0.1:8000/api';
+    const API_BASE_URL = '/back/api';
 
     // --- 数据获取 ---
     const fetchData = useCallback(async () => {

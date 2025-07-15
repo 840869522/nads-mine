@@ -288,10 +288,5 @@ use Nette\Schema\Expect;
             return [];
         }
     }
-
-        public static function updateUserLastLogin(string $id){
-            $sql = "UPDATE c_users SET c_last_login = NOW() WHERE c_username = ?";
-            db::update($sql, [$id]);
-        }
 }
 ?>

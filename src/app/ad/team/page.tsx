@@ -75,16 +75,16 @@ const Page: React.FC = () => {
     const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-    const API_BASE_URL = 'http://127.0.0.1:8000/api';
+    const API_BASE_URL = '/back/api';
 
     const fetchTeams = useCallback(async () => {
         setIsLoading(true);
         try {
-            const url = new URL(`${API_BASE_URL}/ad/team`);
-            if (debouncedSearchQuery) {
-                url.searchParams.append('search', debouncedSearchQuery);
-            }
-            const response = await fetch(url.toString());
+            //const url = new URL(`${API_BASE_URL}/ad/team`);
+            //if (debouncedSearchQuery) {
+            //    url.searchParams.append('search', debouncedSearchQuery);
+            //}
+            const response = await fetch(`${API_BASE_URL}/ad/team`);
             if (!response.ok) throw new Error('从服务器获取队伍列表失败');
             const result = await response.json();
             const rawTeams = result.data ?? [];
