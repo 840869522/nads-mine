@@ -144,6 +144,8 @@ use Illuminate\Support\Facades\Route;
         Route::delete('/{id}', [CourseController::class, 'destroy'])->middleware('jwtcheck:edit-courses');
     });
 
+Route::get('ad/users', [UserController::class, 'getAllUser']);
+
 Route::prefix('ad/team')->group(function () {
     // 获取所有队伍列表
     // GET /api/ad/team
@@ -168,38 +170,55 @@ Route::prefix('ad/team')->group(function () {
 });
 
 
+Route::apiResource('ad-configs', AdConfigController::class);
+
+
+// --- 2. 演练的特殊操作路由 ---
+// 这组路由处理不能通过标准 CRUD 动词表达的操作，如“启动”、“停止”
+
+Route::prefix('ad-configs/{adConfig}')->group(function () {
+    // 启动演练
+    // POST /api/ad-configs/{adConfig}/start
+    Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+
+    // 停止演练
+    // POST /api/ad-configs/{adConfig}/stop
+    Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+});
+
+
+// --- 3. 演练模块所需的辅助数据路由 ---
+// 这组路由为前端页面提供必要的下拉框数据源等
+
 Route::prefix('ad')->group(function () {
 
-    // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
-    // GET /api/ad/available-users
-    // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
-    // 如果它在后面，'/available-users' 可能会被误匹配为 '/{referee}'。
-    Route::get('available-users', [RefereeController::class, 'availableUsers']);
+    /**
+     * ★ 获取所有用户列表作为裁判候选人 ★
+     *
+     * 这是前端“指派裁判”下拉框的数据源。
+     * 请求: GET /api/ad/users
+     * 控制器: RefereeController@availableUsers
+     */
+    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
 
-    // 裁判的 CRUD 路由
-    Route::prefix('referee')->group(function () {
-        // 获取所有裁判列表
-        // GET /api/ad/referee
-        Route::get('/', [RefereeController::class, 'index']);
+    /**
+     * 获取所有团队列表
+     *
+     * 这是前端“红队/蓝队”下拉框的数据源。
+     * 请求: GET /api/ad/team
+     */
+    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
 
-        // 创建一个新裁判
-        // POST /api/ad/referee
-        Route::post('/', [RefereeController::class, 'store']);
-
-        // 获取单个裁判的详细信息
-        // GET /api/ad/referee/{referee}
-        // {referee} 是路由模型绑定，Laravel 会自动根据 ID (c_id) 查找 Referee
-        Route::get('/{referee}', [RefereeController::class, 'show']);
-
-        // 更新一个已存在的裁判
-        // PUT /api/ad/referee/{referee}
-        Route::put('/{referee}', [RefereeController::class, 'update']);
-
-        // 删除一个裁判
-        // DELETE /api/ad/referee/{referee}
-        Route::delete('/{referee}', [RefereeController::class, 'destroy']);
-    });
-
+    // 你可能还有其他辅助路由，可以像这样添加
+    // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
+
+
+// --- 4. 场景 (Scenarios) 模块路由 ---
+// 如果场景管理是独立的模块，可以这样组织
+
+// 假设 ScenarioController 提供了场景列表
+// 请求: GET /api/scenarios
+Route::get('scenarios', [ScenarioController::class, 'index'])->name('scenarios.index');
 
 ?>

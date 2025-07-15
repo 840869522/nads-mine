@@ -1,58 +1,53 @@
 <?php
+// file: app/Http/Resources/AdConfigResource.php
 
 namespace App\Http\Resources;
 
-// 确保这些 Resource 类已经被正确 use
-use App\Http\Resources\TeamResource;
-use App\Http\Resources\SceneConfigResource;
-use App\Http\Resources\SceneInstanceResource; // 假设的场景实例资源
-use App\Http\Resources\AdRefereeResource;       // 假设的裁判资源
+// 你可能不再需要 AdRefereeResource，因为我们直接在模型中格式化了数据
+// use App\Http\Resources\AdRefereeResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * 【最终修复：统一前后端数据合同】
+ * 将所有返回给前端的 JSON 键名，修改为前端期望的、带 c_ 前缀的格式。
+ */
 class AdConfigResource extends JsonResource
 {
     /**
      * 将资源转换为数组。
-     *
      * @param  \Illuminate\Http\Request  $request
-     * @return array<string, mixed>
+     * @return array
      */
     public function toArray($request)
     {
-        // $this->resource 指向传递进来的 AdConfig 模型实例
         return [
-            // AdConfig 自身的核心字段
-            'id' => $this->id,
-            'drill_name' => $this->drill_name,
-            'description' => $this->description,
-            'status' => $this->status,
+            // --- AdConfig 自身属性 (保持不变，格式正确) ---
+            'c_id'                => $this->c_id,
+            'c_drill_name'        => $this->c_drill_name,
+            'c_description'       => $this->c_description,
+            'c_status'            => $this->c_status,
+            'c_start_time'        => $this->c_start_time ? $this->c_start_time->toDateTimeString() : null,
+            'c_end_time'          => $this->c_end_time ? $this->c_end_time->toDateTimeString() : null,
+            'c_create_at'         => $this->c_create_at ? $this->c_create_at->toDateTimeString() : null,
+            'c_update_at'         => $this->c_update_at ? $this->c_update_at->toDateTimeString() : null,
+            'c_red_team_id'       => $this->c_red_team_id,
+            'c_blue_team_id'      => $this->c_blue_team_id,
+            'c_scene_config_id'   => $this->c_scene_config_id,
+            'c_scene_instance_id' => $this->c_scene_instance_id,
 
-            // 时间字段
-            'start_time' => $this->start_time ? $this->start_time : null,
-            'end_time' => $this->end_time ? $this->end_time : null,
-            'created_at' => $this->created_at ? $this->created_at->toDateTimeString() : null,
-            'updated_at' => $this->updated_at ? $this->updated_at->toDateTimeString() : null,
+            // --- 关联对象 (保持不变，格式正确) ---
+            // 注意：这些键名没有 c_ 前缀，但前端的辅助函数 (findTeamNameById 等) 是基于 ID 查找的，所以这里是正确的。
+            // 如果前端需要，也可以在这里直接返回 name 等信息。
+            // 'red_team_name' => $this->whenLoaded('redTeam', fn() => $this->redTeam->c_name),
+            // 'blue_team_name' => $this->whenLoaded('blueTeam', fn() => $this->blueTeam->c_name),
 
-            // 关联关系ID，方便前端直接使用
-            'red_team_id' => $this->red_team_id,
-            'blue_team_id' => $this->blue_team_id,
-            'scene_config_id' => $this->scene_config_id,
-
-            // vvvvvvvvvv   新增的两行   vvvvvvvvvv
-            'scene_instance_id' => $this->scene_instance_id, // 新增：直接返回场景实例ID
-            // ^^^^^^^^^^   新增的两行   ^^^^^^^^^^
-
-            // 完整的关联对象，只有在控制器中通过 with() 预加载了才会包含
-            'red_team' => new TeamResource($this->whenLoaded('redTeam')),
-            'blue_team' => new TeamResource($this->whenLoaded('blueTeam')),
-            'scene_config' => new SceneConfigResource($this->whenLoaded('sceneConfig')),
-
-            // vvvvvvvvvv   新增的两行   vvvvvvvvvv
-            'scene_instance' => new SceneInstanceResource($this->whenLoaded('sceneInstance')), // 新增：返回预加载的场景实例对象
-            // ^^^^^^^^^^   新增的两行   ^^^^^^^^^^
-
-            'referees' => AdRefereeResource::collection($this->whenLoaded('referees')),
+            // 【★★★ 核心修复 ★★★】
+            // 之前：'referees' => AdRefereeResource::collection($this->whenLoaded('referees')),
+            //
+            // 现在：直接使用我们在 AdConfig 模型中创建的、为前端格式化好的 'referees_for_frontend' 访问器。
+            // 最终输出的 JSON 键名仍然是 'referees'，以匹配前端的期望，无需修改前端代码。
+            'referees'            => $this->referees_for_frontend,
         ];
     }
 }

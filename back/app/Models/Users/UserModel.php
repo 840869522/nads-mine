@@ -214,6 +214,17 @@ class UserModel extends Model{
         db::update($sql,[$id]);
     }
 
+    public static function getAllAvailableUsers(): array
+    {
+        $sql = "SELECT c_username, c_email FROM `c_users` ORDER BY c_username";
+        try {
+            return DB::select($sql);
+        } catch (\Exception $e) {
+            Log::error('[DATABASE]: FAILED TO GET ALL USERS: ' . $e->getMessage());
+            return [];
+        }
+    }
+
 }
 
 ?>

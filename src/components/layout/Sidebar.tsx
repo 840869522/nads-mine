@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { APP_NAME, USER_ROLES_CONFIG } from '../../constants';
-import { UserRole } from "../../types.ts";
 import { useThemeMode } from '../../contexts/ThemeModeContext.tsx';
 
 import Box from '@mui/material/Box';
@@ -103,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         // { to: "/scenario/envirments", label: "环境配置", icon: AdjustmentsHorizontalIcon, requiredPermission: 'SCENARIO_ENVIRONMENTS_CONFIG' },
         // --- 新增的子菜单 ---
         // { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'SCENARIO_MANAGE' }
-        { to: "/scenario/sceneinstances", label: "场景实例管理", icon: CubeTransparentIcon },
+        { to: "/scenario/scene instances", label: "场景实例管理", icon: CubeTransparentIcon },
         { to: "/scenario/manage", label: "场景管理", icon: CubeTransparentIcon, requiredPermission: 'scene_setting' }
       ]
     },
