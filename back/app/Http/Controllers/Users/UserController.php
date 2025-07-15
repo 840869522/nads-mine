@@ -9,6 +9,7 @@
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;
+    use Illuminate\Support\Facades\Log;
 
     class UserController extends Controller{
 
@@ -195,6 +196,13 @@
             }
         }
 
+        // {
+        //     "data": {
+        //         "oldPassword": "test1234",
+        //         "newPassword": "test12345"
+        //     },
+        //     "id": "test_12"
+        // }
         public function updateUserPassword(Request $req){
             $reqData = $req->json()->all();
             $token_data  = $req->input("token_data");
@@ -202,14 +210,15 @@
                 $id = $reqData["id"];
                 $data = $reqData["data"];
                 $oldPassword = $data["oldPassword"];
-                $newPassword = $data['newPasssword'];
-            } catch (Exception $_) {
+                $newPassword = $data['newPassword'];
+            } catch (Exception $e) {
+                Log::info($e->getMessage());
                 return response()->json([
                     'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                     "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            if ($token_data['user']->c_username !== $id || in_array("support_user",$token_data["permission"])){
+            if ($token_data['id'] != $id && !in_array("support_user",$token_data["permission"])){
                 return response()->json([
                     "code"=>GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                     "message"=> GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
@@ -222,7 +231,7 @@
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
-            if ($user["data"]->password != $oldPassword) {
+            if ($user["data"]->c_password != $oldPassword) {
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                     "message" => "旧密码错误"

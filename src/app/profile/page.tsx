@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ColorMap } from "@/utils/color";
 import { apiClientWithToken } from "@/utils/axios";
 import { toast } from "react-toastify";
+import CryptoJS from "crypto-js";
 
 const PersonalPage: React.FC = () => {
     const { user } = useAuth();
@@ -169,10 +170,12 @@ const PersonalPage: React.FC = () => {
     const handleSubmitPassword = async () => {
         if (!validatePassword()) return;
         if (!validateEmail()) return;
+        const newPassword = CryptoJS.SHA256(passwordData.newPassword).toString();
+        const oldPassword = CryptoJS.SHA256(passwordData.oldPassword).toString();
         apiClientWithToken.post("/back/api/support/user/update_pwd", JSON.stringify({
             data: {
-                oldPassword: passwordData.oldPassword,
-                newPassword: passwordData.newPassword,
+                oldPassword: oldPassword,
+                newPassword: newPassword,
             },
             id: user?.user.c_username
         })).then((res) => {
