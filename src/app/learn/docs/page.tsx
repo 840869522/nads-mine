@@ -1,163 +1,448 @@
 "use client";
-import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Alert from '@/components/ui/Alert';
-import { BACK_IP_PORT } from '@/constants';
-// import { MOCK_QUESTIONS } from '@/constants'; // 我们不再需要模拟数据
 
-interface QuestionPayload {
-  id: string | number; // ID可能是数字或字符串
-  text: string;
-  type: 'short-answer' | 'multiple-choice';
-  options?: string[];
+import { apiClientWithToken } from "@/utils/axios";
+import { Box, Paper, Typography, Alert as MuiAlert, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from "@mui/icons-material/Edit";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
+import DeleteIcon from "@mui/icons-material/Delete";
+import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
+import { Array2String, String2Array } from "@/utils/string";
+import { SnippetFolderRounded } from "@mui/icons-material";
+import { ColorMap } from "@/utils/color";
+import { toast } from "react-toastify";
+
+type Order = `asc` | `desc`;
+type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
+
+// 后续支持 批量导入
+
+const TypeMap = {
+  1: "单选",
+  2: "多选",
+  3: "判断",
+  4: "简答"
 }
 
-const AddQuestionPage: React.FC = () => {
-  const [allQuestions, setAllQuestions] = useState<QuestionPayload[]>([]); // 初始为空数组
-  const [questionText, setQuestionText] = useState('');
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const QuestionPage: React.FC = () => {
 
-  // 新增: 在页面加载时从API获取问题列表
+  const [questions, setQuestions] = useState<QuestionDisplayItem[]>([]);
+  const [questionsCount, setQuestionsCount] = useState<number>(0);
+  const [page, setPage] = useState<number>(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(5);
+  const [order, setOrder] = useState<Order>("asc");
+  const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
+  const [questionToEdit, setQuesionToEdit] = useState<QuestionDisplayItem | null>(null);
+
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | "error", text: string } | null>(null);
+  const [tableLaoding, setTableLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState({ data: "", flag: false });
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [questionToDelete, setQuesionToDelete] = useState<QuestionDisplayItem | null>(null);
+  const [isQuestionsModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
+
   useEffect(() => {
-    fetch(`${BACK_IP_PORT}/api/questions`)
-        .then(res => res.json())
-        .then(data => setAllQuestions(data))
-        .catch(err => console.error("获取初始问题列表失败:", err));
-  }, []);
+    getQuestionData(1, rowsPerPage);
+  }, [])
 
-  // 已改造: 这个函数现在会调用后端API
-  const handleAddSingleQuestion = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!questionText.trim()) {
-      setStatusMessage({ type: 'error', message: '问题文本不能为空！' });
-      return;
+  useEffect(() => {
+    if (page === 1 && rowsPerPage == 5)
+      return
+    else {
+      if (searchTerm.data.trim() && searchTerm.flag)
+        getQuestionDataByName(page, rowsPerPage, searchTerm.data);
+      else
+        getQuestionData(page, rowsPerPage);
     }
+  }, [page, rowsPerPage, searchTerm]);
 
-    setIsSubmitting(true);
-    setStatusMessage(null);
 
+  const getQuestionData = (page: number, pagesize: number) => {
+    setTableLoading(true);
+    apiClientWithToken.post(`/back/api/study/test/question_list`, JSON.stringify({
+      page: page,
+      pageSize: pagesize
+    })).then(res => {
+      if (res.data.code === 200) {
+        setQuestions(res.data.data.data);
+        setQuestionsCount(res.data.data.count);
+      } else {
+        setQuestions([]);
+        setQuestionsCount(0);
+      }
+    }).finally(() => {
+      setTimeout(() => {
+        setTableLoading(false);
+      }, 300);
+    })
+  }
+
+  const getQuestionDataByName = (page: number, pagesize: number, searchName: string) => {
+    setTableLoading(true);
+    apiClientWithToken.post(`/back/api/study/test/question_list`, JSON.stringify({
+      page: page,
+      pageSize: pagesize
+    })).then(res => {
+      if (res.data.code === 200) {
+        setQuestions(res.data.data.data);
+        setQuestionsCount(res.data.data.count);
+      } else {
+        setQuestions([]);
+        setQuestionsCount(0);
+      }
+    }).finally(() => {
+      setTimeout(() => {
+        setTableLoading(false);
+      }, 300);
+    })
+  }
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
+    setPage(1);
+  };
+
+  const handleSearchSubmit = async () => {
+    setTableLoading(true);
     try {
-      const response = await fetch(`${BACK_IP_PORT}/api/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: questionText }),
-      });
+      const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
+        page: 1,
+        pagesize: rowsPerPage,
+        name: searchTerm.data
+      }));
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '添加到数据库失败');
+      if (res.data.code === 200) {
+        setQuestions(res.data.data.data);
+        setQuestionsCount(res.data.data.count);
+        setPage(1);
+      } else {
+        setQuestions([]);
+        toast.error('搜索权限时发生错误', {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
+        setQuestionsCount(0);
       }
-
-      const createdQuestion = await response.json();
-      setAllQuestions((prev) => [...prev, createdQuestion]);
-      setStatusMessage({ type: 'success', message: `问题 "${createdQuestion.text}" 已成功存入数据库！` });
-      setQuestionText('');
-    } catch (err) {
-      setStatusMessage({ type: 'error', message: (err as Error).message });
     } finally {
-      setIsSubmitting(false);
+      setTableLoading(false);
     }
   };
 
-  // 未改动: 批量上传功能保持原样
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-  const handleFileUpload = () => {
-    if (!selectedFile) {
-      setStatusMessage({ type: 'error', message: '请先选择一个文件！' });
-      return;
-    }
-    // ...批量上传的纯前端逻辑保持不变...
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const newQuestions: QuestionPayload[] = JSON.parse(content);
-        if (!Array.isArray(newQuestions)) {
-          throw new Error('JSON文件内容必须是一个数组。');
-        }
-        setAllQuestions((prev) => [...prev, ...newQuestions]);
-        setStatusMessage({ type: 'success', message: `成功从文件导入 ${newQuestions.length} 个问题！` });
-        setSelectedFile(null);
-      } catch (err) {
-        console.error('Failed to parse or process file:', err);
-        setStatusMessage({ type: 'error', message: '文件解析失败，请确保它是格式正确的JSON数组。' });
+  const handleAddQuestionClick = () => {
+    setIsQuestionModalOpen(true);
+    setQuesionToEdit(null);
+  }
+
+  const confirmDeleteQuestion = () => {
+    setIsConfirmDeleteOpen(false);
+    apiClientWithToken.post("/back/api/study/test/question_del", JSON.stringify({ id: questionToDelete?.c_id })).then(res => {
+      if (res.data.code === 200) {
+        toast.success(`删除题目 ${questionToDelete?.c_id} 成功`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
+        setPage(1);
+        getQuestionData(1, rowsPerPage);
+      } else {
+        toast.error(`删除题目 ${questionToDelete?.c_id} 失败`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
       }
-    };
-    reader.readAsText(selectedFile);
+    });
   };
 
-  // UI部分保持不变
-  return (
-      <div className="space-y-8">
-        <h1 className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">题库管理</h1>
-        <Card title="增加新问题">
-          <form onSubmit={handleAddSingleQuestion} className="border-b dark:border-neutral-700 pb-6 mb-6">
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="questionText" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  问题文本（手动添加）
-                </label>
-                <textarea
-                    id="questionText"
-                    value={questionText}
-                    onChange={(e) => setQuestionText(e.target.value)}
-                    rows={3}
-                    className="w-full p-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-neutral-700"
-                    placeholder="在此输入新的问题..."
-                    disabled={isSubmitting}
-                />
-              </div>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? '提交中...' : '确认添加'}
-                </Button>
-              </div>
-            </div>
-          </form>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="fileUpload" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                从文件批量导入（JSON格式）
-              </label>
-              <input
-                  id="fileUpload"
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileChange}
-                  className="w-full text-sm text-neutral-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary-50 dark:file:bg-primary-700 file:text-primary-700 dark:file:text-primary-200 hover:file:bg-primary-100 dark:hover:file:bg-primary-600"
-              />
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={handleFileUpload} disabled={!selectedFile}>
-                上传文件
-              </Button>
-            </div>
-          </div>
-          {statusMessage && (
-              <div className="mt-6">
-                <Alert type={statusMessage.type} message={statusMessage.message} onClose={() => setStatusMessage(null)} />
-              </div>
-          )}
-        </Card>
-        <Card title={`当前题库 (${allQuestions.length} 条)`}>
-          <ul className="space-y-2 max-h-96 overflow-y-auto">
-            {allQuestions.map((q, index) => (
-                <li key={q.id || index} className="p-2 border-b dark:border-neutral-700 text-sm">
-                  <span className="font-mono text-xs mr-2 text-neutral-500">{q.id.toString()}</span>
-                  <span className="text-neutral-800 dark:text-neutral-200">{q.text}</span>
-                </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-  );
-};
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage + 1);
+  };
 
-export default AddQuestionPage;
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1);
+  };
+
+  const handleEditQuestionClick = (question: QuestionDisplayItem) => {
+    setQuesionToEdit(question);
+    setIsQuestionModalOpen(true);
+  };
+
+  const handelDeleteQuestionClick = (question: QuestionDisplayItem) => {
+    setIsConfirmDeleteOpen(true);
+    setQuesionToDelete(question);
+  }
+
+
+  const handelSaveQuestion = (data: QuestionFormData, isNew: boolean) => {
+    var requestData = {
+      id: data.id,
+      question: data.question,
+      course_id: data.courseName,
+      answer: data.type === 4 ? "*" : data.answer,
+      type: data.type,
+      tag: Array2String(data.tags),
+      content: data.options,
+    }
+    console.log(requestData);
+    if (isNew) {
+      apiClientWithToken.post("/back/api/study/test/question_add", JSON.stringify(requestData)).then(res => {
+        if (res.data.code === 200) {
+          setQuestionsCount(prev => prev + 1)
+          toast.success(`添加题目 ${requestData.id} ${res.data.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            position: "top-right"
+          });
+        } else {
+          toast.error(`添加题目 ${requestData.id} ${res.data.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            position: "top-right"
+          });
+        }
+      });
+    } else {
+      apiClientWithToken.post("/back/api/study/test/question_up", JSON.stringify(requestData)).then(res => {
+        if (res.data.code === 200) {
+          const newQuestion = questions.map(item => item.c_id === data.id ? {
+            c_id: requestData.id,
+            c_question: requestData.question,
+            c_type: requestData.type,
+            c_course_id: requestData.course_id,
+            c_tag: requestData.tag,
+            c_answer: requestData.answer,
+            c_create_at: new Date().toLocaleDateString(),
+            connect: requestData.content
+          } : item);
+          setQuestions(newQuestion);
+          toast.success(`修改题目 ${requestData.id} ${res.data.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            position: "top-right"
+          });
+        } else {
+          toast.error(`修改题目 ${requestData.id} ${res.data.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            position: "top-right"
+          });
+        }
+      })
+    }
+  }
+
+  const filteredAndSortedQuestions = useMemo(() => {
+    let processedpermissions = [...questions].sort((a, b) => {
+      const valA = a[orderBy];
+      const valB = b[orderBy];
+      if (valB < valA) return order === 'asc' ? 1 : -1;
+      if (valB > valA) return order === 'asc' ? -1 : 1;
+      return 0;
+    });
+    return processedpermissions;
+  }, [questions, order, orderBy]);
+
+  const handleRequestSort = (property: SortableQuestionsKeys) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  return (
+    <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
+      <Typography variant="h4" component={'h1'} gutterBottom>
+        题库管理
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        此页面用于管理平台试题。
+      </Typography>
+
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, flexWrap: "wrap", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+          <TextField
+            variant="outlined"
+            size="small"
+            placeholder="搜索权限..."
+            value={searchTerm.data}
+            onChange={handleSearchChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSearchSubmit();
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+              endAdornment: tableLaoding ? (
+                <CircularProgress size={20} />
+              ) : null
+            }}
+            sx={{ minWidth: { sm: 300 } }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleSearchSubmit}
+            disabled={tableLaoding}
+            sx={{ ml: 1, minWidth: 80 }}
+          >
+            搜索
+          </Button>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddCircleOutlineIcon />}
+          onClick={handleAddQuestionClick}
+        >
+          添加试题
+        </Button>
+      </Box>
+      <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
+        <Table aria-label="试题列表">
+          <TableHead sx={{ bgcolor: "action.focus" }}>
+            <TableRow>
+              {[
+                { id: 'c_id', label: '试题id' },
+                { id: 'c_course_id', label: '课程id' },
+                { id: "c_question", label: "题干" },
+                { id: "c_type", label: "类型" },
+                { id: "c_tag", label: "标签" },
+                { id: "c_create_at", label: "创建时间" }
+              ].map((headCell) => (
+                <TableCell
+                  key={headCell.id}
+                  sortDirection={orderBy === headCell.id ? order : false}
+                >
+                  <TableSortLabel
+                    active={orderBy === headCell.id}
+                    direction={orderBy === headCell.id ? order : 'asc'}
+                    onClick={() => handleRequestSort(headCell.id as SortableQuestionsKeys)}
+                  >
+                    {headCell.label}
+                  </TableSortLabel>
+                </TableCell>
+              ))}
+              <TableCell align="center">操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {
+              tableLaoding ? (
+                <TableRow>
+                  <TableCell colSpan={7} align='center' sx={{ height: "40vh" }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : filteredAndSortedQuestions.length > 0 ?
+                filteredAndSortedQuestions.map(question => (
+                  <TableRow key={question.c_id} hover>
+                    <TableCell sx={{ fontWeight: "medium" }}>
+                      {question.c_id}
+                    </TableCell>
+                    <TableCell>
+                      {question.c_course_id}
+                    </TableCell>
+                    <TableCell>
+                      {question.c_question}
+                    </TableCell>
+                    <TableCell>
+                      {TypeMap[question.c_type]}
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                        {String2Array(question.c_tag).map((role, index) => (
+                          <Chip
+                            key={role}
+                            label={role}
+                            size="small"
+                            color={ColorMap[index % ColorMap.length]}
+                            sx={{ m: 0.5 }}
+                          />
+                        ))}
+                      </Box>
+
+                    </TableCell>
+                    <TableCell>
+                      {question.c_create_at}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="编辑权限">
+                        <IconButton size="small" onClick={() => handleEditQuestionClick(question)} color="primary">
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="删除权限">
+                        <IconButton size="small" onClick={() => handelDeleteQuestionClick(question)} color="error" >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                      <Typography color="text.secondary">没有找到匹配的权限。</Typography>
+                    </TableCell>
+                  </TableRow>
+                )
+            }
+          </TableBody>
+        </Table>
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25]}
+          component="div"
+          count={questionsCount}
+          rowsPerPage={rowsPerPage}
+          page={page - 1}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="每页行数:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`}
+        />
+      </TableContainer>
+
+      {/* 编辑试题modal */}
+
+      <QuestionModalForm
+        open={isQuestionsModalOpen}
+        onSave={handelSaveQuestion}
+        onClose={() => setIsQuestionModalOpen(false)}
+        initialQuestion={questionToEdit}
+      />
+
+
+      {questionToDelete && (
+        <ConfirmActionDialog
+          open={isConfirmDeleteOpen}
+          onClose={() => setIsConfirmDeleteOpen(false)}
+          title="确认删除题目"
+          message={`您确定要删除权限 "${questionToDelete?.c_id}" 吗？此操作无法撤销。`}
+          onConfirm={confirmDeleteQuestion}
+        />
+      )}
+    </Paper >
+  );
+}
+
+export default QuestionPage;

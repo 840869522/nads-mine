@@ -4,6 +4,7 @@ namespace App\RunTool;
 
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 命令行执行服务
@@ -11,7 +12,286 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
  * 封装所有通过命令行与系统（如 Docker, OVS）交互的逻辑。
  */
 class CommandLineService
-{
+{   
+    /**
+     * 需要定义脚本位置全局
+     * 通过调用外部Shell脚本创建虚拟机并将其连接到指定的交换机。
+     *
+     * @param array $options 包含创建虚拟机所需参数的关联数组。
+     * - 'id': 数据库自增ID (用于脚本的num参数)
+     * - 'image': 镜像名称
+     * - 'ip': 虚拟机的IP地址
+     * - 'scene_instance_id': 场景实例ID
+     * - 'flag': 靶机flag, 或 "NULL" 字符串
+     * - 'switch_name': 【新增】要连接的OVS交换机的名称
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function createVm(array $options): void
+    {
+        // 1. 使用 base_path() 生成脚本的绝对路径
+        // 1. 使用 app_path() 替代 base_path() 来生成正确的脚本绝对路径
+        $scriptPath = app_path('RunTool/vmscript/newvm_switch.sh');
+        // 2. 准备6个命令行参数
+        $args = [
+            $options['id'],
+            $options['image'],
+            $options['ip'],
+            $options['scene_instance_id'],
+            $options['flag'] ?? 'NULL',
+            $options['switch_name'], // 新增第6个参数：交换机名称
+        ];
+        
+        // 3. 准备并执行命令
+        $command = array_merge([$scriptPath], $args);
+        Log::info('Executing VM creation shell script (6-param version): ' . implode(' ', $command));
+        
+        $process = new Process($command);
+        $process->setTimeout(360);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $errorOutput = $process->getErrorOutput() ?: $process->getOutput();
+            Log::error("Failed to execute VM creation script for vm '{$options['id']}'", [
+                'error' => $errorOutput,
+            ]);
+            throw new ProcessFailedException($process);
+        }
+        
+        Log::info("VM creation script for vm '{$options['id']}' executed successfully.", [
+            'output' => $process->getOutput()
+        ]);
+    }
+    /**
+     * 
+     * 使用veth pair连接两个OVS交换机。
+     *
+     * @param string $switch1Name 第一个交换机的名称
+     * @param string $switch2Name 第二个交换机的名称
+     * @return void
+     * @throws ProcessFailedException
+     */
+    public function connectSwitchToSwitch(string $switch1Name, string $switch2Name): void
+    {
+        // 1. 根据两个交换机的名称，生成veth pair的端口名
+        // 为了确保名称符合Linux接口规范且唯一，我们使用简化的名称加哈希值
+        $s1Hash = substr(md5($switch1Name), 0, 4);
+        $s2Hash = substr(md5($switch2Name), 0, 4);
+        $port1 = "veth-{$s1Hash}-{$s2Hash}";
+        $port2 = "veth-{$s2Hash}-{$s1Hash}";
+
+        // 2. 创建veth pair
+        $commandCreateVeth = ['sudo', 'ip', 'link', 'add', $port1, 'type', 'veth', 'peer', 'name', $port2];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandCreateVeth));
+        $processCreateVeth = new Process($commandCreateVeth);
+        $processCreateVeth->run();
+        if (!$processCreateVeth->isSuccessful()) {
+            // 如果接口已存在，这可能不是一个致命错误，先记录日志
+            Log::warning("Could not create veth pair {$port1}<->{$port2}. Maybe it already exists?", [
+                'error' => $processCreateVeth->getErrorOutput()
+            ]);
+        }
+
+        // 3. 将veth pair的两端分别添加到两个交换机中
+        $commandAddPort1 = ['sudo', 'ovs-vsctl', 'add-port', $switch1Name, $port1];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandAddPort1));
+        (new Process($commandAddPort1))->mustRun();
+
+        $commandAddPort2 = ['sudo', 'ovs-vsctl', 'add-port', $switch2Name, $port2];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandAddPort2));
+        (new Process($commandAddPort2))->mustRun();
+
+
+        // 4. 启动这两个新创建的端口
+        $commandLinkUp1 = ['sudo', 'ip', 'link', 'set', $port1, 'up'];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp1));
+        (new Process($commandLinkUp1))->mustRun();
+
+        $commandLinkUp2 = ['sudo', 'ip', 'link', 'set', $port2, 'up'];
+        Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp2));
+        (new Process($commandLinkUp2))->mustRun();
+    }
+    
+    /**
+     * 
+     * 将一个容器连接到一个OVS交换机上，严格最新的命名规则。
+     *
+     * @param string      $switchName      参数1: 交换机的名称
+     * @param string      $containerName   参数3: 容器的名称
+     * @param string|null $ipAddress       参数4: 分配给容器的IP地址
+     *
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function connectContainerToSwitch(string $switchName, string $containerName, ?string $ipAddress = null): void
+    {
+        // === 生成参数2：新生成的pair名称 ===
+
+        // 1. 处理交换机名称部分
+        $baseSwitchName = explode('_', $switchName)[0];
+        $switchPrefix = substr($baseSwitchName, 0, 2); // 交换机前两个字符
+        $switchSuffix = substr($baseSwitchName, -2);   // 交换机最后一个字符
+        $switchPart = $switchPrefix . $switchSuffix;
+
+        // 2. 处理容器名称部分
+        $baseContainerName = explode('_', $containerName)[0];
+        $containerPrefix = substr($baseContainerName, 0, 2); // 容器前两个字符
+        $containerSuffix = substr($baseContainerName, -2);   // 容器最后一个字符
+        $containerPart = $containerPrefix . $containerSuffix;
+        
+        // 3. 交换机唯一哈希部分
+        $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
+
+        // 4. 拼接成最终的配对名称 (e.g., "SwhCo1da10")
+        $pairName = $switchPart . $containerPart . $switchHash;
+
+        // === 构建严格的四参数命令 ===
+        $command = [
+            'sudo',
+            'ovs-docker',
+            'add-port',
+            $switchName,      // 参数1: 交换机名称
+            $pairName,        // 参数2: 新生成的pair名称
+            $containerName,   // 参数3: 容器名称
+        ];
+
+        // 添加可选的IP地址参数
+        if ($ipAddress) {
+            $command[] = '--ipaddress=' . $ipAddress; // 参数4
+        }
+
+        Log::info('Executing OVS network connection command (V4 Rule): ' . implode(' ', $command));
+
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            Log::error("Failed to connect container '{$containerName}' to switch '{$switchName}'", [
+                'error' => $process->getErrorOutput(),
+                'output' => $process->getOutput(),
+            ]);
+            throw new ProcessFailedException($process);
+        }
+    }
+
+    
+    /**
+     * 
+     * 删除一个 OVS 网桥。
+     *
+     * @param string $switchName 要删除的网桥的名称。
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败（且不是因为网桥本就不存在）。
+     */
+    public function deleteSwitch(string $switchName): void
+    {
+        $command = ['sudo', 'ovs-vsctl', 'del-br', $switchName];
+        Log::info('Executing OVS command: ' . implode(' ', $command));
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            // 如果错误是因为网桥已经不存在，我们不认为这是一个致命错误，
+            // 只记录一个警告即可。对于其他错误，则抛出异常。
+            $errorOutput = $process->getErrorOutput();
+            if (str_contains($errorOutput, 'no bridge named')) {
+                Log::warning("尝试删除一个不存在的 OVS 网桥: {$switchName}");
+            } else {
+                 throw new ProcessFailedException($process);
+            }
+        }
+    }
+    /**
+     * 创建一个 OVS (Open vSwitch) 网桥。
+     *
+     * @param string      $switchName 要创建的交换机的名称。
+     * @param string|null $controller 可选，外部 SDN 控制器的 "ip:port"。
+     * @param bool        $stp        可选，是否为该网桥开启 STP (生成树协议)。
+     * @return void
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function createSwitch(string $switchName, ?string $controller = null, bool $stp = false): void
+    {
+        // 1. 构建基础的 'ovs-vsctl add-br' 命令
+        $command = ['sudo', 'ovs-vsctl', 'add-br', $switchName];
+
+        // 2. 如果需要，添加用于配置 STP 和 Controller 的参数
+        // 注意: '--' 用于明确告诉 ovs-vsctl 'add-br' 命令的选项结束了，后面是 'set' 命令。
+        if ($stp || $controller) {
+            $command[] = '--';
+
+            // 3. 添加 STP 配置
+            if ($stp) {
+                $command[] = 'set';
+                $command[] = 'bridge';
+                $command[] = $switchName;
+                $command[] = 'stp_enable=true';
+            }
+
+            // 4. 添加 Controller 配置
+            if ($controller) {
+                $command[] = 'set-controller';
+                $command[] = $switchName;
+                $command[] = 'tcp:' . $controller;
+            }
+        }
+
+        Log::info('Executing OVS command: ' . implode(' ', $command));
+
+        // 5. 执行命令
+        $process = new Process($command);
+        $process->run();
+
+        // 6. 检查是否成功
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+        // 2. 为新的 OVS 网桥定义一个 libvirt 网络
+        $networkXmlPath = "/tmp/{$switchName}-net.xml";
+        $networkXmlContent = <<<XML
+<network>
+  <name>{$switchName}</name>
+  <forward mode='bridge'/>
+  <bridge name='{$switchName}'/>
+  <virtualport type='openvswitch'/>
+</network>
+XML;
+
+        // 写入临时的 XML 配置文件
+        file_put_contents($networkXmlPath, $networkXmlContent);
+
+        // 3. 使用 virsh 命令定义、自启动并启动网络
+        // 定义网络，如果网络已存在则忽略错误
+        $netDefineCmd = ['sudo', 'virsh', 'net-define', $networkXmlPath];
+        Log::info('Executing libvirt command: ' . implode(' ', $netDefineCmd));
+        $netDefineProcess = new Process($netDefineCmd);
+        $netDefineProcess->run();
+        if (!$netDefineProcess->isSuccessful() && !str_contains($netDefineProcess->getErrorOutput(), 'already exists')) {
+            throw new ProcessFailedException($netDefineProcess);
+        }
+
+        // 设置网络为自启动，如果已配置则忽略错误
+        $netAutostartCmd = ['sudo', 'virsh', 'net-autostart', $switchName];
+        Log::info('Executing libvirt command: ' . implode(' ', $netAutostartCmd));
+        $netAutostartProcess = new Process($netAutostartCmd);
+        $netAutostartProcess->run();
+        if (!$netAutostartProcess->isSuccessful() && !str_contains($netAutostartProcess->getErrorOutput(), 'already configured')) {
+            throw new ProcessFailedException($netAutostartProcess);
+        }
+
+        // 启动网络，如果已激活则忽略错误
+        $netStartCmd = ['sudo', 'virsh', 'net-start', $switchName];
+        Log::info('Executing libvirt command: ' . implode(' ', $netStartCmd));
+        $netStartProcess = new Process($netStartCmd);
+        $netStartProcess->run();
+        if (!$netStartProcess->isSuccessful() && !str_contains($netStartProcess->getErrorOutput(), 'already active')) {
+            throw new ProcessFailedException($netStartProcess);
+        }
+
+        // 4. 清理临时的 XML 文件
+        unlink($networkXmlPath);
+    }
+
     /**
      * 通过执行 `docker run` 命令创建并启动一个容器。
      *
@@ -22,7 +302,7 @@ class CommandLineService
     public function createContainer(array $options): string
     {
         // 1. 构建 docker run 命令数组
-        $command = ['docker', 'run', '-d', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
+        $command = ['sudo', 'docker', 'run', '-itd', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
 
         // a. 添加容器名称
         if (!empty($options['name'])) {
@@ -51,7 +331,7 @@ class CommandLineService
         }
         $command[] = $options['image'];
 
-        \Log::info('Executing Docker command: ' . implode(' ', $command));
+        Log::info('Executing Docker command: ' . implode(' ', $command));
 
         // 2. 执行命令
         $process = new Process($command);
@@ -79,8 +359,8 @@ class CommandLineService
      */
     public function getContainerPid(string $containerId): int
     {
-        // 使用 Go 模板来精确提取 .State.Pid 字段
-        $command = ['docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
+        
+        $command = ['sudo', 'docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
         $process = new Process($command);
         $process->run();
 
@@ -94,4 +374,166 @@ class CommandLineService
         }
         return $pid;
     }
+    /**
+     * 
+     * 列出系统上所有的 OVS 网桥。
+     *
+     * @return array 返回一个包含所有网桥名称的数组。
+     * @throws ProcessFailedException 如果命令执行失败。
+     */
+    public function listSwitches(): array
+    {
+        $command = ['sudo', 'ovs-vsctl', 'list-br'];
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        // 将输出的字符串按行分割，并过滤掉空行
+        $output = trim($process->getOutput());
+        return empty($output) ? [] : explode("\n", $output);
+    }
 }
+
+// // ```json
+// {
+//   "edges": [
+//     {
+//       "id": "edge-1751875313932-v6hq4",
+//       "config": {
+//         "sourceIp": "10.0.6.1/24",
+//         "targetIp": "10.0.6.2/24",
+//         "sourceInterface": "eth0",
+//         "targetInterface": "eth0"
+//       },
+//       "source": "container-1751875299803-ueiff",
+//       "target": "switch-1751875302955-gawdf"
+//     },
+//     {
+//       "id": "edge-1751875315292-yoiwe",
+//       "config": {
+//         "sourceIp": "10.0.7.1/24",
+//         "targetIp": "10.0.7.2/24",
+//         "sourceInterface": "eth0",
+//         "targetInterface": "eth0"
+//       },
+//       "source": "container-1751875300573-bbb2r",
+//       "target": "switch-1751875302955-gawdf"
+//     },
+//     {
+//       "id": "edge-1751875316471-prrdn",
+//       "config": {
+//         "sourceIp": "10.0.8.1/24",
+//         "targetIp": "10.0.8.2/24",
+//         "sourceInterface": "eth0",
+//         "targetInterface": "eth0"
+//       },
+//       "source": "container-1751875300573-bbb2r",
+//       "target": "switch-1751875304435-pptzs"
+//     },
+//     {
+//       "id": "edge-1751875317613-obzw1",
+//       "config": {
+//         "sourceIp": "10.0.9.1/24",
+//         "targetIp": "10.0.9.2/24",
+//         "sourceInterface": "eth0",
+//         "targetInterface": "eth0"
+//       },
+//       "source": "container-1751875302012-jh1zr",
+//       "target": "switch-1751875304435-pptzs"
+//     }
+//   ],
+//   "nodes": [
+//     {
+//       "x": 152.36932373046875,
+//       "y": 345.1477355957031,
+//       "id": "container-1751875299803-ueiff",
+//       "type": "container",
+//       "label": "Container-1",
+//       "config": {
+//         "env": null,
+//         "deviceName": "容器",
+//         "dockerImage": "mysql:latest",
+//         "portMappings": "80:80"
+//       }
+//     },
+//     {
+//       "x": 753.3693237304688,
+//       "y": 342.1477355957031,
+//       "id": "container-1751875300573-bbb2r",
+//       "type": "container",
+//       "label": "Container-2",
+//       "config": {
+//         "env": null,
+//         "deviceName": "容器",
+//         "dockerImage": "mysql:latest",
+//         "portMappings": "80:80"
+//       }
+//     },
+//     {
+//       "x": 1347.369384765625,
+//       "y": 343.1477355957031,
+//       "id": "container-1751875302012-jh1zr",
+//       "type": "container",
+//       "label": "Container-3",
+//       "config": {
+//         "env": null,
+//         "deviceName": "容器",
+//         "dockerImage": "mysql:latest",
+//         "portMappings": "80:80"
+//       }
+//     },
+//     {
+//       "x": 454.3693237304687,
+//       "y": 151.14773559570312,
+//       "id": "switch-1751875302955-gawdf",
+//       "type": "switch",
+//       "label": "Switch-1",
+//       "config": {
+//         "deviceName": "交换机",
+//         "dockerImage": "switch-os:latest",
+//         "portMappings": null
+//       }
+//     },
+//     {
+//       "x": 1045.3693237304688,
+//       "y": 145.14773559570312,
+//       "id": "switch-1751875304435-pptzs",
+//       "type": "switch",
+//       "label": "Switch-2",
+//       "config": {
+//         "deviceName": "交换机",
+//         "dockerImage": "switch-os:latest",
+//         "portMappings": null
+//       }
+//     }
+//   ]
+// }
+// ```
+// [
+//     // 1. 需要创建的容器列表
+//     'containers' => [
+//         ['id' => 'container-1751975196074-gi2o2', 'label' => 'Container-1', 'image' => 'mysql:latest', 'portMappings' => [['hostPort' => '80', 'containerPort' => '80']], 'env' => []],
+//         ['id' => 'container-1751975196797-h69nc', 'label' => 'Container-2', 'image' => 'mysql:latest', 'portMappings' => [['hostPort' => '80', 'containerPort' => '80']], 'env' => []],
+//         ['id' => 'container-1751975204415-99uz5', 'label' => 'Container-3', 'image' => 'mysql:latest', 'portMappings' => [['hostPort' => '80', 'containerPort' => '80']], 'env' => []],
+//         ['id' => 'container-1751975206352-hh2hw', 'label' => 'Container-4', 'image' => 'mysql:latest', 'portMappings' => [['hostPort' => '80', 'containerPort' => '80']], 'env' => []]
+//     ],
+
+//     // 2. 需要创建的交换机列表
+//     'switches' => [
+//         ['id' => 'switch-1751975197803-a4pb5', 'label' => 'Switch-1'],
+//         ['id' => 'switch-1751975209125-2e2xg', 'label' => 'Switch-2']
+//     ],
+
+//     // 3. 需要建立的网络连接列表
+//     'connections' => [
+//         // ... 这里会包含5条详细的连接信息 ...
+//         [
+//             'source' => ['id' => 'switch-1751975197803-a4pb5', 'type' => 'switch', 'label' => 'Switch-1', 'ip' => '10.0.4.1/24', 'interface' => 'eth0'],
+//             'target' => ['id' => 'container-1751975196074-gi2o2', 'type' => 'container', 'label' => 'Container-1', 'ip' => '10.0.4.2/24', 'interface' => 'eth0']
+//         ],
+//         // ... 其他4条连接
+//     ]
+// ]

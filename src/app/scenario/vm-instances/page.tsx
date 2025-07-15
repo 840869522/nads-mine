@@ -29,7 +29,6 @@ import {
     Pause as PauseIcon,
     RestartAlt as ResetIcon,
     PowerSettingsNew as ForceOffIcon,
-    Visibility as ConsoleIcon,
     DesktopWindows as VncIcon,
     Terminal as SshIcon,
     LaptopWindows as RdpIcon,
@@ -46,7 +45,6 @@ import StoragePanel from "@/components/vm/StoragePanel";
 import NetworkPanel from "@/components/vm/NetworkPanel";
 import EventsPanel from "@/components/vm/EventsPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
-import GuacModal from "@/components/vm/GuacModal";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -71,7 +69,7 @@ function useVmInstances(forceRef?: React.MutableRefObject<number>) {
         isLoading,
         isValidating,
         mutate, // 若后面需要手动刷新可用
-    } = useSWR<VmInstance[]>("/api/php/vms", fetcher, {
+    } = useSWR<VmInstance[]>("/back/api/vms", fetcher, {
         // 10 s 内认为数据“新鲜”，避免短时间重复请求
         dedupingInterval: 10_000,
         keepPreviousData: true,
@@ -124,11 +122,6 @@ export default function VmPage() {
     );
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
-    const [guacInfo, setGuacInfo] = React.useState<{
-        type: 'ssh' | 'rdp' | 'vnc';
-        host: string;
-        port: number;
-    } | null>(null);
 
     /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
     React.useEffect(() => {
@@ -178,7 +171,7 @@ export default function VmPage() {
         // 动作触发即刻进入快速轮询模式
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/api/php/vms/${current.id}/actions/${action}`, {
+            const res = await fetch(`/back/api/vms/${current.id}/actions/${action}`, {
                 method: "POST",
             });
             if (!res.ok) {
@@ -187,9 +180,9 @@ export default function VmPage() {
             }
             const result = (await res.json()) as { state?: string };
             await mutate();
-            await globalMutate(`/api/php/vms/${current.id}`);
+            await globalMutate(`/back/api/vms/${current.id}`);
             if (result.state !== "shutoff") {
-                await globalMutate(`/api/php/vms/${current.id}/metrics`);
+                await globalMutate(`/back/api/vms/${current.id}/metrics`);
             }
         } catch (e: any) {
             alert(e.message || "Operation failed");
@@ -201,20 +194,42 @@ export default function VmPage() {
     const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
         if (!current) return;
         try {
-            const res = await fetch(`/api/php/vms/${current.name}/guac`);
+            const res = await fetch(`/back/api/vms/${current.name}/guac?method=${proto}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
+
             const port =
                 proto === 'ssh'
                     ? info.ssh_port
                     : proto === 'rdp'
                     ? info.rdp_port
                     : info.vnc_port;
-            setGuacInfo({ type: proto, host: info.host, port: Number(port) });
+            const url = `/index.html?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
+            //const url = `/guac?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
+            window.open(url, '_blank');
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
         setActionAnchor(null);
+    };
+
+    const handleDelete = async () => {
+        if (!current) return;
+        if (!window.confirm(`确定删除虚拟机 ${current.name}？`)) return;
+        setActionLoading(true);
+        try {
+            const res = await fetch(`/back/api/vms/${current.id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || res.statusText);
+            }
+            await mutate();
+            setCurrent(null);
+        } catch (e: any) {
+            alert(e.message || 'Failed to delete');
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     return (
@@ -380,9 +395,11 @@ export default function VmPage() {
                             size="small"
                             variant="outlined"
                             sx={{ ml: "auto" }}
-                            startIcon={<ConsoleIcon />}
+                            color="error"
+                            disabled={actionLoading}
+                            onClick={handleDelete}
                         >
-                            控制台
+                            删除
                         </Button>
                         <Button
                             size="small"
@@ -400,7 +417,8 @@ export default function VmPage() {
                         onChange={(_, v) => setTab(v)}
                         sx={{ borderBottom: 1, borderColor: "divider", pl: 2 }}
                     >
-                        {["概览", "快照", "存储", "网络", "事件"].map((l) => (
+                        {/*{["概览", "快照", "存储", "网络", "事件"].map((l) => (*/}
+                        {["概览"].map((l) => (
                             <Tab key={l} label={l} />
                         ))}
                     </Tabs>
@@ -408,10 +426,12 @@ export default function VmPage() {
                     {/* --- Panels --- */}
                     <Box sx={{ flex: 1, p: 2 }}>
                         {tab === 0 && current && <OverviewPanel vmId={current.id} />}
+                        {/*
                         {tab === 1 && current && <SnapshotsPanel vmId={current.id} />}
                         {tab === 2 && current && <StoragePanel vmId={current.id} />}
                         {tab === 3 && current && <NetworkPanel vmId={current.id} />}
                         {tab === 4 && current && <EventsPanel vmId={current.id} />}
+                        */}
                     </Box>
                 </Box>
             )}
@@ -444,15 +464,6 @@ export default function VmPage() {
                 <CircularProgress color="inherit" />
             </Backdrop>
             <CreateVmModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => mutate()} />
-            {guacInfo && (
-                <GuacModal
-                    open
-                    onClose={() => setGuacInfo(null)}
-                    type={guacInfo.type}
-                    hostname={guacInfo.host}
-                    port={guacInfo.port}
-                />
-            )}
         </Box>
     );
 }

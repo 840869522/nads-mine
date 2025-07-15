@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+.env
 node_modules
 dist
 dist-ssr
@@ -29,3 +29,9 @@ prisma/data.sqlite
 /prisma/data.sqlite-wal
 /package-lock.json
 /composer.phar
+scripts
+demo-images
+demo-linux.qcow2
+libvirt
+src/.venv
+images

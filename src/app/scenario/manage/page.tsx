@@ -12,14 +12,16 @@ import {
     Delete as DeleteIcon,
     PlayCircleOutline as StartIcon,
     Edit as EditIcon,
-    Add as AddIcon
+    Add as AddIcon,
+    PeopleAlt as PermissionIcon
 } from '@mui/icons-material';
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
+import ScenarioPermissionDialog  from './ScenarioPermissionDialog'
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 // 定义场景的数据结构
-interface Scenario {
+export interface Scenario {
     id: string; // 文件名将作为ID
     name: string;
     description: string;
@@ -27,6 +29,7 @@ interface Scenario {
     nodeCount: number;
     topology_json: TopologyData;
 }
+
 
 type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
@@ -43,9 +46,12 @@ const ScenarioManagementPage: React.FC = () => {
     const [orderBy, setOrderBy] = useState<SortableKeys>('uploadDate');
     const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    // 为了控制弹窗的打开和关闭，需要一个专门的状态（State）来记录。
+    const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
+
+ 
+    
     const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-    // 添加新State: 用于管理当前正在编辑的场景对象和弹窗的显示状态
+    
     const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
     const fetchScenarios = useCallback(async () => {
         setIsLoading(true);
@@ -64,7 +70,10 @@ const ScenarioManagementPage: React.FC = () => {
             setIsLoading(false);
         }
     }, []);
-
+    
+    const handleOpenPermissionDialog = (scenario: Scenario) => {
+        setPermissionScenario(scenario);
+    };
     useEffect(() => {
         fetchScenarios();
     }, [fetchScenarios]);
@@ -74,6 +83,7 @@ const ScenarioManagementPage: React.FC = () => {
     const handleSaveSuccess = () => {
         setCreateDialogOpen(false); // 关闭创建弹窗
         setEditingScenario(null);   // 关闭编辑弹窗
+        setPermissionScenario(null); // 关闭权限弹窗
         fetchScenarios();           // 统一刷新列表
     };
     const handleRefresh = () => {
@@ -153,11 +163,12 @@ const ScenarioManagementPage: React.FC = () => {
             alert(`启动失败: ${err.message}`);
         }
     };
-
+    
     // 新增一个临时的编辑处理函数
     const handleEditScenario = (scenario: Scenario) => {
         setEditingScenario(scenario);
     };
+
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -258,6 +269,12 @@ const ScenarioManagementPage: React.FC = () => {
                                                     <StartIcon />
                                                 </IconButton>
                                             </Tooltip>
+                                            <Tooltip title="权限管理">
+                                                {/* 4. 更新 onClick 事件以打开新弹窗 */}
+                                                <IconButton color="default" size="small" onClick={() => handleOpenPermissionDialog(scenario)}>
+                                                    <PermissionIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {/* 3. 更新删除按钮的 onClick 事件 */}
                                             <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
                                             <Tooltip title="编辑场景">
@@ -318,6 +335,12 @@ const ScenarioManagementPage: React.FC = () => {
                 onClose={() => setEditingScenario(null)}
                 onSaveSuccess={handleSaveSuccess}
                 scenario={editingScenario}
+            />
+            <ScenarioPermissionDialog
+                open={!!permissionScenario}
+                onClose={() => setPermissionScenario(null)}
+                onSaveSuccess={handleSaveSuccess}
+                scenario={permissionScenario}
             />
         </Paper>
     );

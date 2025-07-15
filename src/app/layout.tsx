@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <AppContent>{children}</AppContent>
         </Providers>
-        <ToastContainer closeButton={true} position="top-center" />
+        <ToastContainer closeButton={true} position="top-right" />
       </body>
     </html>
   );

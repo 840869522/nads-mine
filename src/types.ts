@@ -71,9 +71,10 @@ export type DeviceType =
 //场景node编辑
 export interface NodeConfig {
   deviceName: string;
-  dockerImage: string;
+  Image: string;
   portMappings: string;
-  env?: string; // <--- 新增此行，设为可选
+  env?: string; 
+  isTarget?: boolean; 
 }
 
 export interface TopologyNode {

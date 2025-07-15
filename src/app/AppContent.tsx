@@ -35,12 +35,13 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {;
+  useEffect(() => {
     const permissionsData = user?.permission || [];
     const roleData = user?.role || [];
     const token = getCookie("_auth");
+    const isGuac = pathname.startsWith('/guac');
     if (!token) {
-      if (pathname !== '/login') {
+      if (pathname !== '/login' && !isGuac) {
         router.replace('/login');
       }
     } else {
@@ -56,7 +57,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   }, [user, pathname, router]);
 
 
-  const showSidebar = Boolean(user) && pathname !== '/login';
+  const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac');
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>

@@ -6,10 +6,11 @@ use Closure;
 use Illuminate\Http\Request;
 use App\Utils\GlobalResponse;
 use App\Utils\JWTControll;
+use Illuminate\Support\Facades\Log;
 
 class JWTCheckMiddleware{
     /**
-     * Handle an incoming request.
+     * Handle an incoming request. Using to check jwt token and process permission
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response | \Illuminate\Http\RedirectResponse)  $next
@@ -17,6 +18,7 @@ class JWTCheckMiddleware{
      * @return \Illuminate\Http\Response | \Illuminate\Http\RedirectResponse
      */
     public function handle(Request $request, Closure $next, $primiision = null){
+        $path = $request->path();
         $auth = $request->header("Authorization",null);
         $jwtRes =  JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {

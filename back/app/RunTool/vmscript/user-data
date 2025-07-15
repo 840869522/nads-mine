@@ -1,0 +1,47 @@
+#cloud-config
+ssh_pwauth: true
+hostname: ns$n
+timezone: Asia/Hong_Kong
+groups:
+  - ubuntu
+
+# Add users to the system. Users are added after groups are added.
+users:
+  - name: ubuntu
+    primary_group: ubuntu
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    passwd: 88888888
+    shell: /bin/bash
+
+write_files:
+ - content: |
+     # written by cloud-init
+     * soft nofile 65536
+     * hard nofile 65536
+   path: /etc/security/limits.conf
+   permissions: '0644'
+   owner: root:root
+
+bootcmd:
+ - ip link set enp1s0 up
+ - ip addr add $ip/16 dev enp1s0
+ - ip route add default via 10.100.0.254 dev enp1s0
+ - echo "nameserver 8.8.8.8" > /etc/resolv.conf
+ - /opt/zeek/bin/zeekctl deploy
+ - /opt/zeek/bin/zeekctl start
+ - echo "SCENE_ID=${SCENE_ID}" >> /etc/ctf-config
+ - echo "TARGET_ID=$n" >> /etc/ctf-config
+ - echo "ATTACKER_ID=$n" >> /etc/ctf-config
+ - echo "LASTICSEARCH_HOST=10.100.0.88" >> /etc/ctf-config
+ - echo "ELASTICSEARCH_PORT=9200" >> /etc/ctf-config
+ - echo "FLAG=$flag" >> /etc/ctf-config
+ - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
+ - sed -i '/^\[Service\]/a Environment="TARGET_ID=$n"' /lib/systemd/system/td-agent.service
+ - sed -i '/^\[Service\]/a Environment="ATTACKER_ID=$n"' /lib/systemd/system/td-agent.service
+ - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_HOST=10.100.0.88"' /lib/systemd/system/td-agent.service
+ - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_PORT=9200"' /lib/systemd/system/td-agent.service
+ - systemctl daemon-reload
+
+runcmd:
+ - export FLAG=$flag

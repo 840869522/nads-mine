@@ -47,6 +47,7 @@ class SceneContainerInstance extends Model
     protected $fillable = [
         'c_container_id',
         'c_scene_instances_id',
+        'c_flag',
     ];
 
     /**

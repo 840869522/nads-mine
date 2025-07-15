@@ -89,33 +89,35 @@
 
         public static function grantPermission2Role (string $role_id,array $value):array {
             $sql = "DELETE FROM c_roles_permissions WHERE c_role_id = ?";
+            db::beginTransaction();
             try {
-                db::beginTransaction();
+                
                 $res_delete = db::delete($sql,[$role_id]);
                 if ($res_delete >= 0 ){
                     $res = db::table("c_roles_permissions")->insert($value);
-                    if($res) {
-                        db::commit();
-                        return [
-                            "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
-                        ];
-                    }
+                }else{
                     db::rollBack();
                     return [
                         "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                     ];
                 }
-                db::rollBack();
-                return [
-                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
-                ];
-                return [];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
+            if($res) {
+                db::commit();
+                return [
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
+                ];
+            }
+            db::rollBack();
+            return [
+                "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+            ];
         }
 
         public static function revokePermissionFromRole(string $role_id,string $permission_id):array {
@@ -135,6 +137,7 @@
                 ];
                 return [];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -158,6 +161,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -183,6 +187,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -191,8 +196,8 @@
         }
 
         public static function deletePermission(string $id) :array {
-            $sql = "DELETE * FROM  c_permissions WHERE c_id = ?";
-            $sql_role_permissions = "DELETE * FROM c_roles_permissions WHERE c_permission_id = ? ";
+            $sql = "DELETE FROM  c_permissions WHERE c_id = ?";
+            $sql_role_permissions = "DELETE FROM c_roles_permissions WHERE c_permission_id = ? ";
             try {
                 db::beginTransaction();
                 $res = db::delete($sql,[$id]);
@@ -211,6 +216,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE

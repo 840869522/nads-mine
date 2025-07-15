@@ -8,25 +8,14 @@ import {
   TextField,
   Button,
   Typography,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  Paper,
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { UserRole } from '@/types';
-import { APP_PERMISSIONS, APP_PERMISSIONS_CATEGORY, AppPermission } from '@/constants';
-import PermissionForm from './PermissionForm';
-import { Flare } from '@mui/icons-material';
+import { APP_PERMISSIONS, AppPermission } from '@/constants';
+import PermissionForm from './Role2PermissionForm';
 
 export interface RoleFormData {
   id?: string;
