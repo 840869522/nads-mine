@@ -280,7 +280,7 @@ const QuestionPage: React.FC = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="搜索权限..."
+            placeholder="搜索试题..."
             value={searchTerm.data}
             onChange={handleSearchChange}
             onKeyDown={(e) => {

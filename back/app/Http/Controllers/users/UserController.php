@@ -263,13 +263,13 @@
                     "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            if ($id != $token_data['user']->c_username) {
+            if ($id != $token_data['id']) {
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
-            $modelRes = UserModel::updateUserEmail($id, $data);
+            $modelRes = UserModel::updateUserEmailById($id, $data);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,

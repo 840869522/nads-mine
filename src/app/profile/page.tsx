@@ -137,13 +137,14 @@ const PersonalPage: React.FC = () => {
     // 提交基本信息
     const handleSubmitInfo = async () => {
         if (!validateEmail()) return;
-        apiClientWithToken.post("/back/api/support/user/update_pwd", JSON.stringify({
+        apiClientWithToken.post("/back/api/support/user/update_common", JSON.stringify({
             data: {
                 email: formData.email
             },
             id: user?.user.c_username
         })).then((res) => {
             if (res.data.code === 200) {
+                setFormData({ ...formData, email: formData.email });
                 toast.success(`修改信息成功`,
                     {
                         autoClose: 3000,
@@ -153,6 +154,7 @@ const PersonalPage: React.FC = () => {
                     }
                 );
             } else {
+                setFormData({...formData, email: user?.user.c_email || ""});
                 toast.error(`修改信息失败 ${res.data.message}`, {
                     autoClose: 3000,
                     closeOnClick: true,
