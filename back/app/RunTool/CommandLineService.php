@@ -39,7 +39,8 @@ class CommandLineService
             $options['ip'],
             $options['scene_instance_id'],
             $options['flag'] ?? 'NULL',
-            $options['switch_name'], // 新增第6个参数：交换机名称
+            $options['switch_name'],
+            $options['vm_name'], // <--- 添加此行，作为第7个参数
         ];
         
         // 3. 准备并执行命令

@@ -3,8 +3,8 @@
 set -e
 
 # 检查参数数量是否为6
-if [ $# != 6 ]; then
-  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name"
+if [ $# != 7 ]; then
+  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name vm_name"
   exit 1;
 fi
 
@@ -20,9 +20,9 @@ IMAGE_DIR="/home/yic/wurenji/nads/images"
 INSTANCE_BASE_DIR="/home/yic/wurenji/nads/instances"
 
 # 定义当前这个虚拟机的具体实例目录
-INSTANCE_DIR="$INSTANCE_BASE_DIR/ns$1"
+INSTANCE_DIR="$INSTANCE_BASE_DIR/$7"
 
-echo "DEBUG: Creating instance directory: $INSTANCE_DIR"
+echo "DEBUG: Creating instance directory: $INSTANCE_DIR for VM: $7"
 # 清理并创建实例目录
 rm -rf "$INSTANCE_DIR"
 mkdir -p "$INSTANCE_DIR"
@@ -81,7 +81,7 @@ echo "DEBUG: Image copied and converted to qcow2 format."
 echo "DEBUG: Starting virt-install..."
 virt-install --virt-type kvm \
   --network network=$6,model=virtio \
-  --name "ns$1" \
+  --name "$7" \
   --ram=4096 \
   --vcpus=4 \
   --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
@@ -91,4 +91,4 @@ virt-install --virt-type kvm \
   --noautoconsole \
   --import
 
-echo "DEBUG: virt-install command completed."
+echo "DEBUG: virt-install command for $7 completed."
