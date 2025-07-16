@@ -57,6 +57,7 @@ interface VmInstance {
     vmem: number; // MB
     ip?: string;
     scene_instance_id?: string;
+    scene_name?: string;
     uptime?: string;
 }
 
@@ -150,6 +151,7 @@ export default function VmPage() {
             { field: "vcpu", headerName: "vCPU", width: 80 },
             { field: "vmem", headerName: "内存 (MB)", width: 100 },
             { field: "ip", headerName: "IP", minWidth: 140 },
+            { field: "scene_name", headerName: "场景名称", minWidth: 160 },
             { field: "scene_instance_id", headerName: "场景实例ID", minWidth: 160 },
             { field: "uptime", headerName: "运行时间", minWidth: 120 },
         ],
