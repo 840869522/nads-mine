@@ -366,7 +366,8 @@ export default function VmPage() {
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
-        setActionAnchor(null);
+        // Close the actions menu after attempting to open Guacamole
+        setActionAnchor({ anchor: null, id: null });
     };
 
     const handleDelete = async (vm: VmInstance) => {
