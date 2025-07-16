@@ -133,6 +133,63 @@ function VmInfoCell({ id, width, children }: { id: string; width?: number; child
     return data ? <>{children(data)}</> : <Skeleton width={width ?? 40} />;
 }
 
+function VmActionsCell({
+    vm,
+    loading,
+    onLifecycle,
+    onDelete,
+    onMenu,
+}: {
+    vm: VmInstance;
+    loading: boolean;
+    onLifecycle: (vm: VmInstance, action: string) => void;
+    onDelete: (vm: VmInstance) => void;
+    onMenu: (anchor: HTMLElement) => void;
+}) {
+    const { data } = useVmInfo(vm.id);
+    const state = (data?.status || vm.state || '').toLowerCase();
+    const isRunning = state === 'running';
+    const isPaused = state === 'paused';
+    const isShutoff = /shut.?off/.test(state);
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {isRunning ? (
+                <>
+                    <IconButton size="small" onClick={() => onLifecycle(vm, 'pause')} disabled={loading}>
+                        <PauseIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => onLifecycle(vm, 'shutdown')} disabled={loading}>
+                        <StopIcon fontSize="small" color="error" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => onLifecycle(vm, 'reboot')} disabled={loading}>
+                        <ResetIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => onLifecycle(vm, 'force-off')} disabled={loading}>
+                        <ForceOffIcon fontSize="small" color="error" />
+                    </IconButton>
+                </>
+            ) : (
+                <>
+                    <IconButton size="small" onClick={() => onLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={loading}>
+                        <StartIcon fontSize="small" color="success" />
+                    </IconButton>
+                    {!isShutoff && (
+                        <IconButton size="small" onClick={() => onLifecycle(vm, 'force-off')} disabled={loading}>
+                            <ForceOffIcon fontSize="small" color="error" />
+                        </IconButton>
+                    )}
+                </>
+            )}
+            <IconButton size="small" onClick={() => onDelete(vm)} disabled={loading}>
+                <DeleteIcon fontSize="small" color="error" />
+            </IconButton>
+            <IconButton size="small" onClick={(e) => onMenu(e.currentTarget)}>
+                <ArrowDownIcon fontSize="small" />
+            </IconButton>
+        </Box>
+    );
+}
+
 /* ---------- 状态图标 ---------- */
 function stateIcon(state: VmInstance["state"]) {
     switch (state) {
@@ -262,51 +319,17 @@ export default function VmPage() {
                 headerName: '操作',
                 sortable: false,
                 width: 160,
-                renderCell: (params) => {
-                    const vm = params.row as VmInstance;
-                    const { data } = useVmInfo(vm.id);
-                    const state = data?.status || vm.state;
-                    const isRunning = state === 'running';
-                    const isPaused = state === 'paused';
-                    const isShutoff = /shut\s*off/i.test(state);
-                    return (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {isRunning ? (
-                                <>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
-                                        <PauseIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
-                                        <StopIcon fontSize="small" color="error" />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
-                                        <ResetIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
-                                        <ForceOffIcon fontSize="small" color="error" />
-                                    </IconButton>
-                                </>
-                            ) : (
-                                <>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}>
-                                        <StartIcon fontSize="small" color="success" />
-                                    </IconButton>
-                                    {!isShutoff && (
-                                        <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
-                                            <ForceOffIcon fontSize="small" color="error" />
-                                        </IconButton>
-                                    )}
-                                </>
-                            )}
-                            <IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}>
-                                <DeleteIcon fontSize="small" color="error" />
-                            </IconButton>
-                            <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}>
-                                <ArrowDownIcon fontSize="small" />
-                            </IconButton>
-                        </Box>
-                    );
-                },
+                renderCell: (params) => (
+                    <VmActionsCell
+                        vm={params.row as VmInstance}
+                        loading={actionLoading}
+                        onLifecycle={handleLifecycle}
+                        onDelete={handleDelete}
+                        onMenu={(anchor) =>
+                            setActionAnchor({ anchor, id: (params.row as VmInstance).id })
+                        }
+                    />
+                ),
             },
         ],
         [actionLoading]
