@@ -28,6 +28,8 @@ import {
     PlayArrow as StartIcon,
     Stop as StopIcon,
     Pause as PauseIcon,
+    RestartAlt as ResetIcon,
+    PowerSettingsNew as ForceOffIcon,
     Delete as DeleteIcon,
     DesktopWindows as VncIcon,
     Terminal as SshIcon,
@@ -126,6 +128,11 @@ function useVmInfo(vmId: string) {
     });
 }
 
+function VmInfoCell({ id, width, children }: { id: string; width?: number; children: (d: OverviewData) => React.ReactNode }) {
+    const { data } = useVmInfo(id);
+    return data ? <>{children(data)}</> : <Skeleton width={width ?? 40} />;
+}
+
 /* ---------- 状态图标 ---------- */
 function stateIcon(state: VmInstance["state"]) {
     switch (state) {
@@ -167,10 +174,9 @@ export default function VmPage() {
                 field: 'status',
                 headerName: '状态',
                 width: 80,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? stateIcon(data.status as any) : <Skeleton width={20} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell>
+                ),
             },
             { field: 'name', headerName: '名称', flex: 1 },
             { field: 'scene_name', headerName: '场景名称', width: 160 },
@@ -179,86 +185,77 @@ export default function VmPage() {
                 field: 'osType',
                 headerName: 'OS 类型',
                 width: 120,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.osType ?? 'N/A' : <Skeleton width={80} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={80}>{d => d.osType ?? 'N/A'}</VmInfoCell>
+                ),
             },
             {
                 field: 'hostNode',
                 headerName: '宿主机',
                 width: 120,
                 hide: !showColumns.hostNode,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.hostNode : <Skeleton width={80} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={80}>{d => d.hostNode}</VmInfoCell>
+                ),
             },
             {
                 field: 'pool',
                 headerName: '存储池',
                 width: 120,
                 hide: !showColumns.pool,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.pool : <Skeleton width={60} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell>
+                ),
             },
             {
                 field: 'persistent',
                 headerName: '持久化',
                 width: 80,
                 hide: !showColumns.persistent,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? (data.persistent ? '是' : '否') : <Skeleton width={30} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.persistent ? '是' : '否'}</VmInfoCell>
+                ),
             },
             {
                 field: 'autostart',
                 headerName: '自动启动',
                 width: 80,
                 hide: !showColumns.autostart,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? (data.autostart ? '是' : '否') : <Skeleton width={30} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.autostart ? '是' : '否'}</VmInfoCell>
+                ),
             },
             {
                 field: 'vcpu',
                 headerName: 'vCPU',
                 width: 80,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.vcpu.count : <Skeleton width={30} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu.count}</VmInfoCell>
+                ),
             },
             {
                 field: 'memory',
                 headerName: '内存(MB)',
                 width: 100,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.vram.total_mb : <Skeleton width={40} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={40}>{d => d.vram.total_mb}</VmInfoCell>
+                ),
             },
             {
                 field: 'ip',
                 headerName: 'IP',
                 width: 140,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.ipAddress : <Skeleton width={100} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={100}>{d => d.ipAddress}</VmInfoCell>
+                ),
             },
             {
                 field: 'uuid',
                 headerName: 'UUID',
                 width: 220,
-                renderCell: (p) => {
-                    const { data } = useVmInfo(p.row.id);
-                    return data ? data.uuid : <Skeleton width={200} />;
-                },
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={200}>{d => d.uuid}</VmInfoCell>
+                ),
             },
             {
                 field: 'actions',
@@ -271,28 +268,37 @@ export default function VmPage() {
                     const state = data?.status || vm.state;
                     const isRunning = state === 'running';
                     const isPaused = state === 'paused';
-                    const isShutoff = state === 'shut off' || state === 'shutoff';
+                    const notShutoff = state !== 'shutoff' && state !== 'shut off';
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <IconButton
-                                size="small"
-                                onClick={() => handleLifecycle(vm, isRunning ? 'pause' : (isPaused ? 'resume' : 'start'))}
-                                disabled={actionLoading}
-                            >
-                                {isRunning ? <PauseIcon fontSize="small" /> : <StartIcon fontSize="small" color="success" />}
-                            </IconButton>
-                            <IconButton
-                                size="small"
-                                onClick={() => handleLifecycle(vm, 'shutdown')}
-                                disabled={actionLoading || isShutoff}
-                            >
-                                <StopIcon fontSize="small" color="error" />
-                            </IconButton>
-                            <IconButton
-                                size="small"
-                                onClick={() => handleDelete(vm)}
-                                disabled={actionLoading}
-                            >
+                            {isRunning ? (
+                                <>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
+                                        <PauseIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
+                                        <StopIcon fontSize="small" color="error" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
+                                        <ResetIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
+                                        <ForceOffIcon fontSize="small" color="error" />
+                                    </IconButton>
+                                </>
+                            ) : (
+                                <>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}>
+                                        <StartIcon fontSize="small" color="success" />
+                                    </IconButton>
+                                    {notShutoff && (
+                                        <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
+                                            <ForceOffIcon fontSize="small" color="error" />
+                                        </IconButton>
+                                    )}
+                                </>
+                            )}
+                            <IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}>
                                 <DeleteIcon fontSize="small" color="error" />
                             </IconButton>
                             <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}>
@@ -446,7 +452,7 @@ export default function VmPage() {
                 /* === 首次 Skeleton === */
                 <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 1 }} />
             ) : (
-                <Box component={Paper} sx={{ boxShadow: 3, minHeight: 360 }}>
+                <Box component={Paper} sx={{ boxShadow: 3 }}>
                     {/* 进度条移动至按钮区域 */}
 
                     <DataGrid
