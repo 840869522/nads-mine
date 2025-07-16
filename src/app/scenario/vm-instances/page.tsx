@@ -268,7 +268,7 @@ export default function VmPage() {
                     const state = data?.status || vm.state;
                     const isRunning = state === 'running';
                     const isPaused = state === 'paused';
-                    const notShutoff = state !== 'shutoff' && state !== 'shut off';
+                    const isShutoff = /shut\s*off/i.test(state);
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
@@ -291,7 +291,7 @@ export default function VmPage() {
                                     <IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}>
                                         <StartIcon fontSize="small" color="success" />
                                     </IconButton>
-                                    {notShutoff && (
+                                    {!isShutoff && (
                                         <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
                                             <ForceOffIcon fontSize="small" color="error" />
                                         </IconButton>
