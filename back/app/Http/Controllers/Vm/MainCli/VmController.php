@@ -14,8 +14,8 @@ class VmController extends Controller
     public function __construct()
     {
         $root = dirname(base_path());
-        $this->python = $root . '/src/.venv/bin/python3';
-        $this->script = $root . '/src/main_cli_local.py';
+        $this->python = $root . '/back/app/Services/vmservice/.venv/bin/python3';
+        $this->script = $root . '/back/app/Services/vmservice/main_cli_local.py';
     }
 
     private function runCli(array $args)
