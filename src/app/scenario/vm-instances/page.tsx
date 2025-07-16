@@ -52,7 +52,7 @@ interface VmInstance {
     name: string;
     hostNode: string;
     pool: string;
-    state: "running" | "paused" | "shutoff";
+    state: string;
     vcpu: number;
     vmem: number; // MB
     ip?: string;
@@ -85,6 +85,10 @@ interface OverviewData {
     ipAddress: string;
 }
 
+function normalizeState(s: string | undefined): string {
+    return (s || '').replace(/_/g, ' ').toLowerCase().trim();
+}
+
 /* ---------- SWR Hook ---------- */
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -105,9 +109,10 @@ function useVmInstances(forceRef?: React.MutableRefObject<number>) {
             // 动作触发后，在一定时间内保持快速轮询
             if (forceRef && Date.now() < forceRef.current) return 5_000;
             if (!latest) return 5_000; // 首次
-            const unstable = latest.some((vm) =>
-                ["paused", "shutoff"].includes(vm.state)
-            );
+            const unstable = latest.some((vm) => {
+                const st = normalizeState(vm.state);
+                return st === 'paused' || /shut\s*off/.test(st);
+            });
             return unstable ? 5_000 : 30_000;
         },
 
@@ -147,10 +152,10 @@ function VmActionsCell({
     onMenu: (anchor: HTMLElement) => void;
 }) {
     const { data } = useVmInfo(vm.id);
-    const state = (data?.status || vm.state || '').toLowerCase();
+    const state = normalizeState(data?.status || vm.state);
     const isRunning = state === 'running';
     const isPaused = state === 'paused';
-    const isShutoff = /shut.?off/.test(state);
+    const isShutoff = /shut\s*off/.test(state);
     return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {isRunning ? (
@@ -191,8 +196,9 @@ function VmActionsCell({
 }
 
 /* ---------- 状态图标 ---------- */
-function stateIcon(state: VmInstance["state"]) {
-    switch (state) {
+function stateIcon(state: string) {
+    const s = normalizeState(state);
+    switch (s) {
         case "running":
             return <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />;
         case "paused":
@@ -232,7 +238,7 @@ export default function VmPage() {
                 headerName: '状态',
                 width: 80,
                 renderCell: (p) => (
-                    <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell>
+                    <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status)}</VmInfoCell>
                 ),
             },
             { field: 'name', headerName: '名称', flex: 1 },
@@ -342,7 +348,7 @@ export default function VmPage() {
         let rows = (data ?? []).filter((r) =>
             r.name.toLowerCase().includes(search.toLowerCase())
         );
-        if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
+        if (showRunningOnly) rows = rows.filter((r) => normalizeState(r.state) === 'running');
         return rows;
     }, [data, search, showRunningOnly]);
 
@@ -361,7 +367,7 @@ export default function VmPage() {
             const result = (await res.json()) as { state?: string };
             await mutate();
             await globalMutate(`/back/api/vms/${vm.id}`);
-            if (result.state !== "shutoff") {
+            if (!/shut\s*off/i.test(result.state || '')) {
                 await globalMutate(`/back/api/vms/${vm.id}/metrics`);
             }
         } catch (e: any) {
