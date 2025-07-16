@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Vm\MainCli;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 
 class VmController extends Controller
@@ -43,7 +44,42 @@ class VmController extends Controller
     // GET /vms
     public function listVms()
     {
-        return $this->runCli(['list-vms']);
+        $cmd = [$this->python, $this->script, 'list-vms'];
+        $process = new Process($cmd);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $err = trim($process->getErrorOutput() ?: $process->getOutput());
+            return response()->json(['error' => $err], 500);
+        }
+
+        $output = trim($process->getOutput());
+        $data = json_decode($output, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return response($output, 200)->header('Content-Type', 'application/json');
+        }
+
+        $status = $data['status_code'] ?? 200;
+        unset($data['status_code']);
+
+        if (is_array($data)) {
+            $names = array_column($data, 'name');
+            $extra = DB::table('c_scene_vm_instances')
+                ->select('c_vm_name', 'c_scene_instances_id', 'c_ip')
+                ->whereIn('c_vm_name', $names)
+                ->get()
+                ->keyBy('c_vm_name');
+
+            foreach ($data as &$vm) {
+                $info = $extra[$vm['name']] ?? null;
+                if ($info) {
+                    $vm['scene_instance_id'] = $info->c_scene_instances_id;
+                    $vm['ip'] = $info->c_ip;
+                }
+            }
+        }
+
+        return response()->json($data, $status);
     }
 
     // GET /vms/images
