@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Vm\MainCli;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Symfony\Component\Process\Process;
+use Illuminate\Support\Facades\DB;
 
 class VmController extends Controller
 {
@@ -12,9 +13,9 @@ class VmController extends Controller
 
     public function __construct()
     {
-        $root = dirname(base_path());
-        $this->python = $root . '/src/.venv/bin/python3';
-        $this->script = $root . '/src/main_cli_local.py';
+        $toolPath = base_path('app/RunTool');
+        $this->python = $toolPath . '/.venv/bin/python3';
+        $this->script = $toolPath . '/main_cli_local.py';
     }
 
     private function runCli(array $args)
@@ -43,7 +44,41 @@ class VmController extends Controller
     // GET /vms
     public function listVms()
     {
-        return $this->runCli(['list-vms']);
+        $cmd = [$this->python, $this->script, 'list-vms'];
+        $process = new Process($cmd);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $err = trim($process->getErrorOutput() ?: $process->getOutput());
+            return response()->json(['error' => $err], 500);
+        }
+
+        $output = trim($process->getOutput());
+        $data = json_decode($output, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return response($output, 200)->header('Content-Type', 'application/json');
+        }
+
+        $status = $data['status_code'] ?? 200;
+        unset($data['status_code']);
+
+        if (is_array($data)) {
+            foreach ($data as &$vm) {
+                $record = DB::table('c_scene_vm_instances')
+                    ->select('c_scene_instances_id', 'c_ip')
+                    ->where('c_vm_name', $vm['name'])
+                    ->first();
+                if ($record) {
+                    $vm['ip'] = $record->c_ip ?? ($vm['ip'] ?? null);
+                    $vm['c_scene_instances_id'] = $record->c_scene_instances_id;
+                } else {
+                    $vm['ip'] = $vm['ip'] ?? null;
+                    $vm['c_scene_instances_id'] = null;
+                }
+            }
+        }
+
+        return response()->json($data, $status);
     }
 
     // GET /vms/images

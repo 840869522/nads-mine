@@ -35,4 +35,5 @@ demo-images
 demo-linux.qcow2
 libvirt
 src/.venv
+back/app/RunTool/.venv
 images
