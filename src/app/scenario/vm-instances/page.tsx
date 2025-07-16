@@ -160,11 +160,22 @@ export default function VmPage() {
                     return data ? stateIcon(data.status as any) : <Skeleton width={20} />;
                 },
             },
-            { field: 'name', headerName: '名称', minWidth: 160, flex: 1 },
+            { field: 'name', headerName: '名称', flex: 1 },
+            { field: 'scene_name', headerName: '场景名称', width: 160 },
+            { field: 'scene_instance_id', headerName: '场景实例ID', width: 160 },
+            {
+                field: 'osType',
+                headerName: 'OS 类型',
+                width: 120,
+                renderCell: (p) => {
+                    const { data } = useVmInfo(p.row.id);
+                    return data ? data.osType ?? 'N/A' : <Skeleton width={80} />;
+                },
+            },
             {
                 field: 'hostNode',
                 headerName: '宿主机',
-                minWidth: 120,
+                width: 120,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.hostNode : <Skeleton width={80} />;
@@ -173,10 +184,28 @@ export default function VmPage() {
             {
                 field: 'pool',
                 headerName: '存储池',
-                minWidth: 100,
+                width: 120,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.pool : <Skeleton width={60} />;
+                },
+            },
+            {
+                field: 'persistent',
+                headerName: '持久化',
+                width: 80,
+                renderCell: (p) => {
+                    const { data } = useVmInfo(p.row.id);
+                    return data ? (data.persistent ? '是' : '否') : <Skeleton width={30} />;
+                },
+            },
+            {
+                field: 'autostart',
+                headerName: '自动启动',
+                width: 80,
+                renderCell: (p) => {
+                    const { data } = useVmInfo(p.row.id);
+                    return data ? (data.autostart ? '是' : '否') : <Skeleton width={30} />;
                 },
             },
             {
@@ -200,7 +229,7 @@ export default function VmPage() {
             {
                 field: 'ip',
                 headerName: 'IP',
-                minWidth: 140,
+                width: 140,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.ipAddress : <Skeleton width={100} />;
@@ -209,7 +238,7 @@ export default function VmPage() {
             {
                 field: 'uuid',
                 headerName: 'UUID',
-                minWidth: 220,
+                width: 220,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.uuid : <Skeleton width={200} />;
@@ -380,7 +409,7 @@ export default function VmPage() {
                 /* === 首次 Skeleton === */
                 <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 1 }} />
             ) : (
-                <Box component={Paper} sx={{ boxShadow: 3 }}>
+                <Box component={Paper} sx={{ boxShadow: 3, minHeight: 360 }}>
                     {/* 进度条移动至按钮区域 */}
 
                     <DataGrid
