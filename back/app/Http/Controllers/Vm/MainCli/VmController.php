@@ -65,7 +65,7 @@ class VmController extends Controller
         if (is_array($data)) {
             $names = array_column($data, 'name');
             $extra = DB::table('c_scene_vm_instances as v')
-                ->leftJoin('c_scene_instances as si', 'v.c_scene_instances_id', '=', 'si.c_scene_instances_id')
+                ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select(
                     'v.c_vm_name',
