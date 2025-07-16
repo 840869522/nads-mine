@@ -219,26 +219,30 @@ class VmController extends Controller
 
         if (is_array($data)) {
             $names = array_column($data, 'name');
-            $extra = DB::table('c_scene_vm_instances as v')
-                ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
-                ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
-                ->select(
-                    'v.c_vm_name',
-                    'v.c_scene_instances_id',
-                    'v.c_ip',
-                    'sc.c_name as scene_name'
-                )
-                ->whereIn('v.c_vm_name', $names)
-                ->get()
-                ->keyBy('c_vm_name');
+
+            try {
+                $extra = DB::table('c_scene_vm_instances as v')
+                    ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
+                    ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
+                    ->select(
+                        'v.c_vm_name',
+                        'v.c_scene_instances_id',
+                        'v.c_ip',
+                        'sc.c_name as scene_name'
+                    )
+                    ->whereIn('v.c_vm_name', $names)
+                    ->get()
+                    ->keyBy('c_vm_name');
+            } catch (\Throwable $e) {
+                // 查询失败，$extra 设置为空数组，下面将属性设为 null
+                $extra = [];
+            }
 
             foreach ($data as &$vm) {
                 $info = $extra[$vm['name']] ?? null;
-                if ($info) {
-                    $vm['scene_instance_id'] = $info->c_scene_instances_id;
-                    $vm['scene_name'] = $info->scene_name;
-                    $vm['ip'] = $info->c_ip;
-                }
+                $vm['scene_instance_id'] = $info->c_scene_instances_id ?? null;
+                $vm['scene_name'] = $info->scene_name ?? null;
+                $vm['ip'] = $info->c_ip ?? null;
             }
         }
 
