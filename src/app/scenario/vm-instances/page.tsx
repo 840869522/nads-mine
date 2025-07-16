@@ -16,6 +16,9 @@ import {
     Skeleton,
     useTheme,
     IconButton,
+    Checkbox,
+    Switch,
+    FormControlLabel,
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -32,6 +35,7 @@ import {
     Camera as SnapshotIcon,
     KeyboardArrowDown as ArrowDownIcon,
     AddCircleOutline as AddIcon,
+    ViewColumn as ViewColumnIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
@@ -146,6 +150,14 @@ export default function VmPage() {
     const [actionAnchor, setActionAnchor] = React.useState<{ anchor: HTMLElement | null; id: string | null }>({ anchor: null, id: null });
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
+    const [showRunningOnly, setShowRunningOnly] = React.useState(false);
+    const [columnAnchor, setColumnAnchor] = React.useState<null | HTMLElement>(null);
+    const [showColumns, setShowColumns] = React.useState({
+        hostNode: false,
+        pool: false,
+        persistent: false,
+        autostart: false,
+    });
 
 
     /* ---- 列定义 ---- */
@@ -176,6 +188,7 @@ export default function VmPage() {
                 field: 'hostNode',
                 headerName: '宿主机',
                 width: 120,
+                hide: !showColumns.hostNode,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.hostNode : <Skeleton width={80} />;
@@ -185,6 +198,7 @@ export default function VmPage() {
                 field: 'pool',
                 headerName: '存储池',
                 width: 120,
+                hide: !showColumns.pool,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? data.pool : <Skeleton width={60} />;
@@ -194,6 +208,7 @@ export default function VmPage() {
                 field: 'persistent',
                 headerName: '持久化',
                 width: 80,
+                hide: !showColumns.persistent,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? (data.persistent ? '是' : '否') : <Skeleton width={30} />;
@@ -203,6 +218,7 @@ export default function VmPage() {
                 field: 'autostart',
                 headerName: '自动启动',
                 width: 80,
+                hide: !showColumns.autostart,
                 renderCell: (p) => {
                     const { data } = useVmInfo(p.row.id);
                     return data ? (data.autostart ? '是' : '否') : <Skeleton width={30} />;
@@ -293,13 +309,13 @@ export default function VmPage() {
     const theme = useTheme();
 
     /* ---- 行过滤 ---- */
-    const filteredRows = React.useMemo(
-        () =>
-            (data ?? []).filter((r) =>
-                r.name.toLowerCase().includes(search.toLowerCase())
-            ),
-        [data, search]
-    );
+    const filteredRows = React.useMemo(() => {
+        let rows = (data ?? []).filter((r) =>
+            r.name.toLowerCase().includes(search.toLowerCase())
+        );
+        if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
+        return rows;
+    }, [data, search, showRunningOnly]);
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
@@ -394,6 +410,11 @@ export default function VmPage() {
                         }}
                         sx={{ width: { xs: "100%", sm: 260 } }}
                     />
+                    <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+                    <FormControlLabel
+                        control={<Checkbox checked={showRunningOnly} onChange={(e)=>setShowRunningOnly(e.target.checked)} />}
+                        label="只显示运行中的虚拟机"
+                    />
                 </Box>
                 <Button
                     variant="contained"
@@ -403,6 +424,22 @@ export default function VmPage() {
                     创建实例
                 </Button>
             </Box>
+
+            <Menu anchorEl={columnAnchor} open={Boolean(columnAnchor)} onClose={() => setColumnAnchor(null)}>
+                {Object.entries(showColumns).map(([key, val]) => (
+                    <MenuItem key={key}>
+                        <FormControlLabel
+                            control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} color="primary" />}
+                            label={
+                                key === 'hostNode' ? '宿主机' :
+                                key === 'pool' ? '存储池' :
+                                key === 'persistent' ? '持久化' :
+                                '自动启动'
+                            }
+                        />
+                    </MenuItem>
+                ))}
+            </Menu>
 
             {/* ---------- 列表区域 ---------- */}
             {isLoading ? (
@@ -417,6 +454,8 @@ export default function VmPage() {
                         rows={filteredRows}
                         columns={columns}
                         density="compact"
+                        columnVisibilityModel={showColumns}
+                        onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
                         pageSizeOptions={[5, 10, 25]}
                         paginationModel={{ pageSize: rowsPerPage, page }}
                         onPaginationModelChange={(m) => {
