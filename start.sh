@@ -1,25 +1,25 @@
 #!/bin/bash
 
 # ANSI 颜色代码
-RESET='\033[0m'
-BOLD='\033[1m'
-RED='\033[31m'
-GREEN='\033[32m'
-YELLOW='\033[33m'
-BLUE='\033[34m'
-GRAY='\033[90m'
+RESET='\e[0m'
+BOLD='\e[1m'
+RED='\e[31m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+BLUE='\e[34m'
+GRAY='\e[90m'
 
-# 图标模板
-ICON_CHECK="${GREEN}✅${RESET}"
-ICON_CROSS="${RED}X${RESET}"
-ICON_WARN="${YELLOW}⚠️${RESET}"
-ICON_INFO="${BLUE}🔍${RESET}"
-ICON_START="${GREEN}🚀${RESET}"
-ICON_STOP="${RED}🛑${RESET}"
-ICON_GEAR="${YELLOW}⚙️${RESET}"
-ICON_BOOK="${BLUE}📖${RESET}"
-ICON_HAPPY="${GREEN}😄${RESET}"
-ICON_SAD="${RED}😢${RESET}"
+
+ICON_CHECK="${GREEN}[OK]${RESET}"
+ICON_CROSS="${RED}[ERROR]${RESET}"
+ICON_WARN="${YELLOW}[WARN]${RESET}"
+ICON_INFO="${BLUE}[INFO]${RESET}"
+ICON_START="${GREEN}[START]${RESET}"
+ICON_STOP="${RED}[STOP]${RESET}"
+ICON_GEAR="${YELLOW}[CFG]${RESET}"
+ICON_BOOK="${BLUE}[HELP]${RESET}"
+ICON_HAPPY="${GREEN}[OK]${RESET}"
+ICON_SAD="${RED}[FAIL]${RESET}"
 
 # ====== 配置参数 ======
 SESSION_BACK="nads_project_back"
@@ -37,17 +37,14 @@ confirm_and_kill() {
     local name=$2
 
     echo -e "${ICON_INFO} 正在检测 ${name} 服务是否运行..."
-
-    # 使用 ss 替代 lsof（无需 sudo）
-    pid=$(ss -tulnp | grep ":$port" | awk '{print $2}' | cut -d',' -f1)
+    pid=$(sudo lsof -t -i:$port 2>/dev/null)
 
     if [ -z "$pid" ]; then
         echo -e "${ICON_CHECK} 未发现 ${name} 服务运行"
         return 0
     fi
 
-    # 提示用户确认
-    read -p "${ICON_STOP} 发现 ${name} 服务正在运行（PID: $pid），是否终止？(y/n): " choice
+    read -p "发现 ${name} 服务正在运行（PID: $pid），是否终止？(y/n): " choice
     case "$choice" in
         y|Y )
             echo -e "${ICON_STOP} 正在终止 ${name} 服务..."
@@ -70,16 +67,41 @@ confirm_and_kill() {
 check_screen_session() {
     local session_name=$1
     screen -ls | grep -q "$session_name"
-    return $?  # 0 表示存在，1 表示不存在
+    return $?
 }
 
 # ====== 清理无效 Screen 会话 ======
 cleanup_screen_session() {
     local session_name=$1
     if check_screen_session "$session_name"; then
-        echo "🧹 检测到旧会话 $session_name，尝试清理..."
-        screen -S "$session_name" -X quit 2>/dev/null || echo "⚠️ 清理失败，尝试强制删除"
+        echo -e "🧹 检测到旧会话 $session_name，尝试清理..."
+        screen -S "$session_name" -X quit 2>/dev/null || echo -e  "${YELLOW}⚠️${RESET} 清理失败，尝试强制删除"
         rm -f /tmp/screen-$USER/*.$session_name 2>/dev/null
+    fi
+}
+
+# ====== 测试服务 ======
+test_services() {
+    local app_name=$1
+    local http_code
+    local time_out=5
+    local url="http://localhost"
+    if [ "$app_name" = "PHP" ]; then 
+        url="$url:8000"
+    fi
+    if [ "$app_name" = "Node" ]; then
+        url="$url:3000"
+    fi
+    echo "测试 $app_name 服务, 地址为 $url ..."
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time $time_out "$url")
+    if [ $http_code -eq 200 ]; then
+        echo -e "${GREEN}[SUCCESS] 请求成功，HTTP状态码: $http_code ${RESET}"
+    elif [ $http_code -ge 400 ] && [ $http_code -lt 500 ]; then
+        echo -e "[CLIENT ERROR] 客户端错误，状态码: $http_code"
+    elif [ $http_code -ge 500 ] && [ $http_code -lt 600 ]; then
+        echo -e "${RED}[SERVER ERROR] 服务器错误，状态码: $http_code${RESET}"
+    else
+        echo -e "${YELLOW}[UNKNOWN] 未知状态码: $http_code${RESET}"
     fi
 }
 
@@ -96,7 +118,7 @@ start_services() {
         log_file="$BACKEND_LOG"
     elif [ "$service_name" = "NODE" ]; then
         session_name="$SESSION_FRONT"
-        command="cd $FRONTEND_DIR && npm run start >> $FRONTEND_LOG"
+        command="cd $FRONTEND_DIR && npm start >> $FRONTEND_LOG"
         log_file="$FRONTEND_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
@@ -105,7 +127,6 @@ start_services() {
 
     echo -e "${ICON_START} 启动 $service_name 服务..."
 
-    # 清理旧会话
     cleanup_screen_session "$session_name"
 
     echo -e "${ICON_GEAR} 建立新会话 $session_name"
@@ -114,27 +135,64 @@ start_services() {
         return 1
     fi
 
-    # 等待会话初始化
     sleep 1
 
-    # 发送命令
     echo -e "${ICON_GEAR} 执行命令: $command"
     screen -S "$session_name" -X stuff "$command\n"
 
     echo -e "${ICON_CHECK} $service_name 服务已启动，日志记录到 $log_file"
 }
 
-read -p "${ICON_BOOK} 输入 stop（停止服务）/start（启动服务）, stop/start: " command_choice
-command_choice=$(echo "$command_choice" | tr '[:upper:]' '[:lower:]')
+
+# ====== 帮助文档函数 ======
+show_help() {
+cat << EOF
+使用指南: ./start.sh [command]
+
+启动服务: 
+  ./start.sh start
+
+停止服务:
+  ./start.sh stop
+
+测试服务:
+  ./start.sh test
+
+帮助信息:
+  ./start.sh -h | --help
+
+交互模式:
+  直接运行 ./start.sh 将进入交互式菜单
+EOF
+}
+
+# ====== 参数解析 ======
+if [ $# -gt 0 ]; then
+    case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
+        start|stop|test)
+            command_choice=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo -e "${ICON_CROSS} 错误：无效参数 '$1'"
+            show_help
+            exit 1
+            ;;
+    esac
+else
+    read -p "${ICON_BOOK} 输入 stop（停止服务）/start（启动服务）/test（测试服务）, stop/start/test: " command_choice
+    command_choice=$(echo "$command_choice" | tr '[:upper:]' '[:lower:]')
+fi
 
 if [ "$command_choice" = "start" ]; then
     echo -e "${ICON_START} 正在检测并启动服务..."
 
-    # 初始化标志变量
     PHP_NEW=false
     NODE_NEW=false
 
-    # 检测并终止 Node 服务
     confirm_and_kill $FRONTEND_PORT "Node"
     if [ $? -eq 0 ]; then
         echo -e "${ICON_CHECK} Node 服务已终止，准备启动新服务"
@@ -143,7 +201,6 @@ if [ "$command_choice" = "start" ]; then
         echo -e "${ICON_WARN} Node 服务未终止，跳过启动"
     fi
 
-    # 检测并终止 PHP 服务
     confirm_and_kill $BACKEND_PORT "PHP"
     if [ $? -eq 0 ]; then
         echo -e "${ICON_CHECK} PHP 服务已终止，准备启动新服务"
@@ -152,7 +209,6 @@ if [ "$command_choice" = "start" ]; then
         echo -e "${ICON_WARN} PHP 服务未终止，跳过启动"
     fi
 
-    # 启动服务
     if [ "$PHP_NEW" = "true" ]; then
         start_services "PHP"
     fi
@@ -174,6 +230,10 @@ elif [ "$command_choice" = "stop" ]; then
     fi
 
     echo -e "${ICON_HAPPY} Happy! 停止流程已结束！"
+elif [ "$command_choice" = "test" ]; then
+    test_services "PHP"
+    test_services "Node"
 else
+    show_help
     echo -e "${ICON_SAD} 无效输入，默认取消操作! Crying!"
 fi
