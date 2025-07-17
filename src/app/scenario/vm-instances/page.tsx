@@ -483,11 +483,6 @@ export default function VmPage() {
                 open={Boolean(actionAnchor.anchor)}
                 onClose={() => setActionAnchor({ anchor: null, id: null })}
             >
-                <MenuItem onClick={() => setActionAnchor({ anchor: null, id: null })}>
-                    <SnapshotIcon fontSize="small" sx={{ mr: 1 }} />
-                    创建快照
-                </MenuItem>
-                <Divider />
                 <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
                     <SshIcon fontSize="small" sx={{ mr: 1 }} />
                     SSH
