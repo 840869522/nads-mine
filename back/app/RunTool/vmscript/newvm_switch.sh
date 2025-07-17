@@ -16,8 +16,8 @@ echo "DEBUG: Script directory is: $SCRIPT_DIR"
 echo "DEBUG: Template directory is: $TEMPLATE_DIR"
 
 # 定义基础镜像和实例的存放目录 (保持不变)
-IMAGE_DIR="/home/yic/wurenji/nads/images"
-INSTANCE_BASE_DIR="/home/yic/wurenji/nads/instances"
+IMAGE_DIR="/home/ubuntu/virsh/images"
+INSTANCE_BASE_DIR="/home/ubuntu/virsh/instances"
 
 # 定义当前这个虚拟机的具体实例目录
 INSTANCE_DIR="$INSTANCE_BASE_DIR/$7"
@@ -82,8 +82,8 @@ echo "DEBUG: Starting virt-install..."
 virt-install --virt-type kvm \
   --network network=$6,model=virtio \
   --name "$7" \
-  --ram=4096 \
-  --vcpus=4 \
+  --ram=2048 \
+  --vcpus=2 \
   --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
   --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
   --os-variant=ubuntu20.04 \
