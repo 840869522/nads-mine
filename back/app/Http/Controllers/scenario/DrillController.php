@@ -85,6 +85,8 @@ class DrillController extends Controller
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
                 $this->cliService->createSwitch($switchName);
+                $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch'); // 连接到收集镜像的ovs
+
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
                     'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -133,6 +135,15 @@ class DrillController extends Controller
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
                 
+    
+                // 如果从节点信息中获取的镜像名称为空，或者为无效的 'vm-qemu:latest'，则使用默认镜像
+                if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
+                    // 设置一个真实存在的默认镜像
+                    $correctImageName = 'v_att_tcpScanning'; 
+                    
+                    // 记录日志，说明使用了默认镜像
+                    Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
+                }
                 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
                 $flag = ($parsedVmNode['isTarget'] ?? false) ? 'flag{' . Str::uuid()->toString() . '}' : null;
