@@ -7,17 +7,18 @@ import {
     Divider,
     Menu,
     MenuItem,
-    Tabs,
-    Tab,
     TextField,
     Typography,
     InputAdornment,
     Paper,
-    LinearProgress,
     Backdrop,
     CircularProgress,
     Skeleton,
     useTheme,
+    IconButton,
+    Checkbox,
+    Switch,
+    FormControlLabel,
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -29,21 +30,20 @@ import {
     Pause as PauseIcon,
     RestartAlt as ResetIcon,
     PowerSettingsNew as ForceOffIcon,
+    Delete as DeleteIcon,
     DesktopWindows as VncIcon,
     Terminal as SshIcon,
     LaptopWindows as RdpIcon,
     Camera as SnapshotIcon,
     KeyboardArrowDown as ArrowDownIcon,
     AddCircleOutline as AddIcon,
+    ViewColumn as ViewColumnIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
 
-import OverviewPanel from "@/components/vm/OverviewPanel";
-import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
-import StoragePanel from "@/components/vm/StoragePanel";
-import NetworkPanel from "@/components/vm/NetworkPanel";
-import EventsPanel from "@/components/vm/EventsPanel";
+// 保留 OverviewPanel 文件，但此页面不再使用
+//import OverviewPanel from "@/components/vm/OverviewPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
 
 /* ---------- 类型 ---------- */
@@ -59,6 +59,30 @@ interface VmInstance {
     scene_instance_id?: string;
     scene_name?: string;
     uptime?: string;
+}
+
+interface VCPUInfo {
+    count: number;
+    usage_percent: number;
+}
+
+interface VRAMInfo {
+    total_mb: number;
+    usage_mb: number;
+    usage_percent: number;
+}
+
+interface OverviewData {
+    status: string;
+    hostNode: string;
+    pool: string;
+    vcpu: VCPUInfo;
+    vram: VRAMInfo;
+    osType?: string;
+    persistent?: boolean;
+    autostart?: boolean;
+    uuid: string;
+    ipAddress: string;
 }
 
 /* ---------- SWR Hook ---------- */
@@ -96,6 +120,19 @@ function useVmInstances(forceRef?: React.MutableRefObject<number>) {
     return { data, error, isLoading, isValidating, mutate };
 }
 
+function useVmInfo(vmId: string) {
+    return useSWR<OverviewData>(vmId ? `/back/api/vms/${vmId}` : null, fetcher, {
+        refreshInterval: 30_000,
+        dedupingInterval: 10_000,
+        keepPreviousData: true,
+    });
+}
+
+function VmInfoCell({ id, width, children }: { id: string; width?: number; children: (d: OverviewData) => React.ReactNode }) {
+    const { data } = useVmInfo(id);
+    return data ? <>{children(data)}</> : <Skeleton width={width ?? 40} />;
+}
+
 /* ---------- 状态图标 ---------- */
 function stateIcon(state: VmInstance["state"]) {
     switch (state) {
@@ -114,68 +151,179 @@ export default function VmPage() {
     const { data, isLoading, isValidating, mutate } = useVmInstances(forceRefreshUntil);
 
     /* ---- 本地 UI 状态 ---- */
-    const [current, setCurrent] = React.useState<VmInstance | null>(null);
     const [search, setSearch] = React.useState("");
     const [page, setPage] = React.useState(0);
     const [rowsPerPage, setRowsPerPage] = React.useState(10);
-    const [tab, setTab] = React.useState(0);
-    const [actionAnchor, setActionAnchor] = React.useState<null | HTMLElement>(
-        null
-    );
+    const [actionAnchor, setActionAnchor] = React.useState<{ anchor: HTMLElement | null; id: string | null }>({ anchor: null, id: null });
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
+    const [showRunningOnly, setShowRunningOnly] = React.useState(false);
+    const [columnAnchor, setColumnAnchor] = React.useState<null | HTMLElement>(null);
+    const [showColumns, setShowColumns] = React.useState({
+        hostNode: false,
+        pool: false,
+        persistent: false,
+        autostart: false,
+    });
 
-    /* ---- 选中行同步（数据更新后仍保持同一行对象，避免重绘） ---- */
-    React.useEffect(() => {
-        if (!data) return;
-        if (current) {
-            const fresh = data.find((d) => d.id === current.id);
-            setCurrent(fresh ?? data[0] ?? null);
-        } else {
-            setCurrent(data[0] ?? null);
-        }
-    }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ---- 列定义 ---- */
     const columns = React.useMemo<GridColDef[]>(
         () => [
             {
-                field: "state",
-                headerName: "",
-                width: 40,
-                renderCell: (p) => stateIcon(p.row.state),
+                field: 'status',
+                headerName: '状态',
+                width: 80,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell>
+                ),
             },
-            { field: "name", headerName: "名称", minWidth: 160, flex: 1 },
-            { field: "hostNode", headerName: "宿主机", minWidth: 120 },
-            { field: "pool", headerName: "存储池", minWidth: 120 },
-            { field: "vcpu", headerName: "vCPU", width: 80 },
-            { field: "vmem", headerName: "内存 (MB)", width: 100 },
-            { field: "ip", headerName: "IP", minWidth: 140 },
-            { field: "scene_name", headerName: "场景名称", minWidth: 160 },
-            { field: "scene_instance_id", headerName: "场景实例ID", minWidth: 160 },
-            { field: "uptime", headerName: "运行时间", minWidth: 120 },
+            { field: 'name', headerName: '名称', flex: 1 },
+            { field: 'scene_name', headerName: '场景名称', width: 160 },
+            { field: 'scene_instance_id', headerName: '场景实例ID', width: 160 },
+            {
+                field: 'osType',
+                headerName: 'OS 类型',
+                width: 120,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={80}>{d => d.osType ?? 'N/A'}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'hostNode',
+                headerName: '宿主机',
+                width: 120,
+                hide: !showColumns.hostNode,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={80}>{d => d.hostNode}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'pool',
+                headerName: '存储池',
+                width: 120,
+                hide: !showColumns.pool,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'persistent',
+                headerName: '持久化',
+                width: 80,
+                hide: !showColumns.persistent,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.persistent ? '是' : '否'}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'autostart',
+                headerName: '自动启动',
+                width: 80,
+                hide: !showColumns.autostart,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.autostart ? '是' : '否'}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'vcpu',
+                headerName: 'vCPU',
+                width: 80,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu.count}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'memory',
+                headerName: '内存(MB)',
+                width: 100,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={40}>{d => d.vram.total_mb}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'ip',
+                headerName: 'IP',
+                width: 140,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={100}>{d => d.ipAddress}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'uuid',
+                headerName: 'UUID',
+                width: 220,
+                renderCell: (p) => (
+                    <VmInfoCell id={p.row.id} width={200}>{d => d.uuid}</VmInfoCell>
+                ),
+            },
+            {
+                field: 'actions',
+                headerName: '操作',
+                sortable: false,
+                width: 160,
+                renderCell: (params) => {
+                    const vm = params.row as VmInstance;
+                    const { data } = useVmInfo(vm.id);
+                    const state = data?.status || vm.state;
+                    const isRunning = state === 'running';
+                    const isPaused = state === 'paused';
+                    const notShutoff = state !== 'shutoff';
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            {isRunning ? (
+                                <>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
+                                        <PauseIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
+                                        <StopIcon fontSize="small" color="error" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
+                                        <ResetIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'force-off')} disabled={actionLoading}>
+                                        <ForceOffIcon fontSize="small" color="error" />
+                                    </IconButton>
+                                </>
+                            ) : (
+                                <>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}>
+                                        <StartIcon fontSize="small" color="success" />
+                                    </IconButton>
+                                </>
+                            )}
+                            <IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}>
+                                <DeleteIcon fontSize="small" color="error" />
+                            </IconButton>
+                            <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}>
+                                <ArrowDownIcon fontSize="small" />
+                            </IconButton>
+                        </Box>
+                    );
+                },
+            },
         ],
-        []
+        [actionLoading]
     );
 
     const theme = useTheme();
 
     /* ---- 行过滤 ---- */
-    const filteredRows = React.useMemo(
-        () =>
-            (data ?? []).filter((r) =>
-                r.name.toLowerCase().includes(search.toLowerCase())
-            ),
-        [data, search]
-    );
+    const filteredRows = React.useMemo(() => {
+        let rows = (data ?? []).filter((r) =>
+            r.name.toLowerCase().includes(search.toLowerCase())
+        );
+        if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
+        return rows;
+    }, [data, search, showRunningOnly]);
 
-    const handleLifecycle = async (action: string) => {
-        if (!current) return;
+    const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
         // 动作触发即刻进入快速轮询模式
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/back/api/vms/${current.id}/actions/${action}`, {
+            const res = await fetch(`/back/api/vms/${vm.id}/actions/${action}`, {
                 method: "POST",
             });
             if (!res.ok) {
@@ -184,9 +332,9 @@ export default function VmPage() {
             }
             const result = (await res.json()) as { state?: string };
             await mutate();
-            await globalMutate(`/back/api/vms/${current.id}`);
+            await globalMutate(`/back/api/vms/${vm.id}`);
             if (result.state !== "shutoff") {
-                await globalMutate(`/back/api/vms/${current.id}/metrics`);
+                await globalMutate(`/back/api/vms/${vm.id}/metrics`);
             }
         } catch (e: any) {
             alert(e.message || "Operation failed");
@@ -195,10 +343,9 @@ export default function VmPage() {
         }
     };
 
-    const handleGuac = async (proto: 'ssh' | 'rdp' | 'vnc') => {
-        if (!current) return;
+    const handleGuac = async (vm: VmInstance, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${current.name}/guac?method=${proto}`);
+            const res = await fetch(`/back/api/vms/${vm.name}/guac?method=${proto}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
 
@@ -214,21 +361,20 @@ export default function VmPage() {
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
-        setActionAnchor(null);
+        // Close the actions menu after attempting to open Guacamole
+        setActionAnchor({ anchor: null, id: null });
     };
 
-    const handleDelete = async () => {
-        if (!current) return;
-        if (!window.confirm(`确定删除虚拟机 ${current.name}？`)) return;
+    const handleDelete = async (vm: VmInstance) => {
+        if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await fetch(`/back/api/vms/${current.id}`, { method: 'DELETE' });
+            const res = await fetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
             }
             await mutate();
-            setCurrent(null);
         } catch (e: any) {
             alert(e.message || 'Failed to delete');
         } finally {
@@ -266,6 +412,11 @@ export default function VmPage() {
                         }}
                         sx={{ width: { xs: "100%", sm: 260 } }}
                     />
+                    <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+                    <FormControlLabel
+                        control={<Checkbox checked={showRunningOnly} onChange={(e)=>setShowRunningOnly(e.target.checked)} />}
+                        label="只显示运行中的虚拟机"
+                    />
                 </Box>
                 <Button
                     variant="contained"
@@ -276,39 +427,47 @@ export default function VmPage() {
                 </Button>
             </Box>
 
+            <Menu anchorEl={columnAnchor} open={Boolean(columnAnchor)} onClose={() => setColumnAnchor(null)}>
+                {Object.entries(showColumns).map(([key, val]) => (
+                    <MenuItem key={key}>
+                        <FormControlLabel
+                            control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} color="primary" />}
+                            label={
+                                key === 'hostNode' ? '宿主机' :
+                                key === 'pool' ? '存储池' :
+                                key === 'persistent' ? '持久化' :
+                                '自动启动'
+                            }
+                        />
+                    </MenuItem>
+                ))}
+            </Menu>
+
             {/* ---------- 列表区域 ---------- */}
             {isLoading ? (
                 /* === 首次 Skeleton === */
                 <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 1 }} />
             ) : (
-                <Box
-                    component={Paper}
-                    sx={{
-                        boxShadow: 3,
-                        height: "50vh",
-                        display: "flex",
-                        flexDirection: "column",
-                        position: "relative",
-                    }}
-                >
+                <Box component={Paper} sx={{ boxShadow: 3 }}>
                     {/* 进度条移动至按钮区域 */}
 
                     <DataGrid
+                        autoHeight
                         rows={filteredRows}
                         columns={columns}
                         density="compact"
+                        columnVisibilityModel={showColumns}
+                        onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
                         pageSizeOptions={[5, 10, 25]}
                         paginationModel={{ pageSize: rowsPerPage, page }}
                         onPaginationModelChange={(m) => {
                             setRowsPerPage(m.pageSize);
                             setPage(m.page);
                         }}
-                        onRowClick={(p) => setCurrent(p.row)}
                         sx={{
-                            height: "100%",
-                            "& .MuiDataGrid-columnHeaders": {
+                            '& .MuiDataGrid-columnHeaders': {
                                 bgcolor:
-                                    theme.palette.mode === "dark"
+                                    theme.palette.mode === 'dark'
                                         ? theme.palette.grey[800]
                                         : theme.palette.grey[200],
                             },
@@ -317,149 +476,27 @@ export default function VmPage() {
                 </Box>
             )}
 
-            {/* ---------- 详情面板 ---------- */}
-            {current && (
-                <Box
-                    component={Paper}
-                    sx={{
-                        mt: 3,
-                        p: 2,
-                        display: "flex",
-                        flexDirection: "column",
-                        minHeight: "50vh",
-                        boxShadow: 3,
-                        overflow: "auto",
-                    }}
-                >
-                    {/* --- Action Bar --- */}
-                    <Box sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1, position: 'relative' }}>
-                        {actionLoading && (
-                            <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 }} />
-                        )}
-                        {stateIcon(current.state)}
-                        <Typography sx={{ mr: 2 }}>{current.name}</Typography>
-
-                        {current.state === "running" ? (
-                            <>
-                                <Button
-                                    size="small"
-                                    startIcon={<PauseIcon />}
-                                    disabled={actionLoading}
-                                    onClick={() => handleLifecycle("pause")}
-                                >
-                                    暂停
-                                </Button>
-                                <Button
-                                    size="small"
-                                    startIcon={<StopIcon />}
-                                    disabled={actionLoading}
-                                    onClick={() => handleLifecycle("shutdown")}
-                                >
-                                    关机
-                                </Button>
-                                <Button
-                                    size="small"
-                                    startIcon={<ResetIcon />}
-                                    disabled={actionLoading}
-                                    onClick={() => handleLifecycle("reboot")}
-                                >
-                                    重启
-                                </Button>
-                                <Button
-                                    size="small"
-                                    startIcon={<ForceOffIcon />}
-                                    disabled={actionLoading}
-                                    onClick={() => handleLifecycle("force-off")}
-                                >
-                                    强制关闭
-                                </Button>
-                            </>
-                        ) : (
-                            <Button
-                                size="small"
-                                startIcon={<StartIcon />}
-                                disabled={actionLoading}
-                                onClick={() => handleLifecycle(current.state === "paused" ? "resume" : "start")}
-                            >
-                                {current.state === "paused" ? "继续" : "启动"}
-                            </Button>
-                        )}
-                        {current.state !== "shutoff" && current.state !== "running" && (
-                            <Button
-                                size="small"
-                                startIcon={<ForceOffIcon />}
-                                disabled={actionLoading}
-                                onClick={() => handleLifecycle("force-off")}
-                            >
-                                强制关闭
-                            </Button>
-                        )}
-
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            sx={{ ml: "auto" }}
-                            color="error"
-                            disabled={actionLoading}
-                            onClick={handleDelete}
-                        >
-                            删除
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            endIcon={<ArrowDownIcon />}
-                            onClick={(e) => setActionAnchor(e.currentTarget)}
-                        >
-                            更多
-                        </Button>
-                    </Box>
-
-                    {/* --- Tabs --- */}
-                    <Tabs
-                        value={tab}
-                        onChange={(_, v) => setTab(v)}
-                        sx={{ borderBottom: 1, borderColor: "divider", pl: 2 }}
-                    >
-                        {/*{["概览", "快照", "存储", "网络", "事件"].map((l) => (*/}
-                        {["概览"].map((l) => (
-                            <Tab key={l} label={l} />
-                        ))}
-                    </Tabs>
-
-                    {/* --- Panels --- */}
-                    <Box sx={{ flex: 1, p: 2 }}>
-                        {tab === 0 && current && <OverviewPanel vmId={current.id} />}
-                        {/*
-                        {tab === 1 && current && <SnapshotsPanel vmId={current.id} />}
-                        {tab === 2 && current && <StoragePanel vmId={current.id} />}
-                        {tab === 3 && current && <NetworkPanel vmId={current.id} />}
-                        {tab === 4 && current && <EventsPanel vmId={current.id} />}
-                        */}
-                    </Box>
-                </Box>
-            )}
 
             {/* ---------- More Actions Menu ---------- */}
             <Menu
-                anchorEl={actionAnchor}
-                open={Boolean(actionAnchor)}
-                onClose={() => setActionAnchor(null)}
+                anchorEl={actionAnchor.anchor}
+                open={Boolean(actionAnchor.anchor)}
+                onClose={() => setActionAnchor({ anchor: null, id: null })}
             >
-                <MenuItem onClick={() => setActionAnchor(null)}>
+                <MenuItem onClick={() => setActionAnchor({ anchor: null, id: null })}>
                     <SnapshotIcon fontSize="small" sx={{ mr: 1 }} />
                     创建快照
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={() => handleGuac('ssh')}>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
                     <SshIcon fontSize="small" sx={{ mr: 1 }} />
                     SSH
                 </MenuItem>
-                <MenuItem onClick={() => handleGuac('rdp')}>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'rdp'); setActionAnchor({ anchor: null, id: null }); }}>
                     <RdpIcon fontSize="small" sx={{ mr: 1 }} />
                     RDP
                 </MenuItem>
-                <MenuItem onClick={() => handleGuac('vnc')}>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'vnc'); setActionAnchor({ anchor: null, id: null }); }}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
                     VNC 控制台
                 </MenuItem>
