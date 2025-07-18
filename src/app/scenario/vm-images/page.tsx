@@ -23,7 +23,6 @@ import {
     useTheme,
 } from "@mui/material"
 import {
-    Edit as EditIcon,
     Delete as DeleteIcon,
     PlayArrow as StartIcon,
     CloudUpload as UploadIcon,
@@ -131,9 +130,13 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         img.description?.toLowerCase().includes(search.toLowerCase())
     )
 
-    const handleDelete = (id: string) => {
-        if (confirm("确定要删除这个虚拟机镜像吗？")) {
+    const handleDelete = async (id: string) => {
+        if (!confirm("确定要删除这个虚拟机镜像吗？")) return
+        try {
+            await fetch(`/back/api/vms/images/${id}`, { method: 'DELETE' })
             setImages((prev) => prev.filter((img) => img.id !== id))
+        } catch {
+            alert('删除失败')
         }
     }
 
@@ -165,7 +168,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
-        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',
@@ -195,11 +197,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                     <Tooltip title="启动">
                         <IconButton size="small" onClick={() => handleStart(params.row)}>
                             <StartIcon color="success" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="编辑">
-                        <IconButton size="small" onClick={() => handleOpenDialog(params.row)}>
-                            <EditIcon />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="删除">

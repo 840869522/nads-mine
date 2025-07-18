@@ -186,6 +186,7 @@ use Illuminate\Support\Facades\Route;
         $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
         Route::get('/', [$c, 'listVms']);
         Route::get('/images', [$c, 'listVmImages']);
+        Route::delete('/images/{image}', [$c, 'deleteVmImage']);
         Route::post('/create', [$c, 'createVm']);
         Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
         Route::get('/{vm_id}', [$c, 'getVmInfo']);

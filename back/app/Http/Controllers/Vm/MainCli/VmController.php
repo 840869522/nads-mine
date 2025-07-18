@@ -267,6 +267,18 @@ class VmController extends Controller
         return response()->json($data, 200);
     }
 
+    // DELETE /vms/images/{image}
+    public function deleteVmImage($image)
+    {
+        try {
+            $this->runVirsh('vol-delete', $image, '--pool', 'default');
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['message' => 'deleted'], 200);
+    }
+
     // POST /vms/create
     public function createVm(Request $request)
     {
