@@ -161,7 +161,7 @@ class DrillController extends Controller
 
                 $this->cliService->createVm([
                     'id'                  => $vmDbId,
-                    'vm_name'             => $vmName, // <--- 添加此行
+                    'vm_name'             => $vmName, // 
                     'image'               => $correctImageName, // 使用从解析结果中得到的正确镜像名
                    
                     'ip'                  => $ip,

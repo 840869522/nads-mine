@@ -154,7 +154,8 @@ use Illuminate\Support\Facades\Route;
         Route::get('/', [InstanceController::class, 'index']);
         // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
-
+        // 获取单个场景实例的vm详细信息
+        Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     });
 
     Route::prefix('images')->group(function () {
