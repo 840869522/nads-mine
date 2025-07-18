@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Vm\MainCli;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Models\scenario\SceneVmInstance;
 use Symfony\Component\Process\Process;
 use Illuminate\Support\Str;
 
@@ -757,7 +759,7 @@ class VmController extends Controller
     }
 
     // DELETE /vms/{vm_id}
-    public function deleteVm($vmId)
+    public function deleteVm(Request $request, $vmId)
     {
         try {
             try { $this->runVirsh('destroy', $vmId); } catch (\Throwable $e) {}
@@ -765,6 +767,16 @@ class VmController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+
+        $domain = $request->input('domain_name');
+        if ($domain) {
+            try {
+                SceneVmInstance::where('c_vm_name', $domain)->delete();
+            } catch (\Throwable $e) {
+                Log::error('Failed to delete VM record: ' . $e->getMessage(), ['domain' => $domain]);
+            }
+        }
+
         return response()->json(['message' => 'deleted'], 200);
     }
 }

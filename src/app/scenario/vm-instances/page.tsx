@@ -369,7 +369,7 @@ export default function VmPage() {
         if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
+            const res = await fetch(`/back/api/vms/${vm.id}?domain_name=${encodeURIComponent(vm.name)}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
