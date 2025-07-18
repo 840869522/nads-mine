@@ -245,9 +245,6 @@ export default function VmPage() {
                 field: 'ip',
                 headerName: 'IP',
                 width: 140,
-                renderCell: (p) => (
-                    <VmInfoCell id={p.row.id} width={100}>{d => d.ipAddress}</VmInfoCell>
-                ),
             },
             {
                 field: 'uuid',
