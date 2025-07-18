@@ -36,3 +36,5 @@ demo-linux.qcow2
 libvirt
 src/.venv
 images
+
+mima.md

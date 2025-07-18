@@ -21,20 +21,24 @@ ICON_BOOK="${BLUE}[HELP]${RESET}"
 ICON_HAPPY="${GREEN}[OK]${RESET}"
 ICON_SAD="${RED}[FAIL]${RESET}"
 
+SCRIPT_PATH=$(readlink -f "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+
 # ====== 配置参数 ======
 SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
-FRONTEND_DIR="/var/www/html/nads/front"
-BACKEND_DIR="/var/www/html/nads/back"
-FRONTEND_LOG="front.log"
-BACKEND_LOG="back.log"
+FRONTEND_DIR="$SCRIPT_DIR/src"
+BACKEND_DIR="$SCRIPT_DIR/back"
+FRONTEND_LOG="$FRONTEND_DIR/front.log"
+BACKEND_LOG="$BACKEND_DIR/back.log"
 
 # ====== 检测并终止单个服务函数 ======
 confirm_and_kill() {
     local port=$1
     local name=$2
+    local cmd_filter
 
     echo -e "${ICON_INFO} 正在检测 ${name} 服务是否运行..."
     pid=$(sudo lsof -t -i:$port 2>/dev/null)
@@ -85,12 +89,15 @@ test_services() {
     local app_name=$1
     local http_code
     local time_out=5
+    local port
     local url="http://localhost"
     if [ "$app_name" = "PHP" ]; then 
         url="$url:8000"
+        port=8000
     fi
     if [ "$app_name" = "Node" ]; then
         url="$url:3000"
+        port=3000
     fi
     echo "测试 $app_name 服务, 地址为 $url ..."
     http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time $time_out "$url")
@@ -102,6 +109,14 @@ test_services() {
         echo -e "${RED}[SERVER ERROR] 服务器错误，状态码: $http_code${RESET}"
     else
         echo -e "${YELLOW}[UNKNOWN] 未知状态码: $http_code${RESET}"
+        echo -e "${ICON_INFO} 正在检测 ${app_name} 服务是否运行..."
+        pid_test=$(sudo lsof -t -i:$port 2>/dev/null)
+
+        if [ -z "$pid_test" ]; then
+            echo -e "${ICON_CHECK} 未发现 ${app_name} 服务运行"
+        else
+            echo "发现 ${app_name} 服务正在运行（PID: $pid_test）"
+        fi
     fi
 }
 
@@ -118,7 +133,12 @@ start_services() {
         log_file="$BACKEND_LOG"
     elif [ "$service_name" = "NODE" ]; then
         session_name="$SESSION_FRONT"
-        command="cd $FRONTEND_DIR && npm start >> $FRONTEND_LOG"
+        read -p "选择前端运行模式 dev or build" mode
+        if [ "$mode" = "build" ]; then
+            command="cd $FRONTEND_DIR && npm run build && npm start >> $FRONTEND_LOG"
+        elif [ "$mode" = "dev" ]; then 
+            command="cd $FRONTEND_DIR && npm run dev >> $FRONTEND_LOG"
+        fi
         log_file="$FRONTEND_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
