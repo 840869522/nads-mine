@@ -316,6 +316,12 @@ XML;
             $command[] = '-e';
             $command[] = "{$env['key']}={$env['value']}";
         }
+    // 检查是否存在场景实例ID，如果存在，则将其与容器名拼接后添加为环境变量
+    if (!empty($options['scene_instance_id']) && !empty($options['name'])) {
+        $command[] = '-e';
+        // 将环境变量 SCENE_ID 的值设置为 "容器名_场景实例ID" 的格式
+        $command[] = "SCENE_ID={$options['name']}_{$options['scene_instance_id']}";
+    }
 
         // c. 添加端口映射
         foreach ($options['ports'] ?? [] as $port) {

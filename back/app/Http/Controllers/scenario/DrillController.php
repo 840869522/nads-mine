@@ -98,8 +98,11 @@ class DrillController extends Controller
                  $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
                  // ... (Container creation logic remains the same)
                  $options = [
-                    'image' => $containerData['image'], 'name'  => $containerName,
-                    'ports' => $containerData['portMappings'], 'env'   => $containerData['env'],
+                    'image' => $containerData['image'], 
+                    'name'  => $containerName,
+                    'ports' => $containerData['portMappings'], 
+                    'env'   => $containerData['env'],
+                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
                  $flag = $containerData['isTarget'] ? 'flag{' . Str::uuid()->toString() . '}' : null;
                  if ($flag) $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
