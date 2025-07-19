@@ -1,18 +1,21 @@
 "use client";
 
 import { apiClientWithToken } from "@/utils/axios";
-import { Box, Paper, Typography, Alert as MuiAlert, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
+import { Box, Paper, Typography, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
-import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import QuestionModalForm, { QuestionFormData, QuestionDisplayItem } from "@/components/learning/QuestionModalForm";
 import { Array2String, String2Array } from "@/utils/string";
-import { SnippetFolderRounded } from "@mui/icons-material";
 import { ColorMap } from "@/utils/color";
 import { toast } from "react-toastify";
+import { SafetyCheckOutlined } from "@mui/icons-material";
+import ViewQuestionModal from "@/components/learning/ViewQuesitonModal";
+
 
 type Order = `asc` | `desc`;
 type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
@@ -31,12 +34,12 @@ const QuestionPage: React.FC = () => {
   const [questions, setQuestions] = useState<QuestionDisplayItem[]>([]);
   const [questionsCount, setQuestionsCount] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(5);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
   const [questionToEdit, setQuesionToEdit] = useState<QuestionDisplayItem | null>(null);
-
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | "error", text: string } | null>(null);
+  const [questionCheck, setQuestionCheck] = useState(null);
+  const [checkOpen, setCheckOpen] = useState(false);
   const [tableLaoding, setTableLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState({ data: "", flag: false });
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -187,6 +190,11 @@ const QuestionPage: React.FC = () => {
   const handelDeleteQuestionClick = (question: QuestionDisplayItem) => {
     setIsConfirmDeleteOpen(true);
     setQuesionToDelete(question);
+  }
+
+  const handelCheckQuestion = ( question: QuestionDisplayItem) =>{
+    setQuestionCheck(question);
+    setCheckOpen(true);
   }
 
 
@@ -387,12 +395,16 @@ const QuestionPage: React.FC = () => {
                           />
                         ))}
                       </Box>
-
                     </TableCell>
                     <TableCell>
                       {question.c_create_at}
                     </TableCell>
                     <TableCell align="center">
+                      <Tooltip title="查看试题详细">
+                        <IconButton size="small" onClick={()=>handelCheckQuestion(question)} color="default">
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="编辑试题">
                         <IconButton size="small" onClick={() => handleEditQuestionClick(question)} color="primary">
                           <EditIcon />
@@ -416,7 +428,7 @@ const QuestionPage: React.FC = () => {
           </TableBody>
         </Table>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[10, 30, 50]}
           component="div"
           count={questionsCount}
           rowsPerPage={rowsPerPage}
@@ -436,6 +448,16 @@ const QuestionPage: React.FC = () => {
         onClose={() => setIsQuestionModalOpen(false)}
         initialQuestion={questionToEdit}
       />
+
+      {
+        questionCheck && (
+          <ViewQuestionModal
+            open={checkOpen}
+            onCancle={()=>setCheckOpen(false)}
+            initialData={questionCheck}
+          />
+        )
+      }
 
 
       {questionToDelete && (

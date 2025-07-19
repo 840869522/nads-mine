@@ -12,8 +12,7 @@
     use Illuminate\Support\Facades\Log;
 
     class UserController extends Controller{
-
-
+        
         public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {
