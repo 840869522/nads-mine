@@ -68,30 +68,34 @@ n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config"
 n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 
-# 创建 cloud-init 使用的 ISO 文件
-echo "DEBUG: Creating cloud-init ISO image..."
-genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
-echo "DEBUG: ISO image created."
+# 將所有慢速操作打包到一個子Shell中，並將其整體放入後台
+(
+  # 創建 cloud-init 使用的 ISO 文件
+  echo "BACKGROUND: Creating cloud-init ISO image..."
+  genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
+  echo "BACKGROUND: ISO image created."
 
-# 复制并可能转换基础镜像到实例目录
-echo "DEBUG: Copying base image to instance directory..."
-# 使用 qemu-img convert 来复制和转换，这更安全，可以处理不同格式
-qemu-img convert -O qcow2 "$SOURCE_IMAGE_PATH" "$DESTINATION_IMAGE_PATH"
-echo "DEBUG: Image copied and converted to qcow2 format."
+  # 複製並可能轉換基礎镜像到實例目錄
+  echo "BACKGROUND: Copying base image to instance directory..."
+  qemu-img convert -O qcow2 "$SOURCE_IMAGE_PATH" "$DESTINATION_IMAGE_PATH"
+  echo "BACKGROUND: Image copied and converted to qcow2 format."
 
+  # 執行 virt-install 命令
+  echo "BACKGROUND: Starting virt-install..."
+  virt-install --virt-type kvm \
+    --network network=$6,model=virtio \
+    --name "$7" \
+    --ram=2048 \
+    --vcpus=2 \
+    --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
+    --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
+    --os-variant=ubuntu20.04 \
+    --graphics vnc,listen=0.0.0.0 \
+    --noautoconsole \
+    --import
+  
+  echo "BACKGROUND: virt-install command for $7 completed."
 
-# 执行 virt-install 命令
-echo "DEBUG: Starting virt-install..."
-virt-install --virt-type kvm \
-  --network network=$6,model=virtio \
-  --name "$7" \
-  --ram=2048 \
-  --vcpus=2 \
-  --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
-  --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
-  --os-variant=ubuntu20.04 \
-  --graphics vnc,listen=0.0.0.0 \
-  --noautoconsole \
-  --import
+) > /dev/null 2>&1 &
 
-echo "DEBUG: virt-install command for $7 completed."
+echo "DEBUG: All slow tasks for VM '$7' have been dispatched to the background."
