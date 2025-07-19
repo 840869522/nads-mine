@@ -1,8 +1,8 @@
 <?php
 
 
-use App\Http\Controllers\ad\AdConfigController;
-use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\ad\AdConfigController;
+    use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
