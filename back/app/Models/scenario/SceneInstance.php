@@ -46,29 +46,33 @@ class SceneInstance extends Model
     }
 
     /**
-     * 【在这里添加这个方法】
-     * * 定义一个“场景实例”拥有多个“容器实例”的“一对多”关联关系。
-     * 当控制器中调用 $instance->load('containers') 时，Laravel会查找并执行此方法。
-     *
+     * 定义一个“场景实例”拥有多个“容器实例”的“一对多”关联关系。
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function containers()
     {
-        // 这个方法的参数是：
-        // 1. 关联的模型类: SceneContainerInstance::class
-        // 2. 关联表中的外键: 'c_scene_instances_id' (在 c_scene_container_instances 表中)
-        // 3. 本地表中的主键: 'c_scene_instances_id' (在 c_scene_instances 表中)
-        // 您的命名非常规范，所以外键和主键名是一样的。
         return $this->hasMany(SceneContainerInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
+
     /**
-     * 【新增的关联方法】
      * 定义一个“场景实例”拥有多个“交换机实例”的“一对多”关联关系。
-     *
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function switches()
     {
         return $this->hasMany(SceneSwitchInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
+    }
+    
+    /**
+     * ★★★ 在这里添加这个方法 ★★★
+     * 定义一个“场景实例”拥有多个“虚拟机实例”的“一对多”关联关系。
+     * * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function vms()
+    {
+        // 参数1: 关联的模型类: SceneVmInstance::class
+        // 参数2: SceneVmInstance 表中的外键: 'c_scene_instances_id'
+        // 参数3: SceneInstance (当前模型) 表中的主键: 'c_scene_instances_id'
+        return $this->hasMany(SceneVmInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
 }

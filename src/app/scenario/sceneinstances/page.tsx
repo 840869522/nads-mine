@@ -10,9 +10,8 @@ import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
     Visibility as ViewIcon,
-    StopCircle as StopIcon,
+    Delete as DeleteIcon, // <-- 关键改动：导入删除图标
 } from '@mui/icons-material';
-// 关键改动：导入正确的 Dialog 组件
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 
 interface ScenarioInstance {
@@ -45,7 +44,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
 
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
-    // 新增 state 用于存储场景名称
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
 
     const fetchInstances = useCallback(async () => {
@@ -75,16 +73,35 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         fetchInstances();
     };
 
-    // 关键改动：传递整个 instance 对象
     const handleViewDetails = (instance: ScenarioInstance) => {
         setSelectedInstanceId(instance.instance_id);
-        setSelectedScenarioName(instance.scenario_name); // 保存场景名称
+        setSelectedScenarioName(instance.scenario_name);
         setIsDetailsModalOpen(true);
     };
 
-    const handleStopInstance = (instanceId: string) => {
-        if (window.confirm(`您确定要停止实例 ${instanceId} 吗？所有容器将被删除。`)) {
-            alert(`功能待开发：停止并清理实例 ${instanceId}。`);
+    //  实现删除场景实例的功能
+    const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
+        if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
+            setIsLoading(true); // 开始加载，防止用户重复点击
+            try {
+                const response = await fetch(`/back/api/scenariosinstances/${instanceId}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `删除失败，状态码: ${response.status}`);
+                }
+
+                // 删除成功后，从列表中移除该实例，实现实时刷新
+                setInstances(prevInstances => prevInstances.filter(inst => inst.instance_id !== instanceId));
+                
+            } catch (err: any) {
+                // 显示错误提示
+                setError(err.message || '删除过程中发生错误');
+            } finally {
+                setIsLoading(false); // 结束加载
+            }
         }
     };
 
@@ -135,6 +152,9 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>),}}
                     />
                 </Box>
+                
+                {/* [关键改动] 如果有错误信息，则显示 */}
+                {error && <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
                 <TableContainer>
                     <Table>
@@ -165,10 +185,8 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isLoading ? (
+                            {isLoading && instances.length === 0 ? (
                                 <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
-                            ) : error ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Alert severity="error">{error}</Alert></TableCell></TableRow>
                             ) : paginatedInstances.length === 0 ? (
                                 <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
                             ) : (
@@ -182,9 +200,9 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
-                                            {/* 关键改动：传递整个 instance 对象 */}
                                             <Tooltip title="查看详情"><IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}><ViewIcon /></IconButton></Tooltip>
-                                            <Tooltip title="停止场景"><IconButton color="error" size="small" onClick={() => handleStopInstance(instance.instance_id)}><StopIcon /></IconButton></Tooltip>
+                                            {/* [关键改动] 修改为删除按钮 */}
+                                            <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}><DeleteIcon /></IconButton></Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -205,7 +223,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 />
             </Paper>
             
-            {/* 关键改动：传递 scenarioName prop */}
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
