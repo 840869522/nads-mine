@@ -265,6 +265,10 @@
             Route::post('/test_del', [TestController::class, 'test_del']);
             Route::post('/test_list', [TestController::class, 'test_list']);
             Route::post('/test_info', [TestController::class, 'test_info']);
+            Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
+            Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
+            Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+            Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
         });
     });
 
