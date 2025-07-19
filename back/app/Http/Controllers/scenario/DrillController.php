@@ -118,6 +118,14 @@ class DrillController extends Controller
 
             // 3. 创建虚拟机并处理其直接网络连接
             Log::info("================== 开始创建虚拟机并建立连接 ==================");
+            
+            // --- 核心修改：动态生成路径 ---
+            $baseDir = $this->_get_global_directory();
+            // $imageDir = $baseDir . '/virsh/images';
+            $imageDir = '/home/ubuntu/virsh/images';
+            // 实例目录使用场景实例ID，确保唯一性
+            $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
+            
             foreach ($connections as $conn) {
                 $itemNode = null; $switchNode = null; $ip = null;
 
@@ -133,18 +141,11 @@ class DrillController extends Controller
 
                 if (!$itemNode || !$switchNode) continue;
                 
-                
-                // 从解析好的虚拟机信息中获取正确的镜像名称
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
                 
-    
-                // 如果从节点信息中获取的镜像名称为空，或者为无效的 'vm-qemu:latest'，则使用默认镜像
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
-                    // 设置一个真实存在的默认镜像
                     $correctImageName = 'v_att_tcpScanning'; 
-                    
-                    // 记录日志，说明使用了默认镜像
                     Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
                 }
                 
@@ -164,13 +165,14 @@ class DrillController extends Controller
 
                 $this->cliService->createVm([
                     'id'                  => $vmDbId,
-                    'vm_name'             => $vmName, // 
-                    'image'               => $correctImageName, // 使用从解析结果中得到的正确镜像名
-                   
+                    'vm_name'             => $vmName, 
+                    'image'               => $correctImageName,
                     'ip'                  => $ip,
-                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
                     'flag'                => $flag ?? 'NULL',
                     'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir, // <-- 传递镜像目录
+                    'instance_base_dir'   => $instanceBaseDir, // <-- 传递实例根目录
                 ]);
                 
                 $createdItemsInfo[$itemNode['id']] = [

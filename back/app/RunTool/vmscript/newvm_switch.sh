@@ -2,9 +2,9 @@
 # 遇到任何错误则立即退出
 set -e
 
-# 检查参数数量是否为6
-if [ $# != 7 ]; then
-  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name vm_name"
+# 检查参数数量是否为9
+if [ $# != 9 ]; then
+  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name vm_name IMAGE_DIR INSTANCE_BASE_DIR"
   exit 1;
 fi
 
@@ -15,9 +15,12 @@ TEMPLATE_DIR="$SCRIPT_DIR"
 echo "DEBUG: Script directory is: $SCRIPT_DIR"
 echo "DEBUG: Template directory is: $TEMPLATE_DIR"
 
-# 定义基础镜像和实例的存放目录 (保持不变)
-IMAGE_DIR="/home/ubuntu/virsh/images"
-INSTANCE_BASE_DIR="/home/ubuntu/virsh/instances"
+# --- 核心修改：从命令行参数获取目录 ---
+IMAGE_DIR="$8"
+INSTANCE_BASE_DIR="$9"
+
+echo "DEBUG: IMAGE_DIR set to: $IMAGE_DIR"
+echo "DEBUG: INSTANCE_BASE_DIR set to: $INSTANCE_BASE_DIR"
 
 # 定义当前这个虚拟机的具体实例目录
 INSTANCE_DIR="$INSTANCE_BASE_DIR/$7"
