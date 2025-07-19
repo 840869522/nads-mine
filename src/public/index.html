@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>guacamole-lite test</title>
+<style>
+html, body {
+    height: 100%;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+#display{
+    flex-grow:1;
+    width:100%;
+    background:#000;         /* 盖掉白边 */
+    display:flex;            /* 让画面水平垂直居中（可选）*/
+    justify-content:center;
+    align-items:center;
+}
+#display > div {               /* Guacamole 根元素就是 #display 里的第一个 <div> */
+    transform-origin: top left;/* 保证 scale 后 (0,0) 仍是左上角 */
+}
+
+#app-container {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#connection-screen {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: flex-start;
+    align-items: center;
+    background-color: #f5f5f5;
+    padding-top: 60px;
+    box-sizing: border-box;
+}
+
+#connection-form {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 25px;
+    width: 90%;
+    max-width: 600px;
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.form-row {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+#remote-host-details {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#remote-host-details.visible {
+    display: flex;
+}
+
+/*
+#join-connection-details {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#join-connection-details.visible {
+    display: flex;
+}
+*/
+
+label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+input, select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+button {
+    padding: 12px 20px;
+    background-color: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #3367d6;
+}
+
+#display-screen {
+    display: flex; /* show display by default */
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+#display-header {
+    display: flex;
+    padding: 10px;
+    background-color: #333;
+    color: white;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#display-title {
+    font-weight: bold;
+}
+
+#display-uuid {
+    margin-left: 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #aee;
+}
+
+#display-uuid:hover {
+    text-decoration: underline;
+}
+
+#close-button {
+    padding: 8px 15px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+
+.guac-hide-cursor {
+    cursor: url('data:image/gif;base64,R0lGODlhIAAgAIABAAAAAP///yH5BAEKAAEALAAAAAAgACAAAAIfRI6py+0Po5y02ouz3rz7D4biSJbmIabqyrbuC8dmAQA7'), default;
+}
+
+/* Radio button styles */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+}
+
+.radio-option label {
+    margin-left: 8px;
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+/* Checkbox styles */
+.checkbox-option {
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-option input[type="checkbox"] {
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.checkbox-option label {
+    margin-bottom: 0;
+    cursor: pointer;
+    font-weight: normal;
+} 
+</style>
+</head>
+<body>
+<div id="app-container">
+    <!-- Connection Screen (disabled) -->
+    <!--
+    <div id="connection-screen">
+        <div id="connection-form">
+            <h2 class="form-header">Guacamole Remote Connection</h2>
+
+            <div class="form-row">
+                <label>Connection Type:</label>
+                <div id="connection-type" class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="connection-type-new" name="connection-type" value="new">
+                        <label for="connection-type-new">New Connection</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="connection-type-join" name="connection-type" value="join">
+                        <label for="connection-type-join">Join Connection</label>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label>Protocol:</label>
+                <div id="protocol" class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="protocol-rdp" name="protocol" value="rdp" checked>
+                        <label for="protocol-rdp">RDP</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="protocol-vnc" name="protocol" value="vnc">
+                        <label for="protocol-vnc">VNC</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label>Connect to:</label>
+                <div id="connect-target" class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="connect-target-test" name="connect-target" value="test-host" checked>
+                        <label for="connect-target-test">Test Host</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="connect-target-remote" name="connect-target" value="remote-host">
+                        <label for="connect-target-remote">Remote Host</label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="remote-host-details">
+                <div class="form-row">
+                    <label for="remote-hostname">Host:</label>
+                    <input type="text" id="remote-hostname" placeholder="hostname or IP">
+                </div>
+                <div class="form-row">
+                    <label for="remote-username">Username:</label>
+                    <input type="text" id="remote-username">
+                </div>
+                <div class="form-row">
+                    <label for="remote-password">Password:</label>
+                    <input type="password" id="remote-password">
+                </div>
+            </div>
+
+
+            <div id="join-connection-details">
+                <div class="form-row">
+                    <label for="connection-id">Connection ID:</label>
+                    <input type="text" id="connection-id" placeholder="Enter connection ID to join">
+                </div>
+                <div class="form-row">
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="read-only" value="true">
+                        <label for="read-only">Read-only mode</label>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="form-row" style="margin-top: 20px;">
+                <button id="connect-button">Connect</button>
+            </div>
+        </div>
+    </div>
+    -->
+
+    <!-- Display Screen -->
+    <div id="display-screen">
+        <div id="display-header">
+            <div id="display-title">Remote Connection</div>
+            <span id="display-uuid" title="Click to copy Connection ID"></span>
+            <button id="close-button">Disconnect</button>
+        </div>
+        <!-- The remote-desktop surface -->
+        <div id="display"></div>
+    </div>
+</div>
+
+<!-- Hidden textarea for clipboard integration -->
+<textarea id="clipboard-textarea" style="position: absolute; left: -9999px;"></textarea>
+
+<script src="./js/guacamole-common.min.js"></script>
+<script src="./js/crypto-js.min.js"></script>
+
+<script>
+    async function generateGuacamoleToken(tokenObj) {
+        // 演示用固定密钥：与原始示例一致（32 字符 -> 32 字节 -> AES-256）
+        const KEY_STR = '0123456789abcdef0123456789abcdef';
+
+        // --- 校验 CryptoJS 可用 ---
+        if (typeof CryptoJS === 'undefined' || !CryptoJS.AES) {
+            throw new Error("CryptoJS (AES) 未加载，无法生成 token。");
+        }
+
+        // --- 构造 key / iv / 明文 ---
+        const key       = CryptoJS.enc.Utf8.parse(KEY_STR);            // 32-byte key
+        const iv        = CryptoJS.lib.WordArray.random(16);           // 16-byte IV (CBC)
+        const plaintext = CryptoJS.enc.Utf8.parse(JSON.stringify(tokenObj));
+
+        // --- AES-256-CBC + PKCS#7 填充 ---
+        const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        });
+
+        // CryptoJS.AES.encrypt 返回一个 CipherParams；密文在 encrypted.ciphertext
+        const ctBase64 = CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
+        const ivBase64 = CryptoJS.enc.Base64.stringify(iv);
+
+        // 与原函数保持相同打包格式：外层再 btoa 一次
+        const tokenPayload = {
+            iv:    ivBase64,
+            value: ctBase64
+        };
+
+        return btoa(JSON.stringify(tokenPayload));
+    }
+</script>
+<script>
+// DOM elements
+// const connectionScreen = document.getElementById('connection-screen');
+const displayScreen = document.getElementById('display-screen');
+const connectTargetRadios = document.querySelectorAll('input[name="connect-target"]');
+const remoteHostDetailsDiv = document.getElementById('remote-host-details');
+const connectButton = document.getElementById('connect-button');
+const closeButton = document.getElementById('close-button');
+const protocolRadios = document.querySelectorAll('input[name="protocol"]');
+const connectionTypeRadios = document.querySelectorAll('input[name="connection-type"]');
+const remoteHostnameInput = document.getElementById('remote-hostname');
+const remoteUsernameInput = document.getElementById('remote-username');
+const remotePasswordInput = document.getElementById('remote-password');
+// const joinConnectionDetailsDiv = document.getElementById('join-connection-details');
+// const connectionIdInput = document.getElementById('connection-id');
+// const readOnlyCheckbox = document.getElementById('read-only');
+const displayUuid = document.getElementById('display-uuid');
+
+let currentClient = null; // Store the current Guacamole client
+let currentKeyboard = null; // Store the keyboard handler
+let pasteEventListener = null; // Store the paste event listener reference
+let currentScale = 1;
+function fitDisplay() {                    // ← 新增
+    if (!currentClient) return;            // 客户端还没建立时跳过
+    const display = currentClient.getDisplay();
+    const elem    = display.getElement();  // 根 <div>
+    const parent  = elem.parentElement;    // #display
+
+    // 父容器可用尺寸
+    const availW  = parent.clientWidth;
+    const availH  = parent.clientHeight;
+
+    // 远端实际分辨率
+    const remoteW = display.getWidth();
+    const remoteH = display.getHeight();
+    if (!remoteW || !remoteH) return;      // 远端还没回报分辨率
+
+    // 取最小比例，保证完整显示
+    const scale   = Math.min(availW / remoteW, availH / remoteH);
+
+    // 让 Guacamole 做缩放，同时修正鼠标坐标
+    display.scale(scale);
+    currentScale = scale;
+}
+
+// Helper function to get selected radio value
+/*
+ * Legacy form-based connection logic has been disabled. Parameters are now
+ * provided via query string when this page is embedded from the VM management
+ * interface.
+ */
+
+function getConnectionParams() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Accept protocol from either "protocol" or legacy "type"
+    const protoParam = params.get('protocol') || params.get('type');
+    const protocol = (protoParam || 'rdp').toLowerCase();
+
+    // Hostname may be provided as "host" or "hostname"
+    const hostParam = params.get('host') || params.get('hostname');
+    const hostname = hostParam || 'localhost';
+
+    // Validate numeric port
+    let port = parseInt(params.get('port'), 10);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        port = protocol === 'rdp' ? 3389 : port;
+    }
+
+    return {
+        protocol,
+        hostname,
+        port,
+        username: params.get('username') || '',
+        password: params.get('password') || ''
+    };
+}
+
+async function autoConnect() {
+    const cfg = getConnectionParams();
+
+    const settings = {
+        hostname: cfg.hostname,
+        username: cfg.username,
+        password: cfg.password,
+        port: cfg.port
+    };
+
+    if (cfg.protocol === 'rdp') {
+        Object.assign(settings, {
+            "ignore-cert": true,
+            "security": "any",
+            "enable-drive": true,
+            "drive-path": "/tmp/guac-drive",
+            "create-drive-path": true,
+            "enable-printing": true,
+            "audio": ["audio/L16;rate=44100"]
+        });
+    } else if (cfg.protocol === 'vnc') {
+        Object.assign(settings, {
+            autoretry: 3,
+            color_depth: 24,
+            swap_red_blue: false,
+            connect_timeout: 15
+        });
+    }
+
+    const tokenObj = {
+        connection: {
+            type: cfg.protocol,
+            settings
+        }
+    };
+
+    const displayDiv = document.getElementById('display');
+    while (displayDiv.firstChild) displayDiv.removeChild(displayDiv.firstChild);
+
+    const token = await generateGuacamoleToken(tokenObj);
+    initializeGuacamoleClient(token, cfg.protocol, settings);
+}
+
+// Function to initialize Guacamole client
+function initializeGuacamoleClient(token, protocol, params) {
+    // Switch to display screen before initializing
+    displayScreen.style.display = 'flex';
+
+    // Update display title with connection info
+    const displayTitle = document.getElementById('display-title');
+    if (displayTitle && params) {
+        displayTitle.textContent = `Connected to: ${params.hostname} (${protocol.toUpperCase()})`;
+    }
+
+    try {
+        // Create WebSocket tunnel
+        const tunnel = new Guacamole.WebSocketTunnel(`ws://localhost:3001/connect-guac`);
+
+        // Set up onuuid event handler to log connection ID
+        tunnel.onuuid = function (uuid) {
+            console.log("Connection UUID received:", uuid);
+            // console.log("This UUID can be used to join this session from another client");
+
+            // Show UUID in the header and store for copying
+            if (displayUuid) {
+                displayUuid.dataset.uuid = uuid;
+                displayUuid.textContent = `ID: ${uuid}`;
+            }
+        };
+
+        // Create client
+        const client = new Guacamole.Client(tunnel);
+        currentClient = client;
+
+        // Add client display to the page
+        const displayDiv = document.getElementById("display");
+        displayDiv.appendChild(client.getDisplay().getElement());
+        // 绑定缩放逻辑
+        client.getDisplay().onresize = fitDisplay; // 远端分辨率变化时
+        fitDisplay();                              // 首次连接立即适配
+        window.addEventListener('resize', fitDisplay); // 浏览器窗口变化时
+        // Set up error handler
+        client.onerror = function (error) {
+            console.error("Guacamole error:", error);
+            let errorMessage = error.message || "Unknown error";
+
+            // Enhanced error messages for common issues
+            if (protocol === 'vnc' && errorMessage.includes("connect")) {
+                errorMessage = "VNC Connection Error: Could not connect to VNC server. Please verify the host is running a VNC server on port 5900.";
+            } else if (protocol === 'rdp' && errorMessage.includes("connect")) {
+                errorMessage = "RDP Connection Error: Could not connect to RDP server. Please verify the host is running and accepting RDP connections.";
+            }
+
+            alert("Guacamole error: " + errorMessage);
+        };
+
+        // Set up clipboard handler
+        client.onclipboard = (stream, mimetype) => {
+            let data = '';
+            const reader = new Guacamole.StringReader(stream);
+            reader.ontext = text => data += text;
+            reader.onend = () => {
+                console.log("Clipboard data received:", data);
+                // Update the hidden textarea and trigger copy
+                const textarea = document.getElementById('clipboard-textarea');
+                if (textarea) {
+                    textarea.value = data;
+                    textarea.select();
+                    try {
+                        const successful = document.execCommand('copy');
+                        const msg = successful ? 'successful' : 'unsuccessful';
+                        console.log('Copying text command was ' + msg);
+                    } catch (err) {
+                        console.error('Failed to copy text: ', err);
+                    }
+                    // Deselect the text to avoid visual artifacts
+                    window.getSelection().removeAllRanges();
+                }
+            };
+        };
+
+        // Set up file download handler
+        client.onfile = (stream, mimetype, filename) => {
+            stream.sendAck("Ready", Guacamole.Status.Code.SUCCESS);
+
+            const reader = new Guacamole.BlobReader(stream, mimetype);
+
+            reader.onprogress = (length) => {
+                console.log(`Downloaded ${length} bytes of ${filename}`);
+            };
+
+            reader.onend = () => {
+                // Automatically create a link and download the file
+                const file = reader.getBlob();
+                const url = URL.createObjectURL(file);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    console.log(`File download complete: ${filename}`);
+                }, 100);
+            };
+        };
+
+        // Set up mouse
+        const mouse = new Guacamole.Mouse(client.getDisplay().getElement());
+        //mouse.onEach(['mousedown', 'mouseup', 'mousemove', 'mousewheel'],
+        //    e => client.sendMouseState(e.state));
+        mouse.onEach(['mousedown','mouseup','mousemove','mousewheel'], e => {
+            const fixed = {
+                ...e.state,
+                x: Math.round(e.state.x / currentScale),
+                y: Math.round(e.state.y / currentScale)
+            };
+            client.sendMouseState(fixed);
+        });
+        // Set up keyboard
+        const keyboard = new Guacamole.Keyboard(window);
+        keyboard.onkeydown = keysym => client.sendKeyEvent(1, keysym);
+        keyboard.onkeyup = keysym => client.sendKeyEvent(0, keysym);
+        currentKeyboard = keyboard;
+
+        // Set up paste event listener
+        pasteEventListener = (event) => {
+            const text = event.clipboardData.getData('text/plain');
+            if (text && currentClient) {
+                event.preventDefault(); // Prevent default paste behavior in browser
+                // Send clipboard data to the remote session
+                const stream = currentClient.createClipboardStream('text/plain');
+                const writer = new Guacamole.StringWriter(stream);
+                writer.sendText(text);
+                writer.sendEnd();
+                console.log("Sent clipboard data to remote:", text);
+            }
+        };
+        window.addEventListener('paste', pasteEventListener);
+
+        // Connect to the remote desktop
+        // Construct connection string, adding audio only if RDP
+        let connectString = `token=${encodeURIComponent(token)}`;
+        if (protocol === 'rdp') {
+            connectString += `&GUAC_AUDIO=audio/L16`;
+        }
+        client.connect(connectString);
+
+        console.log("Guacamole client initialized and connected");
+    } catch (error) {
+        // Clean up any partially created resources
+        cleanupGuacamole();
+
+        // Show error and return to connection screen
+        console.error("Error initializing Guacamole:", error);
+        alert("Error initializing Guacamole: " + error.message);
+        displayScreen.style.display = 'none';
+    }
+}
+
+// Close button click handler
+closeButton.addEventListener('click', () => {
+    cleanupGuacamole();
+    displayScreen.style.display = 'none';
+});
+
+// Function to properly clean up all Guacamole resources
+function cleanupGuacamole() {
+    if (currentClient) {
+        // Disconnect the client
+        try {
+            currentClient.disconnect();
+        } catch (e) {
+            console.error("Error disconnecting client:", e);
+        }
+        currentClient = null;
+    }
+
+    // Clear displayed UUID
+    if (displayUuid) {
+        displayUuid.textContent = '';
+        delete displayUuid.dataset.uuid;
+    }
+
+    // Properly detach keyboard handler
+    if (currentKeyboard) {
+        try {
+            // Remove existing handlers
+            currentKeyboard.onkeydown = null;
+            currentKeyboard.onkeyup = null;
+
+            // Reset the keyboard state completely
+            currentKeyboard.reset();
+        } catch (e) {
+            console.error("Error cleaning up keyboard:", e);
+        }
+        currentKeyboard = null;
+    }
+
+    // Remove paste event listener if it exists
+    if (pasteEventListener) {
+        window.removeEventListener('paste', pasteEventListener);
+        pasteEventListener = null;
+    }
+
+    // Allow a brief moment for cleanup before making inputs focusable
+    setTimeout(() => {
+        // Re-focus on a form element to help ensure keyboard is working
+        const firstInput = document.querySelector('#connection-form input, #connection-form select');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    }, 100);
+}
+
+// Add click-to-copy behavior for UUID
+if (displayUuid) {
+    displayUuid.addEventListener('click', () => {
+        const uuid = displayUuid.dataset.uuid;
+        if (!uuid) return;
+
+        // Use Clipboard API if available, fallback to old execCommand
+        const copyPromise = navigator.clipboard
+            ? navigator.clipboard.writeText(uuid)
+            : new Promise((resolve, reject) => {
+                  const textarea = document.createElement('textarea');
+                  textarea.value = uuid;
+                  textarea.style.position = 'fixed';
+                  textarea.style.left = '-9999px';
+                  document.body.appendChild(textarea);
+                  textarea.select();
+                  try {
+                      document.execCommand('copy');
+                      resolve();
+                  } catch (err) {
+                      reject(err);
+                  } finally {
+                      document.body.removeChild(textarea);
+                  }
+              });
+
+        copyPromise
+            .then(() => {
+                const original = displayUuid.textContent;
+                displayUuid.textContent = 'Copied!';
+                setTimeout(() => {
+                    displayUuid.textContent = original;
+                }, 1500);
+            })
+            .catch(err => console.error('Failed to copy UUID:', err));
+    });
+}
+
+// Handle page unloads to clean up any active sessions
+window.addEventListener('beforeunload', () => {
+    cleanupGuacamole();
+});
+
+window.addEventListener('DOMContentLoaded', autoConnect);
+</script>
+</body>
+</html>

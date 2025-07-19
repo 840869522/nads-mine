@@ -110,16 +110,15 @@ const QuestionPage: React.FC = () => {
       const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
-        name: searchTerm.data
+        name: searchTerm.data || ""
       }));
-
       if (res.data.code === 200) {
         setQuestions(res.data.data.data);
         setQuestionsCount(res.data.data.count);
         setPage(1);
       } else {
         setQuestions([]);
-        toast.error('搜索权限时发生错误', {
+        toast.error(`搜索权限时发生错误 - ${res.data.message}`, {
           autoClose: 3000,
           closeOnClick: true,
           pauseOnHover: true,
@@ -128,6 +127,14 @@ const QuestionPage: React.FC = () => {
         });
         setQuestionsCount(0);
       }
+    }catch (error) {
+      toast.error(`搜索权限时发生错误 - ${error.message}`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        position: "top-right"
+      });
     } finally {
       setTableLoading(false);
     }
@@ -193,7 +200,6 @@ const QuestionPage: React.FC = () => {
       tag: Array2String(data.tags),
       content: data.options,
     }
-    console.log(requestData);
     if (isNew) {
       apiClientWithToken.post("/back/api/study/test/question_add", JSON.stringify(requestData)).then(res => {
         if (res.data.code === 200) {
@@ -280,7 +286,7 @@ const QuestionPage: React.FC = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="搜索权限..."
+            placeholder="搜索试题..."
             value={searchTerm.data}
             onChange={handleSearchChange}
             onKeyDown={(e) => {

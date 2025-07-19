@@ -315,7 +315,7 @@ def _wait_for_state(name: str, target_state: str, timeout: int = 30) -> bool:
     return False
 
 # ----- VM Creation Helpers -----
-POOL_DIR = "/home/proj/"
+POOL_DIR = "//"
 VIRTIO_ISO = "/usr/share/virtio-win/virtio-win.iso"
 QEMU_IMG = "qemu-img"
 
@@ -533,7 +533,11 @@ def create_vm(req: VMRequest) -> Dict[str, str | int]:
     return {"vm": vm, "mac": mac, "vnc_port": vnc_port}
 
 
-def get_guac_info(vm_name: str):
+def get_guac_info(vm_name: str, method: str = "ssh"):
+    """Return connection info for the specified protocol."""
+    method = method.lower()
+
+    # default VNC port using XML when not explicitly requested
     try:
         xml = run_virsh("dumpxml", vm_name)
         vnc_port = parse_vnc_port(xml) or 5900
@@ -541,15 +545,29 @@ def get_guac_info(vm_name: str):
         vnc_port = 5900
 
     ip = None
-    try:
-        addr_out = run_virsh("domifaddr", vm_name, "--source", "agent")
-        for line in addr_out.splitlines()[2:]:
-            parts = line.split()
-            if len(parts) >= 4:
-                ip = parts[3]
-                break
-    except RuntimeError:
-        pass
+
+    if method == "vnc":
+        # For VNC connections QEMU usually binds to the host's loopback
+        # interface. The display number returned by ``virsh vncdisplay`` is
+        # converted to the TCP port by adding 5900.
+        ip = "127.0.0.1"
+        try:
+            disp_out = run_virsh("vncdisplay", vm_name).strip()
+            m = re.search(r":(\d+)$", disp_out)
+            if m:
+                vnc_port = 5900 + int(m.group(1))
+        except RuntimeError:
+            pass
+    else:
+        try:
+            addr_out = run_virsh("domifaddr", vm_name, "--source", "agent")
+            for line in addr_out.splitlines()[2:]:
+                parts = line.split()
+                if len(parts) >= 4:
+                    ip = parts[3]
+                    break
+        except RuntimeError:
+            pass
 
     return {
         "host": ip or "192.168.200.10",
@@ -886,7 +904,13 @@ def main():
 
     p_guac = sub.add_parser("guac-info")
     p_guac.add_argument("vm_name")
-    p_guac.set_defaults(func=lambda a: get_guac_info(a.vm_name))
+    p_guac.add_argument(
+        "--method",
+        choices=["ssh", "vnc", "rdp"],
+        default="ssh",
+        help="Guacamole connection type",
+    )
+    p_guac.set_defaults(func=lambda a: get_guac_info(a.vm_name, a.method))
 
     p_get = sub.add_parser("get-vm")
     p_get.add_argument("vm_id")
