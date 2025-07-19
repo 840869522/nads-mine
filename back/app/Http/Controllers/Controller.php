@@ -42,4 +42,15 @@ class Controller extends BaseController
         // 响应头设置
         header('Access-Control-Allow-Headers:x-requested-with,Content-Type,X-CSRF-Token');
     }
+
+    public function _get_global_directory() {
+        $directory =  env("GLOBAL_DIRECTORY",'/home/ubuntu/web');
+        if (file_exists($directory) && is_dir($directory))
+            return $directory;
+        else {
+            if (mkdir($directory,0775, true)){
+                return $directory;
+            }
+        }
+    }
 }

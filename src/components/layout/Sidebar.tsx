@@ -127,8 +127,9 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       children: [
         { to: "/learn/quiz", label: "在线测验", icon: QuestionMarkCircleIcon, requiredPermission: 'study_test' },
         { to: "/learn/cases", label: "课程案例", icon: FolderOpenIconHero, requiredPermission: 'study_case' },
-        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
         { to: "/learn/learn", label: "课程学习", icon: DocumentTextIcon, requiredPermission: 'study_learn' },
+        { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
+        { to: "/learn/paper", label: "试卷管理", icon: DocumentTextIcon, requiredPermission: 'study_paper' },
       ]
     }
   ];

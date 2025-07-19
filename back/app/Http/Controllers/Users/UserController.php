@@ -13,6 +13,7 @@
 
     class UserController extends Controller{
 
+
         public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {

@@ -393,12 +393,12 @@ const QuestionPage: React.FC = () => {
                       {question.c_create_at}
                     </TableCell>
                     <TableCell align="center">
-                      <Tooltip title="编辑权限">
+                      <Tooltip title="编辑试题">
                         <IconButton size="small" onClick={() => handleEditQuestionClick(question)} color="primary">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="删除权限">
+                      <Tooltip title="删除试题">
                         <IconButton size="small" onClick={() => handelDeleteQuestionClick(question)} color="error" >
                           <DeleteIcon />
                         </IconButton>

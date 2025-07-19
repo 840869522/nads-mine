@@ -472,7 +472,7 @@ const RoleManagementPage: React.FC = () => {
                     </TableBody>
                 </Table>
                 <TablePagination
-                    rowsPerPageOptions={[5, 10, 25]}
+                    rowsPerPageOptions={[10, 30, 50]}
                     component="div"
                     count={count}
                     rowsPerPage={rowsPerPage}
