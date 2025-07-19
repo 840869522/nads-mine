@@ -23,16 +23,19 @@ class CommandLineService
      * - 'ip': 虚拟机的IP地址
      * - 'scene_instance_id': 场景实例ID
      * - 'flag': 靶机flag, 或 "NULL" 字符串
-     * - 'switch_name': 【新增】要连接的OVS交换机的名称
+     * - 'switch_name': 要连接的OVS交换机的名称
+     * - 'vm_name': 虚拟机名称
+     * - 'image_dir': 基础镜像的存放目录
+     * - 'instance_base_dir': 虚拟机实例的存放根目录
      * @return void
      * @throws ProcessFailedException 如果命令执行失败。
      */
     public function createVm(array $options): void
     {
-        // 1. 使用 base_path() 生成脚本的绝对路径
-        // 1. 使用 app_path() 替代 base_path() 来生成正确的脚本绝对路径
+        // 1. 使用 app_path() 生成脚本的绝对路径
         $scriptPath = app_path('RunTool/vmscript/newvm_switch.sh');
-        // 2. 准备6个命令行参数
+        
+        // 2. 准备9个命令行参数
         $args = [
             $options['id'],
             $options['image'],
@@ -40,12 +43,14 @@ class CommandLineService
             $options['scene_instance_id'],
             $options['flag'] ?? 'NULL',
             $options['switch_name'],
-            $options['vm_name'], // <--- 添加此行，作为第7个参数
+            $options['vm_name'],
+            $options['image_dir'], 
+            $options['instance_base_dir'], 
         ];
         
         // 3. 准备并执行命令
         $command = array_merge([$scriptPath], $args);
-        Log::info('Executing VM creation shell script (6-param version): ' . implode(' ', $command));
+        Log::info('Executing VM creation shell script (9-param version): ' . implode(' ', $command));
         
         $process = new Process($command);
         $process->setTimeout(360);
@@ -63,6 +68,10 @@ class CommandLineService
             'output' => $process->getOutput()
         ]);
     }
+    
+
+
+
     /**
      * 
      * 使用veth pair连接两个OVS交换机。
