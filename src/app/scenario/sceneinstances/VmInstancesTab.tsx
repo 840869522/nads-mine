@@ -166,14 +166,30 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }
     };
 
+    const openGuacWindow = (params: Record<string, string>) => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/guacamole';
+        form.target = '_blank';
+        Object.entries(params).forEach(([key, value]) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+    };
+
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
             const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
-            const url = `/guacamole?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
-            window.open(url, '_blank');
+            openGuacWindow({ type: proto, hostname: info.host, port: String(port) });
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
         }
