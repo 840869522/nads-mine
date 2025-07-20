@@ -27,6 +27,8 @@
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.13",
     "dockerode": "^4.0.7",
+    "guacamole-common-js": "^1.5.0",
+    "guacamole-lite": "^1.0.2",
     "http-proxy-middleware": "^3.0.5",
     "next": "^15.0.0",
     "nextjs": "^0.0.3",
@@ -38,8 +40,7 @@
     "socket.io-client": "^4.7.5",
     "swr": "^2.3.4",
     "uuid": "^11.1.0",
-    "guacamole-common-js": "^1.5.0",
-    "guacamole-lite": "^1.0.2"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
