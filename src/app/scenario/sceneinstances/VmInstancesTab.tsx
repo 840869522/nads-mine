@@ -172,7 +172,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
-            const url = `/index.html?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
+            const url = `/guacamole?type=${proto}&hostname=${encodeURIComponent(info.host)}&port=${port}`;
             window.open(url, '_blank');
         } catch (e: any) {
             alert(e.message || 'Failed to open connection');
