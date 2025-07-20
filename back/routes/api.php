@@ -18,7 +18,7 @@
     use App\Http\Controllers\Course\CourseController;
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
-    use App\Http\Controllers\Vm\MainCli\VmController;
+    use App\Http\Controllers\Vm\VmController;
     use App\Http\Controllers\Course\TestController;
 
     /*
@@ -152,6 +152,8 @@
         Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
+        // 关键: 确保 DELETE 路由指向 destroy 方法
+        Route::delete('/{instance}', [InstanceController::class, 'destroy']);
         // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
         // 获取单个场景实例的vm详细信息
@@ -184,7 +186,7 @@
 
 
     Route::prefix('vms')->group(function () {
-        $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
+        $c = \App\Http\Controllers\Vm\VmController::class;
         Route::get('/', [$c, 'listVms']);
         Route::get('/images', [$c, 'listVmImages']);
         Route::post('/create', [$c, 'createVm']);

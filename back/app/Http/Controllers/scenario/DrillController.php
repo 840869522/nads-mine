@@ -121,8 +121,8 @@ class DrillController extends Controller
             
             // --- 核心修改：动态生成路径 ---
             $baseDir = $this->_get_global_directory();
-            // $imageDir = $baseDir . '/virsh/images';
-            $imageDir = '/home/ubuntu/virsh/images';
+            $imageDir = $baseDir . '/virsh/images';
+            // $imageDir = '/home/ubuntu/virsh/images';
             // 实例目录使用场景实例ID，确保唯一性
             $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
             
