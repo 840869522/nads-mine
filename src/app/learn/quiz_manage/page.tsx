@@ -152,8 +152,6 @@ const QuizManagePage: React.FC = () => {
                 onSave={handelSave}
                 initialData={quizToEdit}
             />
-
-
         </Paper >
     );
 };
