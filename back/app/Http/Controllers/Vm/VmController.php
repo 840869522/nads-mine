@@ -1,5 +1,5 @@
 <?php
-namespace App\Http\Controllers\Vm\MainCli;
+namespace App\Http\Controllers\Vm;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -10,8 +10,8 @@ use Symfony\Component\Process\Process;
 use Illuminate\Support\Str;
 
 class VmController extends Controller
-{   
-       
+{
+
 
     /**
  * 根据场景实例ID获取其下的所有虚拟机实例。
