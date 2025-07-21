@@ -85,6 +85,9 @@ const RunningInstancesPage: React.FC = () => {
         cpuUsage: true,
         memoryUsage: true,
         uptime: true,
+        ip: true,
+        sceneId: true,
+        sceneName: true,
     });
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -130,6 +133,9 @@ const RunningInstancesPage: React.FC = () => {
         { field: 'cpuUsage', headerName: 'CPU', flex: 1, hide: !showColumns.cpuUsage },
         { field: 'memoryUsage', headerName: '内存', flex: 1, hide: !showColumns.memoryUsage },
         { field: 'uptime', headerName: '运行时间', flex: 1, hide: !showColumns.uptime },
+        { field: 'ip', headerName: 'IP', flex: 1, hide: !showColumns.ip },
+        { field: 'scene_instance_id', headerName: '场景实例ID', flex: 1.2, hide: !showColumns.sceneId },
+        { field: 'scene_name', headerName: '场景名称', flex: 1.2, hide: !showColumns.sceneName },
         {
             field: 'actions',
             headerName: '操作',
@@ -355,7 +361,10 @@ const RunningInstancesPage: React.FC = () => {
                                     key === 'ports' ? '端口' :
                                         key === 'cpuUsage' ? 'CPU 使用率' :
                                             key === 'memoryUsage' ? '内存使用率' :
-                                                '运行时间'
+                                                key === 'ip' ? 'IP' :
+                                                    key === 'sceneId' ? '场景实例ID' :
+                                                        key === 'sceneName' ? '场景名称' :
+                                                            '运行时间'
                         } />
                     </MenuItem>
                 ))}

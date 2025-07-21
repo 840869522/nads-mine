@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Services\DockerService;
 use App\Models\Docker\Instance;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class InstancesController extends Controller
 {
@@ -33,6 +35,25 @@ class InstancesController extends Controller
         $role = $request->query('role', 'student');
         $userId = $request->query('userId');
         $containers = $this->docker->listContainers();
+
+        // Fetch extra info from DB: IP, scene instance and scene name
+        $ids = array_map(fn($c) => $c->getId(), $containers);
+        $extra = [];
+        if ($ids) {
+            try {
+                $extra = DB::table('c_scene_container_instances as c')
+                    ->leftJoin('c_scene_instances as si', DB::raw('c.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
+                    ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
+                    ->select('c.c_container_id', 'c.c_scene_instances_id', 'c.c_ip', 'sc.c_name as scene_name')
+                    ->whereIn('c.c_container_id', $ids)
+                    ->get()
+                    ->keyBy('c_container_id');
+            } catch (\Throwable $e) {
+                Log::error('DB query failed in container index: ' . $e->getMessage());
+                $extra = [];
+            }
+        }
+
         $result = [];
         foreach ($containers as $info) {
             $labels = $info->getLabels() ?? [];
@@ -87,6 +108,10 @@ class InstancesController extends Controller
                 }
             }
 
+            $infoExtra = $extra[$info->getId()] ?? null;
+            $ip = $infoExtra->c_ip ?? null;
+            if ($ip) $ip = explode('/', $ip)[0];
+
             $result[] = [
                 'id' => $info->getId(),
                 'name' => ltrim($info->getNames()[0] ?? substr($info->getId(),0,12), '/'),
@@ -100,6 +125,10 @@ class InstancesController extends Controller
                 'uptime' => $info->getStatus() ?? '',
                 'nodeId' => null,
                 'createdAt' => date('c', $info->getCreated() ?? time()),
+                'ip' => $ip,
+                'ipAddress' => $ip,
+                'scene_instance_id' => $infoExtra->c_scene_instances_id ?? null,
+                'scene_name' => $infoExtra->scene_name ?? null,
             ];
         }
         return response()->json($result);
