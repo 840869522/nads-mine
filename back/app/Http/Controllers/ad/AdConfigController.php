@@ -6,7 +6,9 @@ namespace App\Http\Controllers\ad;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdConfigResource;
 use App\Models\ad\AdConfig;
+use App\Models\ad\SceneUsersModel;
 use App\Rules\NoTeamMemberConflict;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -62,6 +64,7 @@ class AdConfigController extends Controller
 
         ]);
 
+
         $adConfig = DB::transaction(function () use ($validated) {
             $adConfig = AdConfig::create([
                 // 现在 Str::uuid() 会被正确识别
@@ -75,6 +78,20 @@ class AdConfigController extends Controller
                 'c_end_time'          => $validated['c_end_time'] ?? null,
                 'c_status'            => 'pending',
             ]);
+
+            $team_user_mod = new TeamUsers();
+            $team_user_list  = $team_user_mod->get_teams_users($validated['c_red_team_id'],$validated['c_blue_team_id']);
+            $scene_user_mod = new SceneUsersModel();
+            foreach($team_user_list as $k=>$v){
+                $valid_users = $scene_user_mod->get_scene_users_info($validated['c_scene_config_id'],$v);
+                if($valid_users){
+                    $ins_scene_user = $scene_user_mod->create_scene_users_info($validated['c_scene_config_id'],$v);
+                    if(!$ins_scene_user){
+                        throw new Exception("权限插入失败");
+                    }
+                }
+            }
+
 
             $refereesData = collect($validated['referees'])->keyBy('c_user_id')->map(function ($referee) {
                 return ['c_level' => $referee['c_level']];

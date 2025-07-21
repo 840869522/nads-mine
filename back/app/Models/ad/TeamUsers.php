@@ -3,8 +3,10 @@
 namespace App\Models\ad;
 
 // 我们只需要 DB Facade 来查询数据库，和 UserModel 来获取用户名
+use App\Models\Course\TestsModel;
 use Illuminate\Support\Facades\DB;
 use App\Models\Users\UserModel;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * TeamUsers 逻辑处理类
@@ -12,8 +14,11 @@ use App\Models\Users\UserModel;
  * 这个类不继承 Model，因为它不代表数据库中的某一行数据。
  * 它是一个服务类，专门用于封装与队伍成员相关的复杂业务逻辑。
  */
-class TeamUsers
+class TeamUsers extends Model
 {
+    protected $table = 'c_teams_users';
+    public $timestamps = false;
+    public $pageSize = 20;
     /**
      * 校验两个队伍是否存在成员冲突。
      * 这是一个静态方法，意味着我们可以直接通过 TeamUsers::verifyConflict() 调用，无需创建实例。
@@ -66,4 +71,18 @@ class TeamUsers
             'conflicting_members' => $conflicting_users,
         ];
     }
+
+
+    public function get_teams_users($team1_id=0,$team2_id=0)
+    {
+        $mod = new TeamUsers();
+        $list = $mod->whereIn('team_id',[$team1_id,$team2_id])->get();
+        $res = [];
+        foreach($list as $k=>$v){
+            $res[] = $v->user_id;
+        }
+        return $res;
+    }
+
+
 }
