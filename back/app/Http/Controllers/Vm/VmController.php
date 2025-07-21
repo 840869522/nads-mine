@@ -26,11 +26,11 @@ public function listVmsBySceneInstance(string $instance_id)
         $allVmsFromHypervisor = $this->fetchVmInstances();
         // 如果返回的不是数组，或获取失败，返回空列表
         if (!is_array($allVmsFromHypervisor)) {
-            \Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
+            Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
             return response()->json([]);
         }
     } catch (\Throwable $e) {
-        \Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
     }
 
@@ -54,7 +54,7 @@ public function listVmsBySceneInstance(string $instance_id)
             ->keyBy('c_vm_name');
 
     } catch (\Throwable $e) {
-        \Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
     }
 
@@ -447,6 +447,7 @@ public function listVmsBySceneInstance(string $instance_id)
     public function getGuacInfo($vmName, Request $request)
     {
         $method = strtolower($request->query('method', 'ssh'));
+        $vmQueryName = $request->query('vm_name', $vmName);
 
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
@@ -467,21 +468,19 @@ public function listVmsBySceneInstance(string $instance_id)
             }
         } else {
             try {
-                $addrOut = $this->runVirsh('domifaddr', $vmName, '--source', 'agent');
-                $lines = array_slice(preg_split('/\n/', trim($addrOut)), 2);
-                foreach ($lines as $l) {
-                    $parts = preg_split('/\s+/', trim($l));
-                    if (count($parts) >= 4) {
-                        $ip = $parts[3];
-                        break;
-                    }
+                $record = DB::table('c_scene_vm_instances')
+                    ->where('c_vm_name', $vmQueryName)
+                    ->first();
+                if ($record && $record->c_ip) {
+                    $ip = explode('/', $record->c_ip)[0];
                 }
             } catch (\Throwable $e) {
+                Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
 
         return response()->json([
-            'host' => $ip ?? '192.168.200.10',
+            'host' => $ip ?? '无效',
             'ssh_port' => 22,
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,

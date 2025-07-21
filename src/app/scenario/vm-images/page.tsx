@@ -165,7 +165,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
-        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
+        //{ field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',

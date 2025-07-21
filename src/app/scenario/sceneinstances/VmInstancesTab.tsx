@@ -185,7 +185,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}`);
+            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
@@ -222,7 +222,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             { field: 'pool', headerName: '存储池', width: 120, hide: !showColumns.pool, renderCell: (p) => <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell> },
             { field: 'vcpu', headerName: 'vCPU', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu.count}</VmInfoCell> },
             { field: 'memory', headerName: '内存(MB)', width: 100, renderCell: (p) => <VmInfoCell id={p.row.id} width={40}>{d => d.vram.total_mb}</VmInfoCell> },
-            { field: 'ip', headerName: 'IP', width: 140, hide: !showColumns.ip, renderCell: (p) => <VmInfoCell id={p.row.id} width={100}>{d => d.ipAddress}</VmInfoCell> },
+            { field: 'ip', headerName: 'IP', width: 140 },
             {
                 field: 'actions',
                 headerName: '操作',

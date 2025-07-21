@@ -468,8 +468,9 @@ function initializeGuacamoleClient(token, protocol, params) {
     try {
         // Create WebSocket tunnel
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const host = window.location.host; // 当前服务器地址+端口
+        const host = window.location.host; // includes port
         const tunnel = new Guacamole.WebSocketTunnel(`${protocol}://${host}/connect-guac`);
+
         // Set up onuuid event handler to log connection ID
         tunnel.onuuid = function (uuid) {
             console.log("Connection UUID received:", uuid);
