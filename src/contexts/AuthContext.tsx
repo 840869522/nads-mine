@@ -35,7 +35,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const data = await res.data;
     if (data.code === 200) {
       var loggedInUser = { user: data.data.user, role: data.data.role, permission: data.data.permissions };
-      
       setUser(loggedInUser);
       localStorage.setItem('droneSimUser', JSON.stringify(loggedInUser));
       setCookie("_auth", data.data.token, {});
@@ -56,9 +55,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+      <AuthContext.Provider value={{ user, login, logout }}>
+        {children}
+      </AuthContext.Provider>
   );
 };
-

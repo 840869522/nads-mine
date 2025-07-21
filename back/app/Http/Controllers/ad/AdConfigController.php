@@ -6,11 +6,13 @@ namespace App\Http\Controllers\ad;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdConfigResource;
 use App\Models\ad\AdConfig;
+use App\Rules\NoTeamMemberConflict;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 // 【★★★ 核心修复 ★★★】在行尾添加分号
 use Illuminate\Support\Str;
+use App\Models\ad\TeamUsers;
 
 class AdConfigController extends Controller
 {
@@ -38,7 +40,13 @@ class AdConfigController extends Controller
         $validated = $request->validate([
             'c_drill_name'      => 'required|string|max:255|unique:c_ad_configs,c_drill_name',
             'c_description'     => 'nullable|string',
-            'c_red_team_id'     => 'required|integer|exists:c_teams,c_id',
+            'c_red_team_id'     => [
+                'required',
+                'integer',
+                'exists:c_teams,c_id',
+                // 创建规则实例，并将蓝队的ID作为参数传给它的构造函数。
+                new NoTeamMemberConflict((int)$request->input('c_blue_team_id', 0))
+            ],
             'c_blue_team_id'    => 'required|integer|exists:c_teams,c_id|different:c_red_team_id',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
@@ -51,6 +59,7 @@ class AdConfigController extends Controller
             'c_blue_team_id.different' => '红队和蓝队不能选择同一个队伍。',
             'referees.min' => '请至少指派一名裁判。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
+
         ]);
 
         $adConfig = DB::transaction(function () use ($validated) {
@@ -96,7 +105,12 @@ class AdConfigController extends Controller
         $validated = $request->validate([
             'c_drill_name'      => ['required', 'string', 'max:255', Rule::unique('c_ad_configs')->ignore($adConfig->c_id, 'c_id')],
             'c_description'     => 'nullable|string',
-            'c_red_team_id'     => 'required|integer|exists:c_teams,c_id',
+            'c_red_team_id'     => [
+                'required',
+                'integer',
+                'exists:c_teams,c_id',
+                new NoTeamMemberConflict((int)$request->input('c_blue_team_id', 0))
+            ],
             'c_blue_team_id'    => 'required|integer|exists:c_teams,c_id|different:c_red_team_id',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',

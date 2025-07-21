@@ -3,11 +3,11 @@
 
 namespace App\Http\Controllers\Course;
 
-use App\Models\Course\QuestionsModel;
-use App\Models\Course\QuestionsOptionsModel;
-use App\Models\Course\TestsModel;
+use App\Models\ad\QuestionsModel;
+use App\Models\ad\QuestionsOptionsModel;
+use App\Models\ad\TestsModel;
 use Illuminate\Http\Request;
-use App\Models\Course\CategoryModel;
+use App\Models\ad\CategoryModel;
 use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
 use App\Utils\GlobalResponse;

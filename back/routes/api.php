@@ -2,6 +2,7 @@
 
 
 use App\Http\Controllers\ad\AdConfigController;
+use App\Http\Controllers\scenario\ScenarioPermissionController;
 use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
@@ -138,6 +139,21 @@ use Illuminate\Support\Facades\Route;
          // 启动场景
         Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
 
+
+    });
+
+    Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
+        ; // 应用通用认证
+
+    // ★★★ 2. 获取和保存特定场景的权限 ★★★
+    // 此路由组会匹配 /api/scenarios/{id}/permissions
+    Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
+
+        // 此路由生成 GET /api/scenarios/{scenarioId}/permissions
+        Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
+
+        // 此路由生成 POST /api/scenarios/{scenarioId}/permissions
+        Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
 
     });
 
