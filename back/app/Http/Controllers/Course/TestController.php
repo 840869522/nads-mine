@@ -4,6 +4,7 @@
 namespace App\Http\Controllers\Course;
 
 use App\Models\Course\PaperRulesModel;
+use App\Models\Course\PapersModel;
 use App\Models\Course\QuestionsModel;
 use App\Models\Course\TempUsersModel;
 
@@ -563,6 +564,24 @@ class TestController extends Controller
             $question_mod = new QuestionsModel();
             $res_data = [];
             $verify_key = [];
+            $test_creation = array(
+                '1'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '2'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '3'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '4'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                )
+            );
             //开始组题，校验
             foreach($verify_list as $k=>$v){
                 $verify_c_id = $mod->verify_paper_rules_c_id($v['data']['key']);
@@ -579,8 +598,17 @@ class TestController extends Controller
                 $v['data']['type'] = $v['type'];
                 $res_data[] = $v['data'];
                 $verify_key[] = $v['data']['key'];
+                $test_creation[$v['type']]['count'] = $v['data']['count'];
+                $test_creation[$v['type']]['score'] = $v['data']['score'];
             }
-            $res = $mod->create_paper_rules_info($c_test_id,$res_data);
+
+            //自动组题
+            $test_mod = new TestsModel();
+            $test_info = $test_mod->get_test_info($c_test_id);
+            $c_paper_count = $test_info->c_paper_count;
+            $qusetion_list = $this->automatic_question_grouping($c_paper_count,$test_creation);
+
+            $res = $mod->create_paper_rules_info($c_test_id,$res_data,$qusetion_list);
             if(!$res){
                 return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"组题规则添加失败");
             }
@@ -675,6 +703,24 @@ class TestController extends Controller
             $question_mod = new QuestionsModel();
             $res_data = [];
             $verify_key = [];
+            $test_creation = array(
+                '1'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '2'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '3'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                ),
+                '4'=>array(
+                    'count'=>0,
+                    'score'=>0,
+                )
+            );
             //开始组题，校验
             foreach($verify_list as $k=>$v){
                 $verify_c_id = $mod->verify_paper_rules_c_id($v['data']['key'],$c_test_id);
@@ -691,8 +737,16 @@ class TestController extends Controller
                 $v['data']['type'] = $v['type'];
                 $res_data[] = $v['data'];
                 $verify_key[] = $v['data']['key'];
+                $test_creation[$v['type']]['count'] = $v['data']['count'];
+                $test_creation[$v['type']]['score'] = $v['data']['score'];
             }
-            $res = $mod->update_paper_rules_info($c_test_id,$res_data);
+            //自动组题
+            $test_mod = new TestsModel();
+            $test_info = $test_mod->get_test_info($c_test_id);
+            $c_paper_count = $test_info->c_paper_count;
+            $qusetion_list = $this->automatic_question_grouping($c_paper_count,$test_creation);
+
+            $res = $mod->update_paper_rules_info($c_test_id,$res_data,$qusetion_list);
             if(!$res){
                 return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"组题规则修改失败");
             }
@@ -818,10 +872,237 @@ class TestController extends Controller
      * @param $true_or_false //判断题数
      * @param $subjective //主观题数
      */
-    public function automatic_question_grouping($paper_count=0,$single_choice=0,$multiple_choice=0,$true_or_false=0,$subjective=0)
+    public function automatic_question_grouping($paper_count=0,$test_creation=[])
     {
-
+        $question_mod = new QuestionsModel();
+        $question_list = $question_mod->get_question_all();
+        $single_choice = [];
+        $multiple_choice = [];
+        $true_or_false = [];
+        $subjective = [];
+        foreach($question_list as $k=>$v){
+            $single_choice[$v['c_type']][$v['c_id']] = $v;
+        }
+        $res = [];
+        for($i=0;$i<$paper_count;$i++){
+            $selected_data = array(
+                '1'=>[],
+                '2'=>[],
+                '3'=>[],
+                '4'=>[],
+            );
+            $question_data = [];
+            $answer_data = [];
+            foreach($test_creation as $k=>$v){
+                for($j=0;$j<$v['count'];$j++){
+                    if(isset($question_data[$k])){
+                        $question_data[$k] = array(
+                            'type'=>$k,
+                            'score'=>$v['score'],
+                            'data'=>[],
+                        );
+                    }
+                    if(isset($answer_data[$k])){
+                        $answer_data[$k] = array(
+                            'type'=>$k,
+                            'data'=>[],
+                        );
+                    }
+                    $extract_questions_res = $this->extract_questions($single_choice[$k],$selected_data[$k]);
+                    $selected_data[$k][]=$extract_questions_res['c_id'];
+                    $question_data[$k]['data'] = array(
+                        'question_id'=>$extract_questions_res['c_id'],
+                        'question'=>$extract_questions_res['c_question'],
+                    );
+                    if($k==4){
+                        $answer_data[$k]['data'] = array(
+                            'question_id'=>$extract_questions_res['c_id'],
+                            'answer'=>"*",
+                        );
+                    }else{
+                        $answer_data[$k]['data'] = array(
+                            'question_id'=>$extract_questions_res['c_id'],
+                            'answer'=>$extract_questions_res['c_answer']
+                        );
+                    }
+                }
+            }
+            $res[] = array(
+                'question'=>array_values($question_data),
+                'answer'=>array_values($answer_data),
+            );
+        }
+        return $res;
     }
+
+
+    /**
+     * Notes:随机抽题
+     * User: zhangnan
+     * DateTime: 2025/7/21 17:26
+     * @param $question_array
+     * @param $not_id
+     * @return array|int|mixed|string
+     */
+    public function extract_questions($question_array=[],$not_id=[])
+    {
+        $filteredData = array_diff_key($question_array, array_flip($not_id));
+        $randomKey = array_rand($filteredData);
+        $randomValue = $filteredData[$randomKey];
+        return $randomValue;
+    }
+
+
+    /**
+     * Notes:通过测试id获取试卷
+     * User: zhangnan
+     * DateTime: 2025/7/21 18:48
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function get_papers(Request $request)
+    {
+        try {
+            $test_id     = trim($request->input('test_id'));
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new PapersModel();
+            $info = $mod->get_paper_list($test_id);
+            if(!$info){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+
+    public function update_papers(Request $request)
+    {
+        $question_data = array(
+            'question'=>array(
+                array(
+                    'type'=>1,
+                    'score'=>0,
+                    'data'=>array(
+                        'question_id'=>1,
+                        'question'=>1,
+                    )
+                )
+            ),
+            'answer'=>array(
+                array(
+                    'type'=>1,
+                    'data'=>array(
+                        'question_id'=>1,
+                        'answer'=>1,
+                    )
+                )
+            )
+        );
+
+
+
+
+        try {
+            $papers_id     = trim($request->input('papers_id'));
+            $validated_data = array(
+                'papers_id' => 'required|string|exists:c_papers,c_id',
+                'question_data' => 'required|array',
+                'question_data.question' => 'required|array',
+                'question_data.question.*.type' => 'required|in:1,2,3,4',
+                'question_data.question.*.score' => 'required|integer',
+                'question_data.question.*.data' => 'required|array',
+                'question_data.question.*.data.*.question_id' => 'required',
+                'question_data.question.*.data.*.question' => 'required',
+                'question_data.answer' => 'required|array',
+                'question_data.answer.*.type' => 'required|in:1,2,3,4',
+                'question_data.answer.*.data' => 'required|array',
+                'question_data.answer.*.data.*.question_id' => 'required',
+                'question_data.answer.*.data.*.answer' => 'required',
+            );
+            $validated_msg = array(
+                'papers_id.required'=>"测试不能为空",
+                'papers_id.string'=>"测试id类型错误",
+                'papers_id.exists'=>"测试id不存在",
+                'question_data.required'=>"试卷数据不能为空",
+                'question_data.array'=>"试卷数据格式不正确",
+                'question_data.question.required'=>"试卷数据中问题组不能为空",
+                'question_data.question.array'=>"试卷数据中问题组格式不正确",
+                'question_data.answer.required'=>"试卷数据中答案组不能为空",
+                'question_data.answer.array'=>"试卷数据中答案组格式不正确",
+                'question_data.answer.*.type.required'=>"试卷数据中答案组题目类型不存在",
+                'question_data.answer.*.type.in'=>"试卷数据中答案组题目类型错误",
+                'question_data.answer.*.data.required'=>"试卷数据中答案组答案数据不存在",
+                'question_data.answer.*.data.array'=>"试卷数据中答案组答案数据格式不正确",
+                'question_data.answer.*.data.*.question_id.required'=>"试卷数据中答案组答案数据question_id不存在",
+                'question_data.answer.*.data.*.answer.required'=>"试卷数据中答案组答案数据answer不存在",
+                'question_data.question.*.type.required'=>"试卷数据中问题组题目类型不存在",
+                'question_data.question.*.type.in'=>"试卷数据中问题组题目类型错误",
+                'question_data.question.*.score.required'=>"试卷数据中问题组题目分值不存在",
+                'question_data.question.*.score.integer'=>"试卷数据中问题组题目分值类型错误",
+                'question_data.question.*.data.required'=>"试卷数据中问题组题目数据不存在",
+                'question_data.question.*.data.array'=>"试卷数据中问题组题目数据格式错误",
+                'question_data.question.*.data.*.question_id.required'=>"试卷数据中问题组题目数据中question_id不存在",
+                'question_data.question.*.data.*.question.required'=>"试卷数据中问题组题目数据中question不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $verify_data = array(
+                '1'=>[],
+                '2'=>[],
+                '3'=>[],
+                '4'=>[],
+            );
+            $type_dic = array(
+                '1'=>'单选题',
+                '2'=>'多选题',
+                '3'=>'判断题',
+                '4'=>'主观题',
+            );
+            $question_mod = new QuestionsModel();
+            $question_dic = $question_mod->get_question_dic();
+            foreach($question_data['question'] as $k=>$v){
+                foreach($v['data'] as $k1=>$v1){
+                    if(!isset($question_dic[$v['type']][$v1['question_id']])){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v1['question_id']."该问题不存在！");
+                    }
+                    if(in_array($v1['question_id'],$verify_data[$v['type']])){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$type_dic[$v['type']]."问题存在重复！");
+                    }
+                    $question_info = $question_dic[$v['type']][$v1['question_id']];
+
+                }
+            }
+
+
+
+
+
+
+            $mod = new PapersModel();
+//            $info = $mod->get_paper_list($test_id);
+//            if(!$info){
+//                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
+//            }
+//            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+
 
 
 

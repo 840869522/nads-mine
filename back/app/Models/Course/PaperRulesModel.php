@@ -25,7 +25,7 @@ class PaperRulesModel extends Model{
      * @param $data
      * @return bool
      */
-    public function create_paper_rules_info($c_test_id="",$data=[])
+    public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
     {
         DB::beginTransaction();
         try{
@@ -42,6 +42,13 @@ class PaperRulesModel extends Model{
                     DB::rollback();
                     return false;
                 }
+            }
+
+            $paper_mod = new PapersModel();
+            $paper_res = $paper_mod->create_paper_info($c_test_id,$qusetion_list);
+            if(!$paper_res){
+                DB::rollback();
+                return false;
             }
             DB::commit();
             return true;
@@ -63,7 +70,7 @@ class PaperRulesModel extends Model{
      * @param $data
      * @return bool
      */
-    public function update_paper_rules_info($c_test_id="",$data=[])
+    public function update_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
     {
         DB::beginTransaction();
         try{
@@ -86,6 +93,12 @@ class PaperRulesModel extends Model{
                     return false;
                 }
             }
+            $paper_mod = new PapersModel();
+            $paper_res = $paper_mod->update_paper_info($c_test_id,$qusetion_list);
+            if(!$paper_res){
+                DB::rollback();
+                return false;
+            }
             DB::commit();
             return true;
         }catch(\Exception $e){
@@ -105,15 +118,25 @@ class PaperRulesModel extends Model{
      */
     public function del_paper_rules_by_test_id($c_test_id="")
     {
+        DB::beginTransaction();
         try{
             $mod = new PaperRulesModel();
             $res = $mod->where("c_test_id",$c_test_id)->delete();
             if(!$res){
+                DB::rollback();
                 return false;
             }
+            $paper_mod = new PapersModel();
+            $paper_del = $paper_mod->del_paper_by_test_id($c_test_id);
+            if(!$paper_del){
+                DB::rollback();
+                return false;
+            }
+            DB::commit();
             return true;
         }catch(\Exception $e){
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+            DB::rollback();
+            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','paper_rules_log');
             return false;
         }
 
