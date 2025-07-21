@@ -222,7 +222,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             { field: 'pool', headerName: '存储池', width: 120, hide: !showColumns.pool, renderCell: (p) => <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell> },
             { field: 'vcpu', headerName: 'vCPU', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu.count}</VmInfoCell> },
             { field: 'memory', headerName: '内存(MB)', width: 100, renderCell: (p) => <VmInfoCell id={p.row.id} width={40}>{d => d.vram.total_mb}</VmInfoCell> },
-            { field: 'ip', headerName: 'IP', width: 140, hide: !showColumns.ip, renderCell: (p) => <VmInfoCell id={p.row.id} width={100}>{d => d.ipAddress}</VmInfoCell> },
+            { field: 'ip', headerName: 'IP', width: 140 },
             {
                 field: 'actions',
                 headerName: '操作',

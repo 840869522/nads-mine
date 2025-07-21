@@ -1,8 +1,9 @@
 <?php
 
 
-    use App\Http\Controllers\ad\AdConfigController;
-    use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ad\AdConfigController;
+use App\Http\Controllers\scenario\ScenarioPermissionController;
+use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -141,6 +142,21 @@
 
     });
 
+    Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
+        ; // 应用通用认证
+
+    // ★★★ 2. 获取和保存特定场景的权限 ★★★
+    // 此路由组会匹配 /api/scenarios/{id}/permissions
+    Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
+
+        // 此路由生成 GET /api/scenarios/{scenarioId}/permissions
+        Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
+
+        // 此路由生成 POST /api/scenarios/{scenarioId}/permissions
+        Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
+
+    });
+
     Route::prefix('scenariosinstances')->group(function () {
 
         Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
@@ -152,7 +168,7 @@
         Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
-        // 关键: 确保 DELETE 路由指向 destroy 方法
+        // 关键: 确保 DELETE 路由指向 destroy 方法 
         Route::delete('/{instance}', [InstanceController::class, 'destroy']);
         // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);

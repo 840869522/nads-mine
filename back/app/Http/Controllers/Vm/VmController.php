@@ -26,11 +26,11 @@ public function listVmsBySceneInstance(string $instance_id)
         $allVmsFromHypervisor = $this->fetchVmInstances();
         // 如果返回的不是数组，或获取失败，返回空列表
         if (!is_array($allVmsFromHypervisor)) {
-            \Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
+            Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
             return response()->json([]);
         }
     } catch (\Throwable $e) {
-        \Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
     }
 
@@ -54,7 +54,7 @@ public function listVmsBySceneInstance(string $instance_id)
             ->keyBy('c_vm_name');
 
     } catch (\Throwable $e) {
-        \Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
     }
 
@@ -481,7 +481,7 @@ public function listVmsBySceneInstance(string $instance_id)
         }
 
         return response()->json([
-            'host' => $ip ?? '192.168.200.10',
+            'host' => $ip ?? '无效',
             'ssh_port' => 22,
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,
