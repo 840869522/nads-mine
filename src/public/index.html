@@ -295,26 +295,43 @@ button:hover {
 <!-- Hidden textarea for clipboard integration -->
 <textarea id="clipboard-textarea" style="position: absolute; left: -9999px;"></textarea>
 
-<script src="https://cdn.jsdelivr.net/npm/guacamole-common-js@1.5.0/dist/cjs/guacamole-common.min.js"></script>
+<script src="./js/guacamole-common.min.js"></script>
+<script src="./js/crypto-js.min.js"></script>
+
 <script>
-async function generateGuacamoleToken(tokenObj) {
-  /* ------------ demo-only token generation (do this in backend IRL) --- */
-  const CIPHER = 'AES-256-CBC';
-  const KEY = new TextEncoder().encode('0123456789abcdef0123456789abcdef');
+    async function generateGuacamoleToken(tokenObj) {
+        // 演示用固定密钥：与原始示例一致（32 字符 -> 32 字节 -> AES-256）
+        const KEY_STR = '0123456789abcdef0123456789abcdef';
 
-  const iv   = crypto.getRandomValues(new Uint8Array(16));
-  const algo = { name: "AES-CBC", iv };
-  const key  = await crypto.subtle.importKey("raw", KEY, algo, false, ["encrypt"]);
-  const ct   = new Uint8Array(await crypto.subtle.encrypt(algo, key,
-                      new TextEncoder().encode(JSON.stringify(tokenObj))));
+        // --- 校验 CryptoJS 可用 ---
+        if (typeof CryptoJS === 'undefined' || !CryptoJS.AES) {
+            throw new Error("CryptoJS (AES) 未加载，无法生成 token。");
+        }
 
-  const token = btoa(JSON.stringify({
-    iv:    btoa(String.fromCharCode(...iv)),
-    value: btoa(String.fromCharCode(...ct))
-  }));
+        // --- 构造 key / iv / 明文 ---
+        const key       = CryptoJS.enc.Utf8.parse(KEY_STR);            // 32-byte key
+        const iv        = CryptoJS.lib.WordArray.random(16);           // 16-byte IV (CBC)
+        const plaintext = CryptoJS.enc.Utf8.parse(JSON.stringify(tokenObj));
 
-  return token;
-} 
+        // --- AES-256-CBC + PKCS#7 填充 ---
+        const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        });
+
+        // CryptoJS.AES.encrypt 返回一个 CipherParams；密文在 encrypted.ciphertext
+        const ctBase64 = CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
+        const ivBase64 = CryptoJS.enc.Base64.stringify(iv);
+
+        // 与原函数保持相同打包格式：外层再 btoa 一次
+        const tokenPayload = {
+            iv:    ivBase64,
+            value: ctBase64
+        };
+
+        return btoa(JSON.stringify(tokenPayload));
+    }
 </script>
 <script>
 // DOM elements
@@ -450,8 +467,9 @@ function initializeGuacamoleClient(token, protocol, params) {
 
     try {
         // Create WebSocket tunnel
-        const tunnel = new Guacamole.WebSocketTunnel(`ws://localhost:3001/connect-guac`);
-
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const host = window.location.host; // 当前服务器地址+端口
+        const tunnel = new Guacamole.WebSocketTunnel(`${protocol}://${host}/connect-guac`);
         // Set up onuuid event handler to log connection ID
         tunnel.onuuid = function (uuid) {
             console.log("Connection UUID received:", uuid);

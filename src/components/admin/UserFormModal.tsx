@@ -162,6 +162,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
       next.password = '新用户必须设置密码';
     } else if (formData.password && formData.password.length < 6) {
       next.password = '密码至少 6 位';
+    }else if (formData.password?.trim()){
+      formData.pwdedit = false;
     }
 
     setErrors(next);

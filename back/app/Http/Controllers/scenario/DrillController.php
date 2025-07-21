@@ -85,6 +85,8 @@ class DrillController extends Controller
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
                 $this->cliService->createSwitch($switchName);
+                $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch'); // 连接到收集镜像的ovs
+
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
                     'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -96,8 +98,11 @@ class DrillController extends Controller
                  $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
                  // ... (Container creation logic remains the same)
                  $options = [
-                    'image' => $containerData['image'], 'name'  => $containerName,
-                    'ports' => $containerData['portMappings'], 'env'   => $containerData['env'],
+                    'image' => $containerData['image'], 
+                    'name'  => $containerName,
+                    'ports' => $containerData['portMappings'], 
+                    'env'   => $containerData['env'],
+                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
                  $flag = $containerData['isTarget'] ? 'flag{' . Str::uuid()->toString() . '}' : null;
                  if ($flag) $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
@@ -113,6 +118,14 @@ class DrillController extends Controller
 
             // 3. 创建虚拟机并处理其直接网络连接
             Log::info("================== 开始创建虚拟机并建立连接 ==================");
+            
+            // --- 核心修改：动态生成路径 ---
+            $baseDir = $this->_get_global_directory();
+            $imageDir = $baseDir . '/virsh/images';
+            // $imageDir = '/home/ubuntu/virsh/images';
+            // 实例目录使用场景实例ID，确保唯一性
+            $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
+            
             foreach ($connections as $conn) {
                 $itemNode = null; $switchNode = null; $ip = null;
 
@@ -128,11 +141,13 @@ class DrillController extends Controller
 
                 if (!$itemNode || !$switchNode) continue;
                 
-                
-                // 从解析好的虚拟机信息中获取正确的镜像名称
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
                 
+                if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
+                    $correctImageName = 'v_att_tcpScanning'; 
+                    Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
+                }
                 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
                 $flag = ($parsedVmNode['isTarget'] ?? false) ? 'flag{' . Str::uuid()->toString() . '}' : null;
@@ -150,13 +165,14 @@ class DrillController extends Controller
 
                 $this->cliService->createVm([
                     'id'                  => $vmDbId,
-                   
-                    'image'               => $correctImageName, // 使用从解析结果中得到的正确镜像名
-                   
+                    'vm_name'             => $vmName, 
+                    'image'               => $correctImageName,
                     'ip'                  => $ip,
-                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
                     'flag'                => $flag ?? 'NULL',
                     'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir, // <-- 传递镜像目录
+                    'instance_base_dir'   => $instanceBaseDir, // <-- 传递实例根目录
                 ]);
                 
                 $createdItemsInfo[$itemNode['id']] = [

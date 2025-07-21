@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Course\CourseController;
     use App\Http\Controllers\Course\CategoryController;
     use App\Http\Controllers\Course\ResourceController;
-    use App\Http\Controllers\Vm\MainCli\VmController;
+    use App\Http\Controllers\Vm\VmController;
     use App\Http\Controllers\Course\TestController;
 
     /*
@@ -168,9 +168,12 @@ use Illuminate\Support\Facades\Route;
         Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
+        // 关键: 确保 DELETE 路由指向 destroy 方法
+        Route::delete('/{instance}', [InstanceController::class, 'destroy']);
         // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
-
+        // 获取单个场景实例的vm详细信息
+        Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     });
 
     Route::prefix('images')->group(function () {
@@ -199,7 +202,7 @@ use Illuminate\Support\Facades\Route;
 
 
     Route::prefix('vms')->group(function () {
-        $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
+        $c = \App\Http\Controllers\Vm\VmController::class;
         Route::get('/', [$c, 'listVms']);
         Route::get('/images', [$c, 'listVmImages']);
         Route::post('/create', [$c, 'createVm']);
@@ -230,6 +233,10 @@ use Illuminate\Support\Facades\Route;
             Route::post('/test_del', [TestController::class, 'test_del']);
             Route::post('/test_list', [TestController::class, 'test_list']);
             Route::post('/test_info', [TestController::class, 'test_info']);
+            Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
+            Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
+            Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+            Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
         });
     });
 

@@ -44,7 +44,7 @@ const PermissionManagementPage: React.FC = () => {
   const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<SortablePermissionsKeys>('c_id');
 
@@ -353,7 +353,7 @@ const PermissionManagementPage: React.FC = () => {
           </TableBody>
         </Table>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[10, 30, 50]}
           component="div"
           count={count}
           rowsPerPage={rowsPerPage}

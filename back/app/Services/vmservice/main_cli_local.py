@@ -315,7 +315,7 @@ def _wait_for_state(name: str, target_state: str, timeout: int = 30) -> bool:
     return False
 
 # ----- VM Creation Helpers -----
-POOL_DIR = "/home/proj/"
+POOL_DIR = "//"
 VIRTIO_ISO = "/usr/share/virtio-win/virtio-win.iso"
 QEMU_IMG = "qemu-img"
 

@@ -40,7 +40,7 @@ const LoginPage: React.FC = () => {
     if (hasLocalError) return;
 
     try {
-      const pwsha256 = CryptoJS.SHA256(password).toString()
+      const pwsha256 = CryptoJS.SHA256(password).toString();
       setSubmitting(true);
       await login(username, pwsha256);
     } catch (err) {

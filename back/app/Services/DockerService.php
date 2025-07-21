@@ -9,6 +9,8 @@ use Docker\API\Model\HostConfig;
 use Docker\API\Model\PortBinding;
 use Docker\API\Model\ContainerConfigExposedPortsItem;
 use App\Models\Docker\DockerInstanceModel;
+use App\Models\scenario\SceneContainerInstance;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
@@ -141,6 +143,12 @@ class DockerService
     public function removeContainer(string $id)
     {
         $this->docker->containerDelete($id, ['force' => true]);
+
+        try {
+            SceneContainerInstance::where('c_container_id', $id)->delete();
+        } catch (\Throwable $e) {
+            Log::error('Failed to delete container record: ' . $e->getMessage(), ['id' => $id]);
+        }
     }
 
     public function removeImage(string $id)

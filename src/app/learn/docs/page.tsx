@@ -1,18 +1,22 @@
 "use client";
 
 import { apiClientWithToken } from "@/utils/axios";
-import { Box, Paper, Typography, Alert as MuiAlert, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { Box, Paper, Typography, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
+import { useEffect, useMemo, useState, useRef } from "react";
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
-import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import QuestionModalForm, { QuestionFormData, QuestionDisplayItem } from "@/components/learning/QuestionModalForm";
 import { Array2String, String2Array } from "@/utils/string";
-import { SnippetFolderRounded } from "@mui/icons-material";
 import { ColorMap } from "@/utils/color";
 import { toast } from "react-toastify";
+import { Download as DownloadIcon } from "@mui/icons-material";
+import ViewQuestionModal from "@/components/learning/ViewQuesitonModal";
+import * as XLSX from "xlsx";
+
 
 type Order = `asc` | `desc`;
 type SortableQuestionsKeys = keyof Pick<QuestionDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
@@ -31,24 +35,28 @@ const QuestionPage: React.FC = () => {
   const [questions, setQuestions] = useState<QuestionDisplayItem[]>([]);
   const [questionsCount, setQuestionsCount] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(5);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
   const [questionToEdit, setQuesionToEdit] = useState<QuestionDisplayItem | null>(null);
-
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | "error", text: string } | null>(null);
+  const [questionCheck, setQuestionCheck] = useState(null);
+  const [checkOpen, setCheckOpen] = useState(false);
   const [tableLaoding, setTableLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState({ data: "", flag: false });
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [questionToDelete, setQuesionToDelete] = useState<QuestionDisplayItem | null>(null);
   const [isQuestionsModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
+  const [importLoading, setImportLoading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+
 
   useEffect(() => {
     getQuestionData(1, rowsPerPage);
   }, [])
 
   useEffect(() => {
-    if (page === 1 && rowsPerPage == 5)
+    if (page === 1 && rowsPerPage == 10)
       return
     else {
       if (searchTerm.data.trim() && searchTerm.flag)
@@ -110,16 +118,15 @@ const QuestionPage: React.FC = () => {
       const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
         page: 1,
         pagesize: rowsPerPage,
-        name: searchTerm.data
+        name: searchTerm.data || ""
       }));
-
       if (res.data.code === 200) {
         setQuestions(res.data.data.data);
         setQuestionsCount(res.data.data.count);
         setPage(1);
       } else {
         setQuestions([]);
-        toast.error('搜索权限时发生错误', {
+        toast.error(`搜索权限时发生错误 - ${res.data.message}`, {
           autoClose: 3000,
           closeOnClick: true,
           pauseOnHover: true,
@@ -128,6 +135,14 @@ const QuestionPage: React.FC = () => {
         });
         setQuestionsCount(0);
       }
+    } catch (error) {
+      toast.error(`搜索权限时发生错误 - ${error.message}`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        position: "top-right"
+      });
     } finally {
       setTableLoading(false);
     }
@@ -182,6 +197,155 @@ const QuestionPage: React.FC = () => {
     setQuesionToDelete(question);
   }
 
+  const handelCheckQuestion = (question: QuestionDisplayItem) => {
+    setQuestionCheck(question);
+    setCheckOpen(true);
+  }
+
+  /**
+   * 批量导入功能实现
+   */
+  const handelImpoerQuestionFromCSV = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+
+  // 解析题目类型
+  const parseQuestionType = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case '单选': return 1;
+      case '多选': return 2;
+      case '判断': return 3;
+      case '简答': return 4;
+      default: return 1;
+    }
+  };
+
+  // 解析标签
+  const parseTags = (tags: string) => {
+    return tags
+  };
+
+  // 解析选项
+  const parseOptions = (question: any) => {
+    const options = [];
+    for (let i = 1; i <= 4; i++) {
+      if (question[`选项${i}`]) {
+        options.push({
+          text: question[`选项${i}`],
+          isCorrect: checkAnswer(question[`选项${i}`], question['答案'])
+        });
+      }
+    }
+    return options;
+  };
+
+  // 验证答案是否正确
+  const checkAnswer = (option: string, answer: string) => {
+    return option === answer;
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportLoading(true);
+
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      try {
+        const data = event.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        // 将数据转为JSON数组
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        console.log(jsonData);
+
+        // 处理数据（假设第一行为标题）
+        const headers = jsonData[0] as string[];
+        const questionsData = jsonData.slice(1).map(row => {
+          const rowData = row as any[];
+          return headers.reduce((acc, header, index) => {
+            acc[header] = rowData[index];
+            return acc;
+          }, {} as Record<string, any>);
+        });
+        console.log(questionsData)
+
+        // 验证并转换数据
+        // const processedData = questionsData.map(question => ({
+        //   id: question['试题ID'],
+        //   question: question['题干'],
+        //   courseName: question['课程ID'],
+        //   answer: question['答案'],
+        //   type: parseQuestionType(question['题目类型']),
+        //   tags: parseTags(question['标签']),
+        //   options: parseOptions(question)
+        // }));
+        // console.log(processedData);
+
+        // 调用API批量导入
+        // apiClientWithToken.post("/back/api/study/test/question_batch_add", {
+        //   questions: processedData
+        // }).then(res => {
+        //   if (res.data.code === 200) {
+        //     toast.success(`成功导入 ${processedData.length} 道题目`, {
+        //       autoClose: 3000,
+        //       closeOnClick: true,
+        //       pauseOnHover: true,
+        //       draggable: true,
+        //       position: "top-right"
+        //     });
+        //     getQuestionData(1, rowsPerPage);
+        //   } else {
+        //     throw new Error(res.data.message);
+        //   }
+        // }).catch(error => {
+        //   toast.error(`批量导入失败: ${error.message}`, {
+        //     autoClose: 3000,
+        //     closeOnClick: true,
+        //     pauseOnHover: true,
+        //     draggable: true,
+        //     position: "top-right"
+        //   });
+        // }).finally(() => {
+        //   setImportLoading(false);
+        // });
+      } catch (error) {
+        toast.error('文件解析失败，请确认文件格式正确', {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
+        setImportLoading(false);
+      }finally {
+        setImportLoading(false);
+      }
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
+  const downloadImportTemplate = () => {
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', '选项A', '选项B', '选项C', '选项D'],
+      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', '选项A', '2', '3', '4', '5']
+    ]);
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '题库模板');
+
+    XLSX.writeFile(workbook, '题库导入模板.xlsx');
+  };
+
+  /**
+   * 功能实现结束
+   */
 
   const handelSaveQuestion = (data: QuestionFormData, isNew: boolean) => {
     var requestData = {
@@ -193,7 +357,6 @@ const QuestionPage: React.FC = () => {
       tag: Array2String(data.tags),
       content: data.options,
     }
-    console.log(requestData);
     if (isNew) {
       apiClientWithToken.post("/back/api/study/test/question_add", JSON.stringify(requestData)).then(res => {
         if (res.data.code === 200) {
@@ -280,7 +443,7 @@ const QuestionPage: React.FC = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="搜索权限..."
+            placeholder="搜索试题..."
             value={searchTerm.data}
             onChange={handleSearchChange}
             onKeyDown={(e) => {
@@ -302,7 +465,6 @@ const QuestionPage: React.FC = () => {
           />
           <Button
             variant="contained"
-            size="small"
             onClick={handleSearchSubmit}
             disabled={tableLaoding}
             sx={{ ml: 1, minWidth: 80 }}
@@ -310,13 +472,39 @@ const QuestionPage: React.FC = () => {
             搜索
           </Button>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={handleAddQuestionClick}
-        >
-          添加试题
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+          <Button
+            variant="contained"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={handleAddQuestionClick}
+          >
+            添加试题
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={downloadImportTemplate}
+            startIcon={<DownloadIcon />}
+          >
+            下载导入模板
+          </Button>
+          <Box>
+            <Button
+              variant="contained"
+              disabled={importLoading}
+              onClick={handelImpoerQuestionFromCSV}
+            >
+              从CSV文件导入
+            </Button>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+            />
+          </Box>
+        </Box>
+
       </Box>
       <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
         <Table aria-label="试题列表">
@@ -381,18 +569,22 @@ const QuestionPage: React.FC = () => {
                           />
                         ))}
                       </Box>
-
                     </TableCell>
                     <TableCell>
                       {question.c_create_at}
                     </TableCell>
                     <TableCell align="center">
-                      <Tooltip title="编辑权限">
+                      <Tooltip title="查看试题详细">
+                        <IconButton size="small" onClick={() => handelCheckQuestion(question)} color="default">
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="编辑试题">
                         <IconButton size="small" onClick={() => handleEditQuestionClick(question)} color="primary">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="删除权限">
+                      <Tooltip title="删除试题">
                         <IconButton size="small" onClick={() => handelDeleteQuestionClick(question)} color="error" >
                           <DeleteIcon />
                         </IconButton>
@@ -402,7 +594,7 @@ const QuestionPage: React.FC = () => {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                      <Typography color="text.secondary">没有找到匹配的权限。</Typography>
+                      <Typography color="text.secondary">暂无相关数据。</Typography>
                     </TableCell>
                   </TableRow>
                 )
@@ -410,7 +602,7 @@ const QuestionPage: React.FC = () => {
           </TableBody>
         </Table>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[10, 30, 50]}
           component="div"
           count={questionsCount}
           rowsPerPage={rowsPerPage}
@@ -430,6 +622,16 @@ const QuestionPage: React.FC = () => {
         onClose={() => setIsQuestionModalOpen(false)}
         initialQuestion={questionToEdit}
       />
+
+      {
+        questionCheck && (
+          <ViewQuestionModal
+            open={checkOpen}
+            onCancle={() => setCheckOpen(false)}
+            initialData={questionCheck}
+          />
+        )
+      }
 
 
       {questionToDelete && (

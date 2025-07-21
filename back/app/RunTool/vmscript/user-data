@@ -11,8 +11,8 @@ users:
     primary_group: ubuntu
     lock_passwd: false
     sudo: ALL=(ALL) NOPASSWD:ALL
-    passwd: 88888888
     shell: /bin/bash
+    passwd: \$1\$fe.0nUwl\$G9a1bnZh8EDFhtORhwnkh1
 
 write_files:
  - content: |
@@ -25,7 +25,7 @@ write_files:
 
 bootcmd:
  - ip link set enp1s0 up
- - ip addr add $ip/16 dev enp1s0
+ - ip addr add $ip dev enp1s0
  - ip route add default via 10.100.0.254 dev enp1s0
  - echo "nameserver 8.8.8.8" > /etc/resolv.conf
  - /opt/zeek/bin/zeekctl deploy

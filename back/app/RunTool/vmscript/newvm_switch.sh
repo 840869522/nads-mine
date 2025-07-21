@@ -2,9 +2,9 @@
 # 遇到任何错误则立即退出
 set -e
 
-# 检查参数数量是否为6
-if [ $# != 6 ]; then
-  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name"
+# 检查参数数量是否为9
+if [ $# != 9 ]; then
+  echo "USAGE: $0 num image_name ip SCENE_ID flag switch_name vm_name IMAGE_DIR INSTANCE_BASE_DIR"
   exit 1;
 fi
 
@@ -15,14 +15,17 @@ TEMPLATE_DIR="$SCRIPT_DIR"
 echo "DEBUG: Script directory is: $SCRIPT_DIR"
 echo "DEBUG: Template directory is: $TEMPLATE_DIR"
 
-# 定义基础镜像和实例的存放目录 (保持不变)
-IMAGE_DIR="/home/yic/wurenji/nads/images"
-INSTANCE_BASE_DIR="/home/yic/wurenji/nads/instances"
+# --- 核心修改：从命令行参数获取目录 ---
+IMAGE_DIR="$8"
+INSTANCE_BASE_DIR="$9"
+
+echo "DEBUG: IMAGE_DIR set to: $IMAGE_DIR"
+echo "DEBUG: INSTANCE_BASE_DIR set to: $INSTANCE_BASE_DIR"
 
 # 定义当前这个虚拟机的具体实例目录
-INSTANCE_DIR="$INSTANCE_BASE_DIR/ns$1"
+INSTANCE_DIR="$INSTANCE_BASE_DIR/$7"
 
-echo "DEBUG: Creating instance directory: $INSTANCE_DIR"
+echo "DEBUG: Creating instance directory: $INSTANCE_DIR for VM: $7"
 # 清理并创建实例目录
 rm -rf "$INSTANCE_DIR"
 mkdir -p "$INSTANCE_DIR"
@@ -65,30 +68,34 @@ n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config"
 n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 
-# 创建 cloud-init 使用的 ISO 文件
-echo "DEBUG: Creating cloud-init ISO image..."
-genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
-echo "DEBUG: ISO image created."
+# 將所有慢速操作打包到一個子Shell中，並將其整體放入後台
+(
+  # 創建 cloud-init 使用的 ISO 文件
+  echo "BACKGROUND: Creating cloud-init ISO image..."
+  genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
+  echo "BACKGROUND: ISO image created."
 
-# 复制并可能转换基础镜像到实例目录
-echo "DEBUG: Copying base image to instance directory..."
-# 使用 qemu-img convert 来复制和转换，这更安全，可以处理不同格式
-qemu-img convert -O qcow2 "$SOURCE_IMAGE_PATH" "$DESTINATION_IMAGE_PATH"
-echo "DEBUG: Image copied and converted to qcow2 format."
+  # 複製並可能轉換基礎镜像到實例目錄
+  echo "BACKGROUND: Copying base image to instance directory..."
+  qemu-img convert -O qcow2 "$SOURCE_IMAGE_PATH" "$DESTINATION_IMAGE_PATH"
+  echo "BACKGROUND: Image copied and converted to qcow2 format."
 
+  # 執行 virt-install 命令
+  echo "BACKGROUND: Starting virt-install..."
+  virt-install --virt-type kvm \
+    --network network=$6,model=virtio \
+    --name "$7" \
+    --ram=2048 \
+    --vcpus=2 \
+    --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
+    --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
+    --os-variant=ubuntu20.04 \
+    --graphics vnc,listen=0.0.0.0 \
+    --noautoconsole \
+    --import
+  
+  echo "BACKGROUND: virt-install command for $7 completed."
 
-# 执行 virt-install 命令
-echo "DEBUG: Starting virt-install..."
-virt-install --virt-type kvm \
-  --network network=$6,model=virtio \
-  --name "ns$1" \
-  --ram=4096 \
-  --vcpus=4 \
-  --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
-  --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
-  --os-variant=ubuntu20.04 \
-  --graphics vnc,listen=0.0.0.0 \
-  --noautoconsole \
-  --import
+) > /dev/null 2>&1 &
 
-echo "DEBUG: virt-install command completed."
+echo "DEBUG: All slow tasks for VM '$7' have been dispatched to the background."
