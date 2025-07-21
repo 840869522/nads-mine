@@ -71,6 +71,17 @@ class DrillController extends Controller
         $createdItemsInfo = []; // 存放所有已创建的容器和VM
         $sceneInstance = null;
 
+        // 创建一个映射来存储容器ID与其完整的IP地址（包含子网掩码）
+        $containerIps = [];
+        foreach ($connections as $conn) {
+            if ($conn['source']['type'] === 'container' && !empty($conn['source']['ip'])) {
+                $containerIps[$conn['source']['id']] = $conn['source']['ip'];
+            }
+            if ($conn['target']['type'] === 'container' && !empty($conn['target']['ip'])) {
+                $containerIps[$conn['target']['id']] = $conn['target']['ip'];
+            }
+        }
+
         try {
             // 2. 创建场景实例记录
             $sceneInstance = SceneInstance::create([
@@ -108,9 +119,14 @@ class DrillController extends Controller
                  if ($flag) $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
 
                  $containerId = $this->cliService->createContainer($options);
-                 SceneContainerInstance::create([
-                    'c_container_id' => $containerId, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id, 'c_flag' => $flag,
-                 ]);
+                                 // 【修改】从映射中获取IP，并一同存入数据库
+                $containerIp = $containerIps[$containerData['id']] ?? null;
+                SceneContainerInstance::create([
+                    'c_container_id' => $containerId,
+                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                    'c_flag' => $flag,
+                    'c_ip' => $containerIp, // 添加IP地址
+                ]);
                  $createdItemsInfo[$containerData['id']] = [
                     'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
                  ];
