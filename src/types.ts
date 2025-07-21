@@ -164,6 +164,9 @@ export interface RunningInstance {
   name: string;
   type: string; // <-- 这里被修改，以支持 '虚拟机', '容器', '交换机' 等多种类型
   ipAddress: string;
+  ip?: string;
+  scene_instance_id?: string;
+  scene_name?: string;
   status: InstanceStatus;
   /** 端口映射，如 "80->8080" */
   ports?: string;

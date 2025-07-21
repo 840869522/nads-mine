@@ -49,6 +49,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         cpuUsage: true,
         memoryUsage: true,
         uptime: true,
+        ip: true,
+        sceneId: true,
+        sceneName: true,
     });
 
     const getStatusChipColor = (status: InstanceStatus): "success" | "warning" | "error" | "info" | "default" => {
@@ -153,6 +156,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'cpuUsage', headerName: 'CPU', width: 100, hide: !showColumns.cpuUsage },
         { field: 'memoryUsage', headerName: '内存', flex: 1, hide: !showColumns.memoryUsage },
         { field: 'uptime', headerName: '运行时间', flex: 1, hide: !showColumns.uptime },
+        { field: 'ip', headerName: 'IP', flex: 1.2, hide: !showColumns.ip },
+        { field: 'scene_instance_id', headerName: '场景实例ID', flex: 1.2, hide: !showColumns.sceneId },
+        { field: 'scene_name', headerName: '场景名称', flex: 1.2, hide: !showColumns.sceneName },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
             field: 'actions', headerName: '操作', sortable: false, width: 180,
@@ -251,6 +257,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             key === 'ports' ? '端口' :
                             key === 'cpuUsage' ? 'CPU' :
                             key === 'memoryUsage' ? '内存' :
+                            key === 'ip' ? 'IP' :
+                            key === 'sceneId' ? '场景实例ID' :
+                            key === 'sceneName' ? '场景名称' :
                             '运行时间'
                         } />
                     </MenuItem>

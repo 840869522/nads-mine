@@ -447,6 +447,7 @@ public function listVmsBySceneInstance(string $instance_id)
     public function getGuacInfo($vmName, Request $request)
     {
         $method = strtolower($request->query('method', 'ssh'));
+        $vmQueryName = $request->query('vm_name', $vmName);
 
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
@@ -467,16 +468,14 @@ public function listVmsBySceneInstance(string $instance_id)
             }
         } else {
             try {
-                $addrOut = $this->runVirsh('domifaddr', $vmName, '--source', 'agent');
-                $lines = array_slice(preg_split('/\n/', trim($addrOut)), 2);
-                foreach ($lines as $l) {
-                    $parts = preg_split('/\s+/', trim($l));
-                    if (count($parts) >= 4) {
-                        $ip = $parts[3];
-                        break;
-                    }
+                $record = DB::table('c_scene_vm_instances')
+                    ->where('c_vm_name', $vmQueryName)
+                    ->first();
+                if ($record && $record->c_ip) {
+                    $ip = explode('/', $record->c_ip)[0];
                 }
             } catch (\Throwable $e) {
+                Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
 
