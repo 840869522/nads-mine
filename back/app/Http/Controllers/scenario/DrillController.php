@@ -35,6 +35,8 @@ use Illuminate\Support\Facades\Validator;
 // ps aux | grep ovs
 
 //journalctl -f | grep ovs-vswitchd
+use Illuminate\Support\Facades\DB;
+
 class DrillController extends Controller
 {
     private CommandLineService $cliService;
@@ -64,12 +66,23 @@ class DrillController extends Controller
         // 1. 解析拓扑
         $parsedTopology = TopologyParser::parse($topologyJson);
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
-        $connections = $parsedTopology['connections'];
+        
+        // 【修改】使用引用传递，以便 assignIpAddresses 方法能直接修改 connections
+        $connections = &$parsedTopology['connections'];
+        
         $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
         $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
         $createdSwitchesInfo = [];
         $createdItemsInfo = []; // 存放所有已创建的容器和VM
         $sceneInstance = null;
+
+        // 【新增】IP地址自动分配逻辑
+        try {
+            $this->assignIpAddresses($connections);
+        } catch (\Exception $e) {
+            Log::error("IP地址自动分配失败: " . $e->getMessage());
+            return response()->json(['message' => 'IP地址分配失败：' . $e->getMessage()], 500);
+        }
 
         // 创建一个映射来存储容器ID与其完整的IP地址（包含子网掩码）
         $containerIps = [];
@@ -238,6 +251,64 @@ class DrillController extends Controller
             $errorMessage = $e->getMessage();
             Log::error("启动场景时发生严重错误: " . $errorMessage, ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => '启动场景时发生错误：' . $errorMessage], 500);
+        }
+    }
+
+    /**
+     * 【新增】为网络连接自动分配IP地址
+     *
+     * @param array $connections
+     * @throws \Exception
+     */
+    private function assignIpAddresses(array &$connections): void
+    {
+        // 1. 从数据库获取所有已存在的IP地址
+        $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
+        $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
+
+        // 2. 清理IP（去除/16等后缀），合并并创建快速查找表
+        $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
+            return explode('/', $ip)[0];
+        })->unique()->flip();
+        
+        Log::info('Found existing IPs in DB', $existingIps->keys()->toArray());
+
+        $octet3 = 0;
+        $octet4 = 0; // 从 .0 开始，循环会立刻变成 .1
+
+        // 3. 定义一个闭包函数，用于获取下一个可用的IP
+        $getNextIp = function() use (&$octet3, &$octet4, &$existingIps) {
+            do {
+                if ($octet4 >= 254) { // IP最后一个段通常不用0和255
+                    $octet4 = 1;
+                    $octet3++;
+                } else {
+                    $octet4++;
+                }
+
+                if ($octet3 >= 255) {
+                    throw new \Exception("IP地址池 10.100.0.0/16 已耗尽。");
+                }
+
+                $newIp = "10.100.{$octet3}.{$octet4}";
+
+            } while (isset($existingIps[$newIp]));
+
+            // 将新分配的IP加入到 existingIps 集合中，防止在本次事务中被重复分配
+            $existingIps[$newIp] = true;
+            
+            Log::info("Assigned new IP: {$newIp}");
+            return $newIp . "/16";
+        };
+
+        // 4. 遍历所有连接，为IP为空的节点分配新IP
+        foreach ($connections as &$connection) {
+            if (empty($connection['source']['ip'])) {
+                $connection['source']['ip'] = $getNextIp();
+            }
+            if (empty($connection['target']['ip'])) {
+                $connection['target']['ip'] = $getNextIp();
+            }
         }
     }
 }
