@@ -237,6 +237,7 @@ use Illuminate\Support\Facades\Route;
             Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
             Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
             Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
+            Route::post('/get_papers', [TestController::class, 'get_papers']);
         });
     });
 

@@ -185,7 +185,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}`);
+            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;

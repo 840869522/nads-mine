@@ -224,5 +224,35 @@ class QuestionsModel extends Model{
         return $cnt;
     }
 
+
+    /**
+     * Notes:获取全部题目
+     * User: zhangnan
+     * DateTime: 2025/7/21 16:53
+     * @return mixed
+     */
+    public function get_question_all()
+    {
+        $mod = new QuestionsModel();
+        $list = $mod->get()->toArray();;
+        return $list;
+    }
+
+    /**
+     * Notes:获取问题字典
+     * User: zhangnan
+     * DateTime: 2025/7/21 19:06
+     * @return array
+     */
+    public function get_question_dic()
+    {
+        $list = $this->get_question_all();
+        $res = [];
+        foreach($list as $k=>$v){
+            $res[$v['c_type']][$v['c_id']] = $v;
+        }
+        return $res;
+    }
+
 }
 ?>
