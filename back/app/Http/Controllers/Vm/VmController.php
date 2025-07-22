@@ -358,7 +358,7 @@ public function listVmsBySceneInstance(string $instance_id)
         try {
             $vm = SceneVmInstance::create([
                 'c_vm_name' => $vmName,
-                'c_scene_instances_id' => '',
+                'c_scene_instances_id' => 'standalone',
                 'c_ip' => $ip,
                 'c_flag' => $flag,
             ]);
@@ -377,9 +377,9 @@ public function listVmsBySceneInstance(string $instance_id)
                 'vm_name' => $vmName,
                 'image' => $image,
                 'ip' => $ip,
-                'scene_instance_id' => '',
+                'scene_instance_id' => 'standalone',
                 'flag' => $flag ?? 'NULL',
-                'switch_name' => 'ovs-switch',
+                'switch_name' => 'ovs-network',
                 'image_dir' => $imageDir,
                 'instance_base_dir' => $instanceBaseDir,
             ]);
