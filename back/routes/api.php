@@ -154,75 +154,50 @@
     /**
      * 定义人员测试分系统路由
      */
-Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
-    Route::prefix('courses')->group(function(){
-        Route::get('/',[CourseController::class,'index']);
-        Route::get('/{id}',[CourseController::class,'show']);
-        Route::post('/',[CourseController::class,'store']);
-        Route::put('/{id}',[CourseController::class,'update']);
-        Route::delete('/{id}',[CourseController::class,'destroy']);
-        Route::get('/{courseId}/users', [CourseController::class, 'getUsers']);
-        Route::post('/{courseId}/users', [CourseController::class, 'syncUsers']);
-        Route::post('/{courseId}/add-user', [CourseController::class, 'addUserToCourse']); // 保留单用户添加接口
-    });
-        /**
-         * 定义人员测试分系统路由
-         */
-        Route::prefix("study")->group(function () {
-            Route::prefix('courses')->group(function () {
-                Route::get('/', [CourseController::class, 'index'])->name('courses.index');
-                Route::get('/{id}', [CourseController::class, 'show'])->name('courses.show');
-                Route::post('/', [CourseController::class, 'store'])->name('courses.store');
-                Route::put('/{id}', [CourseController::class, 'update'])->name('courses.update');
-                Route::delete('/{id}', [CourseController::class, 'destroy'])->name('courses.destroy');
-                Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
+        Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
+            Route::prefix('courses')->group(function(){
+                Route::get('/',[CourseController::class,'index']);
+                Route::get('/{id}',[CourseController::class,'show']);
+                Route::post('/',[CourseController::class,'store']);
+                Route::put('/{id}',[CourseController::class,'update']);
+                Route::delete('/{id}',[CourseController::class,'destroy']);
+                Route::get('/{courseId}/users', [CourseController::class, 'getUsers']);
+                Route::post('/{courseId}/users', [CourseController::class, 'syncUsers']);
+                Route::post('/{courseId}/add-user', [CourseController::class, 'addUserToCourse']); // 保留单用户添加接口
             });
 
-    Route::prefix('categories')->group(function(){
-        Route::get('/', [CategoryController::class, 'index']);
-        Route::post('/', [CategoryController::class, 'store']);
-        Route::put('/{id}', [CategoryController::class, 'update']);
-        Route::delete('/{id}', [CategoryController::class, 'destroy']);
-    });
-            Route::prefix('categories')->group(function () {
-                Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
-                Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
-                Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
-                Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+            Route::prefix('categories')->group(function(){
+                Route::get('/', [CategoryController::class, 'index']);
+                Route::post('/', [CategoryController::class, 'store']);
+                Route::put('/{id}', [CategoryController::class, 'update']);
+                Route::delete('/{id}', [CategoryController::class, 'destroy']);
             });
 
-    Route::prefix('courses/{courseId}/resources')->group(function () {
-        Route::get('/', [ResourceController::class, 'index']);
-        Route::post('/', [ResourceController::class, 'store']);
-        Route::post('/upload', [ResourceController::class, 'upload']);
-        Route::delete('/{id}', [ResourceController::class, 'destroy']);
-    });
             Route::prefix('courses/{courseId}/resources')->group(function () {
-                Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
-                Route::post('/', [ResourceController::class, 'store'])->name('resources.store');
-                Route::post('/upload', [ResourceController::class, 'upload'])->name('resources.upload');
-                Route::delete('/{id}', [ResourceController::class, 'destroy'])->name('resources.destroy');
+                Route::get('/', [ResourceController::class, 'index']);
+                Route::post('/', [ResourceController::class, 'store']);
+                Route::post('/upload', [ResourceController::class, 'upload']);
+                Route::delete('/{id}', [ResourceController::class, 'destroy']);
             });
-        });
 
-    Route::prefix('courses/{courseId}/experiments')->group(function () {
-        Route::get('/', [ExperimentController::class, 'index']);
-        Route::post('/', [ExperimentController::class, 'store']);
-        Route::put('/{experimentId}', [ExperimentController::class, 'update']);
-        Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
-        Route::prefix('{experimentId}/resources')->group(function () {
-            Route::get('/', [ExperimentResourceController::class, 'index']);
-            Route::post('/', [ExperimentResourceController::class, 'store']);
-            Route::post('/upload', [ExperimentResourceController::class, 'upload']);
-            Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
+            Route::prefix('courses/{courseId}/experiments')->group(function () {
+                Route::get('/', [ExperimentController::class, 'index']);
+                Route::post('/', [ExperimentController::class, 'store']);
+                Route::put('/{experimentId}', [ExperimentController::class, 'update']);
+                Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
+                Route::prefix('{experimentId}/resources')->group(function () {
+                    Route::get('/', [ExperimentResourceController::class, 'index']);
+                    Route::post('/', [ExperimentResourceController::class, 'store']);
+                    Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+                    Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
+                });
+            });
+            // 新增路由：获取资源文件
+            Route::get('/resources/{c_resource_id}', [ResourceController::class, 'download']);
+            // 新增实验资源下载路由
+            Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
+            Route::get('/users', [CourseController::class, 'getAllUsers']);
         });
-    });
-    // 新增路由：获取资源文件
-    Route::get('/resources/{c_resource_id}', [ResourceController::class, 'download']);
-    // 新增实验资源下载路由
-    Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
-    Route::get('/users', [CourseController::class, 'getAllUsers']);
-});
     /**
      * 定义环境构建分系统
      */
