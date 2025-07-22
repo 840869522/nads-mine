@@ -25,15 +25,15 @@ class CommandLineService
     {
         // 1. 为 Linux Bridge 配置 IP 地址
         $gatewayIpOnly = explode('/', $gatewayIp)[0];
-        $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
-        Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
+        // $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
+        // Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
         
-        $processConfigBridge = new Process($commandConfigBridge);
-        $processConfigBridge->run();
-        // 如果IP已存在，忽略错误，否则抛出异常
-        if (!$processConfigBridge->isSuccessful() && !str_contains($processConfigBridge->getErrorOutput(), 'File exists')) {
-            throw new ProcessFailedException($processConfigBridge);
-        }
+        // $processConfigBridge = new Process($commandConfigBridge);
+        // $processConfigBridge->run();
+        // // 如果IP已存在，忽略错误，否则抛出异常
+        // if (!$processConfigBridge->isSuccessful() && !str_contains($processConfigBridge->getErrorOutput(), 'File exists')) {
+        //     throw new ProcessFailedException($processConfigBridge);
+        // }
 
         // 2. 循环为每个容器配置默认路由
         foreach ($containers as $container) {
