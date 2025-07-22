@@ -13,6 +13,36 @@ use Illuminate\Support\Facades\Log;
  */
 class CommandLineService
 {   
+     /**
+     * 为网桥配置IP地址，并为容器设置默认路由。
+     *
+     * @param string $bridgeName      要配置的网桥名称 (e.g., 'br0')
+     * @param string $gatewayIp       要分配给网桥的网关IP地址 (e.g., '10.100.0.254/16')
+     * @param array  $containers      需要配置路由的容器列表，格式: [['name' => 'C1_xxx', 'ip' => '10.100.0.9/16'], ...]
+     * @return void
+     */
+    public function configureBridgeAndRoutes(string $bridgeName, string $gatewayIp, array $containers): void
+    {
+        // 1. 为 Linux Bridge 配置 IP 地址
+        $gatewayIpOnly = explode('/', $gatewayIp)[0];
+        $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
+        Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
+        
+        $processConfigBridge = new Process($commandConfigBridge);
+        $processConfigBridge->run();
+        // 如果IP已存在，忽略错误，否则抛出异常
+        if (!$processConfigBridge->isSuccessful() && !str_contains($processConfigBridge->getErrorOutput(), 'File exists')) {
+            throw new ProcessFailedException($processConfigBridge);
+        }
+
+        // 2. 循环为每个容器配置默认路由
+        foreach ($containers as $container) {
+            $containerName = $container['name'];
+            $commandAddRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'add', 'default', 'via', $gatewayIpOnly];
+            Log::info("Executing [IP-Config]: Adding default route for container {$containerName}");
+            (new Process($commandAddRoute))->mustRun();
+        }
+    }
     //交换机和br0连接
     public function connectSwitchToBr0(string $ovsSwitchName, string $linuxBridgeName): void
     {
