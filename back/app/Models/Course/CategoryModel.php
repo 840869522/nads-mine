@@ -1,20 +1,14 @@
 <?php
-
 namespace App\Models\Course;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
 use App\Utils\GlobalResponse;
 
-class CategoryModel extends Model
+class CategoryModel
 {
-    protected $table = 'c_course_categories';
-    protected $primaryKey = 'c_category_id';
-    protected $keyType = 'string';
-    public $incrementing = false;
-
     /**
      * Get all categories.
      *
@@ -23,138 +17,243 @@ class CategoryModel extends Model
     public static function getAllCategories(): array
     {
         try {
-            $categories = DB::table('c_course_categories')->get()->toArray();
-            // Ensure UTF-8 encoding for string fields
-            $categories = array_map(function ($category) {
-                $category->c_category_id = mb_convert_encoding($category->c_category_id, 'UTF-8', 'UTF-8');
-                $category->c_category_name = mb_convert_encoding($category->c_category_name, 'UTF-8', 'UTF-8');
-                return $category;
-            }, $categories);
+            // 检查数据库连接
+            DB::connection()->getPdo();
+            $categories = DB::select('SELECT c_category_id, c_category_name FROM c_course_categories');
             return [
-                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'code' => 200,
+                'message' => 'Categories retrieved successfully.',
                 'data' => $categories,
-                'message' => GlobalResponse::HTTP_STATUS_OK_MES,
             ];
         } catch (QueryException $e) {
-            Log::error('[DATABASE] getAllCategories: ' . $e->getMessage());
+            Log::error('[DATABASE] getAllCategories: ' . $e->getMessage(), [
+                'sql' => 'SELECT c_category_id, c_category_name FROM c_course_categories',
+                'error_code' => $e->getCode(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => GlobalResponse::$DATABASE_ERROR_MES,
+                'code' => 500,
+                'message' => 'Failed to retrieve categories: ' . $e->getMessage(),
+                'error_details' => [
+                    'sql_error' => $e->getMessage(),
+                    'sql_code' => $e->getCode(),
+                ],
+            ];
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getAllCategories: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+                'error_details' => [
+                    'error' => $e->getMessage(),
+                ],
             ];
         }
     }
 
-    /**
-     * Insert a new category.
-     *
-     * @param string|null $name
-     * @return array
-     */
-    public static function insertCategory(?string $name): array
+    public static function insertCategory(array $data): array
     {
         try {
-            if (empty($name)) {
+            if (empty($data['c_category_name'])) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Category name is required.',
-                    'errors' => ['name' => ['The category name field is required.']],
+                    'code' => 422,
+                    'message' => '缺少必填字段: c_category_name。',
                 ];
             }
 
-            $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8'); // Ensure UTF-8 encoding
+            $categoryName = mb_convert_encoding($data['c_category_name'], 'UTF-8', 'UTF-8');
+            if (mb_strlen($categoryName) > 50) {
+                return [
+                    'code' => 422,
+                    'message' => '类别名称不能超过50个字符。',
+                ];
+            }
+
+            // 稳定生成 ID：从最大值加一
+            $maxIdRow = DB::selectOne('SELECT MAX(CAST(c_category_id AS UNSIGNED)) as max_id FROM c_course_categories');
+            $newIdNum = ($maxIdRow->max_id ?? 0) + 1;
+            if ($newIdNum > 99) {
+                return [
+                    'code' => 422,
+                    'message' => '已达到最大类别数限制（99）。',
+                ];
+            }
+            $newId = sprintf('%02d', $newIdNum);
+
+            $categoryFolder = public_path('web/' . $newId);
+            if (!File::makeDirectory($categoryFolder, 0755, true)) {
+                \Log::error('[FILESYSTEM] insertCategory: 无法创建目录', [
+                    'path' => $categoryFolder,
+                ]);
+                return [
+                    'code' => 500,
+                    'message' => '无法创建类别文件夹。',
+                ];
+            }
 
             DB::beginTransaction();
-            // Generate a two-character category ID (e.g., '01')
-            $existingIds = DB::table('c_course_categories')->pluck('c_category_id')->toArray();
-            $newId = sprintf('%02d', count($existingIds) + 1);
-
             $result = DB::insert(
-                "INSERT INTO c_course_categories (c_category_id, c_category_name, created_at, updated_at) VALUES (?, ?, NOW(), NOW())",
-                [$newId, $name]
+                'INSERT INTO c_course_categories (c_category_id, c_category_name) VALUES (?, ?)',
+                [$newId, $categoryName]
             );
 
-            DB::commit();
+            if ($result) {
+                DB::commit();
+                return [
+                    'code' => 201,
+                    'message' => '类别创建成功。',
+                    'data' => ['id' => $newId, 'name' => $categoryName],
+                ];
+            }
 
+            DB::rollBack();
             return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'data' => ['c_category_id' => $newId, 'c_category_name' => $name],
-                'message' => $result ? 'Category created successfully.' : GlobalResponse::$DATABASE_ERROR_MES,
+                'code' => 500,
+                'message' => '无法创建类别。',
             ];
         } catch (QueryException $e) {
             DB::rollBack();
-            Log::error('[DATABASE] insertCategory: ' . $e->getMessage());
-            $message = $e->getCode() == 23000 ? 'The category name has already been taken.' : GlobalResponse::$DATABASE_ERROR_MES;
+            \Log::error('[DATABASE] insertCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'data' => $data,
+                'sql' => 'INSERT INTO c_course_categories (c_category_id, c_category_name) VALUES (?, ?)',
+                'bindings' => [$newId ?? '未生成', $data['c_category_name']],
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $message,
-                'errors' => ['name' => [$message]],
+                'code' => $e->getCode() == 23000 ? 422 : 500,
+                'message' => $e->getCode() == 23000 ? '类别名称已存在。' : '无法创建类别: ' . $e->getMessage(),
+                'error_details' => [
+                    'sql_error' => $e->getMessage(),
+                    'sql_code' => $e->getCode(),
+                ],
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('[GENERAL] insertCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'data' => $data,
+            ]);
+            return [
+                'code' => 500,
+                'message' => '发生意外错误: ' . $e->getMessage(),
+                'error_details' => [
+                    'error' => $e->getMessage(),
+                ],
             ];
         }
     }
 
-    /**
-     * Update a category by ID.
-     *
-     * @param string $id
-     * @param string|null $name
-     * @return array
-     */
-    public static function updateCategory(string $id, ?string $name): array
+    public static function updateCategory(string $id, array $data): array
     {
         try {
-            if (empty($name)) {
+            if (!preg_match('/^\d{2}$/', $id)) {
                 return [
-                    'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                    'message' => 'Category name is required.',
-                    'errors' => ['name' => ['The category name field is required.']],
+                    'code' => 422,
+                    'message' => 'Invalid category_id format.',
+                ];
+            }
+            if (empty($data['c_category_name'])) {
+                return [
+                    'code' => 422,
+                    'message' => 'Missing required field: c_category_name.',
                 ];
             }
 
-            $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8'); // Ensure UTF-8 encoding
-            $id = mb_convert_encoding($id, 'UTF-8', 'UTF-8'); // Ensure UTF-8 encoding for ID
-
+            DB::beginTransaction();
             $result = DB::update(
-                "UPDATE c_course_categories SET c_category_name = ?, updated_at = NOW() WHERE c_category_id = ?",
-                [$name, $id]
+                'UPDATE c_course_categories SET c_category_name = ? WHERE c_category_id = ?',
+                [$data['c_category_name'], $id]
             );
 
+            if ($result) {
+                DB::commit();
+                return [
+                    'code' => 200,
+                    'message' => 'Category updated successfully.',
+                ];
+            }
+
+            DB::rollBack();
             return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $result ? 'Category updated successfully.' : 'Category not found.',
-                'data' => $result ? ['c_category_id' => $id, 'c_category_name' => $name] : null,
+                'code' => 404,
+                'message' => 'Category not found.',
             ];
         } catch (QueryException $e) {
-            Log::error('[DATABASE] updateCategory: ' . $e->getMessage());
-            $message = $e->getCode() == 23000 ? 'The category name has already been taken.' : GlobalResponse::$DATABASE_ERROR_MES;
+            DB::rollBack();
+            Log::error('[DATABASE] updateCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $message,
-                'errors' => ['name' => [$message]],
+                'code' => 500,
+                'message' => $e->getCode() == 23000 ? 'Category name already exists.' : 'Failed to update category: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] updateCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
             ];
         }
     }
 
-    /**
-     * Delete a category by ID.
-     *
-     * @param string $id
-     * @return array
-     */
     public static function deleteCategory(string $id): array
     {
         try {
-            $id = mb_convert_encoding($id, 'UTF-8', 'UTF-8'); // Ensure UTF-8 encoding
-            $result = DB::delete("DELETE FROM c_course_categories WHERE c_category_id = ?", [$id]);
+            if (!preg_match('/^\d{2}$/', $id)) {
+                return [
+                    'code' => 422,
+                    'message' => 'Invalid category_id format.',
+                ];
+            }
+
+            $hasCourses = DB::table('c_courses')->where('category_id', $id)->exists();
+            if ($hasCourses) {
+                return [
+                    'code' => 422,
+                    'message' => 'Cannot delete category with associated courses.',
+                ];
+            }
+
+            $categoryFolder = public_path('web/' . $id);
+            DB::beginTransaction();
+            $result = DB::delete('DELETE FROM c_course_categories WHERE c_category_id = ?', [$id]);
+            if ($result) {
+                if (File::exists($categoryFolder)) {
+                    File::deleteDirectory($categoryFolder);
+                }
+                DB::commit();
+                return [
+                    'code' => 200,
+                    'message' => 'Category deleted successfully.',
+                ];
+            }
+            DB::rollBack();
             return [
-                'code' => $result ? GlobalResponse::$DATABASE_SUCCESS_CODE : GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $result ? 'Category deleted successfully.' : 'Category not found.',
+                'code' => 404,
+                'message' => 'Category not found.',
             ];
         } catch (QueryException $e) {
-            Log::error('[DATABASE] deleteCategory: ' . $e->getMessage());
-            $message = $e->getCode() == 23000 ? 'Category is referenced by courses.' : GlobalResponse::$DATABASE_ERROR_MES;
+            DB::rollBack();
+            Log::error('[DATABASE] deleteCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
-                'code' => GlobalResponse::$DATABASE_ERROR_CODE,
-                'message' => $message,
+                'code' => 500,
+                'message' => $e->getCode() == 23000 ? 'Category is referenced by courses.' : 'Failed to delete category: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] deleteCategory: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
             ];
         }
     }
