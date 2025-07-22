@@ -10,6 +10,7 @@ use App\Models\Course\TempUsersModel;
 
 use App\Models\Course\QuestionsOptionsModel;
 use App\Models\Course\TestsModel;
+use App\Models\Course\TestUsersModel;
 use Illuminate\Http\Request;
 use App\Models\Course\CategoryModel;
 use Illuminate\Http\JsonResponse;
@@ -160,7 +161,7 @@ class TestController extends Controller
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
-            if(in_array($type,[1,2,3])){
+            if(in_array($type,[1,2])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
                 }else{
@@ -986,7 +987,13 @@ class TestController extends Controller
     }
 
 
-
+    /**
+     * Notes:试卷修改(未完成)
+     * User: zhangnan
+     * DateTime: 2025/7/22 15:22
+     * @param Request $request
+     * @return JsonResponse|void
+     */
     public function update_papers(Request $request)
     {
         $question_data = array(
@@ -1098,6 +1105,115 @@ class TestController extends Controller
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:发卷
+     * User: zhangnan
+     * DateTime: 2025/7/22 15:37
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function send_papers(Request $request)
+    {
+        try {
+            $test_id     = trim($request->input('test_id'));
+            $c_username     = trim($request->input('username'));
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+                'username' => 'required|string|exists:c_users,c_username',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+                'username.exists'=>"用户不能为空",
+                'username.string'=>"用户类型不正确",
+                'username.exists'=>"用户不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $tests_mod = new TestsModel();
+            $test_info = $tests_mod->get_test_info($test_id);
+            if(time()<strtotime($test_info['c_start'])){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未到测试开始时间！");
+            }
+
+            if(time()>strtotime($test_info['c_end'])){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"测试时间已结束！");
+            }
+
+            $test_user_mod = new TestUsersModel();
+            $paper_mod =  new PapersModel();
+            $check_test_users = $test_user_mod->check_test_users_by_user_name($test_id,$c_username);
+            if(!$check_test_users){
+                $paper_id = $check_test_users->c_paper_id;
+                $paper_info = $paper_mod->get_paper_info_by_id($paper_id);
+                if(!$paper_info){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"试卷信息获取失败！");
+                }
+                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$paper_info->c_questions);
+            }else{
+                $papers_list = $paper_mod->get_paper_list($test_id);
+                if(!$papers_list){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下无试卷！");
+                }
+                $papers_dic = [];
+                foreach($papers_list as $k=>$v){
+                    $papers_dic[$v['c_id']] = $v;
+                }
+                $papers_info = $this->distribute_test_papers($test_id,$papers_dic);
+                $res = $test_user_mod->create_test_users_info($test_id,$c_username,$papers_info['c_id']);
+                if(!$res){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"试卷派发失败！");
+                }
+                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$papers_info['c_questions']);
+
+            }
+
+
+            $mod = new PapersModel();
+            $info = $mod->get_paper_list($test_id);
+            if(!$info){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:派发试卷
+     * User: zhangnan
+     * DateTime: 2025/7/22 17:35
+     * @param $test_id
+     * @param $papers_list
+     */
+    public function distribute_test_papers($test_id="",$papers_list="")
+    {
+        $papers_dic = [];
+        foreach($papers_list as $k=>$v){
+            $papers_dic[] = $v['c_id'];
+        }
+        $test_user_papers_dic = [];
+        $test_users_mod =  new TestUsersModel();
+        $test_users_list = $test_users_mod->get_test_user_by_test_id($test_id);
+        foreach($test_users_list as $k=>$v){
+            $test_user_papers_dic[] = $v['c_paper_id'];
+        }
+        $result = array_diff($test_user_papers_dic, $papers_dic);
+        if(!empty($result)){
+            $randomKey = array_rand($result);  // 随机获取一个键
+            $randomValue = $result[$randomKey]; // 通过键获取对应的值
+            return $papers_list[$randomValue];
+        }else{
+            $randomKey = array_rand($papers_dic);  // 随机获取一个键
+            $randomValue = $papers_dic[$randomKey]; // 通过键获取对应的值
+            return $papers_list[$randomValue];
         }
     }
 

@@ -168,7 +168,7 @@ use Illuminate\Support\Facades\Route;
         Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
         // GET /api/scenarios/instances - 获取所有场景实例列表
         Route::get('/', [InstanceController::class, 'index']);
-        // 关键: 确保 DELETE 路由指向 destroy 方法 
+        // 关键: 确保 DELETE 路由指向 destroy 方法
         Route::delete('/{instance}', [InstanceController::class, 'destroy']);
         // --- 获取单个场景实例的容器详细信息 ---
         Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
@@ -238,6 +238,7 @@ use Illuminate\Support\Facades\Route;
             Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
             Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
             Route::post('/get_papers', [TestController::class, 'get_papers']);
+            Route::post('/send_papers', [TestController::class, 'send_papers']);
         });
     });
 

@@ -108,5 +108,22 @@ class PapersModel extends Model{
         }
         return $res;
     }
+
+    /**
+     * Notes:获取试卷信息
+     * User: zhangnan
+     * DateTime: 2025/7/22 16:15
+     * @param $c_id
+     * @return false
+     */
+    public function get_paper_info_by_id($c_id="")
+    {
+        $mod = new PapersModel();
+        $res = $mod->where("c_id",$c_id)->first();
+        if(empty($res)){
+            return false;
+        }
+        return $res;
+    }
 }
 ?>
