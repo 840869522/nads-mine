@@ -125,11 +125,13 @@ class QuestionsModel extends Model{
             if(!$res){
                 return false;
             }
-            $question_options_mod = new QuestionsOptionsModel();
-            $question_options_res = $question_options_mod->update_question_options_info($c_id,$content);
-            if(!$question_options_res){
-                DB::rollback();
-                return false;
+            if (in_array($type,[1,2])){
+                $question_options_mod = new QuestionsOptionsModel();
+                $question_options_res = $question_options_mod->update_question_options_info($c_id,$content);
+                if(!$question_options_res){
+                    DB::rollback();
+                    return false;
+                }
             }
             DB::commit();
             return true;

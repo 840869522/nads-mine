@@ -159,7 +159,7 @@ class TestController extends Controller
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
-            if(in_array($type,[1,2,3])){
+            if(in_array($type,[1,2])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
                 }else{
