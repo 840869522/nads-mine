@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\Storage;
 class ExperimentModel
 {
     public static function createExperiment(string $courseId, array $data): array
@@ -18,7 +18,8 @@ class ExperimentModel
                 ];
             }
 
-            if (!DB::table('c_courses')->where('c_course_id', $courseId)->exists()) {
+            $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
+            if (!$course) {
                 return [
                     'code' => 422,
                     'message' => 'Invalid course_id: Course does not exist.',
@@ -32,16 +33,38 @@ class ExperimentModel
                 ];
             }
 
-            $experimentId = (string) Str::uuid();
-            $experimentFolder = public_path("web/{$courseId}/experiments/{$experimentId}");
-            if (!File::exists($experimentFolder)) {
-                if (!File::makeDirectory($experimentFolder, 0755, true)) {
+            // 生成实验 ID：类别ID + 课程ID + 递增序号
+            $categoryId = $course->c_category_id;
+            $existingExperiments = DB::table('c_course_experiments')
+                ->where('c_course_id', $courseId)
+                ->count();
+            $experimentNumber = $existingExperiments + 1; // 下一个序号
+            $experimentId = sprintf('%s%s%02d', $categoryId, $courseId, $experimentNumber); // 例如：0100101
+
+            // 确保实验 ID 唯一
+            if (DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->exists()) {
+                return [
+                    'code' => 422,
+                    'message' => 'Experiment ID already exists.',
+                ];
+            }
+
+            // 创建实验文件夹，使用 local_resources 磁盘
+            $experimentFolder = "courses/{$categoryId}/{$courseId}/Experiment/{$experimentId}";
+            if (!Storage::disk('local_resources')->exists($experimentFolder)) {
+                if (!Storage::disk('local_resources')->makeDirectory($experimentFolder, 0755, true)) {
                     return [
                         'code' => 500,
                         'message' => 'Failed to create experiment folder.',
                     ];
                 }
             }
+
+            // 记录文件夹路径以便调试
+            Log::info('Creating experiment folder', [
+                'experimentFolder' => $experimentFolder,
+                'fullPath' => Storage::disk('local_resources')->path($experimentFolder),
+            ]);
 
             DB::beginTransaction();
             $result = DB::insert(

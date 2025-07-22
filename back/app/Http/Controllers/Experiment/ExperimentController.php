@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 class ExperimentController extends Controller
 {
     public function index($courseId)
@@ -138,17 +139,17 @@ class ExperimentController extends Controller
                 ->where('c_experiment_id', $experimentId)
                 ->get();
             foreach ($resources as $resource) {
-                if (Storage::disk('public')->exists($resource->c_resource_path)) {
-                    Storage::disk('public')->delete($resource->c_resource_path);
+                if (Storage::disk('local_resources')->exists($resource->c_resource_path)) {
+                    Storage::disk('local_resources')->delete($resource->c_resource_path);
                 }
             }
             DB::table('c_experiment_resources')->where('c_experiment_id', $experimentId)->delete();
 
             // 删除实验文件夹
             $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
-            $experimentFolder = public_path("web/{$course->c_category_id}/{$courseId}/experiments/{$experimentId}");
-            if (File::exists($experimentFolder)) {
-                File::deleteDirectory($experimentFolder);
+            $experimentFolder = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$experimentId}";
+            if (Storage::disk('local_resources')->exists($experimentFolder)) {
+                Storage::disk('local_resources')->deleteDirectory($experimentFolder);
             }
 
             // 删除实验记录

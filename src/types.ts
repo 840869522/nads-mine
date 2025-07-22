@@ -155,12 +155,13 @@ export interface CourseCaseResource {
   c_resource_path: string;
   c_size?: string;
   fileObject?: File;
+  isExperimentResource?: boolean; // 新增标志，区分课程资源和实验资源
 }
 export interface Category {
   c_category_id: string;
   c_category_name: string;
 }
-export type CourseCaseResourceFormat = 'pdf' | 'mp4' | 'avi' | 'pptx' | 'docx' | 'other';
+export type CourseCaseResourceFormat = 'pdf' | 'mp4' | 'avi' | 'pptx' | 'docx' | 'other' | 'png' | 'jpeg' | 'jpg' | 'doc';
 export interface Experiment {
   c_experiment_id: string;
   c_experiment_name: string;

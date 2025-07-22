@@ -370,10 +370,14 @@ export const MOCK_COURSE_CASES: CourseCase[] = [
 ];
 
 export const SUPPORTED_COURSE_RESOURCE_FORMATS: Record<CourseCaseFileFormat, string> = {
-  pdf: "application/pdf",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  mp4: "video/mp4",
-  avi: "video/x-msvideo",
-  other: "*/*"
+  pdf: '.pdf',
+  mp4: '.mp4',
+  avi: '.avi',
+  pptx: '.pptx',
+  docx: '.docx',
+  doc: '.doc',
+  jpg: '.jpg',
+  jpeg: '.jpeg',
+  png: '.png',
+  other: '*/*'
 };

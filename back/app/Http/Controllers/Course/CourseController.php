@@ -53,7 +53,6 @@ class CourseController extends Controller
             'c_course_name' => 'required|string|max:100|unique:c_courses,c_course_name',
             'c_description' => 'nullable|string',
             'c_category_id' => 'required|string|size:2|exists:c_course_categories,c_category_id',
-            //'c_user_id' => 'nullable|string|exists:c_users,c_username',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -93,12 +92,53 @@ class CourseController extends Controller
         $modelRes = CourseModel::deleteCourse($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);
     }
+    /**
+     * 获取所有用户
+     */
+    public function getAllUsers(Request $request)
+    {
+        $modelRes = CourseModel::getAllUsers();
+        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 500);
+    }
 
-    public function addUserToCourse(Request $request)
+    /**
+     * 获取课程的授权用户
+     */
+    public function getUsers($courseId)
+    {
+        $modelRes = CourseModel::getCourseUsers($courseId);
+        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : ($modelRes['code'] == 404 ? 404 : 500));
+    }
+
+    /**
+     * 批量更新课程的授权用户
+     */
+    public function syncUsers(Request $request, $courseId)
     {
         $validator = Validator::make($request->json()->all(), [
-            'c_user_id' => 'required|string|exists:c_users,c_username',
-            'c_course_id' => 'required|string|size:5|exists:c_courses,c_course_id',
+            'users' => 'required|array',
+            'users.*' => 'string|exists:c_users,c_username',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => 422,
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $userIds = $request->json('users', []);
+        $modelRes = CourseModel::syncCourseUsers($courseId, $userIds);
+        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : ($modelRes['code'] == 404 ? 404 : 500));
+    }
+
+    /**
+     *  addUserToCourse 方法，调整路由和参数名
+     */
+    public function addUserToCourse(Request $request, $courseId)
+    {
+        $validator = Validator::make($request->json()->all(), [
+            'c_username' => 'required|string|exists:c_users,c_username',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -108,7 +148,8 @@ class CourseController extends Controller
         }
 
         $reqData = $request->json()->all();
-        $modelRes = CourseModel::addUserToCourse($reqData['c_user_id'], $reqData['c_course_id']);
+        $modelRes = CourseModel::addUserToCourse($reqData['c_username'], $courseId);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 400);
     }
+
 }

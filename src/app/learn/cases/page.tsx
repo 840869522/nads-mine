@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { debounce } from 'lodash';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -32,13 +33,16 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import Pagination from '@mui/material/Pagination';
+import SecurityIcon from '@mui/icons-material/Security';
 
-import { CourseCase, CourseCaseResource, Category, Experiment } from '@/types';
+
+import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
 import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
 import ExperimentFormModal from '@/components/coursecases/ExperimentFormModal';
 import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
+import CoursePermissionDialog from '@/components/coursecases/CoursePermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import { BACK_IP_PORT } from '@/constants';
 import { getCookie } from '@/utils/cookie';
@@ -47,6 +51,23 @@ const highlightText = (text: string, keyword: string) => {
   if (!keyword || !text) return text;
   const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.replace(regex, '<span style="color: red">$1</span>');
+};
+const getFileType = (type: string): CourseCaseResourceFormat => {
+  // 如果已经是扩展名，直接返回
+  const validExtensions = ['pdf', 'mp4', 'avi', 'pptx', 'docx', 'doc', 'jpg', 'png'];
+  if (validExtensions.includes(type.toLowerCase())) {
+    return type.toLowerCase() as CourseCaseResourceFormat;
+  }
+  // 处理 MIME 类型
+  if (type.includes('pdf')) return 'pdf';
+  if (type.includes('mp4')) return 'mp4';
+  if (type.includes('x-msvideo') || type.includes('avi')) return 'avi';
+  if (type.includes('presentationml.presentation')) return 'pptx';
+  if (type.includes('wordprocessingml.document')) return 'docx';
+  if (type.includes('msword')) return 'doc';
+  if (type.includes('jpeg')) return 'jpg';
+  if (type.includes('png')) return 'png';
+  return 'other'; // 未知类型返回 'other'
 };
 
 const CourseCasesPage: React.FC = () => {
@@ -76,9 +97,11 @@ const CourseCasesPage: React.FC = () => {
   const [totalCases, setTotalCases] = useState<number>(0);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [tabValue, setTabValue] = useState(0);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const debouncedFetchData = debounce(async () => {
       setIsLoading(true);
       setErrorMessage('');
       try {
@@ -105,17 +128,18 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch scene configs
-        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/scene/scenarios`, {
+        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/scenarios`, {
           headers: { Authorization: `Bearer ${token}` },
+
         });
         const sceneConfigsData = sceneConfigsResponse.data;
-        if (sceneConfigsData.code === 200) {
-          setSceneConfigs(sceneConfigsData.data.map((config: { c_config_id: number; c_name: string }) => ({
-            c_config_id: config.c_config_id,
-            c_name: config.c_name,
+        try {
+          setSceneConfigs(sceneConfigsData.map((config: { id: number; name: string }) => ({
+            c_config_id: config.id,
+            c_name: config.name,
           })) || []);
-        } else {
-          setErrorMessage(`获取场景配置失败: ${sceneConfigsData.message || '未知错误'}`);
+        } catch (error: any) {
+          setErrorMessage(`获取场景配置失败: ${error.message || '未知错误'}`);
         }
 
         // Fetch courses
@@ -137,16 +161,22 @@ const CourseCasesPage: React.FC = () => {
                 let experiments: Experiment[] = [];
                 try {
                   const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+
                     headers: { Authorization: `Bearer ${token}` },
+                    params: {
+                      page: 1,
+                      pageSize: 10
+                    }
                   });
                   const resourcesData = resourcesResponse.data;
                   if (resourcesData.code === 200) {
                     resources = (resourcesData.data.resources || []).map((res: any) => ({
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
-                      c_type: res.c_type.split('/')[1] || 'other',
+                      c_type: getFileType(res.c_type),
                       c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                      isExperimentResource: false, // 标记为课程资源
                     }));
                   }
                 } catch (error: any) {
@@ -167,9 +197,10 @@ const CourseCasesPage: React.FC = () => {
                       resources: (exp.resources || []).map((res: any) => ({
                         c_resource_id: res.c_resource_id,
                         c_resource_name: res.c_resource_name,
-                        c_type: res.c_type.split('/')[1] || 'other',
-                        c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                        c_type: getFileType(res.c_type),
+                        c_resource_path: `${BACK_IP_PORT}/api/study/experiment-resources/${res.c_resource_id}`,
                         c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                        isExperimentResource: true, // 标记为实验资源
                       })),
                       created_at: exp.created_at || new Date().toISOString(),
                     }));
@@ -197,13 +228,24 @@ const CourseCasesPage: React.FC = () => {
           setErrorMessage(`获取课程失败: ${coursesData.message || '未知错误'}`);
         }
       } catch (error: any) {
-        setErrorMessage(error.response?.data?.message || error.message || '加载数据失败');
-        console.error('Error fetching data:', error);
+        const message =
+            error.response?.status === 429
+                ? `请求过于频繁，请稍后重试（${error.response?.headers['retry-after'] || 60}秒）`
+                : error.response?.data?.message || error.message || '加载数据失败';
+        setErrorMessage(message);
+        console.error('Error fetching data:', {
+          message,
+          status: error.response?.status,
+          data: error.response?.data,
+          url: error.config?.url,
+        });
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchData();
+    }, 500);
+
+    debouncedFetchData();
+    return () => debouncedFetchData.cancel(); // 清理防抖函数
   }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
   const handleOpenFormModal = (courseCase?: CourseCase) => {
@@ -237,7 +279,20 @@ const CourseCasesPage: React.FC = () => {
     setEditingExperiment(null);
     setSelectedCourseId(null);
   };
+  const handleOpenPermissionDialog = (course: CourseCase) => {
+    setSelectedCourse(course);
+    setIsPermissionDialogOpen(true);
+  };
 
+  const handleClosePermissionDialog = () => {
+    setIsPermissionDialogOpen(false);
+    setSelectedCourse(null);
+  };
+  // 添加 handlePermissionSaveSuccess
+  const handlePermissionSaveSuccess = () => {
+    setErrorMessage('权限保存成功');
+    setTimeout(() => setErrorMessage(''), 3000); // 3秒后清除提示
+  };
   const handleSaveExperiment = async (experiment: Experiment, courseId: string) => {
     try {
       const token = getCookie('_auth');
@@ -384,7 +439,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                Authorization: `Bearer ${token}`,
+                'Authorization': `Bearer ${token}`,
               },
             });
             const data = response.data;
@@ -395,12 +450,12 @@ const CourseCasesPage: React.FC = () => {
         }
       }
 
-      // Refresh course list
+      // 刷新课程列表
       const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
-          pageSize: itemsPerPage,
+          pageSize: itemsPerPage, // 使用动态每页条数
           ...(searchKeyword && { keyword: searchKeyword }),
           ...(filterCategoryId && { c_category_id: filterCategoryId }),
         },
@@ -420,7 +475,7 @@ const CourseCasesPage: React.FC = () => {
                   resources = (resourcesData.data.resources || []).map((res: any) => ({
                     c_resource_id: res.c_resource_id,
                     c_resource_name: res.c_resource_name,
-                    c_type: res.c_type.split('/')[1] || 'other',
+                    c_type: getFileType(res.c_type),
                     c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
                     c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                   }));
@@ -443,7 +498,7 @@ const CourseCasesPage: React.FC = () => {
                     resources: (exp.resources || []).map((res: any) => ({
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
-                      c_type: res.c_type.split('/')[1] || 'other',
+                      c_type: getFileType(res.c_type),
                       c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                     })),
@@ -675,24 +730,24 @@ const CourseCasesPage: React.FC = () => {
     return new Date(dateString).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  const handleCategoryChange = (event: SelectChangeEvent) => {
+  const handleCategoryChange = debounce((event: SelectChangeEvent) => {
     setFilterCategoryId(event.target.value as string);
     setCurrentPage(1);
-  };
+  }, 300);
 
-  const handleItemsPerPageChange = (event: SelectChangeEvent) => {
+  const handleItemsPerPageChange = debounce((event: SelectChangeEvent) => {
     setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1);
-  };
+    setCurrentPage(1); // 重置到第一页
+  }, 300);
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
     setCurrentPage(page);
   };
 
-  const handleOpenResourcesDialog = (courseCase: CourseCase) => {
+  const handleOpenResourcesDialog = (courseCase: CourseCase, tabIndex: number = 0) => {
     setSelectedCaseForResources(courseCase);
     setIsResourcesDialogOpen(true);
-    setTabValue(0);
+    setTabValue(tabIndex);
   };
 
   const handleCloseResourcesDialog = () => {
@@ -704,10 +759,10 @@ const CourseCasesPage: React.FC = () => {
     setTempSearch(event.target.value);
   };
 
-  const handleSearchSubmit = () => {
-    setSearchKeyword(tempSearch);
+  const handleSearchSubmit = debounce(() => {
+    setSearchKeyword(tempSearch.trim());
     setCurrentPage(1);
-  };
+  }, 500);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -716,7 +771,7 @@ const CourseCasesPage: React.FC = () => {
   const getPageNumbers = () => {
     const totalPages = Math.ceil(totalCases / itemsPerPage);
     const pageNumbers = [];
-    const maxVisiblePages = 5;
+    const maxVisiblePages = 5; // 显示的最大页码数
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -764,66 +819,102 @@ const CourseCasesPage: React.FC = () => {
         >
           <Box>
             <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-              课程案例管理
+              课程案例库
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              随时查看和管理课程案例
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box>
             <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                color="primary"
                 onClick={() => handleOpenFormModal()}
+                sx={{ fontWeight: 'bold', mr: 2 }}
             >
-              添加课程
+              添加案例
             </Button>
             <Button
-                variant="outlined"
-                startIcon={<AddIcon />}
+                variant="contained"
+                color="secondary"
                 onClick={() => handleOpenCategoryModal()}
+                sx={{ fontWeight: 'bold' }}
             >
               添加类别
             </Button>
           </Box>
         </Box>
-        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl sx={{ minWidth: 120 }}>
-            <InputLabel id="category-filter-label">类别</InputLabel>
-            <Select
-                labelId="category-filter-label"
-                value={filterCategoryId}
-                label="类别"
-                onChange={handleCategoryChange}
+
+        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel id="category-filter-label">分类筛选</InputLabel>
+              <Select
+                  labelId="category-filter-label"
+                  id="category-filter"
+                  value={typeof filterCategoryId === 'string' ? filterCategoryId : ''}
+                  label="分类筛选"
+                  onChange={handleCategoryChange}
+              >
+                <MenuItem value="">所有分类</MenuItem>
+                {categories.map(category => (
+                    <MenuItem key={category.c_category_id} value={category.c_category_id}>
+                      {category.c_category_name}
+                    </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {filterCategoryId && (
+                <Chip
+                    label={`当前筛选: ${categories.find(cat => cat.c_category_id === filterCategoryId)?.c_category_name || '未知分类'}`}
+                    onDelete={() => setFilterCategoryId('')}
+                    color="primary"
+                    sx={{ height: 40, px: 2 }}
+                />
+            )}
+
+            <FormControl sx={{ minWidth: 120 }}>
+              <InputLabel id="items-per-page-label">每页条数</InputLabel>
+              <Select
+                  labelId="items-per-page-label"
+                  id="items-per-page"
+                  value={itemsPerPage.toString()}
+                  label="每页条数"
+                  onChange={handleItemsPerPageChange}
+              >
+                <MenuItem value="10">10 条/页</MenuItem>
+                <MenuItem value="20">20 条/页</MenuItem>
+                <MenuItem value="50">50 条/页</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* 右侧：搜索框 + 按钮 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <TextField
+                label="搜索课程"
+                variant="outlined"
+                value={tempSearch}
+                onChange={handleSearchChange}
+                onBlur={() => {
+                  if (!tempSearch.trim()) {
+                    setSearchKeyword('');
+                    setCurrentPage(1);
+                  }
+                }}
+                sx={{ minWidth: 300 }}
+                placeholder="输入课程名称或描述"
+            />
+            <Button
+                variant="contained"
+                color="primary"
+                onClick={handleSearchSubmit}
+                sx={{ height: 40 }}
             >
-              <MenuItem value="">所有类别</MenuItem>
-              {categories.map(category => (
-                  <MenuItem key={category.c_category_id} value={category.c_category_id}>
-                    {category.c_category_name}
-                  </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-              label="搜索课程"
-              variant="outlined"
-              value={tempSearch}
-              onChange={handleSearchChange}
-              onKeyPress={event => {
-                if (event.key === 'Enter') handleSearchSubmit();
-              }}
-              sx={{ flexGrow: 1, maxWidth: 400 }}
-          />
-          <FormControl sx={{ minWidth: 120 }}>
-            <InputLabel id="items-per-page-label">每页条数</InputLabel>
-            <Select
-                labelId="items-per-page-label"
-                value={itemsPerPage.toString()}
-                label="每页条数"
-                onChange={handleItemsPerPageChange}
-            >
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={20}>20</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-            </Select>
-          </FormControl>
+              确认搜索
+            </Button>
+          </Box>
         </Box>
         <TableContainer component={Paper}>
           <Table>
@@ -865,6 +956,9 @@ const CourseCasesPage: React.FC = () => {
                           title="查看资源和实验"
                       >
                         <VisibilityIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleOpenPermissionDialog(course)} title="管理权限">
+                        <SecurityIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -908,6 +1002,7 @@ const CourseCasesPage: React.FC = () => {
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
               <Tab label="课程资源" />
               <Tab label="实验" />
+              <Tab label="实验资源" />
             </Tabs>
             {tabValue === 0 && (
                 <Box sx={{ mt: 2 }}>
@@ -995,7 +1090,7 @@ const CourseCasesPage: React.FC = () => {
                                     <DeleteIcon />
                                   </IconButton>
                                   <IconButton
-                                      onClick={() => handleOpenResourcesDialog({ ...selectedCaseForResources!, experiments: [experiment] })}
+                                      onClick={() => handleOpenResourcesDialog(selectedCaseForResources!, 2)}
                                       title="查看实验资源"
                                   >
                                     <VisibilityIcon />
@@ -1008,46 +1103,50 @@ const CourseCasesPage: React.FC = () => {
                   ) : (
                       <Typography>无实验</Typography>
                   )}
-                  {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle1">实验资源</Typography>
-                        <Table>
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>实验名称</TableCell>
-                              <TableCell>资源名称</TableCell>
-                              <TableCell>类型</TableCell>
-                              <TableCell>大小</TableCell>
-                              <TableCell>操作</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {selectedCaseForResources.experiments
-                                .filter(exp => exp.resources.length > 0)
-                                .map(exp =>
-                                    exp.resources.map(resource => (
-                                        <TableRow key={`${exp.c_experiment_id}-${resource.c_resource_id}`}>
-                                          <TableCell>{exp.c_experiment_name}</TableCell>
-                                          <TableCell>{resource.c_resource_name}</TableCell>
-                                          <TableCell>{resource.c_type}</TableCell>
-                                          <TableCell>{resource.c_size}</TableCell>
-                                          <TableCell>
-                                            <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                              <VisibilityIcon />
-                                            </IconButton>
-                                            <IconButton
-                                                onClick={() => handleDeleteResource(resource, true, exp.c_experiment_id)}
-                                                title="删除"
-                                            >
-                                              <DeleteIcon />
-                                            </IconButton>
-                                          </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                          </TableBody>
-                        </Table>
-                      </Box>
+                </Box>
+            )}
+            {tabValue === 2 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle1">实验资源</Typography>
+                  {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) ? (
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>实验名称</TableCell>
+                            <TableCell>资源名称</TableCell>
+                            <TableCell>类型</TableCell>
+                            <TableCell>大小</TableCell>
+                            <TableCell>操作</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedCaseForResources.experiments
+                              .filter(exp => exp.resources.length > 0)
+                              .map(exp =>
+                                  exp.resources.map(resource => (
+                                      <TableRow key={`${exp.c_experiment_id}-${resource.c_resource_id}`}>
+                                        <TableCell>{exp.c_experiment_name || '实验名称'}</TableCell>
+                                        <TableCell>{resource.c_resource_name}</TableCell>
+                                        <TableCell>{resource.c_type}</TableCell>
+                                        <TableCell>{resource.c_size}</TableCell>
+                                        <TableCell>
+                                          <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                            <VisibilityIcon />
+                                          </IconButton>
+                                          <IconButton
+                                              onClick={() => handleDeleteResource(resource, true, exp.c_experiment_id)}
+                                              title="删除"
+                                          >
+                                            <DeleteIcon />
+                                          </IconButton>
+                                        </TableCell>
+                                      </TableRow>
+                                  ))
+                              )}
+                        </TableBody>
+                      </Table>
+                  ) : (
+                      <Typography>无实验资源</Typography>
                   )}
                 </Box>
             )}
@@ -1082,9 +1181,14 @@ const CourseCasesPage: React.FC = () => {
             onClose={handleCloseResourceViewer}
             resource={viewingResource}
         />
+        <CoursePermissionDialog
+            open={isPermissionDialogOpen}
+            onClose={handleClosePermissionDialog}
+            course={selectedCourse}
+            onSaveSuccess={handlePermissionSaveSuccess}
+        />
       </PageWrapper>
   );
 };
 
 export default CourseCasesPage;
-

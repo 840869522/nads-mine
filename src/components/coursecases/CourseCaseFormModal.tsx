@@ -255,7 +255,7 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
                     hidden
                     multiple
                     onChange={handleFileChange}
-                    accept={Object.values(SUPPORTED_COURSE_RESOURCE_FORMATS).join(',')}
+                    accept={Object.values(SUPPORTED_COURSE_RESOURCE_FORMATS).filter(ext => ext !== '*/*').join(',')}
                 />
               </Button>
               {resources.length > 0 && (

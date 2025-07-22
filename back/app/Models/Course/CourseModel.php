@@ -5,9 +5,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
-
+use Illuminate\Support\Facades\Storage;
 class CourseModel
 {
+    const COURSES_USERS_TABLE = 'c_courses_users';
     public static function getAllCourses(int $page = 1, int $pagesize = 10, ?string $keyword = null, ?string $c_category_id = null): array
     {
         try {
@@ -153,8 +154,8 @@ class CourseModel
 
             $newId = $data['c_category_id'] . sprintf('%03d', $nextSequence);
 
-            $courseFolder = public_path('web/' . $data['c_category_id'] . '/' . $newId);
-            if (!File::makeDirectory($courseFolder, 0755, true)) {
+            $courseFolder = 'courses/' . $data['c_category_id'] . '/' . $newId;
+            if (!Storage::disk('local_resources')->makeDirectory($courseFolder, 0755, true)) {
                 return [
                     'code' => 500,
                     'message' => 'Failed to create course folder.',
@@ -166,35 +167,11 @@ class CourseModel
                 'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
                 [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id']]
             );
-//
-            /*
-            if ($result && isset($data['c_user_id'])) {
-                $userExists = DB::table('c_users')->where('c_username', $data['c_user_id'])->exists();
-                if (!$userExists) {
-                    DB::rollBack();
-                    return [
-                        'code' => 422,
-                        'message' => 'User does not exist.',
-                    ];
-                }
-                $userResult = DB::insert(
-                    'INSERT INTO c_users_courses (user_id, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
-                    [$data['c_user_id'], $newId]
-                );
-                if (!$userResult) {
-                    DB::rollBack();
-                    return [
-                        'code' => 500,
-                        'message' => 'Failed to associate user with course.',
-                    ];
-                }
-            }
-*/
             DB::commit();
             return [
                 'code' => 201,
                 'message' => 'Course created successfully.',
-                'data' => ['id' => $newId],
+                'data' => ['c_course_id' => $newId],
             ];
         } catch (QueryException $e) {
             DB::rollBack();
@@ -251,52 +228,102 @@ class CourseModel
                 ];
             }
 
-            $oldFolder = public_path('web/' . $oldCourse->c_category_id . '/' . $id);
-            $newFolder = public_path('web/' . $data['c_category_id'] . '/' . $id);
+            DB::beginTransaction();
 
             if ($oldCourse->c_category_id !== $data['c_category_id']) {
-                if (File::exists($newFolder)) {
+                $existingCourses = DB::table('c_courses')
+                    ->where('c_category_id', $data['c_category_id'])
+                    ->pluck('c_course_id')
+                    ->toArray();
+
+                $sequenceNumbers = array_map(function ($courseId) {
+                    return (int) substr($courseId, -3);
+                }, $existingCourses);
+                $nextSequence = $sequenceNumbers ? max($sequenceNumbers) + 1 : 1;
+
+                if ($nextSequence > 999) {
+                    DB::rollBack();
                     return [
                         'code' => 422,
-                        'message' => 'Target folder already exists.',
+                        'message' => 'Maximum number of courses reached for this category.',
                     ];
                 }
-                if (File::exists($oldFolder)) {
-                    File::moveDirectory($oldFolder, $newFolder, true);
+
+                $newId = $data['c_category_id'] . sprintf('%03d', $nextSequence);
+
+                if (DB::table('c_courses')->where('c_course_id', $newId)->exists()) {
+                    DB::rollBack();
+                    return [
+                        'code' => 500,
+                        'message' => 'New course ID already exists.',
+                    ];
                 }
-            }
 
-            DB::beginTransaction();
-            $result = DB::update(
-                'UPDATE c_courses SET c_course_name = ?, c_description = ?, c_category_id = ?, updated_at = NOW() WHERE c_course_id = ?',
-                [$data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id'], $id]
-            );
+                DB::insert(
+                    'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW())',
+                    [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id'], $oldCourse->created_at]
+                );
 
-            if ($result) {
+                $resources = DB::table('c_course_resources')->where('c_course_id', $id)->get();
+                foreach ($resources as $resource) {
+                    $fileName = basename($resource->c_resource_path);
+                    $newPath = 'courses/' . $data['c_category_id'] . '/' . $newId . '/' . $fileName;
+                    DB::update(
+                        'UPDATE c_course_resources SET c_course_id = ?, c_resource_path = ? WHERE c_resource_id = ?',
+                        [$newId, $newPath, $resource->c_resource_id]
+                    );
+                }
+
+                // 修改：使用 Storage::disk('local_resources') 移动文件夹
+                $oldFolder = 'courses/' . $oldCourse->c_category_id . '/' . $id;
+                $newFolder = 'courses/' . $data['c_category_id'] . '/' . $newId;
+                if (Storage::disk('local_resources')->exists($oldFolder)) {
+                    Storage::disk('local_resources')->move($oldFolder, $newFolder);
+                    Log::info('Moved folder from ' . $oldFolder . ' to ' . $newFolder);
+                } else {
+                    Log::warning('Old folder does not exist: ' . $oldFolder);
+                }
+
+                DB::delete('DELETE FROM c_courses WHERE c_course_id = ?', [$id]);
+
                 DB::commit();
                 return [
                     'code' => 200,
-                    'message' => 'Course updated successfully.',
+                    'message' => 'Course updated successfully with new ID.',
+                    'data' => ['new_course_id' => $newId],
+                ];
+            } else {
+                $result = DB::update(
+                    'UPDATE c_courses SET c_course_name = ?, c_description = ?, updated_at = NOW() WHERE c_course_id = ?',
+                    [$data['c_course_name'], $data['c_description'] ?? null, $id]
+                );
+
+                if ($result) {
+                    DB::commit();
+                    return [
+                        'code' => 200,
+                        'message' => 'Course updated successfully.',
+                    ];
+                }
+
+                DB::rollBack();
+                return [
+                    'code' => 404,
+                    'message' => 'Course not found.',
                 ];
             }
-
-            DB::rollBack();
-            return [
-                'code' => 404,
-                'message' => 'Course not found.',
-            ];
         } catch (QueryException $e) {
             DB::rollBack();
-            Log::error('[DATABASE] updateCourse: ' . $e->getMessage(), [
+            Log::error('[DATABASE] updateCoursePartial: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
             return [
                 'code' => 500,
-                'message' => $e->getCode() == 23000 ? 'Course name or category ID issue.' : 'Failed to update course: ' . $e->getMessage(),
+                'message' => 'Failed to update course: ' . $e->getMessage(),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('[GENERAL] updateCourse: ' . $e->getMessage(), [
+            Log::error('[GENERAL] updateCoursePartial: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
             return [
@@ -324,7 +351,10 @@ class CourseModel
                 ];
             }
             $categoryId = $course->c_category_id;
-            $courseFolder = public_path('web/' . $categoryId . '/' . $id);
+            $courseFolder = 'courses/' . $categoryId . '/' . $id;
+            if (Storage::disk('local_resources')->exists($courseFolder)) {
+                Storage::disk('local_resources')->deleteDirectory($courseFolder);
+            }
 
             $resources = DB::table('c_course_resources')->where('c_course_id', $id)->get();
             foreach ($resources as $resource) {
@@ -413,7 +443,175 @@ class CourseModel
             ];
         }
     }
+    /**
+     * 获取所有用户
+     */
+    public static function getAllUsers(): array
+    {
+        try {
+            $users = DB::table('c_users')
+                ->select('c_username', 'c_name')
+                ->get();
 
+            return [
+                'code' => 200,
+                'message' => 'Users retrieved successfully.',
+                'data' => $users
+            ];
+        } catch (QueryException $e) {
+            Log::error('[DATABASE] getAllUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Failed to retrieve users: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getAllUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 获取课程的授权用户
+     */
+    public static function getCourseUsers(string $courseId): array
+    {
+        try {
+            if (!preg_match('/^\d{5}$/', $courseId)) {
+                return [
+                    'code' => 422,
+                    'message' => 'Invalid course_id format.',
+                ];
+            }
+
+            $courseExists = DB::table('c_courses')->where('c_course_id', $courseId)->exists();
+            if (!$courseExists) {
+                return [
+                    'code' => 404,
+                    'message' => 'Course not found.',
+                ];
+            }
+
+            $users = DB::table(self::COURSES_USERS_TABLE . ' as cu')
+                ->join('c_users as u', 'cu.c_username', '=', 'u.c_username')
+                ->select('u.c_username', 'u.c_name')
+                ->where('cu.c_course_id', $courseId)
+                ->get();
+
+            return [
+                'code' => 200,
+                'message' => 'Course users retrieved successfully.',
+                'data' => $users
+            ];
+        } catch (QueryException $e) {
+            Log::error('[DATABASE] getCourseUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Failed to retrieve course users: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getCourseUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 批量更新课程的授权用户
+     */
+    public static function syncCourseUsers(string $courseId, array $userIds): array
+    {
+        try {
+            if (!preg_match('/^\d{5}$/', $courseId)) {
+                return [
+                    'code' => 422,
+                    'message' => 'Invalid course_id format.',
+                ];
+            }
+
+            $courseExists = DB::table('c_courses')->where('c_course_id', $courseId)->exists();
+            if (!$courseExists) {
+                return [
+                    'code' => 404,
+                    'message' => 'Course not found.',
+                ];
+            }
+
+            // 验证用户ID是否存在
+            $validUsers = DB::table('c_users')
+                ->whereIn('c_username', $userIds)
+                ->pluck('c_username')
+                ->toArray();
+
+            if (count($validUsers) !== count($userIds)) {
+                return [
+                    'code' => 422,
+                    'message' => 'One or more user IDs are invalid.',
+                ];
+            }
+
+            DB::beginTransaction();
+
+            // 删除现有权限
+            DB::table(self::COURSES_USERS_TABLE)
+                ->where('c_course_id', $courseId)
+                ->delete();
+
+            // 插入新权限
+            if (!empty($userIds)) {
+                $insertData = array_map(function ($userId) use ($courseId) {
+                    return [
+                        'c_course_id' => $courseId,
+                        'c_username' => $userId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }, $userIds);
+
+                DB::table(self::COURSES_USERS_TABLE)->insert($insertData);
+            }
+
+            DB::commit();
+            return [
+                'code' => 200,
+                'message' => 'Course users updated successfully.',
+            ];
+        } catch (QueryException $e) {
+            DB::rollBack();
+            Log::error('[DATABASE] syncCourseUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Failed to update course users: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] syncCourseUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 修改 addUserToCourse 方法，修正表名
+     */
     public static function addUserToCourse(string $userId, string $courseId): array
     {
         try {
@@ -442,7 +640,7 @@ class CourseModel
 
             DB::beginTransaction();
             $result = DB::insert(
-                'INSERT INTO c_users_courses (user_id, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                'INSERT INTO ' . self::COURSES_USERS_TABLE . ' (c_username, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
                 [$userId, $courseId]
             );
 
@@ -479,4 +677,5 @@ class CourseModel
             ];
         }
     }
+
 }

@@ -19,6 +19,8 @@
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\MainCli\VmController;
     use App\Http\Controllers\Course\TestController;
+    use App\Http\Controllers\Experiment\ExperimentController;
+    use App\Http\Controllers\Experiment\ExperimentResourceController;
 
 
 
@@ -149,7 +151,9 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
         Route::post('/',[CourseController::class,'store']);
         Route::put('/{id}',[CourseController::class,'update']);
         Route::delete('/{id}',[CourseController::class,'destroy']);
-        Route::post('/{courseId}/users', [CourseController::class, 'addUser']);
+        Route::get('/{courseId}/users', [CourseController::class, 'getUsers']);
+        Route::post('/{courseId}/users', [CourseController::class, 'syncUsers']);
+        Route::post('/{courseId}/add-user', [CourseController::class, 'addUserToCourse']); // 保留单用户添加接口
     });
 
     Route::prefix('categories')->group(function(){
@@ -178,6 +182,11 @@ Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
             Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
         });
     });
+    // 新增路由：获取资源文件
+    Route::get('/resources/{c_resource_id}', [ResourceController::class, 'download']);
+    // 新增实验资源下载路由
+    Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
+    Route::get('/users', [CourseController::class, 'getAllUsers']);
 });
     /**
      * 定义环境构建分系统

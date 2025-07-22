@@ -14,23 +14,32 @@ use Illuminate\Support\Str;
 
 class ResourceController extends Controller
 {
-    public function index(Request $request)
+    // 修改：添加 $courseId 参数，调整验证逻辑为查询参数
+    public function index(Request $request, $courseId)
     {
         try {
-            $validator = Validator::make($request->json()->all(), [
+            // 修改：从查询参数和 URL 参数合并验证，移除 JSON 验证
+            $validator = Validator::make(array_merge($request->query(), ['c_course_id' => $courseId]), [
                 'c_course_id' => 'required|string|exists:c_courses,c_course_id',
                 'page' => 'integer|min:1',
                 'pageSize' => 'integer|min:1',
             ]);
+            // 修改：添加详细日志记录验证失败
             if ($validator->fails()) {
+                Log::error('Validation failed in ResourceController::index', [
+                    'errors' => $validator->errors()->toArray(),
+                    'courseId' => $courseId,
+                    'query' => $request->query()
+                ]);
                 return response()->json([
                     'code' => 422,
                     'message' => $validator->errors()->first(),
                 ], 422);
             }
 
-            $reqData = $request->json()->all();
-            $modelRes = ResourceModel::getResourcesByCourseId($reqData['c_course_id'], $reqData['page'] ?? 1, $reqData['pageSize'] ?? 10);
+            // 修改：从查询参数获取 page 和 pageSize，courseId 直接使用
+            $reqData = $request->query();
+            $modelRes = ResourceModel::getResourcesByCourseId($courseId, $reqData['page'] ?? 1, $reqData['pageSize'] ?? 10);
             return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 500);
         } catch (\Exception $e) {
             Log::error('[CONTROLLER] ResourceController::index: ' . $e->getMessage(), [
@@ -46,12 +55,14 @@ class ResourceController extends Controller
         }
     }
 
+    // 未修改：保持原样
     public function show(Request $request, $id)
     {
         $modelRes = ResourceModel::getResourceById($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);
     }
 
+    // 未修改：保持原样
     public function getResource($id)
     {
         $modelRes = ResourceModel::getResourceById($id);
@@ -60,24 +71,25 @@ class ResourceController extends Controller
         }
 
         $path = $modelRes['data']['c_resource_path'];
-        if (!Storage::disk('public')->exists($path)) {
+        if (!Storage::disk('local_resources')->exists($path)) {
             return response()->json([
                 'code' => 404,
                 'message' => 'Resource file not found.',
             ], 404);
         }
 
-        return response()->file(Storage::disk('public')->path($path));
+        return response()->file(Storage::disk('local_resources')->path($path));
     }
 
+    // 未修改：保持原样
     public function store(Request $request)
     {
         $validator = Validator::make($request->json()->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id',
-            'name' => 'required|string|max:255',
-            'path' => 'required|string',
-            'type' => 'required|string',
-            'size' => 'nullable|integer|min:0',
+            'c_resource_name' => 'required|string|max:255',
+            'c_resource_path' => 'required|string',
+            'c_type' => 'required|string',
+            'c_size' => 'nullable|integer|min:0',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -90,11 +102,12 @@ class ResourceController extends Controller
         return response()->json($modelRes, $modelRes['code'] == 201 ? 201 : 500);
     }
 
+    // 未修改：保持原样
     public function upload(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id',
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,mp4,pptx,avi|max:102400',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -114,10 +127,21 @@ class ResourceController extends Controller
                 ], 404);
             }
 
+            $originalName = $file->getClientOriginalName();
+            $targetPath = 'courses/' . $course->c_category_id . '/' . $courseId;
+            $fileName = $originalName;
+
+            // 检查是否已存在同名文件
+            $counter = 1;
+            while (Storage::disk('local_resources')->exists($targetPath . '/' . $fileName)) {
+                $fileName = pathinfo($originalName, PATHINFO_FILENAME) . '_' . $counter . '.' . $file->getClientOriginalExtension();
+                $counter++;
+            }
+
             $data = [
                 'c_course_id' => $courseId,
-                'c_resource_name' => $file->getClientOriginalName(),
-                'c_resource_path' => Storage::disk('public')->putFile('web/' . $course->c_category_id . '/' . $courseId, $file),
+                'c_resource_name' => $originalName,
+                'c_resource_path' => Storage::disk('local_resources')->putFileAs($targetPath, $file, $fileName),
                 'c_type' => $file->getMimeType(),
                 'c_size' => $file->getSize(),
             ];
@@ -134,6 +158,9 @@ class ResourceController extends Controller
         } catch (QueryException $e) {
             Log::error('[DATABASE] uploadResource: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
             ]);
             return response()->json([
                 'code' => 500,
@@ -146,6 +173,9 @@ class ResourceController extends Controller
         } catch (\Exception $e) {
             Log::error('[GENERAL] uploadResource: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
             ]);
             return response()->json([
                 'code' => 500,
@@ -157,9 +187,73 @@ class ResourceController extends Controller
         }
     }
 
+    // 未修改：保持原样
     public function destroy(Request $request, $id)
     {
         $modelRes = ResourceModel::deleteResource($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);
+    }
+    // 新增 download 方法
+    public function download(Request $request, $c_resource_id)
+    {
+        try {
+            // 验证 c_resource_id 是否为有效 UUID
+            $validator = Validator::make(['c_resource_id' => $c_resource_id], [
+                'c_resource_id' => 'required|string|uuid',
+            ]);
+            if ($validator->fails()) {
+                Log::error('Validation failed in ResourceController::download', [
+                    'errors' => $validator->errors()->toArray(),
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json([
+                    'code' => 422,
+                    'message' => $validator->errors()->first(),
+                ], 422);
+            }
+
+            // 查询资源
+            $modelRes = ResourceModel::getResourceById($c_resource_id);
+            if ($modelRes['code'] != 200) {
+                Log::error('Resource not found in ResourceController::download', [
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json($modelRes, $modelRes['code']);
+            }
+
+            $resource = $modelRes['data'];
+            $path = $resource['c_resource_path'];
+
+            // 检查文件是否存在
+            if (!Storage::disk('local_resources')->exists($path)) {
+                Log::error('Resource file not found in ResourceController::download', [
+                    'c_resource_id' => $c_resource_id,
+                    'path' => $path,
+                ]);
+                return response()->json([
+                    'code' => 404,
+                    'message' => 'Resource file not found.',
+                ], 404);
+            }
+
+            // 返回文件流
+            Log::info('Downloading resource', [
+                'c_resource_id' => $c_resource_id,
+                'path' => $path,
+                'file_name' => $resource['c_resource_name'],
+            ]);
+            return Storage::disk('local_resources')->download($path, $resource['c_resource_name'], [
+                'Content-Type' => $resource['c_type'] ?: 'application/octet-stream',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[CONTROLLER] ResourceController::download: ' . $e->getMessage(), [
+                'c_resource_id' => $c_resource_id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code' => 500,
+                'message' => 'Unexpected error in ResourceController::download: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

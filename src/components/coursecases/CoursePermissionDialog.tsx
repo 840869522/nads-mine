@@ -7,8 +7,8 @@ import {
     CircularProgress, Alert, Skeleton
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { getCookie } from '@/utils/cookie'; // 确保路径正确
-import { BACK_IP_PORT } from '@/constants'; // 确保与 page.tsx 一致
+import { getCookie } from '@/utils/cookie';
+import { BACK_IP_PORT } from '@/constants';
 
 // 类型定义
 interface Course {
@@ -46,13 +46,20 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
             setError(null);
             try {
                 const requestOptions = {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ page: 1, pagesize: 100 }) // 设置分页参数
                 };
 
                 const [usersRes, permissionsRes] = await Promise.all([
-                    fetch(`${BACK_IP_PORT}/api/study/users`, requestOptions), // 获取所有用户
-                    fetch(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/users`, requestOptions) // 获取课程授权用户
+                    fetch(`${BACK_IP_PORT}/api/support/user/all`, requestOptions), // 使用 support 路由
+                    fetch(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/users`, {
+                        method: 'GET',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
                 ]);
 
                 if (!usersRes.ok || !permissionsRes.ok) {
@@ -62,10 +69,12 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                 const usersData = await usersRes.json();
                 const permissionsData = await permissionsRes.json();
 
-                const fetchedUsers: User[] = Array.isArray(usersData.data) ? usersData.data.map((u: any) => ({
+                // 适配 support 路由的响应格式
+                const fetchedUsers: User[] = Array.isArray(usersData.data?.data) ? usersData.data.data.map((u: any) => ({
                     id: u.c_username,
-                    name: u.c_name || u.c_username
+                    name: u.c_name || u.c_username // 使用 c_name，若为空则用 c_username
                 })) : [];
+                console.log('Fetched users:', fetchedUsers); // 调试日志
                 setAllUsers(fetchedUsers);
 
                 const currentPermissionIds: string[] = Array.isArray(permissionsData.data) ? permissionsData.data.map((u: any) => u.c_username) : [];
@@ -152,7 +161,11 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
             return <Alert severity="error" sx={{ m: 1 }}>{error}</Alert>;
         }
         if (allUsers.length === 0) {
-            return <Typography sx={{ p: 3, color: 'text.secondary', textAlign: 'center' }}>没有可供选择的用户。</Typography>;
+            return (
+                <Typography sx={{ p: 3, color: 'text.secondary', textAlign: 'center' }}>
+                    无法加载用户列表，可能缺少权限或数据库为空，请联系管理员。
+                </Typography>
+            );
         }
         return (
             <FormGroup>
