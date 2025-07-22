@@ -85,6 +85,9 @@ const RunningInstancesPage: React.FC = () => {
         cpuUsage: true,
         memoryUsage: true,
         uptime: true,
+        ipAddress: true,
+        scene_instance_id: true,
+        scene_name: true,
     });
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -124,6 +127,9 @@ const RunningInstancesPage: React.FC = () => {
         { field: 'status', headerName: '状态', flex: 1, renderCell: (params) => (
                 <Chip label={STATUS_TRANSLATIONS[params.row.status]} color={getStatusChipColor(params.row.status)} size="small" />
             ) },
+        { field: 'ipAddress', headerName: 'IP', flex: 1, hide: !showColumns.ipAddress },
+        { field: 'scene_instance_id', headerName: '场景实例ID', flex: 1, hide: !showColumns.scene_instance_id },
+        { field: 'scene_name', headerName: '场景名称', flex: 1, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id },
         { field: 'imageName', headerName: '镜像名', flex: 1, hide: !showColumns.imageName },
         { field: 'ports', headerName: '端口', flex: 1, hide: !showColumns.ports },
@@ -294,7 +300,8 @@ const RunningInstancesPage: React.FC = () => {
         let processedInstances = [...instances].filter(instance =>
             instance.name.toLowerCase().includes(searchTerm) ||
             instance.id.includes(searchTerm) ||
-            instance.imageName.toLowerCase().includes(searchTerm)
+            instance.imageName.toLowerCase().includes(searchTerm) ||
+            (instance.ipAddress ?? '').includes(searchTerm)
         );
         if (showRunningOnly) {
             processedInstances = processedInstances.filter(i => i.status === 'running');
@@ -349,14 +356,20 @@ const RunningInstancesPage: React.FC = () => {
             <Menu anchorEl={columnAnchorEl} open={Boolean(columnAnchorEl)} onClose={()=>setColumnAnchorEl(null)}>
                 {Object.entries(showColumns).map(([key,val])=> (
                     <MenuItem key={key}>
-                        <FormControlLabel control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>} label={
-                            key === 'id' ? '容器 ID' :
+                        <FormControlLabel
+                            control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
+                            label={
+                                key === 'id' ? '容器 ID' :
                                 key === 'imageName' ? '镜像名' :
-                                    key === 'ports' ? '端口' :
-                                        key === 'cpuUsage' ? 'CPU 使用率' :
-                                            key === 'memoryUsage' ? '内存使用率' :
-                                                '运行时间'
-                        } />
+                                key === 'ports' ? '端口' :
+                                key === 'cpuUsage' ? 'CPU 使用率' :
+                                key === 'memoryUsage' ? '内存使用率' :
+                                key === 'ipAddress' ? 'IP' :
+                                key === 'scene_instance_id' ? '场景实例ID' :
+                                key === 'scene_name' ? '场景名称' :
+                                '运行时间'
+                            }
+                        />
                     </MenuItem>
                 ))}
             </Menu>

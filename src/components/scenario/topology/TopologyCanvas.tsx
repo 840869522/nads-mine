@@ -217,8 +217,8 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           const targetTextX = midX - Math.sin(radAngle) * EDGE_TEXT_OFFSET;
           const targetTextY = midY + Math.cos(radAngle) * EDGE_TEXT_OFFSET;
           
-          const sourceLabel = `${edge.config.sourceInterface} (${edge.config.sourceIp})`;
-          const targetLabel = `${edge.config.targetInterface} (${edge.config.targetIp})`;
+          const sourceLabel = `${edge.config.sourceInterface} ${edge.config.sourceIp}`;
+          const targetLabel = `${edge.config.targetInterface} ${edge.config.targetIp}`;
 
           let displayAngle = angle;
           if (angle > 90 || angle < -90) {
