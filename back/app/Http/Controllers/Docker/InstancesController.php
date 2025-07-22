@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Services\DockerService;
 use App\Models\Docker\Instance;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class InstancesController extends Controller
 {
@@ -33,6 +34,24 @@ class InstancesController extends Controller
         $role = $request->query('role', 'student');
         $userId = $request->query('userId');
         $containers = $this->docker->listContainers();
+
+        // 先收集所有容器 ID，用于后续一次性查询数据库
+        $ids = array_map(fn($c) => $c->getId(), $containers);
+        $extra = [];
+        if ($ids) {
+            try {
+                $extra = DB::table('c_scene_container_instances as ci')
+                    ->leftJoin('c_scene_instances as si', DB::raw('ci.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
+                    ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
+                    ->select('ci.c_container_id', 'ci.c_scene_instances_id', 'ci.c_ip', 'sc.c_name as scene_name')
+                    ->whereIn('ci.c_container_id', $ids)
+                    ->get()
+                    ->keyBy('c_container_id');
+            } catch (\Throwable $e) {
+                $extra = [];
+            }
+        }
+
         $result = [];
         foreach ($containers as $info) {
             $labels = $info->getLabels() ?? [];
@@ -87,10 +106,15 @@ class InstancesController extends Controller
                 }
             }
 
+            $infoExtra = $extra[$info->getId()] ?? null;
+
             $result[] = [
                 'id' => $info->getId(),
                 'name' => ltrim($info->getNames()[0] ?? substr($info->getId(),0,12), '/'),
                 'type' => 'container',
+                'ipAddress' => $infoExtra->c_ip ?? null,
+                'scene_instance_id' => $infoExtra->c_scene_instances_id ?? null,
+                'scene_name' => $infoExtra->scene_name ?? null,
                 'status' => $this->mapStatus($info->getState()),
                 'ports' => implode(', ', $ports),
                 'imageName' => $info->getImage(),

@@ -1,21 +1,44 @@
 "use client";
 
-import { apiClientWithToken } from "@/utils/axios";
-import { Box, Paper, Typography, Button, InputAdornment, CircularProgress, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableSortLabel, TableBody, Tooltip, IconButton, Chip, TablePagination } from "@mui/material";
+
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  InputAdornment,
+  CircularProgress,
+  TextField,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableSortLabel,
+  TableBody,
+  Tooltip,
+  IconButton,
+  Chip,
+  TablePagination
+} from "@mui/material";
 import { useEffect, useMemo, useState, useRef } from "react";
+import { toast } from "react-toastify";
+import * as XLSX from "xlsx";
+
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { Download as DownloadIcon } from "@mui/icons-material";
+
+import { apiClientWithToken } from "@/utils/axios";
 import QuestionModalForm, { QuestionFormData, QuestionDisplayItem } from "@/components/learning/QuestionModalForm";
 import { Array2String, String2Array } from "@/utils/string";
 import { ColorMap } from "@/utils/color";
-import { toast } from "react-toastify";
-import { Download as DownloadIcon } from "@mui/icons-material";
 import ViewQuestionModal from "@/components/learning/ViewQuesitonModal";
-import * as XLSX from "xlsx";
+
 
 
 type Order = `asc` | `desc`;
@@ -39,7 +62,7 @@ const QuestionPage: React.FC = () => {
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<SortableQuestionsKeys>("c_id");
   const [questionToEdit, setQuesionToEdit] = useState<QuestionDisplayItem | null>(null);
-  const [questionCheck, setQuestionCheck] = useState(null);
+  const [questionCheck, setQuestionCheck] = useState<QuestionDisplayItem | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
   const [tableLaoding, setTableLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState({ data: "", flag: false });
@@ -323,7 +346,7 @@ const QuestionPage: React.FC = () => {
           position: "top-right"
         });
         setImportLoading(false);
-      }finally {
+      } finally {
         setImportLoading(false);
       }
     };
@@ -353,10 +376,10 @@ const QuestionPage: React.FC = () => {
       question: data.question,
       course_id: data.courseName,
       answer: data.type === 4 ? "*" : data.answer,
-      type: data.type,
+      type: parseInt(data.type),
       tag: Array2String(data.tags),
       content: data.options,
-    }
+    };
     if (isNew) {
       apiClientWithToken.post("/back/api/study/test/question_add", JSON.stringify(requestData)).then(res => {
         if (res.data.code === 200) {
@@ -384,7 +407,7 @@ const QuestionPage: React.FC = () => {
           const newQuestion = questions.map(item => item.c_id === data.id ? {
             c_id: requestData.id,
             c_question: requestData.question,
-            c_type: requestData.type,
+            c_type: requestData.type as number,
             c_course_id: requestData.course_id,
             c_tag: requestData.tag,
             c_answer: requestData.answer,
@@ -639,7 +662,7 @@ const QuestionPage: React.FC = () => {
           open={isConfirmDeleteOpen}
           onClose={() => setIsConfirmDeleteOpen(false)}
           title="确认删除题目"
-          message={`您确定要删除权限 "${questionToDelete?.c_id}" 吗？此操作无法撤销。`}
+          message={`您确定要删除试题 "${questionToDelete?.c_id}" 吗？此操作无法撤销。`}
           onConfirm={confirmDeleteQuestion}
         />
       )}

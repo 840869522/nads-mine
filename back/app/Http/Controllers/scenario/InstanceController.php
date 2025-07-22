@@ -49,7 +49,7 @@ class InstanceController extends Controller
     public function show(SceneInstance $instance)
     {
         try {
-            $instance->load('containers', 'vms', 'switches');
+            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
             $runningInstances = [];
             foreach ($instance->containers as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
@@ -74,6 +74,9 @@ class InstanceController extends Controller
                         'id' => $details->getId(),
                         'name' => ltrim($details->getName() ?? '', '/'),
                         'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
                         'status' => $this->mapStatus($details->getState()->getStatus()),
                         'ports' => implode(', ', $ports),
                         'imageName' => $details->getConfig()->getImage(),

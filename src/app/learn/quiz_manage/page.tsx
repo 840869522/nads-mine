@@ -1,13 +1,37 @@
 "use client";
 
-import QuizAddModal, { QuizDisplayItem } from "@/components/learning/QuizAddModal";
-import { apiClientWithToken } from "@/utils/axios";
-import { Box, Button, CircularProgress, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import {
+    Box,
+    Button,
+    CircularProgress,
+    IconButton,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TablePagination,
+    TableRow,
+    TableSortLabel,
+    Tooltip,
+    Typography
+} from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import EditIcon from "@mui/icons-material/Edit";
 
+import QuizAddModal, { QuizDisplayItem } from "@/components/learning/QuizAddModal";
+import { apiClientWithToken } from "@/utils/axios";
+import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
+import { toast } from "react-toastify";
 
+type Order = "asc" | "desc";
+
+type SortableQuizKeys = keyof Pick<QuizDisplayItem, "c_id" | "c_course_id" | "c_question" | "c_type" | "c_tag">;
 
 const QuizManagePage: React.FC = () => {
 
@@ -20,32 +44,45 @@ const QuizManagePage: React.FC = () => {
 
 
     const [isQuizModalOpen, setIsQuizModalOpen] = useState<boolean>(false);
-    const [quizToEdit, setQuizToEdit] = useState<QuizDisplayItem | null>(null);
+    const [quizToOperate, setQuizToOperate] = useState<QuizDisplayItem | null>(null);
+    const [checkQuizOpen, setQuizCheckOpen] = useState<boolean>(false);
 
-    useEffect(()=>{
-        getQuizList(page,rowsPerPage);
-    },[page,rowsPerPage]);
+    const [quizToDelete, setQuizToDelete] = useState<QuizDisplayItem | null>(null);
+    const [deleteConfirmOpen, setQuizDeleteConfirmOpen] = useState<boolean>(false);
 
-    const getQuizList = (page:number,pagesize:number)=>{
+    const [order, setOrder] = useState<Order>("asc");
+    const [orderBy, setOrderBy] = useState<SortableQuizKeys>("c_id");
+
+    useEffect(() => {
+        getQuizList(page, rowsPerPage);
+    }, []);
+
+    useEffect(() => {
+        if (page === 1 && rowsPerPage === 10)
+            return
+        else getQuizList(page, rowsPerPage);
+    }, [page, rowsPerPage]);
+
+    const getQuizList = (page: number, pagesize: number) => {
         setTableLoading(true);
-        apiClientWithToken.post("/back/study/test/test_list",JSON.stringify({
-            page:page,
+        apiClientWithToken.post("/back/api/study/test/test_list", JSON.stringify({
+            page: page,
             pageSize: pagesize
-        })).then((res)=>{
+        })).then((res) => {
             if (res.data.code === 200) {
                 setQuizData(res.data.data.data);
                 setQuizCount(res.data.data.count);
-            }else {
+            } else {
                 setQuizData([]);
                 setQuizCount(0);
             }
-        }).finally(()=>{
+        }).finally(() => {
             setTableLoading(false);
         });
     }
-    
 
-    const handleAddQuizClick = ()=>{
+
+    const handleAddQuizClick = () => {
 
     }
 
@@ -59,16 +96,136 @@ const QuizManagePage: React.FC = () => {
     };
 
     const handelSave = (formData: QuizDisplayItem, isNew: boolean) => {
+        var data = { ...formData }
         if (isNew) {
-
+            apiClientWithToken.post("/back/api/study/test/test_add", JSON.stringify({
+                ...data
+            })).then((res) => {
+                if (res.data.code === 200) {
+                    toast.success(`新增测试 “${quizToDelete?.c_name}” 成功`, {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        draggable: true,
+                        pauseOnHover: true,
+                        position: "top-right",
+                    })
+                } else {
+                    toast.error(`新增测试失败 - ${res.data.message}`, {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        draggable: true,
+                        pauseOnHover: true,
+                        position: "top-right",
+                    })
+                }
+            }).catch((err) => {
+                toast.success(`新增测试失败 - ${err.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    draggable: true,
+                    pauseOnHover: true,
+                    position: "top-right",
+                })
+            })
         } else {
-
+            apiClientWithToken.post("/back/api/study/test/test_update", JSON.stringify({
+                id: quizToOperate?.c_id,
+                data: { ...data }
+            })).then((res) => {
+                if (res.data.code === 200) {
+                    toast.success(`修改测试 “${quizToDelete?.c_name}” 成功`, {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        draggable: true,
+                        pauseOnHover: true,
+                        position: "top-right",
+                    })
+                } else {
+                    toast.error(`修改测试失败 - ${res.data.message}`, {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        draggable: true,
+                        pauseOnHover: true,
+                        position: "top-right",
+                    })
+                }
+            }).catch((err) => {
+                toast.success(`修改测试失败 - ${err.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    draggable: true,
+                    pauseOnHover: true,
+                    position: "top-right",
+                })
+            })
         }
     }
 
+
+    const handleOperateQuiz = (quiz: QuizDisplayItem, check: boolean) => {
+        setQuizToOperate(quiz);
+        check ? setQuizCheckOpen(true) : setIsQuizModalOpen(true);
+    }
+
+    const handelDeleteQuizClicke = (quiz: QuizDisplayItem) => {
+        setQuizToDelete(quiz);
+        setQuizDeleteConfirmOpen(true);
+    }
+
+    const handelDeleteQuiz = () => {
+        apiClientWithToken.post("/back/api/study/test/test_del", JSON.stringify({ id: quizToDelete?.c_id })).then(res => {
+            if (res.data.code === 200) {
+                toast.success(`删除测试 “${quizToDelete?.c_name}” 成功`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    draggable: true,
+                    pauseOnHover: true,
+                    position: "top-right",
+                })
+            } else {
+                toast.error(`删除测试失败 - ${res.data.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    draggable: true,
+                    pauseOnHover: true,
+                    position: "top-right",
+                })
+            }
+        }).catch(err => {
+            toast.success(`删除测试失败 - ${err.message}`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                draggable: true,
+                pauseOnHover: true,
+                position: "top-right",
+            })
+        }).finally(() => {
+            setQuizToDelete(null);
+            setQuizDeleteConfirmOpen(false);
+        })
+    };
+
+
+    const filteredAndSortedQuiz = useMemo(() => {
+        let processedpermissions = [...quizData].sort((a, b) => {
+          const valA = a[orderBy];
+          const valB = b[orderBy];
+          if (valB < valA) return order === 'asc' ? 1 : -1;
+          if (valB > valA) return order === 'asc' ? -1 : 1;
+          return 0;
+        });
+        return processedpermissions;
+      }, [quizData, order, orderBy]);
+    
+      const handleRequestSort = (property: SortableQuizKeys) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+      };
+
     return (
         <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
-            <Typography>
+            <Typography variant="h4" component={'h1'} gutterBottom>
                 测试管理页面
             </Typography>
 
@@ -82,24 +239,32 @@ const QuizManagePage: React.FC = () => {
                         添加测试
                     </Button>
                 </Box>
-                
+
                 <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
                     <Table aria-label="测试列表">
                         <TableHead sx={{ bgcolor: "action.focus" }}>
                             <TableRow>
                                 {
                                     [
-                                        { id: 'c_id', label: '试题id' },
-                                        { id: 'c_course_id', label: '课程id' },
-                                        { id: "c_question", label: "题干" },
-                                        { id: "c_type", label: "类型" },
-                                        { id: "c_tag", label: "标签" },
+                                        { id: 'c_name', label: '测试名' },
+                                        { id: "c_course_id", label: "课程ID" },
+                                        { id: "c_description", label: "描述" },
+                                        { id: "c_paper_count", label: "试卷数" },
+                                        { id: "c_start", label: "开始时间" },
+                                        { id: "c_end", label: "结束时间" },
                                         { id: "c_create_at", label: "创建时间" }
                                     ].map((headCell) => (
                                         <TableCell
                                             key={headCell.id}
+                                            sortDirection={orderBy === headCell.id ? order : false}
                                         >
-                                            {headCell.label}
+                                            <TableSortLabel
+                                                active={orderBy === headCell.id}
+                                                direction={orderBy === headCell.id ? order : 'asc'}
+                                                onClick={() => handleRequestSort(headCell.id as SortableQuestionsKeys)}
+                                            >
+                                                {headCell.label}
+                                            </TableSortLabel>
                                         </TableCell>
                                     ))
                                 }
@@ -114,11 +279,46 @@ const QuizManagePage: React.FC = () => {
                                             <CircularProgress />
                                         </TableCell>
                                     </TableRow>
-                                ) : quizData.length > 0 ? (
-                                    quizData.map(item =>(
-                                        <TableRow key={item.c_id} hover>
+                                ) : filteredAndSortedQuiz.length > 0 ? (
+                                    filteredAndSortedQuiz.map(quiz => (
+                                        <TableRow key={quiz.c_id} hover>
                                             <TableCell>
-                                                {item.c_id}
+                                                {quiz.c_name}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_course_id}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_description}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_paper_count}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_start}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_end}
+                                            </TableCell>
+                                            <TableCell>
+                                                {quiz.c_create_at}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Tooltip title="查看试题详细">
+                                                    <IconButton size="small" onClick={() => handleOperateQuiz(quiz, true)} color="default">
+                                                        <VisibilityIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="编辑试题">
+                                                    <IconButton size="small" onClick={() => handleOperateQuiz(quiz, false)} color="primary">
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="删除试题">
+                                                    <IconButton size="small" onClick={() => handelDeleteQuizClicke(quiz)} color="error" >
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -150,10 +350,21 @@ const QuizManagePage: React.FC = () => {
                 open={isQuizModalOpen}
                 onClose={() => setIsQuizModalOpen(false)}
                 onSave={handelSave}
-                initialData={quizToEdit}
+                initialData={quizToOperate}
             />
 
 
+            {
+                quizToDelete && (
+                    <ConfirmActionDialog
+                        open={deleteConfirmOpen}
+                        onClose={() => setQuizDeleteConfirmOpen(false)}
+                        onConfirm={handelDeleteQuiz}
+                        title="确认删除测试"
+                        message={`您确定要删除测试 "${quizToDelete?.c_name}" 吗？此操作无法撤销。`}
+                    />
+                )
+            }
         </Paper >
     );
 };
