@@ -110,7 +110,7 @@ class DrillController extends Controller
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
                 $this->cliService->createSwitch($switchName);
                 $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch'); // 连接到收集镜像的ovs
-
+                // $this->cliService->connectSwitchToSwitch($switchName, 'br0'); // 连接到收集镜像的ovs
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
                     'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
