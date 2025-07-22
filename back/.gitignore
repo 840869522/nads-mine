@@ -12,4 +12,4 @@ yarn-error.log
 /.idea
 /.vscode
 /database/migrations/
-
+/app/Services/vmservice/.venv

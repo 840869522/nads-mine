@@ -9,9 +9,10 @@
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;
+    use Illuminate\Support\Facades\Log;
 
     class UserController extends Controller{
-
+        
         public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {
@@ -195,7 +196,62 @@
             }
         }
 
+        // {
+        //     "data": {
+        //         "oldPassword": "test1234",
+        //         "newPassword": "test12345"
+        //     },
+        //     "id": "test_12"
+        // }
         public function updateUserPassword(Request $req){
+            $reqData = $req->json()->all();
+            $token_data  = $req->input("token_data");
+            try {
+                $id = $reqData["id"];
+                $data = $reqData["data"];
+                $oldPassword = $data["oldPassword"];
+                $newPassword = $data['newPassword'];
+            } catch (Exception $e) {
+                Log::info($e->getMessage());
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+            if ($token_data['id'] != $id && !in_array("support_user",$token_data["permission"])){
+                return response()->json([
+                    "code"=>GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    "message"=> GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                ]);
+            }
+            $user = UserModel::getUserById($id);
+            if ($user["code"] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+            if ($user["data"]->c_password != $oldPassword) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => "旧密码错误"
+                ]);
+            }
+            $modelRes = UserModel::updateUserPasswordById($id, $newPassword);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+        }
+
+        public function updateUserEmail (Request $req) {
             $reqData = $req->json()->all();
             $token_data  = $req->input("token_data");
             try {
@@ -207,7 +263,13 @@
                     "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
-            $modelRes = UserModel::updateUserById($id, $data);
+            if ($id != $token_data['id']) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+            $modelRes = UserModel::updateUserEmailById($id, $data);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,

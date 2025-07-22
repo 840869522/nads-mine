@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-.env
+back/app/Services/vmservice/.venv
 node_modules
 dist
 dist-ssr
@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .next
+
 data.sqlite
 prisma/data.sqlite
 /prisma/data.sqlite-shm
@@ -33,3 +34,7 @@ scripts
 demo-images
 demo-linux.qcow2
 libvirt
+src/.venv
+images
+
+mima.md

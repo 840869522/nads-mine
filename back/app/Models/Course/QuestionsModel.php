@@ -208,5 +208,19 @@ class QuestionsModel extends Model{
         return $res;
     }
 
+    /**
+     * Notes:获取题目种类个数
+     * User: zhangnan
+     * DateTime: 2025/7/16 15:16
+     * @param $c_type
+     * @return mixed
+     */
+    public function get_question_cnt($c_type=0)
+    {
+        $mod = new QuestionsModel();
+        $cnt = $mod->where('c_type',$c_type)->count();
+        return $cnt;
+    }
+
 }
 ?>

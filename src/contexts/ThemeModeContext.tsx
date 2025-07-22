@@ -2,6 +2,7 @@
 import React, { createContext, useState, useMemo, useContext, ReactNode } from 'react';
 import { createTheme, ThemeProvider as MuiThemeProvider, PaletteMode } from '@mui/material/styles';
 import { zhCN } from '@mui/material/locale'; // Import Chinese locale
+import { antdColors } from '@/utils/color';
 
 interface ThemeModeContextType {
   mode: PaletteMode;
@@ -29,7 +30,7 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
       return 'dark';
     }
   };
-  
+
   const [mode, setMode] = useState<PaletteMode>(getInitialMode());
 
   React.useEffect(() => {
@@ -57,10 +58,52 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
       createTheme({
         palette: {
           mode,
+          processing: {
+            light: antdColors.geekblue[4],
+            main: antdColors.geekblue[5],
+            dark: antdColors.geekblue[6],
+            contrastText: "#FFF"
+          },
+          magenta: {
+            light: antdColors.magenta[4],
+            main: antdColors.magenta[5],
+            dark: antdColors.magenta[6],
+            contrastText: '#fff',
+          },
+          lime :{
+            light: antdColors.lime[4],
+            main: antdColors.lime[5],
+            dark: antdColors.lime[6],
+            contrastText : "#FFF",
+          },
+          purple: {
+            light: antdColors.purple[4],
+            main: antdColors.purple[5],
+            dark: antdColors.purple[6],
+            contrastText: '#fff',
+          },
+          volcano: {
+            main: antdColors.volcano[5],
+            light: antdColors.volcano[4],
+            dark: antdColors.volcano[6],
+            contrastText: "#fff",
+          },
+          cyan: {
+            light: antdColors.cyan[4],
+            main: antdColors.cyan[5],
+            dark: antdColors.cyan[6],
+            contrastText: "#fff",
+          },
           primary: {
             main: '#3b82f6', // Tailwind primary-500
             light: '#60a5fa', // Tailwind primary-400
             dark: '#2563eb', // Tailwind primary-600
+          },
+          ochre: {
+            main: '#E3D026',
+            light: '#E9DB5D',
+            dark: '#A29415',
+            contrastText: '#242105',
           },
           secondary: {
             main: '#64748b', // Example: Slate 500
@@ -74,30 +117,38 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
             secondary: mode === 'dark' ? '#a3a3a3' : '#525252', // neutral-400 and neutral-600
           }
         },
+        // colorSchemes:{
+        //   light:{
+
+        //   },
+        //   dark:{
+
+        //   }
+        // },
         typography: {
           fontFamily: 'Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"',
         },
         components: {
-            MuiButtonBase: {
-                defaultProps: {
-                     disableRipple: false, // Keep ripple effect
-                }
-            },
-            MuiPaper: {
-                styleOverrides: {
-                    root: {
-                        backgroundImage: 'none', // Disable MUI's default gradient on Paper in dark mode
-                    }
-                }
-            },
-            MuiCircularProgress :{
-              styleOverrides: {
-                root: {
-                  color:"#1976d2",
-                  opacity:1,
-                }
+          MuiButtonBase: {
+            defaultProps: {
+              disableRipple: false, // Keep ripple effect
+            }
+          },
+          MuiPaper: {
+            styleOverrides: {
+              root: {
+                backgroundImage: 'none', // Disable MUI's default gradient on Paper in dark mode
               }
             }
+          },
+          MuiCircularProgress: {
+            styleOverrides: {
+              root: {
+                color: "#1976d2",
+                opacity: 1,
+              }
+            }
+          }
         }
       }, zhCN), // Apply Chinese locale
     [mode]

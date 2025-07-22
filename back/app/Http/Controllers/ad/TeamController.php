@@ -1,22 +1,23 @@
 <?php
+// file: app/Http/Controllers/ad/TeamController.php
 
 namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
 use App\Models\ad\Team;
-use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class TeamController extends Controller
 {
     /**
-     * 获取队伍列表，支持服务端搜索。
+     * 获取队伍列表
      */
     public function index(Request $request)
     {
         $searchQuery = $request->query('search');
-
-        $query = Team::query()->withCount('users as member_count');
+        $query = Team::query()->with('users');
 
         if ($searchQuery) {
             $query->where(function ($q) use ($searchQuery) {
@@ -24,40 +25,54 @@ class TeamController extends Controller
                     ->orWhere('c_description', 'LIKE', '%' . $searchQuery . '%');
             });
         }
-
         $teams = $query->latest('c_id')->get();
 
-        $teams->each(function ($team) {
-            $team->score = 0; // 或从其他地方获取真实分数
-        });
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $teams
-        ]);
+        return response()->json(['status' => 'success', 'data' => $teams]);
     }
 
     /**
-     * 创建一个新队伍。
+     * 创建一个新队伍，并关联成员。
      */
     public function store(Request $request)
     {
+        // ★★★ 核心修复：将验证规则中的 'members' 修改为 'users' ★★★
         $validatedData = $request->validate([
             'c_name'        => 'required|string|max:255|unique:c_teams,c_name',
-            'c_color'       => 'required|string|max:50',
+            'c_color'       => ['required', 'string', Rule::in(['red', 'blue'])],
             'c_description' => 'nullable|string|max:1000',
+            'users'         => 'nullable|array', // 期望接收 'users' 键
+            'users.*'       => 'string|exists:c_users,c_username',
         ]);
 
-        $team = Team::create($validatedData);
+        DB::beginTransaction();
+        try {
+            $team = Team::create([
+                'c_name'        => $validatedData['c_name'],
+                'c_color'       => $validatedData['c_color'],
+                'c_description' => $validatedData['c_description'],
+            ]);
 
-        $team->loadCount('users as member_count');
-        $team->score = 0;
+            // ★★★ 核心修复：检查 'users' 键并同步 ★★★
+            if (isset($validatedData['users'])) {
+                $team->users()->sync($validatedData['users']);
+            }
 
-        return response()->json([
-            'status' => 'success',
-            'message' => '队伍 "' . $team->c_name . '" 已成功创建！',
-            'data' => $team
-        ], 201);
+            DB::commit();
+
+            $team->load('users');
+            return response()->json([
+                'status' => 'success',
+                'message' => '队伍 "' . $team->c_name . '" 已成功创建！',
+                'data' => $team
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => 'error',
+                'message' => '创建失败: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -65,37 +80,54 @@ class TeamController extends Controller
      */
     public function show(Team $team)
     {
-        $team->loadCount('users as member_count');
-        $team->score = $team->score ?? 0;
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $team
-        ]);
+        $team->load('users');
+        return response()->json(['status' => 'success', 'data' => $team]);
     }
 
     /**
-     * 更新指定的队伍信息。
+     * 更新指定的队伍信息，并同步成员关系。
      */
     public function update(Request $request, Team $team)
     {
+        // ★★★ 核心修复：将验证规则中的 'members' 修改为 'users' ★★★
         $validatedData = $request->validate([
             'c_name' => [
                 'required', 'string', 'max:255',
                 Rule::unique('c_teams', 'c_name')->ignore($team->c_id, 'c_id'),
             ],
-            'c_color'       => 'required|string|max:50',
+            'c_color'       => ['required', 'string', Rule::in(['red', 'blue'])],
             'c_description' => 'nullable|string|max:1000',
+            'users'         => 'nullable|array', // 期望接收 'users' 键
+            'users.*'       => 'string|exists:c_users,c_username',
         ]);
 
-        $team->update($validatedData);
-        $team->loadCount('users as member_count');
+        DB::beginTransaction();
+        try {
+            $team->update([
+                'c_name'        => $validatedData['c_name'],
+                'c_color'       => $validatedData['c_color'],
+                'c_description' => $validatedData['c_description'],
+            ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => '队伍 "' . $team->c_name . '" 已成功更新！',
-            'data' => $team
-        ]);
+            // ★★★ 核心修复：检查 'users' 键并同步 ★★★
+            $team->users()->sync($validatedData['users'] ?? []);
+
+            DB::commit();
+
+            $team->load('users');
+            return response()->json([
+                'status' => 'success',
+                'message' => '队伍 "' . $team->c_name . '" 已成功更新！',
+                'data' => $team
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => 'error',
+                'message' => '更新失败: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -105,10 +137,6 @@ class TeamController extends Controller
     {
         $teamName = $team->c_name;
         $team->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => '队伍 "' . $teamName . '" 已成功删除。'
-        ]);
+        return response()->json(['status' => 'success', 'message' => '队伍 "' . $teamName . '" 已成功删除。']);
     }
 }

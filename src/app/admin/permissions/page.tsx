@@ -29,21 +29,22 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import PermissionFormModal, { PermissionFormData } from '@/components/admin/PermissionModal';
+import { toast } from 'react-toastify';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
-type PermissionDisplayItem = { c_id: string; c_name: string;  };
+type PermissionDisplayItem = { c_id: string; c_name: string; };
 
 
 
 type Order = 'asc' | 'desc';
-type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_name' >;
+type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_name'>;
 
 
 const PermissionManagementPage: React.FC = () => {
   const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<SortablePermissionsKeys>('c_id');
 
@@ -54,7 +55,6 @@ const PermissionManagementPage: React.FC = () => {
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [permissionToDelete, setPermissionToDelete] = useState<PermissionDisplayItem | null>(null);
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     getPermissionData(page, rowsPerPage)
@@ -93,16 +93,21 @@ const PermissionManagementPage: React.FC = () => {
         setPermissions(res.data.data.data);
         setDataCount(res.data.data.count);
         setPage(1);
-      }else{
+      } else {
         setPermissions([]);
-        setFeedbackMessage({ type: 'error', text: '搜索权限时发生错误' });
+        toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       }
-    }finally {
+    } finally {
       setTableLoading(false);
     }
   };
 
-  const handleRequestSort = (property : SortablePermissionsKeys) => {
+  const handleRequestSort = (property: SortablePermissionsKeys) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
@@ -120,17 +125,20 @@ const PermissionManagementPage: React.FC = () => {
   const handleAddPermissionClick = () => {
     setEditingPermission(null);
     setIsPermissionModalOpen(true);
-    setFeedbackMessage(null);
   };
 
-  const handleEditPermissionClick = (permision:PermissionDisplayItem ) => {
+  const handleEditPermissionClick = (permision: PermissionDisplayItem) => {
     apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: permision.c_id })).then((res) => {
       if (res.data.code === 200) {
-        setEditingPermission({id:res.data.data.c_id, name: res.data.data.c_name});
+        setEditingPermission({ id: res.data.data.c_id, name: res.data.data.c_name });
         setIsPermissionModalOpen(true);
-        setFeedbackMessage(null);
       } else {
-        setFeedbackMessage({ type: "error", text: res.data.message });
+        toast.error(res.data.message, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       }
     })
   };
@@ -138,16 +146,26 @@ const PermissionManagementPage: React.FC = () => {
   const handleSaveUser = async (formData: PermissionFormData, isNew: boolean) => {
     var permissionData = {
       id: formData.id,
-      name : formData.name
+      name: formData.name
     }
     if (isNew) {
       apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...permissionData } })).then((res) => {
         if (res.data.code === 200) {
           setPage(1);;
           getPermissionData(1, rowsPerPage);
-          setFeedbackMessage({ type: "success", text: `权限 "${permissionData.id}" 添加成功。` });
+          toast.success(`权限 "${permissionData.id}" 添加成功。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         } else {
-          setFeedbackMessage({ type: "error", text: `权限 "${permissionData.id}" 添加失败。` })
+          toast.error(`权限 "${permissionData.id}" 添加失败。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            draggable: true,
+            pauseOnHover: true
+          });
         }
       });
     } else if (editingPermission) {
@@ -159,11 +177,21 @@ const PermissionManagementPage: React.FC = () => {
       }));
       if (res.data.code === 200) {
         setPermissions(prev => prev.map(u =>
-          u.c_id === editingPermission.id ? { ...u, c_name: formData.name!,  } : u
+          u.c_id === editingPermission.id ? { ...u, c_name: formData.name!, } : u
         ));
-        setFeedbackMessage({ type: 'success', text: `权限 "${formData.id}" 更新成功。` });
+        toast.success(`权限 "${formData.id}" 更新成功。`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       } else {
-        setFeedbackMessage({ type: 'error', text: `权限 "${formData.id}" 更新失败。` });
+        toast.error(`权限 "${formData.id}" 更新失败。`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          draggable: true,
+          pauseOnHover: true
+        });
       }
     }
   };
@@ -172,7 +200,6 @@ const PermissionManagementPage: React.FC = () => {
   const handleDeletePermissionClick = (permision: PermissionDisplayItem) => {
     setPermissionToDelete(permision);
     setIsConfirmDeleteOpen(true);
-    setFeedbackMessage(null);
   };
 
   const confirmDeleteUser = () => {
@@ -180,9 +207,19 @@ const PermissionManagementPage: React.FC = () => {
       apiClientWithToken.post(`/back/api/support/permission/delete`, JSON.stringify({ id: permissionToDelete.c_id })).then((res) => {
         if (res.data.code === 200) {
           setPermissions(prev => prev.filter(u => u.c_id !== permissionToDelete.c_id));
-          setFeedbackMessage({ type: 'success', text: `权限 "${permissionToDelete.c_id}" 已删除。` });
+          toast.success(`权限 "${permissionToDelete.c_id}" 已删除。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         } else
-          setFeedbackMessage({ type: 'error', text: `权限 "${permissionToDelete.c_id}" 删除失败。` })
+          toast.error(`权限 "${permissionToDelete.c_id}" 删除失败。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
       });
     }
     setIsConfirmDeleteOpen(false);
@@ -210,12 +247,6 @@ const PermissionManagementPage: React.FC = () => {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
         此页面用于管理平台权限、查看权限活动。
       </Typography>
-
-      {feedbackMessage && (
-        <MuiAlert severity={feedbackMessage.type} sx={{ mb: 2 }} onClose={() => setFeedbackMessage(null)}>
-          {feedbackMessage.text}
-        </MuiAlert>
-      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
@@ -322,7 +353,7 @@ const PermissionManagementPage: React.FC = () => {
           </TableBody>
         </Table>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[10, 30, 50]}
           component="div"
           count={count}
           rowsPerPage={rowsPerPage}

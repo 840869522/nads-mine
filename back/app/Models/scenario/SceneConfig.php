@@ -5,67 +5,58 @@ namespace App\Models\scenario;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * App\Models\scenario\SceneConfig
- *
- * @property int $c_config_id 主键 场景id
- * @property string $c_name 场景名称
- * @property string|null $c_description 场景描述
- * @property \Illuminate\Support\Carbon|null $c_created_at 创建时间
- * @property array|null $c_scene 场景json
- */
 class SceneConfig extends Model
 {
     use HasFactory;
 
     /**
-     * 【修正】手动指定模型关联的数据表名。
-     * Laravel 默认会使用类名的复数蛇形命名 (scene_configs)，
-     * 这里我们精确匹配数据库中的表名 `c_scene_configs`。
+     * 【修正】手动指定与模型关联的、正确的小写表名。
      * @var string
      */
     protected $table = 'c_scene_configs';
 
     /**
-     * 【修正】手动指定主键。
-     * Laravel 默认主键为 `id`，这里我们指定为 `c_config_id`。
+     * 【修正】手动指定正确的主键字段名。
      * @var string
      */
     protected $primaryKey = 'c_config_id';
 
     /**
-     * 【修正】由于数据库中的时间戳字段名为 `c_created_at` 且没有 `updated_at` 字段，
-     * 需要明确告知 Eloquent 如何处理时间戳。
+     * 【修正】明确告知 Laravel 时间戳字段的自定义名称。
+     * 这是解决 "Unknown column 'created_at'" 错误的关键。
      */
     const CREATED_AT = 'c_created_at';
-    const UPDATED_AT = null; // 数据库中没有更新时间字段，设为 null
+    const UPDATED_AT = 'c_updated_at';
 
     /**
-     * 指示模型是否自动维护时间戳。
-     * 因为我们定义了 CREATED_AT，所以这里保持 true。
+     * 启用 Eloquent 的自动时间戳管理。
+     * 因为我们定义了上面的常量，所以 Laravel 会自动管理 c_created_at 和 c_updated_at。
      * @var bool
      */
     public $timestamps = true;
 
-
     /**
-     * 【修正】可批量赋值的属性。
-     * 这里的字段名需要与数据库表的列名完全对应。
+     * 【修正】定义可批量赋值的属性，所有字段名都已更新为 c_ 前缀。
      * @var array<int, string>
      */
     protected $fillable = [
         'c_name',
         'c_description',
-        'c_scene',
+        'c_scene', // 你的数据库字段是 c_scene (json类型)
     ];
 
     /**
-     * 【修正】应进行类型转换的属性。
-     * 将数据库中的 JSON 字段 `c_scene` 自动转换为 PHP 数组。
+     * 【修正】定义属性类型转换，将 c_scene 字段自动转换为数组/对象。
      * @var array<string, string>
      */
     protected $casts = [
         'c_scene' => 'array',
-        'c_created_at' => 'datetime', // 推荐为时间戳字段添加转换
     ];
+
+    // 如果 SceneConfig 有任何关联关系，可以在这里定义
+    // 例如，一个场景配置可以被多个攻防演练配置使用
+    // public function adConfigs()
+    // {
+    //     return $this->hasMany(AdConfig::class, 'c_scene_config_id', 'c_config_id');
+    // }
 }

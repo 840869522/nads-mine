@@ -7,7 +7,9 @@
     use Illuminate\Support\Facades\DB as db;
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Database\QueryException;
-    use Illuminate\Support\Facades\Log as log;
+use Illuminate\Mail\Transport\ArrayTransport;
+use Illuminate\Support\Facades\Log as log;
+use Symfony\Component\Validator\Constraints\Length;
 
     class PermissionModel extends Model {
 
@@ -137,6 +139,7 @@
                 ];
                 return [];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -160,6 +163,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -185,6 +189,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
@@ -213,6 +218,7 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }catch (Exception $e) {
+                db::rollBack();
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
@@ -220,7 +226,53 @@
             }
         }
 
-    }
+        /**
+         * 辅助函数 用以实现将权限数组数据转化为多级嵌套数据 通过添加children字段实现
+         *
+         * @param array $menus
+         * @param string $pid
+         * @param integer $depth
+         * @return array
+         */
+        private static function buildTreeData(array $menus,string $pid = "0", int $depth = 0):array {
+            if ($depth > 20) {
+                Log::warning("菜单嵌套层级超过限制", ['depth' => $depth]);
+                return [];
+            }
+    
+            $branch = [];
+            
+            foreach ($menus as $menu) {
+                if ($menu->c_pid === $pid) {
+                    $children = self::buildTreeData($menus, $menu->c_id, $depth + 1);
+                    // 添加子菜单（如果存在）
+                    if (!empty($children)) {
+                        $menu->children = $children;
+                    }
+                    $branch[] = (array)$menu;
+                }
+            }
+            
+            return $branch;
+        }
 
+        public static function getSystemMenu(): array {
+            try {
+                $res = db::table("c_permissions")->select(['c_id','c_pid','c_label','c_is_menu','c_src','c_icon'])->get()->toArray();
+                $menuData = self::buildTreeData($res);
+                return [
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data"=>$menuData 
+                ];
+            }catch (Exception $e) {
+                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    'code'=> GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
+        }
+
+
+    }
 
 ?>

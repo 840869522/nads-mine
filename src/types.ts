@@ -71,7 +71,7 @@ export type DeviceType =
 //场景node编辑
 export interface NodeConfig {
   deviceName: string;
-  dockerImage: string;
+  Image: string;
   portMappings: string;
   env?: string; 
   isTarget?: boolean; 

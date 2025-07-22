@@ -30,7 +30,7 @@ import UserFormModal, { UserFormData } from '@/components/admin/UserFormModal';
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
-import { Height } from '@mui/icons-material';
+import { toast } from 'react-toastify';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type UserDisplayItem = { c_username: string; c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
@@ -44,7 +44,7 @@ const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<UserDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<SortableUserKeys>('c_username');
 
@@ -94,10 +94,16 @@ const UserManagementPage: React.FC = () => {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
         setPage(1);
+      } else {
+        throw new Error(res.data.message);
       }
     } catch (error) {
-      console.error('搜索失败:', error);
-      setFeedbackMessage({ type: 'error', text: '搜索用户时发生错误' });
+      toast.error(`搜索用户时发生错误 - ${error.message}`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
     } finally {
       setTableLoading(false);
     }
@@ -121,7 +127,6 @@ const UserManagementPage: React.FC = () => {
   const handleAddUserClick = () => {
     setEditingUser(null);
     setIsUserModalOpen(true);
-    setFeedbackMessage(null);
   };
 
   const handleEditUserClick = (user: UserDisplayItem) => {
@@ -129,9 +134,13 @@ const UserManagementPage: React.FC = () => {
       if (res.data.code === 200) {
         setEditingUser(res.data.data);
         setIsUserModalOpen(true);
-        setFeedbackMessage(null);
       } else {
-        setFeedbackMessage({ type: "error", text: res.data.message });
+        toast.error(`发生错误 - ${res.data.message}`,{
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       }
     })
   };
@@ -150,9 +159,19 @@ const UserManagementPage: React.FC = () => {
         if (res.data.code === 200) {
           setPage(1);;
           getUserData(1, rowsPerPage);
-          setFeedbackMessage({ type: "success", text: `用户 "${formData.username}" 添加成功。` });
+          toast.success(`用户 "${formData.username}" 添加成功。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         } else {
-          setFeedbackMessage({ type: "error", text: `用户 "${formData.username}" 添加失败。` })
+          toast.error(`用户 "${formData.username}" 添加失败。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         }
       });
     } else if (editingUser) {
@@ -167,9 +186,19 @@ const UserManagementPage: React.FC = () => {
         setUsers(prev => prev.map(u =>
           u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
         ));
-        setFeedbackMessage({ type: 'success', text: `用户 "${formData.username}" 更新成功。` });
+        toast.success(`用户 "${formData.username}" 更新成功。`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       } else {
-        setFeedbackMessage({ type: 'error', text: `用户 "${formData.username}" 更新失败。` });
+       toast.error(`用户 "${formData.username}" 更新失败。`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
       }
     }
   };
@@ -178,7 +207,6 @@ const UserManagementPage: React.FC = () => {
   const handleDeleteUserClick = (user: UserDisplayItem) => {
     setUserToDelete(user);
     setIsConfirmDeleteOpen(true);
-    setFeedbackMessage(null);
   };
 
   const confirmDeleteUser = () => {
@@ -186,9 +214,19 @@ const UserManagementPage: React.FC = () => {
       apiClientWithToken.post(`/back/api/support/user/delete`, JSON.stringify({ id: userToDelete.c_username })).then((res) => {
         if (res.data.code === 200) {
           setUsers(prev => prev.filter(u => u.c_username !== userToDelete.c_username));
-          setFeedbackMessage({ type: 'success', text: `用户 "${userToDelete.c_username}" 已删除。` });
+          toast.success(`用户 "${userToDelete.c_username}" 已删除。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         } else
-          setFeedbackMessage({ type: 'error', text: `用户 "${userToDelete.c_username}" 删除失败。` })
+          toast.error(`用户 "${userToDelete.c_username}" 删除失败。`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
       });
     }
     setIsConfirmDeleteOpen(false);
@@ -216,12 +254,6 @@ const UserManagementPage: React.FC = () => {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
         此页面用于管理平台用户账户、分配角色以及查看用户活动。
       </Typography>
-
-      {feedbackMessage && (
-        <MuiAlert severity={feedbackMessage.type} sx={{ mb: 2 }} onClose={() => setFeedbackMessage(null)}>
-          {feedbackMessage.text}
-        </MuiAlert>
-      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
@@ -306,20 +338,6 @@ const UserManagementPage: React.FC = () => {
                 filteredAndSortedUsers.map((user) => (
                   <TableRow key={user.c_username} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{user.c_username}</TableCell>
-                    {/* <TableCell>
-                      <Chip
-                        label={USER_ROLES_CONFIG[user.role].name}
-                        size="small"
-                        color={user.role === UserRole.ADMIN ? "secondary" : "default"}
-                        sx={{
-                          bgcolor: user.role === UserRole.ADMIN ? 'primary.dark' :
-                            user.role === UserRole.ATTACKER ? 'error.light' :
-                              user.role === UserRole.DEFENDER ? 'info.light' :
-                                'default',
-                          color: user.role === UserRole.ADMIN ? 'common.white' : 'text.primary'
-                        }}
-                      />
-                    </TableCell> */}
                     <TableCell>{user.c_email}</TableCell>
                     <TableCell>
                       <Chip
@@ -357,7 +375,7 @@ const UserManagementPage: React.FC = () => {
           </TableBody>
         </Table>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[10, 30, 50]}
           component="div"
           count={count}
           rowsPerPage={rowsPerPage}

@@ -5,14 +5,16 @@ const Array2String = (data: string[] | null): string => {
     return data.join(",");
 }
 
-const Sttring2Array = (data: string | null): string[] => {
+const String2Array = (data: string | null): string[] => {
+    var reqData = []
     if (!data || data.trim()) {
-        return [];
+        reqData =  [];
     }
-    return data.split(",").filter(Boolean);
+    reqData = data.split(",").filter(Boolean);
+    return reqData;
 }
 
 export {
     Array2String,
-    Sttring2Array
+    String2Array
 }

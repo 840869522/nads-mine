@@ -3,7 +3,10 @@
 
 namespace App\Http\Controllers\Course;
 
+use App\Models\Course\PaperRulesModel;
 use App\Models\Course\QuestionsModel;
+use App\Models\Course\TempUsersModel;
+
 use App\Models\Course\QuestionsOptionsModel;
 use App\Models\Course\TestsModel;
 use Illuminate\Http\Request;
@@ -11,6 +14,7 @@ use App\Models\Course\CategoryModel;
 use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
 use App\Utils\GlobalResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
@@ -39,7 +43,7 @@ class TestController extends Controller
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
-                'type' => 'required|string|in:single,multiple,true_false,essay',
+                'type' => 'required|integer|in:1,2,3,4',
                 'tag' => 'required|max:50'
             );
             $validated_msg = array(
@@ -126,7 +130,7 @@ class TestController extends Controller
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 'question' => 'required',
                 'answer' => 'required',
-                'type' => 'required|string|in:single,multiple,true_false,essay',
+                'type' => 'required|integer|in:1,2,3,4',
                 'tag' => 'required|max:50'
             );
             $validated_msg = array(
@@ -155,7 +159,7 @@ class TestController extends Controller
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
-            if(in_array($type,[1,2])){
+            if(in_array($type,[1,2,3])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
                 }else{
@@ -471,6 +475,352 @@ class TestController extends Controller
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
         }
+    }
+
+
+    /**
+     * Notes:添加组题规则
+     * User: zhangnan
+     * DateTime: 2025/7/17 13:39
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function paper_rules_add(Request $request)
+    {
+
+        try {
+            $c_test_id     = trim($request->input('test_id'));
+            $single_choice     = $request->input('single_choice');//单选
+            $multiple_choice     = $request->input('multiple_choice');//多选
+            $true_or_false     = $request->input('true_or_false');//判断
+            $subjective     = $request->input('subjective');//主观
+            $validated_data = array(
+                'test_id' => 'required|max:50|string|exists:c_tests,c_id|unique:c_paper_rules,c_test_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试主键不能为空",
+                'test_id.max'=>"测试主键字段超限",
+                'test_id.exists'=>"测试主键不存在",
+                'test_id.string'=>"测试主键类型错误",
+                'test_id.unique'=>"测试已存在组卷规则",
+            );
+
+            $verify_list = [];
+            if(!empty($single_choice)){
+                $verify_list[] = array(
+                    'name'=>"单选题",
+                    'field'=>"single_choice",
+                    'type'=>1,
+                    'data'=>$single_choice
+                );
+            }
+            if(!empty($multiple_choice)){
+                $verify_list[] = array(
+                    'name'=>"多选题",
+                    'field'=>"multiple_choice",
+                    'type'=>2,
+                    'data'=>$multiple_choice
+                );
+            }
+            if(!empty($true_or_false)){
+                $verify_list[] = array(
+                    'name'=>"判断题",
+                    'field'=>"true_or_false",
+                    'type'=>3,
+                    'data'=>$true_or_false
+                );
+            }
+            if(!empty($subjective)){
+                $verify_list[] = array(
+                    'name'=>"主观题",
+                    'field'=>"subjective",
+                    'type'=>4,
+                    'data'=>$subjective
+                );
+            }
+
+            if(empty($verify_list)){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未获取到组卷规则");
+            }
+            foreach($verify_list as $k=>$v){
+                $validated_data[$v['field']]='array';
+                $validated_data[$v['field'].'.key']='required|max:10';
+                $validated_data[$v['field'].'.tag']='required|max:50';
+                $validated_data[$v['field'].'.count']='required|int';
+                $validated_data[$v['field'].'.score']='required|int';
+                $validated_msg[$v['field'].'.array']=$v['name'].'数据格式错误';
+                $validated_msg[$v['field'].'.key.required']=$v['name'].'组卷规则主键不能为空';
+                $validated_msg[$v['field'].'.key.max']=$v['name'].'组卷规则主键超限';
+                $validated_msg[$v['field'].'.tag.required']=$v['name'].'组卷规则试题标签不能为空';
+                $validated_msg[$v['field'].'.tag.max']=$v['name'].'组卷规则试题标签超限';
+                $validated_msg[$v['field'].'.count.required']=$v['name'].'组卷规则试题数量不能为空';
+                $validated_msg[$v['field'].'.count.int']=$v['name'].'组卷规则试题数量格式不正确';
+                $validated_msg[$v['field'].'.score.required']=$v['name'].'组卷规则分数不能为空';
+                $validated_msg[$v['field'].'.score.int']=$v['name'].'组卷规则分数格式不正确';
+            }
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new PaperRulesModel();
+            $question_mod = new QuestionsModel();
+            $res_data = [];
+            $verify_key = [];
+            //开始组题，校验
+            foreach($verify_list as $k=>$v){
+                $verify_c_id = $mod->verify_paper_rules_c_id($v['data']['key']);
+                if(!$verify_c_id){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."主键以存在！");
+                }
+                if(in_array($v['data']['key'],$verify_key)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."组卷规则主键重复！");
+                }
+                $cnt = $question_mod->get_question_cnt($v['type']);
+                if($cnt<$v['data']['count']){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，请更新题库后重试！");
+                }
+                $v['data']['type'] = $v['type'];
+                $res_data[] = $v['data'];
+                $verify_key[] = $v['data']['key'];
+            }
+            $res = $mod->create_paper_rules_info($c_test_id,$res_data);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"组题规则添加失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+    /**
+     * 修改组卷规则
+     * Notes:
+     * User: zhangnan
+     * DateTime: 2025/7/17 15:35
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function paper_rules_update(Request $request)
+    {
+        try {
+            $c_test_id     = trim($request->input('test_id'));
+            $single_choice     = $request->input('single_choice');//单选
+            $multiple_choice     = $request->input('multiple_choice');//多选
+            $true_or_false     = $request->input('true_or_false');//判断
+            $subjective     = $request->input('subjective');//主观
+            $validated_data = array(
+                'test_id' => 'required|max:50|string|exists:c_tests,c_id|exists:c_paper_rules,c_test_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试主键不能为空",
+                'test_id.max'=>"测试主键字段超限",
+                'test_id.exists'=>"测试主键不存在",
+                'test_id.exists_1'=>"不存在此测试的组卷规则",
+                'test_id.string'=>"测试主键类型错误",
+            );
+
+            $verify_list = [];
+            if(!empty($single_choice)){
+                $verify_list[] = array(
+                    'name'=>"单选题",
+                    'field'=>"single_choice",
+                    'type'=>1,
+                    'data'=>$single_choice
+                );
+            }
+            if(!empty($multiple_choice)){
+                $verify_list[] = array(
+                    'name'=>"多选题",
+                    'field'=>"multiple_choice",
+                    'type'=>2,
+                    'data'=>$multiple_choice
+                );
+            }
+            if(!empty($true_or_false)){
+                $verify_list[] = array(
+                    'name'=>"判断题",
+                    'field'=>"true_or_false",
+                    'type'=>3,
+                    'data'=>$true_or_false
+                );
+            }
+            if(!empty($subjective)){
+                $verify_list[] = array(
+                    'name'=>"主观题",
+                    'field'=>"subjective",
+                    'type'=>4,
+                    'data'=>$subjective
+                );
+            }
+
+            if(empty($verify_list)){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未获取到组卷规则");
+            }
+            foreach($verify_list as $k=>$v){
+                $validated_data[$v['field']]='array';
+                $validated_data[$v['field'].'.key']='required|max:10';
+                $validated_data[$v['field'].'.tag']='required|max:50';
+                $validated_data[$v['field'].'.count']='required|int';
+                $validated_data[$v['field'].'.score']='required|int';
+                $validated_msg[$v['field'].'.array']=$v['name'].'数据格式错误';
+                $validated_msg[$v['field'].'.key.required']=$v['name'].'组卷规则主键不能为空';
+                $validated_msg[$v['field'].'.key.max']=$v['name'].'组卷规则主键超限';
+                $validated_msg[$v['field'].'.tag.required']=$v['name'].'组卷规则试题标签不能为空';
+                $validated_msg[$v['field'].'.tag.max']=$v['name'].'组卷规则试题标签超限';
+                $validated_msg[$v['field'].'.count.required']=$v['name'].'组卷规则试题数量不能为空';
+                $validated_msg[$v['field'].'.count.int']=$v['name'].'组卷规则试题数量格式不正确';
+                $validated_msg[$v['field'].'.score.required']=$v['name'].'组卷规则分数不能为空';
+                $validated_msg[$v['field'].'.score.int']=$v['name'].'组卷规则分数格式不正确';
+            }
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new PaperRulesModel();
+            $question_mod = new QuestionsModel();
+            $res_data = [];
+            $verify_key = [];
+            //开始组题，校验
+            foreach($verify_list as $k=>$v){
+                $verify_c_id = $mod->verify_paper_rules_c_id($v['data']['key'],$c_test_id);
+                if(!$verify_c_id){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."主键以存在！");
+                }
+                if(in_array($v['data']['key'],$verify_key)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."组卷规则主键重复！");
+                }
+                $cnt = $question_mod->get_question_cnt($v['type']);
+                if($cnt<$v['data']['count']){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，请更新题库后重试！");
+                }
+                $v['data']['type'] = $v['type'];
+                $res_data[] = $v['data'];
+                $verify_key[] = $v['data']['key'];
+            }
+            $res = $mod->update_paper_rules_info($c_test_id,$res_data);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"组题规则修改失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+    /**
+     * Notes:删除组卷规则
+     * User: zhangnan
+     * DateTime: 2025/7/17 15:36
+     * @param Request $request
+     */
+    public function paper_rules_del(Request $request)
+    {
+        try {
+            $c_test_id     = trim($request->input('test_id'));
+            $validated_data = array(
+                'test_id' => 'required|max:50|string|exists:c_paper_rules,c_test_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试主键不能为空",
+                'test_id.max'=>"测试主键字段超限",
+                'test_id.exists'=>"不存在此测试的组卷规则",
+                'test_id.string'=>"测试主键类型错误",
+            );
+
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new PaperRulesModel();
+            $res = $mod->del_paper_rules_by_test_id($c_test_id);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"组题规则删除失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+
+    /**
+     * Notes:查询组卷规则
+     * User: zhangnan
+     * DateTime: 2025/7/17 15:41
+     * @param Request $request
+     */
+    public function get_paper_rules_info(Request $request)
+    {
+        try {
+            $c_test_id     = trim($request->input('test_id'));
+            $validated_data = array(
+                'test_id' => 'required|max:50|string|exists:c_paper_rules,c_test_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试主键不能为空",
+                'test_id.max'=>"测试主键字段超限",
+                'test_id.exists'=>"不存在此测试的组卷规则",
+                'test_id.string'=>"测试主键类型错误",
+            );
+
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $mod = new PaperRulesModel();
+            $list = $mod->get_paper_rules_info($c_test_id);
+            $dic["1"]='single_choice';
+            $dic["2"]='multiple_choice';
+            $dic["3"]='true_or_false';
+            $dic["4"]='subjective';
+
+
+            $res = array(
+                'single_choice'=>array(
+                    'key'=>"",
+                    'tag'=>"",
+                    'type'=>1,
+                    'count'=>0,
+                    'score'=>0
+                ),
+                'multiple_choice'=>array(
+                    'key'=>"",
+                    'tag'=>"",
+                    'type'=>1,
+                    'count'=>0,
+                    'score'=>0
+                ),
+                'true_or_false'=>array(
+                    'key'=>"",
+                    'tag'=>"",
+                    'type'=>1,
+                    'count'=>0,
+                    'score'=>0
+                ),
+                'subjective'=>array(
+                    'key'=>"",
+                    'tag'=>"",
+                    'type'=>1,
+                    'count'=>0,
+                    'score'=>0
+                ),
+            );
+            foreach($list as $k=>$v){
+                $res[$dic[$v->c_type]]['key']=$v->c_id;
+                $res[$dic[$v->c_type]]['tag']=$v->c_tag;
+                $res[$dic[$v->c_type]]['type']=$v->c_type;
+                $res[$dic[$v->c_type]]['count']=$v->c_count;
+                $res[$dic[$v->c_type]]['score']=$v->c_score;
+            }
+
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+    /**
+     * Notes:自动组卷
+     * User: zhangnan
+     * DateTime: 2025/7/17 15:13
+     * @param $paper_count //试卷数
+     * @param $single_choice //单选题数
+     * @param $multiple_choice //多选题数
+     * @param $true_or_false //判断题数
+     * @param $subjective //主观题数
+     */
+    public function automatic_question_grouping($paper_count=0,$single_choice=0,$multiple_choice=0,$true_or_false=0,$subjective=0)
+    {
+
     }
 
 

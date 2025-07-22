@@ -32,6 +32,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModal'; // New Import
 import { apiClientWithToken } from '@/utils/axios';
 import SearchIcon from '@mui/icons-material/Search';
+import { toast } from 'react-toastify';
 
 
 interface MockRole {
@@ -54,7 +55,7 @@ const RoleManagementPage: React.FC = () => {
     const [order, setOrder] = useState<Order>('asc');
     const [orderBy, setOrderBy] = useState<SortableRoleKeys>('c_id');
     const [page, setPage] = useState<number>(1);
-    const [rowsPerPage, setRowsPerPage] = useState<number>(5);
+    const [rowsPerPage, setRowsPerPage] = useState<number>(10);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<MockRole | null>(null);
     const [tableLaoding, setTableLoading] = useState(true);
@@ -63,7 +64,6 @@ const RoleManagementPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [roleToDelete, setRoleToDelete] = useState<MockRole | null>(null);
-    const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // State for viewing permissions modal
     const [isViewPermsModalOpen, setIsViewPermsModalOpen] = useState(false);
@@ -77,7 +77,6 @@ const RoleManagementPage: React.FC = () => {
     const handleAddRoleClick = () => {
         setEditingRole(null);
         setIsRoleModalOpen(true);
-        setFeedbackMessage(null);
     };
 
     const handleChangePage = (event: unknown, newPage: number) => {
@@ -99,7 +98,12 @@ const RoleManagementPage: React.FC = () => {
                     setCount(res.data.data.count);
                 }
                 else {
-                    setFeedbackMessage({ type: "error", text: res.data.message });
+                    toast.error(res.data.message , {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        pauseOnHover: true,
+                        draggable: true,
+                      });
                 }
             }).finally(() => {
                 setTableLoading(false);
@@ -124,10 +128,16 @@ const RoleManagementPage: React.FC = () => {
                 setRoles(res.data.data.data);
                 setCount(res.data.data.count);
                 setPage(1);
+            }else {
+                throw new Error(res.data.message);
             }
         } catch (error) {
-            console.error('搜索失败:', error);
-            setFeedbackMessage({ type: 'error', text: '搜索用户时发生错误' });
+            toast.error(`搜索用户时发生错误 - ${error.message}`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+              });
         } finally {
             setTableLoading(false);
         }
@@ -139,9 +149,13 @@ const RoleManagementPage: React.FC = () => {
                 const permision = res.data.data.map(p => p.c_id);
                 setEditingRole({ ...role, permissions: permision });
                 setIsRoleModalOpen(true);
-                setFeedbackMessage(null);
             } else {
-                setFeedbackMessage({ type: "error", text: res.data.message });
+               toast.error(res.data.message,{
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+              });
             }
         });
     };
@@ -160,9 +174,19 @@ const RoleManagementPage: React.FC = () => {
             if (data.code === 200) {
                 setPage(1);
                 getRoleData(1, rowsPerPage);
-                setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 添加成功。` });
+                toast.success(`角色 "${formData.nameDisplay}" 添加成功。` , {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
             } else {
-                setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" 添加失败。` });
+                toast.error(`角色 "${formData.nameDisplay}" 添加失败。` , {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
             }
         } else if (editingRole) {
             const res = await apiClientWithToken.post(`/back/api/support/role/update`, JSON.stringify({
@@ -179,9 +203,19 @@ const RoleManagementPage: React.FC = () => {
                         ? { ...r, nameDisplay: formData.nameDisplay, description: formData.description }
                         : r
                 ));
-                setFeedbackMessage({ type: 'success', text: `角色 "${formData.nameDisplay}" 更新成功。` });
+                toast.success(`角色 "${formData.nameDisplay}" 更新成功。`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
             } else {
-                setFeedbackMessage({ type: 'error', text: `角色 "${formData.nameDisplay}" ${res.data.message}` });
+                toast.error(`角色 "${formData.nameDisplay}" ${res.data.message}` , {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
             }
         }
     };
@@ -189,20 +223,40 @@ const RoleManagementPage: React.FC = () => {
 
     const handleDeleteRoleClick = (role: MockRole) => {
         if (role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT) {
-            setFeedbackMessage({ type: 'error', text: `核心角色 "${role.c_id}" 不能被删除。` });
+            toast.error( `核心角色 "${role.c_id}" 不能被删除。`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+              });
             return;
         }
         setRoleToDelete(role);
         setIsConfirmDeleteOpen(true);
-        setFeedbackMessage(null);
     };
 
+    /**
+     * 待优化
+     */
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
-            await apiClientWithToken.post(`/back/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
-            const res = await apiClientWithToken.post(`/back/api/support/role/all`, JSON.stringify({ page: page, pagesize: rowsPerPage }));
-            setRoles(res.data.data.data);
-            setFeedbackMessage({ type: 'success', text: `角色 "${roleToDelete.c_name}" 已删除。` });
+            const res = await apiClientWithToken.post(`/back/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
+            if (res.data.code === 200){
+                toast.success(`角色 "${roleToDelete.c_name}" 已删除。`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
+                  getRoleData(1, rowsPerPage);
+            }else {
+                toast.error(`角色 "${roleToDelete.c_name}" 删除失败 - ${res.data.message}。`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
+            }
         }
         setIsConfirmDeleteOpen(false);
         setRoleToDelete(null);
@@ -262,18 +316,12 @@ const RoleManagementPage: React.FC = () => {
                 此页面用于定义和管理平台中的用户角色及其对应的权限。当前页面的访问已通过路由和侧边栏链接限制为管理员。
             </Typography>
 
-            {feedbackMessage && (
-                <MuiAlert severity={feedbackMessage.type} sx={{ mb: 2 }} onClose={() => setFeedbackMessage(null)}>
-                    {feedbackMessage.text}
-                </MuiAlert>
-            )}
-
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
                     <TextField
                         variant="outlined"
                         size="small"
-                        placeholder="搜索用户..."
+                        placeholder="搜索角色..."
                         value={searchTerm.data}
                         onChange={handleSearchChange}
                         onKeyDown={(e) => {
@@ -424,7 +472,7 @@ const RoleManagementPage: React.FC = () => {
                     </TableBody>
                 </Table>
                 <TablePagination
-                    rowsPerPageOptions={[5, 10, 25]}
+                    rowsPerPageOptions={[10, 30, 50]}
                     component="div"
                     count={count}
                     rowsPerPage={rowsPerPage}

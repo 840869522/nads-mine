@@ -50,6 +50,7 @@ apiClientWithToken.interceptors.response.use(
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
+                position:"top-center"
             });
             deleteCookie("_auth");
             localStorage.removeItem('droneSimUser');
@@ -62,6 +63,7 @@ apiClientWithToken.interceptors.response.use(
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
+                position:"top-center"
             });
              setTimeout(()=>{},200);
             window.location.href = "/";

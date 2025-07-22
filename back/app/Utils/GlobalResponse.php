@@ -24,7 +24,6 @@
         public static int $DATABASE_SUCCESS_CODE  = 900;
 
         public static int $USER_LOGIN_ERROR_CODE  = 844;
-        
 
         /**
          * 全局响应信息

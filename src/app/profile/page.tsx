@@ -3,9 +3,10 @@
 import { Paper, Grid, TextField, Button, Typography, Box, Chip, Stack } from "@mui/material";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Paragliding } from "@mui/icons-material";
-
-const roleColors = ['primary', 'secondary', 'success', 'error', 'info', 'warning'] as const;
+import { ColorMap } from "@/utils/color";
+import { apiClientWithToken } from "@/utils/axios";
+import { toast } from "react-toastify";
+import CryptoJS from "crypto-js";
 
 const PersonalPage: React.FC = () => {
     const { user } = useAuth();
@@ -136,53 +137,75 @@ const PersonalPage: React.FC = () => {
     // 提交基本信息
     const handleSubmitInfo = async () => {
         if (!validateEmail()) return;
-
-        try {
-            await updateUserInfo(formData);
-            setSubmitStatus({
-                message: "个人信息更新成功",
-                success: true,
-                visible: true
-            });
+        apiClientWithToken.post("/back/api/support/user/update_common", JSON.stringify({
+            data: {
+                email: formData.email
+            },
+            id: user?.user.c_username
+        })).then((res) => {
+            if (res.data.code === 200) {
+                setFormData({ ...formData, email: formData.email });
+                toast.success(`修改信息成功`,
+                    {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        pauseOnHover: true,
+                        draggable: true,
+                    }
+                );
+            } else {
+                setFormData({...formData, email: user?.user.c_email || ""});
+                toast.error(`修改信息失败 ${res.data.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                })
+            }
+        }).finally(() => {
             setIsEditing(false);
-        } catch (error) {
-            setSubmitStatus({
-                message: "更新失败，请重试",
-                success: false,
-                visible: true
-            });
-        }
-        setTimeout(() => {
-            setSubmitStatus(prev => ({ ...prev, visible: false }));
-        }, 3000);
+        })
+
     };
 
     // 提交密码修改
     const handleSubmitPassword = async () => {
         if (!validatePassword()) return;
-
-        try {
-            await updatePassword(passwordData);
-            setSubmitStatus({
-                message: "密码更新成功",
-                success: true,
-                visible: true
-            });
+        if (!validateEmail()) return;
+        const newPassword = CryptoJS.SHA256(passwordData.newPassword).toString();
+        const oldPassword = CryptoJS.SHA256(passwordData.oldPassword).toString();
+        apiClientWithToken.post("/back/api/support/user/update_pwd", JSON.stringify({
+            data: {
+                oldPassword: oldPassword,
+                newPassword: newPassword,
+            },
+            id: user?.user.c_username
+        })).then((res) => {
+            if (res.data.code === 200) {
+                toast.success(`修改密码成功`,
+                    {
+                        autoClose: 3000,
+                        closeOnClick: true,
+                        pauseOnHover: true,
+                        draggable: true,
+                    }
+                );
+            } else {
+                toast.error(`修改密码失败 ${res.data.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                })
+            }
+        }).finally(() => {
             setPasswordData({
                 oldPassword: "",
                 newPassword: "",
                 confirmPassword: ""
             });
-        } catch (error) {
-            setSubmitStatus({
-                message: "密码更新失败，请重试",
-                success: false,
-                visible: true
-            });
-        }
-        setTimeout(() => {
-            setSubmitStatus(prev => ({ ...prev, visible: false }));
-        }, 3000);
+            setIsEditing(false);
+        })
     };
 
     // 取消编辑
@@ -257,7 +280,7 @@ const PersonalPage: React.FC = () => {
                                 </Typography>
                                 <Box sx={{ mt: 2 }}>
                                     <Typography sx={{ fontWeight: 'bold' }}>用户名:</Typography>
-                                    <Typography>{user?.user.c_username}</Typography>
+                                    <Typography>{formData.username}</Typography>
                                 </Box>
                                 <Box sx={{ mt: 2 }}>
                                     <Typography sx={{ fontWeight: 'bold' }}>邮箱:</Typography>
@@ -271,7 +294,7 @@ const PersonalPage: React.FC = () => {
                                                 key={role}
                                                 label={role}
                                                 size="small"
-                                                color={roleColors[index % roleColors.length]}
+                                                color={ColorMap[index % ColorMap.length]}
                                                 sx={{ m: 0.5 }}
                                             />
                                         ))}
