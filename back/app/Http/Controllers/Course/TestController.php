@@ -161,6 +161,8 @@ class TestController extends Controller
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
+            $dx_cnt = 0;
+            $dx_zong_cnt = 0;
             if(in_array($type,[1,2])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
@@ -173,7 +175,22 @@ class TestController extends Controller
                         if(!$verify_options_only){
                             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
                         }
-                        if($v['option']==$c_answer){
+                        if($type==1){
+                            if($v['option']==$c_answer){
+                                $verify_answer=1;
+                            }
+                        }else{
+                            $answer = explode(';',$v['option']);
+                            $dx_zong_cnt = count($answer);
+                            if(in_array($v['option'],$answer)){
+                                $dx_cnt++;
+                            }
+
+                        }
+
+                    }
+                    if($type==2){
+                        if($dx_zong_cnt==$dx_cnt){
                             $verify_answer=1;
                         }
                     }
@@ -1171,7 +1188,6 @@ class TestController extends Controller
                 return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$papers_info['c_questions']);
 
             }
-
 
             $mod = new PapersModel();
             $info = $mod->get_paper_list($test_id);
