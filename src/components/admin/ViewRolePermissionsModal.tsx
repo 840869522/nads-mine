@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogActions,
@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { APP_PERMISSIONS, AppPermission } from '@/constants';
-import { PermScanWifi } from '@mui/icons-material';
 
 interface ViewRolePermissionsModalProps {
   open: boolean;
