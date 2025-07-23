@@ -56,6 +56,7 @@ const TypeMap = {
 const QuestionPage: React.FC = () => {
 
   const [questions, setQuestions] = useState<QuestionDisplayItem[]>([]);
+  const [firstFlag, setFirstFlag] = useState<boolean>(true);
   const [questionsCount, setQuestionsCount] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
@@ -76,10 +77,11 @@ const QuestionPage: React.FC = () => {
 
   useEffect(() => {
     getQuestionData(1, rowsPerPage);
+    setFirstFlag(false);
   }, [])
 
   useEffect(() => {
-    if (page === 1 && rowsPerPage == 10)
+    if (firstFlag) 
       return
     else {
       if (searchTerm.data.trim() && searchTerm.flag)
@@ -296,7 +298,6 @@ const QuestionPage: React.FC = () => {
             return acc;
           }, {} as Record<string, any>);
         });
-        console.log(questionsData)
 
         // 验证并转换数据
         // const processedData = questionsData.map(question => ({
