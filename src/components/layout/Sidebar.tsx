@@ -34,6 +34,7 @@ import Cog6ToothIcon from '@heroicons/react/24/outline/Cog6ToothIcon';
 import UserGroupIcon from '@heroicons/react/24/outline/UserGroupIcon';
 import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
 import ArrowLeftEndOnRectangleIcon from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
+import MenuIcon from '@mui/icons-material/Menu'; // 设置通用图标
 
 
 
@@ -130,6 +131,24 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     }
   ];
 
+  const iconMaap = {
+    "ChartPieIcon": ChartPieIcon,
+    "Cog6ToothIcon": Cog6ToothIcon,
+    "UserGroupIcon": UserGroupIcon,
+    "KeyIcon": KeyIcon,
+    "ArrowLeftEndOnRectangleIcon": ArrowLeftEndOnRectangleIcon,
+    "ArchiveBoxIconHero": ArchiveBoxIconHero,
+    "CommandLineIcon": CommandLineIcon,
+    "ComputerDesktopIconHero": ComputerDesktopIconHero,
+    "AdjustmentsHorizontalIcon": AdjustmentsHorizontalIcon,
+    "CubeTransparentIcon": CubeTransparentIcon,
+    "ShieldCheckIcon": ShieldCheckIcon,
+    "AcademicCapIcon": AcademicCapIcon,
+    "QuestionMarkCircleIcon": QuestionMarkCircleIcon,
+    "FolderOpenIconHero": FolderOpenIconHero,
+    "DocumentTextIcon": DocumentTextIcon,
+  }
+
   const handleMenuClick = (label: string) => {
     setOpenMenus(prev => ({ ...prev, [label]: !prev[label] }));
   };
@@ -159,11 +178,11 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     };
     return filterItems(userSiderMenu);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user,userSiderMenu]); // navItems is stable, so not including it
+  }, [user, userSiderMenu]); // navItems is stable, so not including it
 
   const renderNavList = (items: NavItemType[], isSubmenu: boolean = false) => {
     return items.map((item) => {
-      const IconComponent = item.icon;
+      const IconComponent = iconMaap[item.icon] || MenuIcon;
       if (item.children) {
         const isOpen = openMenus[item.label] || false;
         const isParentActive = item.children.some(child => child.to && pathname.startsWith(child.to));
