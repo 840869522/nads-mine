@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production node server.js"
   },
   "dependencies": {
+    "@cyntler/react-doc-viewer": "^1.17.0",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
     "@google/genai": "^1.4.0",
@@ -30,10 +31,14 @@
     "guacamole-common-js": "^1.5.0",
     "guacamole-lite": "^1.0.2",
     "http-proxy-middleware": "^3.0.5",
+    "lodash": "^4.17.21",
+    "mammoth": "^1.9.1",
     "next": "^15.0.0",
     "nextjs": "^0.0.3",
     "react": "^19.1.0",
+    "react-doc-viewer": "^0.1.14",
     "react-dom": "^19.1.0",
+    "react-pdf": "^10.0.1",
     "react-rnd": "^10.5.2",
     "react-toastify": "^11.0.5",
     "socket.io": "^4.7.5",
