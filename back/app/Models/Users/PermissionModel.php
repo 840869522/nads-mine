@@ -7,9 +7,7 @@
     use Illuminate\Support\Facades\DB as db;
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Database\QueryException;
-use Illuminate\Mail\Transport\ArrayTransport;
-use Illuminate\Support\Facades\Log as log;
-use Symfony\Component\Validator\Constraints\Length;
+    use Illuminate\Support\Facades\Log as log;
 
     class PermissionModel extends Model {
 
@@ -234,7 +232,7 @@ use Symfony\Component\Validator\Constraints\Length;
          * @param integer $depth
          * @return array
          */
-        private static function buildTreeData(array $menus,string $pid = "0", int $depth = 0):array {
+        private static function buildTreeData(array $menus,int $isMenu = 0,string $pid = "0", int $depth = 0):array {
             if ($depth > 20) {
                 Log::warning("菜单嵌套层级超过限制", ['depth' => $depth]);
                 return [];
@@ -244,22 +242,45 @@ use Symfony\Component\Validator\Constraints\Length;
             
             foreach ($menus as $menu) {
                 if ($menu->c_pid === $pid) {
-                    $children = self::buildTreeData($menus, $menu->c_id, $depth + 1);
+                    $children = self::buildTreeData($menus, $isMenu,$menu->c_id, $depth + 1);
                     // 添加子菜单（如果存在）
                     if (!empty($children)) {
                         $menu->children = $children;
                     }
-                    $branch[] = (array)$menu;
+                    $newMenu = (array)$menu;
+                    unset($newMenu['c_pid']);
+                    unset($newMenu['c_is_menu']);
+                    if ($isMenu){
+                        $newMenu['requiredPermission'] = $newMenu['c_id'] ;
+                        if (!trim($newMenu['to'])){
+                            unset($newMenu['to']);
+                        }
+                     }else { 
+                        $newMenu['key'] =$newMenu['c_id'];
+                        unset($newMenu['to']);
+                    }
+                    unset($newMenu['c_id']);
+                    $branch[] = $newMenu;
                 }
             }
             
             return $branch;
         }
 
-        public static function getSystemMenu(): array {
+        /**
+         * 用于得到前端需要的树状权限列表
+         *
+         * @param integer $menu 控制是否为菜单
+         * @return array
+         */
+        public static function getSystemAllPermission(int $menu = 0): array {
             try {
-                $res = db::table("c_permissions")->select(['c_id','c_pid','c_label','c_is_menu','c_src','c_icon'])->get()->toArray();
-                $menuData = self::buildTreeData($res);
+                if ($menu){
+                    $res = db::table("c_permissions")->select(['c_id','c_pid','c_label as label','c_is_menu','c_src as to','c_icon as icon'])->where('c_is_menu', '=', $menu)->get()->toArray();
+                }else{
+                    $res = db::table("c_permissions")->select(['c_id','c_pid','c_label as label','c_is_menu','c_src as to'])->get()->toArray();
+                }
+                $menuData = self::buildTreeData($res,$menu);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>$menuData 

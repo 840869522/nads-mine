@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -15,7 +15,8 @@ import {
   Stack,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { APP_PERMISSIONS, AppPermission } from '@/constants';
+import { AppPermission } from '@/types';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 interface ViewRolePermissionsModalProps {
   open: boolean;
@@ -30,6 +31,10 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
   roleName,
   permissionKeys,
 }) => {
+  useEffect(()=>{
+    console.log(permissionKeys);
+  },[]);
+  const {appAllPermission} = userPermissionContext();
   const collectPermissions = (permissions: AppPermission[], keys: string[]) => {
     return permissions.reduce((acc, perm) => {
       var newPerm: AppPermission = { ...perm, children: null };
@@ -50,7 +55,7 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
   }
 
 
-  const groupedPermissions = collectPermissions(APP_PERMISSIONS, permissionKeys);
+  const groupedPermissions = collectPermissions(appAllPermission, permissionKeys);
 
   // const groupedPermissions = collectedPerms.reduce((acc, perm) => {
   //   const mainCategory = perm.path[0] // 取第一个路径作为主分组

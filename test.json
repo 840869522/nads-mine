@@ -1,0 +1,90 @@
+{
+    "data": {
+        "code": 200,
+        "message": "SUCCESS",
+        "data": [
+            {
+                "label": "基础支撑系统",
+                "children": [
+                    {
+                        "label": "用户管理",
+                        "to": "/admin/users",
+                        "children": [
+                            {
+                                "label": "修改用户",
+                                "key": "support_user-edit-user"
+                            },
+                            {
+                                "label": " 重置用户密码",
+                                "key": "study_user-reset-password"
+                            }
+                        ],
+                        "key": "support_user"
+                    },
+                    {
+                        "label": "角色管理",
+                        "to": "/admin/roles",
+                        "children": [
+                            {
+                                "label": " 编辑角色",
+                                "key": "support_role-edit-role"
+                            }
+                        ],
+                        "key": "support_role"
+                    }
+                ],
+                "key": "support"
+            },
+            {
+                "label": "人员测试分系统",
+                "children": [
+                    {
+                        "label": "课程案例",
+                        "to": "/learn/case",
+                        "key": "study_courses"
+                    }
+                ],
+                "key": "study"
+            }
+        ]
+    },
+    "permissionData": {
+        "code": 200,
+        "message": "SUCCESS",
+        "data": [
+            {
+                "label": "基础支撑系统",
+                "icon": "icon",
+                "children": [
+                    {
+                        "label": "用户管理",
+                        "to": "/admin/users",
+                        "icon": "icon",
+                        "requiredPermission": "support_user"
+                    },
+                    {
+                        "label": "角色管理",
+                        "to": "/admin/roles",
+                        "icon": "icon",
+                        "requiredPermission": "support_role"
+                        
+                    }
+                ],
+                "requiredPermission": "support"
+            },
+            {
+                "label": "人员测试分系统",
+                "icon": "icon",
+                "children": [
+                    {
+                        "label": "课程案例",
+                        "to": "/learn/case",
+                        "icon": "icon",
+                        "requiredPermission": "study_courses"
+                    }
+                ],
+                "requiredPermission": "study"
+            }
+        ]
+    }
+}

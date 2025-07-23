@@ -93,7 +93,6 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ open, onClose, onSave, in
 
   const handleSubmit = () => {
     if (validate()) {
-      console.log(formData)
       onSave(formData, isNewRole);
       onClose();
     }

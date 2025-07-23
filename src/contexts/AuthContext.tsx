@@ -1,11 +1,8 @@
 
 "use client";
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole } from '../types';
 import { apiClient } from '@/utils/axios';
 import { deleteCookie, setCookie } from '@/utils/cookie';
-import { getCookie } from '@/utils/cookie';
-import { BACK_IP_PORT } from '@/constants';
 
 
 interface AuthContextType {

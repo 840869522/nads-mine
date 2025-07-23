@@ -62,19 +62,19 @@ export interface AttackLogEntry {
 }
 
 export type DeviceType =
-    | 'container'
-    | 'switch'
-    | 'virtual_machine'
-    | 'nat_bridge'
-    | 'router';
+  | 'container'
+  | 'switch'
+  | 'virtual_machine'
+  | 'nat_bridge'
+  | 'router';
 
 //场景node编辑
 export interface NodeConfig {
   deviceName: string;
   Image: string;
   portMappings: string;
-  env?: string; 
-  isTarget?: boolean; 
+  env?: string;
+  isTarget?: boolean;
 }
 
 export interface TopologyNode {
@@ -106,18 +106,18 @@ export interface TopologyData {
 }
 
 export type TopologyActionType =
-    | 'ADD_NODE'
-    | 'DELETE_NODE'
-    | 'MOVE_NODE'
-    | 'UPDATE_NODE_CONFIG'
-    | 'ADD_EDGE'
-    | 'DELETE_EDGE'
-    | 'UPDATE_EDGE_CONFIG'
-    | 'BATCH_DELETE'
-    | 'SELECT_ELEMENT'
-    | 'CLEAR_SELECTION'
-    | 'START_LINKING'
-    | 'LOAD_TOPOLOGY';
+  | 'ADD_NODE'
+  | 'DELETE_NODE'
+  | 'MOVE_NODE'
+  | 'UPDATE_NODE_CONFIG'
+  | 'ADD_EDGE'
+  | 'DELETE_EDGE'
+  | 'UPDATE_EDGE_CONFIG'
+  | 'BATCH_DELETE'
+  | 'SELECT_ELEMENT'
+  | 'CLEAR_SELECTION'
+  | 'START_LINKING'
+  | 'LOAD_TOPOLOGY';
 
 export interface TopologyAction {
   type: TopologyActionType;
@@ -194,4 +194,19 @@ export interface RunningInstance {
   uptime: string;
   nodeId?: string;
   createdAt: string;
+}
+
+
+export interface AppPermission {
+  key: string;
+  label: string;
+  children?: AppPermission[] | null;
+}
+
+export interface NavItemType {
+  to?: string;
+  label: string;
+  icon: React.ElementType;
+  children?: NavItemType[];
+  requiredPermission?: string; // New: specific permission key required
 }

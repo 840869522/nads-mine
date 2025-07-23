@@ -38,7 +38,24 @@
 
         public function getSystemAllMenu() {
             $model = new PermissionModel();
-            $modelRes = $model::getSystemMenu();
+            $modelRes = $model::getSystemAllPermission(1);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE){
+                return response()->json([
+                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message"=>GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }else{
+                return response()->json([
+                    'code'=>GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data"=>$modelRes['data']
+                ]);
+            }
+        }
+
+        public function getSystemAllPermission() {
+            $model = new PermissionModel();
+            $modelRes = $model::getSystemAllPermission(0);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE){
                 return response()->json([
                     "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,

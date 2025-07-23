@@ -1,18 +1,11 @@
 
-import { UserRole, Question, DroneNode, DockerContainer, TeamColor, DeviceType, NodeConfig, EdgeConfig, ManagedImage, CourseCase, CourseCaseFileFormat, RunningInstance, InstanceStatus } from './types';
+import { UserRole, Question, DroneNode, DockerContainer, TeamColor, DeviceType, NodeConfig, EdgeConfig, ManagedImage, CourseCase, CourseCaseFileFormat, RunningInstance, InstanceStatus,AppPermission } from './types';
 
 export const APP_NAME = "网络安全实验平台";
 
-// New: Define Application Permissions Structure
-export interface AppPermission {
-  key: string;
-  label: string;
-  children?: AppPermission[] | null;
-}
+
 
 export const BACK_IP_PORT = "http://localhost:8000";
-
-
 
 export const APP_PERMISSIONS_CATEGORY = {
   "study": "人员测试分系统",
