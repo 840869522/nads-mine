@@ -41,6 +41,7 @@ type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_nam
 
 
 const PermissionManagementPage: React.FC = () => {
+  const [firstFlag, setFirstFlag] = useState<boolean>(true);
   const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);

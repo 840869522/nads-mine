@@ -359,7 +359,7 @@ export default function VmPage() {
 
     const handleGuac = async (vm: VmInstance, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vm.name}/guac?method=${proto}`);
+            const res = await fetch(`/back/api/vms/${vm.name}/guac?method=${proto}&vm_name=${encodeURIComponent(vm.name)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
 

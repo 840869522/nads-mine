@@ -13,6 +13,80 @@ use Illuminate\Support\Facades\Log;
  */
 class CommandLineService
 {   
+     /**
+     * 为网桥配置IP地址，并为容器设置默认路由。
+     *
+     * @param string $bridgeName      要配置的网桥名称 (e.g., 'br0')
+     * @param string $gatewayIp       要分配给网桥的网关IP地址 (e.g., '10.100.0.254/16')
+     * @param array  $containers      需要配置路由的容器列表，格式: [['name' => 'C1_xxx', 'ip' => '10.100.0.9/16'], ...]
+     * @return void
+     */
+    public function configureBridgeAndRoutes(string $bridgeName, string $gatewayIp, array $containers): void
+    {
+        // 1. 为 Linux Bridge 配置 IP 地址
+        $gatewayIpOnly = explode('/', $gatewayIp)[0];
+        // $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
+        // Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
+        
+        // $processConfigBridge = new Process($commandConfigBridge);
+        // $processConfigBridge->run();
+        // // 如果IP已存在，忽略错误，否则抛出异常
+        // if (!$processConfigBridge->isSuccessful() && !str_contains($processConfigBridge->getErrorOutput(), 'File exists')) {
+        //     throw new ProcessFailedException($processConfigBridge);
+        // }
+
+        // 2. 循环为每个容器配置默认路由
+        foreach ($containers as $container) {
+            $containerName = $container['name'];
+            $commandAddRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'add', 'default', 'via', $gatewayIpOnly];
+            Log::info("Executing [IP-Config]: Adding default route for container {$containerName}");
+            (new Process($commandAddRoute))->mustRun();
+        }
+    }
+    //交换机和br0连接
+    public function connectSwitchToBr0(string $ovsSwitchName, string $linuxBridgeName): void
+    {
+        // 1. 根据OVS交换机和Linux Bridge的名称，生成veth pair的端口名
+        // 使用哈希值确保名称的唯一性和规范性
+        $ovsHash = substr(md5($ovsSwitchName), 0, 4);
+        $brHash = substr(md5($linuxBridgeName), 0, 4);
+        $portForOvs = "veth-{$ovsHash}-{$brHash}";
+        $portForBridge = "veth-{$brHash}-{$ovsHash}";
+
+        // 2. 创建veth pair ("虚拟网线")
+        $commandCreateVeth = ['sudo', 'ip', 'link', 'add', $portForOvs, 'type', 'veth', 'peer', 'name', $portForBridge];
+        Log::info("Executing [OVS-to-Bridge]: " . implode(' ', $commandCreateVeth));
+        try {
+            (new Process($commandCreateVeth))->mustRun();
+        } catch (ProcessFailedException $e) {
+            // 如果接口已存在，这可能不是一个致命错误，记录警告后继续
+            if (str_contains($e->getProcess()->getErrorOutput(), 'File exists')) {
+                Log::warning("Could not create veth pair {$portForOvs}<->{$portForBridge}. It already exists. Continuing...");
+            } else {
+                throw $e; // 其他错误则抛出
+            }
+        }
+
+        // 3. 将veth pair的一端添加到OVS交换机
+        $commandAddPortOvs = ['sudo', 'ovs-vsctl', 'add-port', $ovsSwitchName, $portForOvs];
+        Log::info("Executing [OVS-to-Bridge]: " . implode(' ', $commandAddPortOvs));
+        (new Process($commandAddPortOvs))->mustRun();
+
+        // 4. 【关键区别】将veth pair的另一端添加到Linux Bridge
+        $commandAddPortBridge = ['sudo', 'brctl', 'addif', $linuxBridgeName, $portForBridge];
+        Log::info("Executing [OVS-to-Bridge]: " . implode(' ', $commandAddPortBridge));
+        (new Process($commandAddPortBridge))->mustRun();
+
+        // 5. 启动这两个新创建的端口
+        $commandLinkUpOvs = ['sudo', 'ip', 'link', 'set', $portForOvs, 'up'];
+        Log::info("Executing [OVS-to-Bridge]: " . implode(' ', $commandLinkUpOvs));
+        (new Process($commandLinkUpOvs))->mustRun();
+
+        $commandLinkUpBridge = ['sudo', 'ip', 'link', 'set', $portForBridge, 'up'];
+        Log::info("Executing [OVS-to-Bridge]: " . implode(' ', $commandLinkUpBridge));
+        (new Process($commandLinkUpBridge))->mustRun();
+    }
+
     /**
      * 需要定义脚本位置全局
      * 通过调用外部Shell脚本创建虚拟机并将其连接到指定的交换机。

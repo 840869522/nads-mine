@@ -80,7 +80,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         id: '',
         question: '',
         answer: '',
-        type: '',
+        type: 1,
         courseName: '',
         tags: '',
         options: [''],
@@ -94,12 +94,13 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 setFormData({
                     id: initialQuestion?.c_id,
                     question: initialQuestion?.c_question,
-                    answer: initialQuestion?.c_answer,
-                    type: initialQuestion?.c_type,
+                    answer: initialQuestion?.c_type === 4 ? "*" :initialQuestion?.c_answer || "",
+                    type: parseInt(initialQuestion?.c_type || '1'),
                     tags: String2Array(initialQuestion?.c_tag),
                     courseName: initialQuestion?.c_course_id,
                     options: initialQuestion.connect,
                 });
+                console.log(formData);
             } else {
                 setFormData({
                     id: "",
@@ -207,13 +208,11 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
             }
         }
         setErrors(newErrors);
-        console.log(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     // 提交表单
     const handleSubmit = () => {
-        console.log(validateForm());
         if (validateForm()) {
             formData.options = formData.options.map(opt => {
                 const newOpt = { key: opt.c_id, option: opt.c_content }

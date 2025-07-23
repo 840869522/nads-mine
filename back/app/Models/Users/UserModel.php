@@ -288,5 +288,19 @@ use Nette\Schema\Expect;
             return [];
         }
     }
+
+        public static function getUsersForPermission(): array
+        {
+            // 假设 c_is_login = 1 代表激活用户。如果不是，请修改此处的 WHERE 条件。
+            $sql = "SELECT c_username as id, c_username as name FROM `c_users` WHERE c_is_login = 1 ORDER BY c_username ASC";
+            try {
+                return DB::select($sql);
+            } catch (QueryException $e) {
+                Log::info('[DATABASE]: FAILED TO GET USERS FOR PERMISSION : ' . $e->getMessage());
+                return []; // 出错时安全地返回一个空数组
+            }
+        }
+
+
 }
 ?>

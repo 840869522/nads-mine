@@ -49,6 +49,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         cpuUsage: true,
         memoryUsage: true,
         uptime: true,
+        ipAddress: true,
+        scene_instance_id: true,
+        scene_name: true,
     });
 
     const getStatusChipColor = (status: InstanceStatus): "success" | "warning" | "error" | "info" | "default" => {
@@ -153,6 +156,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'cpuUsage', headerName: 'CPU', width: 100, hide: !showColumns.cpuUsage },
         { field: 'memoryUsage', headerName: '内存', flex: 1, hide: !showColumns.memoryUsage },
         { field: 'uptime', headerName: '运行时间', flex: 1, hide: !showColumns.uptime },
+        { field: 'ipAddress', headerName: 'IP', width: 160, hide: !showColumns.ipAddress },
+        { field: 'scene_instance_id', headerName: '场景实例ID', width: 160, hide: !showColumns.scene_instance_id },
+        { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
             field: 'actions', headerName: '操作', sortable: false, width: 180,
@@ -245,14 +251,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             <Menu anchorEl={columnAnchorEl} open={Boolean(columnAnchorEl)} onClose={()=>setColumnAnchorEl(null)}>
                 {Object.entries(showColumns).map(([key,val])=> (
                     <MenuItem key={key}>
-                        <FormControlLabel control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>} label={
-                            key === 'id' ? '容器 ID' :
-                            key === 'imageName' ? '镜像名' :
-                            key === 'ports' ? '端口' :
-                            key === 'cpuUsage' ? 'CPU' :
-                            key === 'memoryUsage' ? '内存' :
-                            '运行时间'
-                        } />
+                        <FormControlLabel
+                            control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
+                            label={
+                                key === 'id' ? '容器 ID' :
+                                key === 'imageName' ? '镜像名' :
+                                key === 'ports' ? '端口' :
+                                key === 'cpuUsage' ? 'CPU' :
+                                key === 'memoryUsage' ? '内存' :
+                                key === 'ipAddress' ? 'IP' :
+                                key === 'scene_instance_id' ? '场景实例ID' :
+                                key === 'scene_name' ? '场景名称' :
+                                '运行时间'
+                            }
+                        />
                     </MenuItem>
                 ))}
             </Menu>

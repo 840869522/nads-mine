@@ -6,11 +6,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\scenario\SceneVmInstance;
+use App\RunTool\CommandLineService;
 use Symfony\Component\Process\Process;
 use Illuminate\Support\Str;
 
 class VmController extends Controller
 {
+
+    private CommandLineService $cliService;
+
+    public function __construct(CommandLineService $cliService)
+    {
+        $this->cliService = $cliService;
+    }
 
 
     /**
@@ -26,11 +34,11 @@ public function listVmsBySceneInstance(string $instance_id)
         $allVmsFromHypervisor = $this->fetchVmInstances();
         // 如果返回的不是数组，或获取失败，返回空列表
         if (!is_array($allVmsFromHypervisor)) {
-            \Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
+            Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
             return response()->json([]);
         }
     } catch (\Throwable $e) {
-        \Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
     }
 
@@ -54,7 +62,7 @@ public function listVmsBySceneInstance(string $instance_id)
             ->keyBy('c_vm_name');
 
     } catch (\Throwable $e) {
-        \Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
+        Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
         return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
     }
 
@@ -337,109 +345,53 @@ public function listVmsBySceneInstance(string $instance_id)
     public function createVm(Request $request)
     {
         $req = $request->all();
-        if (empty($req['base_image'])) {
-            return response()->json(['error' => 'base_image required'], 400);
+        $image = $req['image'] ?? $req['base_image'] ?? null;
+        if (empty($image)) {
+            return response()->json(['error' => 'image required'], 400);
         }
 
-        $vm = $req['vm_name'] ?? ('vm-' . Str::random(8));
-        $mac = $this->genMac($vm);
-        $poolDir = '//';
-        $baseImagePath = $poolDir . '/' . $req['base_image'];
+        $vmName = $req['vm_name'] ?? ('vm-' . Str::random(8));
+        $ip = $req['ip'] ?? null;
+        $isTarget = !empty($req['is_target']);
+        $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
 
         try {
-            $guestOs = $this->detectOs($baseImagePath);
-        } catch (\Throwable $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-
-        $osVariant = $req['os_variant'] ?? ($guestOs === 'linux' ? 'ubuntu24.04' : 'win10');
-        if ($guestOs === 'windows' && empty($req['admin_password'])) {
-            return response()->json(['error' => 'Windows VM requires admin_password'], 400);
-        }
-
-        $tmpDir = sys_get_temp_dir() . '/' . $vm . '-ci-' . uniqid();
-        mkdir($tmpDir, 0700, true);
-
-        if ($guestOs === 'windows') {
-            $userData = "#cloud-config\n"
-                . "password: {$req['admin_password']}\n"
-                . "username: Administrator\n"
-                . "runcmd:\n"
-                . "  - powershell -Command \"Set-ItemProperty -Path 'HKLM:\\System\\CCS\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0\"\n"
-                . "  - powershell -Command \"Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'\"\n"
-                . "  - powershell -Command \"Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0\"\n"
-                . "  - powershell -Command \"Start-Service sshd\"\n";
-        } else {
-            $lines = [
-                '#cloud-config',
-                "hostname: {$vm}",
-                'users:',
-                '  - default',
-                '  - name: ubuntu',
-                '    sudo: ALL=(ALL) NOPASSWD:ALL',
-            ];
-            if (!empty($req['ssh_key'])) {
-                $lines[] = '    ssh_authorized_keys:';
-                $lines[] = '      - ' . $req['ssh_key'];
-            }
-            if (!empty($req['admin_password'])) {
-                $lines[] = 'chpasswd:';
-                $lines[] = '  list: |';
-                $lines[] = '    ubuntu:' . $req['admin_password'];
-                $lines[] = '  expire: False';
-                $lines[] = 'ssh_pwauth: True';
-            }
-            $lines = array_merge($lines, [
-                'packages:',
-                '  - openssh-server',
-                '  - xrdp',
-                '  - tigervnc-standalone-server',
-                'runcmd:',
-                '  - systemctl enable --now xrdp',
+            $vm = SceneVmInstance::create([
+                'c_vm_name' => $vmName,
+                'c_scene_instances_id' => 'standalone',
+                'c_ip' => $ip,
+                'c_flag' => $flag,
             ]);
-            $userData = implode("\n", $lines);
+        } catch (\Throwable $e) {
+            Log::error('Failed to create VM record: ' . $e->getMessage());
+            return response()->json(['error' => 'database error'], 500);
         }
 
-        file_put_contents("$tmpDir/user-data", $userData);
-        file_put_contents("$tmpDir/meta-data", "instance-id: {$vm}\nlocal-hostname: {$vm}\n");
-        file_put_contents("$tmpDir/network-config", "");
-
-        $overlayPath = $poolDir . '/' . $vm . '.qcow2';
-        $diskOpts = [
-            "path=$overlayPath",
-            'size=' . ($req['disk_gb'] ?? 20),
-            'format=qcow2',
-            "backing_store=$baseImagePath,backing_format=qcow2",
-        ];
-
-        $cmd = [
-            'virt-install',
-            '--import',
-            '--quiet',
-            '--name', $vm,
-            '--memory', (string)($req['memory'] ?? 2048),
-            '--vcpus', (string)($req['vcpus'] ?? 2),
-            '--os-variant', $osVariant,
-            '--graphics', 'vnc,listen=0.0.0.0,port=0',
-            '--noautoconsole',
-            '--wait', '0',
-            '--disk', implode(',', $diskOpts),
-            '--network', "bridge=br0,model=virtio,mac={$mac}",
-            '--cloud-init', "user-data=$tmpDir/user-data,meta-data=$tmpDir/meta-data,network-config=$tmpDir/network-config,disable=on",
-        ];
+        $baseDir = $this->_get_global_directory();
+        $imageDir = $baseDir . '/virsh/images';
+        $instanceBaseDir = $baseDir . '/virsh/instances';
 
         try {
-            $this->runCommand($cmd);
-            $xml = $this->runVirsh('dumpxml', $vm);
-            $vncPort = $this->parseVncPort($xml) ?? 5900;
+            $this->cliService->createVm([
+                'id' => $vm->c_vm_id,
+                'vm_name' => $vmName,
+                'image' => $image,
+                'ip' => $ip,
+                'scene_instance_id' => 'standalone',
+                'flag' => $flag ?? 'NULL',
+                'switch_name' => 'ovs-network',
+                'image_dir' => $imageDir,
+                'instance_base_dir' => $instanceBaseDir,
+            ]);
         } catch (\Throwable $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Failed to create VM via CLI: ' . $e->getMessage());
+            return response()->json(['error' => 'vm creation failed'], 500);
         }
 
         return response()->json([
-            'vm' => $vm,
-            'mac' => $mac,
-            'vnc_port' => $vncPort,
+            'vm_id' => $vm->c_vm_id,
+            'vm_name' => $vmName,
+            'flag' => $flag,
         ], 200);
     }
 
@@ -447,6 +399,7 @@ public function listVmsBySceneInstance(string $instance_id)
     public function getGuacInfo($vmName, Request $request)
     {
         $method = strtolower($request->query('method', 'ssh'));
+        $vmQueryName = $request->query('vm_name', $vmName);
 
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
@@ -467,21 +420,19 @@ public function listVmsBySceneInstance(string $instance_id)
             }
         } else {
             try {
-                $addrOut = $this->runVirsh('domifaddr', $vmName, '--source', 'agent');
-                $lines = array_slice(preg_split('/\n/', trim($addrOut)), 2);
-                foreach ($lines as $l) {
-                    $parts = preg_split('/\s+/', trim($l));
-                    if (count($parts) >= 4) {
-                        $ip = $parts[3];
-                        break;
-                    }
+                $record = DB::table('c_scene_vm_instances')
+                    ->where('c_vm_name', $vmQueryName)
+                    ->first();
+                if ($record && $record->c_ip) {
+                    $ip = explode('/', $record->c_ip)[0];
                 }
             } catch (\Throwable $e) {
+                Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
 
         return response()->json([
-            'host' => $ip ?? '192.168.200.10',
+            'host' => $ip ?? '无效',
             'ssh_port' => 22,
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,

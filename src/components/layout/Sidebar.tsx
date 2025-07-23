@@ -130,6 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         { to: "/learn/learn", label: "课程学习", icon: DocumentTextIcon, requiredPermission: 'study_learn' },
         { to: "/learn/docs", label: "题库管理", icon: DocumentTextIcon, requiredPermission: 'study_questions' },
         { to: "/learn/paper", label: "试卷管理", icon: DocumentTextIcon, requiredPermission: 'study_paper' },
+        { to: "/learn/quiz_manage", label: "测试管理", icon: DocumentTextIcon, requiredPermission: 'study_paper' },
       ]
     }
   ];

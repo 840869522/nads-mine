@@ -6,11 +6,15 @@ namespace App\Http\Controllers\ad;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdConfigResource;
 use App\Models\ad\AdConfig;
+use App\Models\ad\SceneUsersModel;
+use App\Rules\NoTeamMemberConflict;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 // 【★★★ 核心修复 ★★★】在行尾添加分号
 use Illuminate\Support\Str;
+use App\Models\ad\TeamUsers;
 
 class AdConfigController extends Controller
 {
@@ -38,7 +42,13 @@ class AdConfigController extends Controller
         $validated = $request->validate([
             'c_drill_name'      => 'required|string|max:255|unique:c_ad_configs,c_drill_name',
             'c_description'     => 'nullable|string',
-            'c_red_team_id'     => 'required|integer|exists:c_teams,c_id',
+            'c_red_team_id'     => [
+                'required',
+                'integer',
+                'exists:c_teams,c_id',
+                // 创建规则实例，并将蓝队的ID作为参数传给它的构造函数。
+                new NoTeamMemberConflict((int)$request->input('c_blue_team_id', 0))
+            ],
             'c_blue_team_id'    => 'required|integer|exists:c_teams,c_id|different:c_red_team_id',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
@@ -51,7 +61,9 @@ class AdConfigController extends Controller
             'c_blue_team_id.different' => '红队和蓝队不能选择同一个队伍。',
             'referees.min' => '请至少指派一名裁判。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
+
         ]);
+
 
         $adConfig = DB::transaction(function () use ($validated) {
             $adConfig = AdConfig::create([
@@ -66,6 +78,20 @@ class AdConfigController extends Controller
                 'c_end_time'          => $validated['c_end_time'] ?? null,
                 'c_status'            => 'pending',
             ]);
+
+            $team_user_mod = new TeamUsers();
+            $team_user_list  = $team_user_mod->get_teams_users($validated['c_red_team_id'],$validated['c_blue_team_id']);
+            $scene_user_mod = new SceneUsersModel();
+            foreach($team_user_list as $k=>$v){
+                $valid_users = $scene_user_mod->get_scene_users_info($validated['c_scene_config_id'],$v);
+                if($valid_users){
+                    $ins_scene_user = $scene_user_mod->create_scene_users_info($validated['c_scene_config_id'],$v);
+                    if(!$ins_scene_user){
+                        throw new Exception("权限插入失败");
+                    }
+                }
+            }
+
 
             $refereesData = collect($validated['referees'])->keyBy('c_user_id')->map(function ($referee) {
                 return ['c_level' => $referee['c_level']];
@@ -96,7 +122,12 @@ class AdConfigController extends Controller
         $validated = $request->validate([
             'c_drill_name'      => ['required', 'string', 'max:255', Rule::unique('c_ad_configs')->ignore($adConfig->c_id, 'c_id')],
             'c_description'     => 'nullable|string',
-            'c_red_team_id'     => 'required|integer|exists:c_teams,c_id',
+            'c_red_team_id'     => [
+                'required',
+                'integer',
+                'exists:c_teams,c_id',
+                new NoTeamMemberConflict((int)$request->input('c_blue_team_id', 0))
+            ],
             'c_blue_team_id'    => 'required|integer|exists:c_teams,c_id|different:c_red_team_id',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',

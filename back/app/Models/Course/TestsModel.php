@@ -115,14 +115,30 @@ class TestsModel extends Model{
      */
     public function del_test_info($c_id="")
     {
+        DB::beginTransaction();
         try{
             $mod = new TestsModel();
             $res = $mod->where("c_id",$c_id)->delete();
             if(!$res){
+                DB::rollback();
                 return false;
             }
+            $papers_rule_mod = new PaperRulesModel();
+            $del_papers_rule = $papers_rule_mod->del_paper_rules_by_test_id($c_id);
+            if(!$del_papers_rule){
+                DB::rollback();
+                return false;
+            }
+            $paper_mod = new PapersModel();
+            $paper_del = $paper_mod->del_paper_by_test_id($c_id);
+            if(!$paper_del){
+                DB::rollback();
+                return false;
+            }
+            DB::commit();
             return true;
         }catch(\Exception $e){
+            DB::rollback();
             DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
             return false;
         }
