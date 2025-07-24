@@ -95,6 +95,33 @@
             }
         }
 
+
+        public function getAllPermssionLable(Request $req) {
+            $reqData = $req->json()->all();
+            try {
+                $page = $reqData["page"];
+                $pagesize = $reqData['pagesize'];
+            }catch (Exception $_) {
+                $page = 1;
+                $pagesize = 10;
+            }
+            $modelRes = PermissionModel::getAllPermissionLabel($page,$pagesize);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
+                return response()->json([
+                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message"=>GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+            return response()->json([
+                "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
+                "data"=>[ 
+                    'data'=>$modelRes['data'],
+                    'count'=>$modelRes['count']
+                    ]
+            ]);
+        }
+
         public function searchPermission(Request $req){
             $reqData =  $req->json()->all();
             try {

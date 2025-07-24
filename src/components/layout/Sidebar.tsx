@@ -131,7 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     }
   ];
 
-  const iconMaap = {
+  const iconMap = {
     "ChartPieIcon": ChartPieIcon,
     "Cog6ToothIcon": Cog6ToothIcon,
     "UserGroupIcon": UserGroupIcon,
@@ -147,7 +147,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     "QuestionMarkCircleIcon": QuestionMarkCircleIcon,
     "FolderOpenIconHero": FolderOpenIconHero,
     "DocumentTextIcon": DocumentTextIcon,
-  }
+    "MenuIcon":MenuIcon
+  };
 
   const handleMenuClick = (label: string) => {
     setOpenMenus(prev => ({ ...prev, [label]: !prev[label] }));
@@ -182,7 +183,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
 
   const renderNavList = (items: NavItemType[], isSubmenu: boolean = false) => {
     return items.map((item) => {
-      const IconComponent = iconMaap[item.icon] || MenuIcon;
+      const IconComponent = iconMap[item.icon] || MenuIcon;
       if (item.children) {
         const isOpen = openMenus[item.label] || false;
         const isParentActive = item.children.some(child => child.to && pathname.startsWith(child.to));
@@ -201,7 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
             <Collapse in={isOpen} timeout="auto" unmountOnExit>
               <List component="div" disablePadding>
                 {renderNavList(item.children, true)}
-              </List>
+              </List> 
             </Collapse>
           </React.Fragment>
         );
