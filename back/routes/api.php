@@ -1,9 +1,9 @@
 <?php
 
 
-use App\Http\Controllers\ad\AdConfigController;
-use App\Http\Controllers\scenario\ScenarioPermissionController;
-use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\ad\AdConfigController;
+    use App\Http\Controllers\scenario\ScenarioPermissionController;
+    use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -49,8 +49,6 @@ use Illuminate\Support\Facades\Route;
         Route::post("support/user/login",[UserController::class,"login"]);
         Route::post("/support/permission/all_menu",[PermissionController::class, "getSystemAllMenu"]);
         Route::post("/support/permission/all_permission",[PermissionController::class, "getSystemAllPermission"]);
-        // Route::post("support/user/update_pwd",[UserController::class,"updateUserPassword"])->middleware("jwtcheck");
-        // Route::post("support/user/up_common",[UserController::class, "updateUserEmail"])->middleware("jwtcheck");
     });
 
     Route::prefix("")->middleware("jwtcheck")->group(function () {
