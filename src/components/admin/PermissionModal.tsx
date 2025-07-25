@@ -373,7 +373,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
             />
             <TextField
               name="api_src"
-              label="api接口地址"
+              label="api接口"
               fullWidth
               variant="outlined"
               value={formData.api_src || ''}
