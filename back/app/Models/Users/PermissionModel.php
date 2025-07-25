@@ -57,12 +57,12 @@ class PermissionModel extends Model
 
     public static function searchPermissionByName(string $name, int $page = 1, int $pagesize = 10): array
     {
-        $sql = "SELECT * FROM `c_permissions` WHERE c_name LIKE ? OR c_id LIKE ?  LIMIT ? OFFSET ?";
-        $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions` WHERE c_name LIKE ?  OR c_id LIKE ?";
+        $sql = "SELECT * FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label  LIMIT ? OFFSET ?";
+        $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label";
         $offset = ($page - 1) * $pagesize;
         try {
-            $user = db::select($sql, ['%' . $name . '%', '%' . $name . '%', $pagesize, $offset]);
-            $count = db::select($sql_count, ['%' . $name . '%', '%' . $name . '%']);
+            $user = db::select($sql, ['%' . $name . '%', '%' . $name . '%', '%' . $name . '%',$pagesize, $offset]);
+            $count = db::select($sql_count, ['%' . $name . '%', '%' . $name . '%','%' . $name . '%']);
             return [
                 "data" => $user,
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -158,7 +158,7 @@ class PermissionModel extends Model
             db::beginTransaction();
             $value = [
                 "c_id" => $data["id"],
-                "c_name"=>$data['name'],
+                "c_des"=>$data['des'],
                 "c_api_src"=>$data['api_src'],
                 "c_pid"=>$data['pid'],
                 "c_src"=>$data['src'],
@@ -190,10 +190,10 @@ class PermissionModel extends Model
 
     public static function updatePermission(string $id, array $data): array
     {
-        $sql = "UPDATE `c_permissions` SET c_pid = ?,c_name= ?,c_label = ? ,c_api_src = ? ,c_src = ? ,c_is_menu = ?,c_status = ?,c_icon = ?  WHERE c_id = ?";
+        $sql = "UPDATE `c_permissions` SET c_pid = ?,c_des= ?,c_label = ? ,c_api_src = ? ,c_src = ? ,c_is_menu = ?,c_status = ?,c_icon = ?  WHERE c_id = ?";
         try {
             db::beginTransaction();
-            $res = db::update($sql, [$data["pid"], $data['name'], $data['label'], $data['api_src'], $data['src'], $data['is_menu'], $data['status'], $data['icon'], $id]);
+            $res = db::update($sql, [$data["pid"], $data['des'], $data['label'], $data['api_src'], $data['src'], $data['is_menu'], $data['status'], $data['icon'], $id]);
             if ($res) {
                 db::commit();
                 return [
