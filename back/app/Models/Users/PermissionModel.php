@@ -57,8 +57,8 @@ class PermissionModel extends Model
 
     public static function searchPermissionByName(string $name, int $page = 1, int $pagesize = 10): array
     {
-        $sql = "SELECT * FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label  LIMIT ? OFFSET ?";
-        $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label";
+        $sql = "SELECT * FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label LIKE ?  LIMIT ? OFFSET ?";
+        $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions` WHERE c_des LIKE ? OR c_id LIKE ? OR c_label LIKE ?";
         $offset = ($page - 1) * $pagesize;
         try {
             $user = db::select($sql, ['%' . $name . '%', '%' . $name . '%', '%' . $name . '%',$pagesize, $offset]);
