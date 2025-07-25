@@ -302,3 +302,5 @@ Route::prefix('ad')->group(function () {
  * 定义安全实验分系统路由
  */
 Route::prefix("ad")->group(function () {});
+
+?>
