@@ -118,7 +118,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       icon: ShieldCheckIcon,
       children: [
         { to: "/ad", label: "攻防演练", icon: ShieldCheckIcon, requiredPermission: 'ad_test' }, // Renamed from "安全演练"
-        { to: "/ad/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'ad' } // Renamed from "安全演练"
+        { to: "/ad/team", label: "队伍管理", icon: ShieldCheckIcon, requiredPermission: 'ad' }, // Renamed from "安全演练"
+        { to: "/ad/referee", label: "裁判管理", icon: ShieldCheckIcon, requiredPermission: 'ad' }
       ]
     },
     {

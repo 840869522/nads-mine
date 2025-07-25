@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, FormEvent } from 'react';
+import React, {useState, useEffect, useCallback, FormEvent, useMemo} from 'react';
 // MUI 组件导入
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -43,7 +43,6 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
 // 假设的自定义钩子，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
-import InstanceDetailsDialog from './instances/InstanceDetailsDialog';
 
 // --- 类型定义 ---
 interface User {
@@ -102,12 +101,33 @@ const AdManagementPage: React.FC = () => {
     const [selectedRedTeamId, setSelectedRedTeamId] = useState<number | ''>('');
     const [selectedBlueTeamId, setSelectedBlueTeamId] = useState<number | ''>('');
     const [teamConflictError, setTeamConflictError] = useState<string | null>(null);
-    // 用于管理实例详情模态框的状态
-    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-    const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
-    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
-
     const API_BASE_URL = '/back/api';
+
+
+    const teamMemberUsernames = useMemo(() => {
+        // 如果没有选择队伍，返回一个空集合
+        if (!selectedRedTeamId && !selectedBlueTeamId) {
+            return new Set<string>();
+        }
+
+        // 找到对应的队伍对象
+        const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
+        const blueTeam = teams.find(t => t.c_id === selectedBlueTeamId);
+
+        const members = new Set<string>();
+
+        // 将红队成员加入集合
+        if (redTeam?.users) {
+            redTeam.users.forEach(user => members.add(user.c_username));
+        }
+
+        // 将蓝队成员加入集合
+        if (blueTeam?.users) {
+            blueTeam.users.forEach(user => members.add(user.c_username));
+        }
+
+        return members;
+    }, [selectedRedTeamId, selectedBlueTeamId, teams]); // 依赖项：当队伍选择变化时重新计算
 
     // --- 数据获取 ---
     const fetchData = useCallback(async () => {
@@ -269,17 +289,6 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
-    // 处理查看实例详情的函数
-    const handleViewInstanceDetails = (adConfig: AdConfig) => {
-        if (adConfig.c_scene_instance_id) {
-            setSelectedInstanceId(adConfig.c_scene_instance_id);
-            // 使用演练名称作为场景名称，如果需要更精确的场景名称，需要 adConfig 中包含
-            setSelectedScenarioName(adConfig.c_drill_name);
-            setIsDetailsModalOpen(true);
-        } else {
-            setStatusMessage({ type: 'error', message: '此演练没有关联的场景实例ID，无法查看详情。' });
-        }
-    };
     // --- 渲染逻辑 (已恢复所有调用) ---
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
@@ -326,20 +335,20 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell align="right">
-                                                    {adConfig.c_status === 'pending' && (<Tooltip title="开始演练"><IconButton color="success" onClick={() => handleAdAction(adConfig.c_id, 'start')}><PlayArrowIcon /></IconButton></Tooltip>)}
+                                                    {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
+                                                        <Tooltip title="开始/重新开始演练">
+                                                            <IconButton
+                                                                color="success"
+                                                                onClick={() => handleAdAction(adConfig.c_id, 'start')}
+                                                            >
+                                                                <PlayArrowIcon />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
                                                     {adConfig.c_status === 'running' && (<Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleAdAction(adConfig.c_id, 'stop')}><StopIcon /></IconButton></Tooltip>)}
-                                                    {/* 将查看详情按钮的功能指向新的处理函数 */}
-                                                    <Tooltip title="查看详情/报告">
-                                                        <IconButton 
-                                                            color="info" 
-                                                            onClick={() => handleViewInstanceDetails(adConfig)} 
-                                                            disabled={!adConfig.c_scene_instance_id} // 只有当存在场景实例ID时才启用
-                                                        >
-                                                            <VisibilityIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status !== 'pending'}><EditIcon /></IconButton></span></Tooltip>
-                                                    <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status !== 'pending'}><DeleteIcon /></IconButton></span></Tooltip>
+                                                    <Tooltip title="查看详情/报告"><IconButton color="info"><VisibilityIcon /></IconButton></Tooltip>
+                                                    <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status == 'running'}><EditIcon /></IconButton></span></Tooltip>
+                                                    <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status == 'running'}><DeleteIcon /></IconButton></span></Tooltip>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -367,16 +376,37 @@ const AdManagementPage: React.FC = () => {
 
                         <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
                             <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判</Typography>
-                            <Autocomplete multiple id="referee-autocomplete" options={users} getOptionLabel={(option) => option.c_username} value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]} isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
-                                          onChange={(_event, newValue) => {
-                                              const newReferees = newValue.map(user => {
-                                                  const existing = selectedReferees.find(r => r.c_user_id === user.c_username);
-                                                  return existing || { c_user_id: user.c_username, c_level: '普通裁判', user: user };
-                                              });
-                                              setSelectedReferees(newReferees);
-                                          }}
-                                          renderInput={(params) => (<TextField {...params} variant="standard" label="选择用户作为裁判" placeholder="添加裁判..." />)}
+
+                            <Autocomplete
+                                multiple
+                                id="referee-autocomplete"
+                                options={users}
+                                getOptionLabel={(option) => option.c_username}
+                                value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]}
+                                isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
+                                onChange={(_event, newValue) => {
+                                    const newReferees = newValue.map(user => {
+                                        const existing = selectedReferees.find(r => r.c_user_id === user.c_username);
+                                        return existing || { c_user_id: user.c_username, c_level: '普通裁判', user: user };
+                                    });
+                                    setSelectedReferees(newReferees);
+                                }}
+
+                                getOptionDisabled={(option) => teamMemberUsernames.has(option.c_username)}
+
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        variant="standard"
+                                        label="选择用户作为裁判"
+                                        placeholder="添加裁判..."
+                                        // (可选) 添加一个辅助提示，告诉用户为什么某些选项被禁用了
+                                        helperText={teamMemberUsernames.size > 0 ? "已经是红/蓝队成员的用户将被禁用" : ""}
+                                    />
+                                )}
                             />
+
+
                             {selectedReferees.length > 0 && (
                                 <Stack spacing={2} sx={{ mt: 3 }}>
                                     {selectedReferees.map((referee) => (
@@ -411,15 +441,6 @@ const AdManagementPage: React.FC = () => {
                     <Button onClick={handleDeleteAdConfig} color="error" disabled={isSubmitting}>{isSubmitting ? <CircularProgress size={24} /> : '确认删除'}</Button>
                 </DialogActions>
             </Dialog>
-            {/* 迁移过来的 InstanceDetailsDialog */}
-            {isDetailsModalOpen && selectedInstanceId && (
-                <InstanceDetailsDialog
-                    open={isDetailsModalOpen}
-                    onClose={() => setIsDetailsModalOpen(false)}
-                    instanceId={selectedInstanceId}
-                    scenarioName={selectedScenarioName}
-                />
-            )}
         </Box>
     );
 };

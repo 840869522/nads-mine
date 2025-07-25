@@ -1,9 +1,9 @@
 <?php
 
 
-use App\Http\Controllers\ad\AdConfigController;
-use App\Http\Controllers\scenario\ScenarioPermissionController;
-use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\ad\AdConfigController;
+    use App\Http\Controllers\scenario\ScenarioPermissionController;
+    use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
     use App\Http\Controllers\Users\PermissionController;
     use App\Http\Controllers\Users\RoleController;
@@ -143,16 +143,9 @@ use Illuminate\Support\Facades\Route;
     });
 
     Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
-        ; // 应用通用认证
-
-    // ★★★ 2. 获取和保存特定场景的权限 ★★★
-    // 此路由组会匹配 /api/scenarios/{id}/permissions
+        ;
     Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
-
-        // 此路由生成 GET /api/scenarios/{scenarioId}/permissions
         Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
-
-        // 此路由生成 POST /api/scenarios/{scenarioId}/permissions
         Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
 
     });
@@ -244,69 +237,36 @@ use Illuminate\Support\Facades\Route;
 
     Route::get('ad/users', [UserController::class, 'getAllUser']);
     Route::prefix('ad/team')->group(function () {
-        // 获取所有队伍列表
-        // GET /api/ad/team
         Route::get('/', [TeamController::class, 'index']);
-
-        // 创建一个新队伍
-        // POST /api/ad/team
         Route::post('/', [TeamController::class, 'store']);
-
-        // 获取单个队伍的详细信息
-        // GET /api/ad/team/{team}
-        // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
         Route::get('/{team}', [TeamController::class, 'show']);
-
-        // 更新一个已存在的队伍
-        // PUT /api/ad/team/{team}
         Route::put('/{team}', [TeamController::class, 'update']);
-
-        // 删除一个队伍
-        // DELETE /api/ad/team/{team}
         Route::delete('/{team}', [TeamController::class, 'destroy']);
     });
     Route::apiResource('ad-configs', AdConfigController::class);
     Route::prefix('ad-configs/{adConfig}')->group(function () {
-        // 启动演练
-        // POST /api/ad-configs/{adConfig}/start
         Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
-
-        // 停止演练
-        // POST /api/ad-configs/{adConfig}/stop
         Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
     });
 
-// --- 3. 演练模块所需的辅助数据路由 ---
-// 这组路由为前端页面提供必要的下拉框数据源等
+    Route::prefix('ad')->group(function () {
 
-Route::prefix('ad')->group(function () {
+        Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
+        Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
 
-    /**
-     * ★ 获取所有用户列表作为裁判候选人 ★
-     *
-     * 这是前端“指派裁判”下拉框的数据源。
-     * 请求: GET /api/ad/users
-     * 控制器: RefereeController@availableUsers
-     */
-    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
+        Route::get('/referees/all', [RefereeController::class, 'index']);
 
-    /**
-     * 获取所有团队列表
-     *
-     * 这是前端“红队/蓝队”下拉框的数据源。
-     * 请求: GET /api/ad/team
-     */
-    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
+        Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
 
-    // 你可能还有其他辅助路由，可以像这样添加
-    // Route::get('some-other-data', [SomeController::class, 'getData']);
-});
+        // 你可能还有其他辅助路由，可以像这样添加
+        // Route::get('some-other-data', [SomeController::class, 'getData']);
+    });
 
 /**
  * 定义安全实验分系统路由
  */
-Route::prefix("ad")->group(function() {
-
-})->middleware("jwtcheck:ad");
-
-?>
+//Route::prefix("ad")->group(function() {
+//
+//})->middleware("jwtcheck:ad");
+//
+//?>
