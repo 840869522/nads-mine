@@ -64,6 +64,8 @@ Route::prefix("support")->group(function () {
         Route::post("/new", [UserController::class, "insertNewUser"]);
         Route::post("/update", [UserController::class, "updateUserInfo"]);
         Route::post("/delete", [UserController::class, "deleteUser"]);
+        Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
+        Route::post("/up_common", [UserController::class, "updateUserEmail"]);
     });
 
     Route::prefix("role")->group(function () {
