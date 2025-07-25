@@ -301,7 +301,7 @@ const PermissionManagementPage: React.FC = () => {
               {[
                 { id: 'c_id', label: '权限id' },
                 { id: 'c_label', label: '名称' },
-                { id: "c_name", label: "描述" },
+                { id: "c_des", label: "描述" },
                 { id: "c_api_src", label: "api接口地址" },
                 { id: "c_src", label: "前端地址" },
                 { id: "c_pid", label: "父项id" },
@@ -336,7 +336,7 @@ const PermissionManagementPage: React.FC = () => {
                   <TableRow key={permission.c_id} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_id}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_label}</TableCell>
-                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_name}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_des}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_api_src}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_src.trim() || ""}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_pid === '0' ? "顶层权限" : permission.c_pid}</TableCell>

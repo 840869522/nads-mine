@@ -72,7 +72,7 @@ const iconMap = {
 
 export interface PermissionFormData {
   id?: string,
-  name: string,
+  des: string,
   label: string,
   pid: string,
   api_src: string,
@@ -86,7 +86,7 @@ export type PermissionDisplayItem = {
   c_id: string,
   c_label: string,
   c_pid: string,
-  c_name: string,
+  c_des: string,
   c_api_src: string,
   c_src: string,
   c_icon: string,
@@ -94,7 +94,7 @@ export type PermissionDisplayItem = {
   c_status: number,
 };
 
-const defaultData: PermissionFormData = { id: '', name: '', label: "", pid: "", api_src: "", src: "", status: 1, is_menu: 0, icon: "MenuIcon" };
+const defaultData: PermissionFormData = { id: '', des: '', label: "", pid: "", api_src: "", src: "", status: 1, is_menu: 0, icon: "MenuIcon" };
 
 interface PermissionFormModalProps {
   open: boolean;
@@ -127,7 +127,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
       if (initialPermission) {
         setFormData({
           id: initialPermission.c_id,
-          name: initialPermission.c_name,
+          des: initialPermission.c_des,
           label: initialPermission.c_label,
           pid: initialPermission.c_pid,
           api_src: initialPermission.c_api_src,
@@ -235,7 +235,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.id.trim()) newErrors.id = '权限id不能为空。';
-    if (!formData.name.trim()) newErrors.name = '权限描述不能为空。';
+    if (!formData.des.trim()) newErrors.des = '权限描述不能为空。';
     if (!formData.label.trim()) newErrors.label = "权限名称不能为空";
     if (!formData.is_menu && !formData.api_src.trim()) { newErrors.api_src = "api接口地址不能为空"; }
     if (formData.is_menu && !formData.src.trim()) newErrors.src = "前端地址不能为空";
@@ -297,16 +297,16 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
               sx={{ mb: 2 }}
             />
             <TextField
-              name="name"
+              name="des"
               label="权限描述"
               fullWidth
               multiline
               rows={3}
               variant="outlined"
-              value={formData.name || ''}
+              value={formData.des || ''}
               onChange={handleChange}
-              error={!!errors.name}
-              helperText={errors.name}
+              error={!!errors.des}
+              helperText={errors.des}
               required
             />
 
