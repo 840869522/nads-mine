@@ -9,8 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use App\Utils\JWTControll;
 use App\Utils\GlobalResponse;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+
+use App\Models\Users\PermissionModel;
+
+
 class Controller extends BaseController
 {
     use AuthorizesRequests, DispatchesJobs, ValidatesRequests;
@@ -32,14 +35,18 @@ class Controller extends BaseController
         $request->merge([
             "token_data"=>$jwtRes["data"]
         ]);
-        // if ($primission){
-        //     if (!in_array($primission, $jwtRes["data"]["permission"])){
-        //         return response()->json([
-        //             'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-        //             "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
-        //         ]);
-        //     }
-        // }
+        $res = PermissionModel::getPermissionByApi($controllerName);
+        if ($res['code'] != GlobalResponse::$DATABASE_SUCCESS_CODE){
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES);
+        }
+        if ($res['data']['needed']){
+            if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                return response()->json([
+                    'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                    "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                ]);
+            }
+        }
     }
 
     /**
