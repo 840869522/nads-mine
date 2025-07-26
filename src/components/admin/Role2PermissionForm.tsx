@@ -151,7 +151,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
         if (perms.length === 0)
             return null;
         return perms.map((perm) => {
-            const isParent = !!perm.children || perm.key === "databoard_view";
+            const isParent = !!perm.children || perm.key === "databoard_view" ;
             const allDescendants = getAllDescendantKeys(perm);
 
             // 检查所有后代是否都被选中
