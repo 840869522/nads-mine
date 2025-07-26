@@ -220,6 +220,7 @@ const PermissionManagementPage: React.FC = () => {
             pauseOnHover: true,
             draggable: true,
           });
+          updateData(true);
         } else
           toast.error(`权限 "${permissionToDelete.c_id}" 删除失败。`, {
             autoClose: 3000,
