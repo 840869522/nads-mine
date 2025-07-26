@@ -280,6 +280,7 @@ class PermissionModel extends Model
                     unset($newMenu['to']);
                 }
                 unset($newMenu['c_id']);
+                unset($newMenu['sort']);
                 $branch[] = $newMenu;
             }
         }
@@ -297,9 +298,9 @@ class PermissionModel extends Model
     {
         try {
             if ($menu) {
-                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to', 'c_icon as icon'])->where('c_is_menu', '=', $menu)->get()->toArray();
+                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to', 'c_icon as icon','sort'])->where('c_is_menu', '=', $menu)->orderBy("sort")->get()->toArray();
             } else {
-                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to'])->get()->toArray();
+                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to','sort'])->orderBy("sort")->get()->toArray();
             }
             $menuData = self::buildTreeData($res, $menu);
             return [
@@ -322,7 +323,7 @@ class PermissionModel extends Model
         $offset = ($page - 1) * $pagesize;
         $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions`";
         try {
-            $res  = db::table("c_permissions")->select(['c_id', 'c_label'])->offset($offset)->limit($pagesize)->get()->toArray();
+            $res  = db::table("c_permissions")->select(['c_id', 'c_label','sort'])->offset($offset)->limit($pagesize)->orderBy('sort')->get()->toArray();
             $count = db::selectOne($sql_count);
             return [
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,

@@ -81,6 +81,7 @@ Route::prefix("support")->group(function () {
 
     Route::prefix('permission')->group(function () {
         Route::post('/all', [PermissionController::class, 'getAllPermission']);
+        Route::post('/all_label', [PermissionController::class, 'getAllPermssionLable']);
         Route::post('/id', [PermissionController::class, 'getPermissionById']);
         Route::post("/search", [PermissionController::class, "searchPermission"]);
         Route::post("/role", [PermissionController::class, "getPermissionsByRoleId"]);
