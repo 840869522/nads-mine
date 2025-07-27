@@ -151,7 +151,7 @@ class CategoryModel
             if (!preg_match('/^\d{2}$/', $id)) {
                 return [
                     'code' => 422,
-                    'message' => 'Invalid category_id format.',
+                    'message' => 'Invalid c_category_id format.',
                 ];
             }
             if (empty($data['c_category_name'])) {
@@ -207,15 +207,7 @@ class CategoryModel
             if (!preg_match('/^\d{2}$/', $id)) {
                 return [
                     'code' => 422,
-                    'message' => 'Invalid category_id format.',
-                ];
-            }
-
-            $hasCourses = DB::table('c_courses')->where('category_id', $id)->exists();
-            if ($hasCourses) {
-                return [
-                    'code' => 422,
-                    'message' => 'Cannot delete category with associated courses.',
+                    'message' => 'Invalid c_category_id format.',
                 ];
             }
 
@@ -244,7 +236,7 @@ class CategoryModel
             ]);
             return [
                 'code' => 500,
-                'message' => $e->getCode() == 23000 ? 'Category is referenced by courses.' : 'Failed to delete category: ' . $e->getMessage(),
+                'message' => 'Failed to delete category: ' . $e->getMessage(),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
