@@ -258,6 +258,8 @@
 
         Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
 
+        Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
+
         // 你可能还有其他辅助路由，可以像这样添加
         // Route::get('some-other-data', [SomeController::class, 'getData']);
     });

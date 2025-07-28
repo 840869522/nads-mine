@@ -43,6 +43,8 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
 // 假设的自定义钩子，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
+import {TopologyData} from "@/types.ts";
+import {useAuth} from "@/hooks/useAuth.ts";
 
 // --- 类型定义 ---
 interface User {
@@ -80,10 +82,21 @@ interface AdConfig {
     blueTeam?: Team;
 }
 
+export interface Ad {
+    id: string; // 文件名将作为ID
+    name: string;
+    description: string;
+    uploadDate: string;
+    nodeCount: number;
+    topology_json: TopologyData;
+}
+
 interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
     // === 状态管理 ===
+    const { user } = useAuth();
+    const [error, setError] = useState<string | null>(null);
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [users, setUsers] = useState<User[]>([]);
@@ -250,18 +263,42 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
-    const handleAdAction = async (adConfigId: string, action: 'start' | 'stop') => {
-        setIsSubmitting(true);
+    // 启动场景
+    const handleAdAction= async (ad: Ad) => {
+        // 1. 从 useAuth Hook 获取用户名
+        const username = user.user.c_username;
+
+        if (!username) {
+            alert('无法获取当前用户名，请确保您已登录。');
+            return;
+        }
+
+        if (!window.confirm(`您确定要启动场景 “${ad.name}” 的演练吗？`)) {
+            return;
+        }
+
         try {
-            const response = await fetch(`${API_BASE_URL}/ad-configs/${adConfigId}/${action}`, { method: 'POST', headers: { 'Accept': 'application/json' } });
+            const response = await fetch(`/back/api/scenarios/${ad.id}/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                // 2. 在请求体中附加上用户名
+                body: JSON.stringify({ username: username }),
+            });
+
             const result = await response.json();
-            if (!response.ok) throw new Error(result.message || '状态变更失败');
-            setStatusMessage({ type: 'success', message: result.message });
-            await fetchData();
-        } catch (err) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
-        } finally {
-            setIsSubmitting(false);
+
+            if (!response.ok) {
+                throw new Error(result.message || '启动失败');
+            }
+
+            alert(result.message);
+
+        } catch (err: any) {
+            setError(err.message || '发生未知网络错误');
+            alert(`启动失败: ${err.message}`);
         }
     };
 
