@@ -58,23 +58,36 @@ class TestUsersModel extends Model{
      * @param $c_correct
      * @return bool
      */
-    public function update_test_users_info($info="",$c_answers="",$c_score="",$c_correct=1)
+    public function update_test_users_info($info="",$c_answers="",$c_score="",$c_correct=1,$answers_res_data=[])
     {
-        $info->c_answers = $c_answers;
-        $info->c_score = $c_score;
-        $info->c_correct = $c_correct;
-        $info->c_end = date("Y-m-d H:i:s");;
-        $info->c_submit = date("Y-m-d H:i:s");
+        DB::beginTransaction();
         try{
+            $info->c_answers = $c_answers;
+            $info->c_score = $c_score;
+            $info->c_correct = $c_correct;
+            $info->c_end = date("Y-m-d H:i:s");;
+            $info->c_submit = date("Y-m-d H:i:s");
             $res = $info->save();
             if(!$res){
+                DB::rollback();
                 return false;
             }
+            if(!empty($answers_res_data)){
+                $answre_mod = new AnswersModel();
+                $answre_res = $answre_mod->create_answers_info($answers_res_data);
+                if(!$answre_res){
+                    DB::rollback();
+                    return false;
+                }
+            }
+            DB::commit();
             return true;
         }catch(\Exception $e){
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+            DB::rollback();
+            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_users_log');
             return false;
         }
+
     }
 
 
@@ -121,12 +134,51 @@ class TestUsersModel extends Model{
      * @param $test_id
      * @return mixed
      */
-    public function get_test_user_by_test_id($test_id="")
+    public function get_test_user_by_test_id($test_id="",$correct=0)
     {
         $mod = new TestUsersModel();
-        $res = $mod->where('c_test_id',$test_id)->get()->toArray();
+        if($correct==0){
+            $res = $mod->where('c_test_id',$test_id)->get()->toArray();
+        }else{
+            $res = $mod->where('c_test_id',$test_id)->where('c_correct',$correct)->get()->toArray();
+        }
+
         return $res;
     }
+
+
+    /**
+     * Notes:主观题修改后提交
+     * User: zhangnan
+     * DateTime: 2025/7/28 10:07
+     * @param $c_test_id
+     * @param $user_name
+     * @param $scor1e
+     * @return bool
+     */
+    public function update_test_user_by_zg($c_test_id="",$user_name="",$score=0)
+    {
+        $info = $this->check_test_users_by_user_name($c_test_id,$user_name);
+        $z_score = $info->c_score+$score;
+        $info->c_score = $z_score;
+        $info->c_correct = 2;
+        try{
+            $res = $info->save();
+            if(!$res){
+                return false;
+            }
+            return true;
+        }catch(\Exception $e){
+            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_users_log');
+            return false;
+        }
+    }
+
+
+
+
+
+
 
 }
 ?>

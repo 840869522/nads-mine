@@ -67,11 +67,11 @@
             try {
                 $page = $reqData["page"];
                 $pagesize = $reqData["pagesize"];
-                $name = $reqData['name'];
+                $name = $reqData['name'] ?? "";
             } catch (Exception $_) {
                 $page = 1;
                 $pagesize = 10;
-                $name = $reqData['name'] ?? "";
+                $name = $reqData['name'] ?? " ";
             }
             $modelRes = RoleModel::searchRoleByName($name, $page, $pagesize);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, ChangeEvent, useActionState } from 'react';
+import React, { useEffect, useState, ChangeEvent } from 'react';
 import {
   Box,
   Chip,
@@ -19,12 +19,11 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { User, UserRole } from '@/types';
-import { BACK_IP_PORT, USER_ROLES_CONFIG } from '@/constants';
 import { apiClientWithToken } from '@/utils/axios';
-import { SingletonRouter } from 'next/router';
 
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
+  pwdedit? : boolean,
   username?: string;
   email?: string;
   status?: 'active' | 'disabled';

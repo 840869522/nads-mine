@@ -1,10 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import {
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
     Checkbox,
     FormControlLabel,
     List,
@@ -13,30 +10,30 @@ import {
     Box,
     Paper,
 } from '@mui/material';
-import { APP_PERMISSIONS, AppPermission } from '@/constants';
+import { AppPermission } from '@/types';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 interface PermissionFormProps {
-    permissions: AppPermission[];
-    onPermissionChange: (permissions: string[]) => void;
-    initialSelected?: string[];
+    permissions: AppPermission[],
+    onPermissionChange: (permissions: string[]) => void,
+    initialSelected?: string[],
+    children: ReactNode
 }
 
 const PermissionForm: React.FC<PermissionFormProps> = ({
-    permissions = APP_PERMISSIONS,
     onPermissionChange,
     initialSelected = [],
     children
 }) => {
     const [selected, setSelected] = useState<string[]>(initialSelected);
-
-
+    const { appAllPermission } = userPermissionContext();
 
     // 处理权限变更（勾选/取消勾选）
     const handlePermissionChange = (permissionKey: string, isChecked: boolean) => {
         var newSelected = [...selected];
 
         // 1. 查找目标权限及其父级
-        const returnData = findPermissionByKey(permissions, permissionKey);
+        const returnData = findPermissionByKey(appAllPermission, permissionKey);
         if (!returnData) return;
         const permission = returnData.node;
         const directParent = returnData.parent;
@@ -48,6 +45,33 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                 // 勾选父级时添加所有子权限
                 const allDescendants = getAllDescendantKeys(permission);
                 newSelected.push(...allDescendants);
+                let currentParent = directParent;
+                while (currentParent) {
+                    const allChildrenSelected = currentParent?.children?.every(child => {
+                        const descendants = getAllDescendantKeys(child);
+                        return descendants.every(desc => newSelected.includes(desc));
+                    });
+                    const someChildSelected = currentParent?.children?.some(child => {
+                        const descendants = getAllDescendantKeys(child);
+                        return descendants.every(desc => newSelected.includes(desc));
+                    })
+
+                    const parentKey = currentParent.key;
+
+                    if (allChildrenSelected || someChildSelected) {
+                        if (!newSelected.includes(parentKey)) {
+                            newSelected.push(parentKey);
+                        }
+                    } else {
+                        const idx = newSelected.indexOf(parentKey);
+                        if (idx > -1) {
+                            newSelected.splice(idx, 1);
+                        }
+                    }
+                    // 继续向上查找父级
+                    const parentResult = findPermissionByKey(appAllPermission, currentParent.key);
+                    currentParent = parentResult?.parent || null;
+                }
             } else {
                 // 取消父级时移除所有子权限
                 const allDescendants = getAllDescendantKeys(permission);
@@ -61,7 +85,6 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
 
             newSelected.length = 0;
             newSelected.push(...updated);
-
             // 3. 向上更新所有父级权限的选中状态
             let currentParent = directParent;
             while (currentParent) {
@@ -69,10 +92,14 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                     const descendants = getAllDescendantKeys(child);
                     return descendants.every(desc => newSelected.includes(desc));
                 });
+                const someChildSelected = currentParent?.children?.some(child => {
+                    const descendants = getAllDescendantKeys(child);
+                    return descendants.every(desc => newSelected.includes(desc));
+                })
 
                 const parentKey = currentParent.key;
 
-                if (allChildrenSelected) {
+                if (allChildrenSelected || someChildSelected) {
                     if (!newSelected.includes(parentKey)) {
                         newSelected.push(parentKey);
                     }
@@ -82,13 +109,11 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                         newSelected.splice(idx, 1);
                     }
                 }
-
                 // 继续向上查找父级
-                const parentResult = findPermissionByKey(permissions, currentParent.key);
+                const parentResult = findPermissionByKey(appAllPermission, currentParent.key);
                 currentParent = parentResult?.parent || null;
             }
         }
-
         const uniqueSelected = [...new Set(newSelected)];
         setSelected(uniqueSelected);
         onPermissionChange(uniqueSelected);
@@ -126,14 +151,20 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
         if (perms.length === 0)
             return null;
         return perms.map((perm) => {
-            const isParent = !!perm.children || perm.key === "databoard_view";
-            const parentKey = perm.key;
-            const allChildrenSelected =
-                isParent &&
-                perm.children?.every(c => selected.includes(c.key)) || false;
-            const indeterminate =
-                isParent &&
-                perm.children?.some(c => selected.includes(c.key)) &&
+            const isParent = !!perm.children || perm.key === "databoard_view" ;
+            const allDescendants = getAllDescendantKeys(perm);
+
+            // 检查所有后代是否都被选中
+            const allChildrenSelected = isParent &&
+                allDescendants.every(key => selected.includes(key));
+
+            // 检查是否有任意后代被选中
+            const someChildSelected = isParent &&
+                allDescendants.some(key => selected.includes(key));
+
+            // 基于完整后代状态计算半选状态
+            const indeterminate = isParent &&
+                someChildSelected &&
                 !allChildrenSelected;
 
             return (
@@ -145,9 +176,9 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                                 <FormControlLabel
                                     control={
                                         <Checkbox
-                                            checked={selected.includes(parentKey) || allChildrenSelected}
+                                            checked={selected.includes(perm.key) || allChildrenSelected}
                                             indeterminate={indeterminate}
-                                            onChange={(e) => handlePermissionChange(parentKey, e.target.checked)}
+                                            onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
                                             size="small"
                                         />
                                     }
@@ -168,8 +199,8 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                             <FormControlLabel
                                 control={
                                     <Checkbox
-                                        checked={selected.includes(parentKey)}
-                                        onChange={(e) => handlePermissionChange(parentKey, e.target.checked)}
+                                        checked={selected.includes(perm.key)}
+                                        onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
                                         size="small"
                                     />
                                 }
@@ -194,9 +225,9 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                 权限分配
                 {children}
             </Typography>
-            <Paper variant="outlined" sx={{ maxHeight: 400, overflowY: 'auto', p: 0}}>
+            <Paper variant="outlined" sx={{ maxHeight: 400, overflowY: 'auto', p: 0 }}>
                 <List disablePadding >
-                    {renderPermissions(permissions)}
+                    {renderPermissions(appAllPermission)}
                 </List>
             </Paper>
         </Box>
