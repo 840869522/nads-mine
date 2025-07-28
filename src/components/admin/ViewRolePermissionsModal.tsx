@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -12,11 +12,11 @@ import {
   ListItemIcon,
   Divider,
   Box,
-  useScrollTrigger,
   Stack,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { APP_PERMISSIONS, APP_PERMISSIONS_CATEGORY, AppPermission } from '@/constants';
+import { AppPermission } from '@/types';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 interface ViewRolePermissionsModalProps {
   open: boolean;
@@ -31,34 +31,66 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
   roleName,
   permissionKeys,
 }) => {
-  const collectPermissions = (permissions: AppPermission[], keys: string[], path: string[] = []) => {
+  useEffect(()=>{
+    console.log(permissionKeys);
+  },[]);
+  const {appAllPermission} = userPermissionContext();
+  const collectPermissions = (permissions: AppPermission[], keys: string[]) => {
     return permissions.reduce((acc, perm) => {
-      const currentPath = [...path, perm.label]
-
+      var newPerm: AppPermission = { ...perm, children: null };
       // 直接匹配当前权限
       if (keys.includes(perm.key)) {
-        acc.push({ ...perm, path: currentPath })
-      }
-
-      // 递归处理子权限
-      if (perm.children?.length) {
-        const childPerms = collectPermissions(perm.children, keys, currentPath)
-        acc.push(...childPerms)
+        // 递归处理子权限
+        if (perm.children?.length) {
+          const childPerms = collectPermissions(perm.children, keys)
+          newPerm.children = childPerms;
+        } else {
+          newPerm.children = [];
+        }
+        acc.push(newPerm);
       }
 
       return acc
-    }, [] as (AppPermission & { path: string[] })[])
+    }, [] as AppPermission[])
   }
 
 
-  const collectedPerms = collectPermissions(APP_PERMISSIONS, permissionKeys);
+  const groupedPermissions = collectPermissions(appAllPermission, permissionKeys);
 
-  const groupedPermissions = collectedPerms.reduce((acc, perm) => {
-    const mainCategory = perm.path[0] // 取第一个路径作为主分组
-    if (!acc[mainCategory]) acc[mainCategory] = []
-    acc[mainCategory].push(perm)
-    return acc
-  }, {} as Record<string, (AppPermission & { path: string[] })[]>)
+  // const groupedPermissions = collectedPerms.reduce((acc, perm) => {
+  //   const mainCategory = perm.path[0] // 取第一个路径作为主分组
+  //   if (!acc[mainCategory]) acc[mainCategory] = []
+  //   acc[mainCategory].push(perm)
+  //   return acc
+  // }, {} as Record<string, (AppPermission & { path: string[] })[]>)
+
+  const renderList = (permission: AppPermission, leavel: number = 1) => {
+    if (permission.children && permission.children.length > 0) {
+      return (
+        <Stack>
+          <ListItem key={permission.key} sx={{ py: 0.8, pl: leavel * 3 }}>
+            <ListItemIcon sx={{ minWidth: 32 }}>
+              <CheckCircleOutlineIcon fontSize="small" color="success" />
+            </ListItemIcon>
+            <ListItemText primary={permission.label} primaryTypographyProps={{ variant: 'body2' }} />
+          </ListItem>
+          {
+            permission.children.map(item => renderList(item, leavel + 1))
+          }
+        </Stack>
+      )
+    } else {
+      return (
+        <ListItem key={permission.key} sx={{ py: 0.8, pl: leavel * 3 }}>
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <CheckCircleOutlineIcon fontSize="small" color="success" />
+          </ListItemIcon>
+          <ListItemText primary={permission.label} primaryTypographyProps={{ variant: 'body2' }} />
+        </ListItem>
+      )
+    }
+  }
+
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper">
@@ -71,27 +103,17 @@ const ViewRolePermissionsModal: React.FC<ViewRolePermissionsModalProps> = ({
             此角色当前未分配任何权限。
           </Typography>
         ) : (
-          Object.entries(groupedPermissions).map(([category, permissionsInCategory], index) => (
-            <Box key={category} sx={{ mb: index < Object.keys(groupedPermissions).length - 1 ? 2 : 0 }}>
+          Object.entries(groupedPermissions).map(([category, permission], index) => (
+            <Box key={permission.key} sx={{ mb: index < Object.keys(groupedPermissions).length - 1 ? 2 : 0 }}>
               <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', mt: index > 0 ? 2 : 0 }}>
-                {APP_PERMISSIONS_CATEGORY[category] || category}
+                {permission.label}
               </Typography>
               <List dense disablePadding>
-                {permissionsInCategory.map((permission) => (
-
-                  <Stack>
-                    {
-                      permission.path.length > 1 || permission.key === "databoard_view" ? (
-                        <ListItem key={permission.key} sx={{ py: 0.8, pl: permission.path.length * 3 }}>
-                          <ListItemIcon sx={{ minWidth: 32 }}>
-                            <CheckCircleOutlineIcon fontSize="small" color="success" />
-                          </ListItemIcon>
-                          <ListItemText primary={permission.label} primaryTypographyProps={{ variant: 'body2' }} /> 
-                        </ListItem>
-                      ) : null
-                    }
-                  </Stack>
-                ))}
+                {
+                  permission.key === "databoard_view" ?
+                    renderList(permission)
+                    : permission.children?.map(item => renderList(item))
+                }
               </List>
               {index < Object.keys(groupedPermissions).length - 1 && <Divider sx={{ my: 1.5 }} />}
             </Box>

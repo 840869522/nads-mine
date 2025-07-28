@@ -196,13 +196,6 @@
             }
         }
 
-        // {
-        //     "data": {
-        //         "oldPassword": "test1234",
-        //         "newPassword": "test12345"
-        //     },
-        //     "id": "test_12"
-        // }
         public function updateUserPassword(Request $req){
             $reqData = $req->json()->all();
             $token_data  = $req->input("token_data");

@@ -94,7 +94,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 setFormData({
                     id: initialQuestion?.c_id,
                     question: initialQuestion?.c_question,
-                    answer: initialQuestion?.c_answer,
+                    answer: initialQuestion?.c_type === 4 ? "*" :initialQuestion?.c_answer || "",
                     type: parseInt(initialQuestion?.c_type || '1'),
                     tags: String2Array(initialQuestion?.c_tag),
                     courseName: initialQuestion?.c_course_id,

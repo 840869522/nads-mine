@@ -181,26 +181,31 @@ class TestController extends Controller
                                 $verify_answer=1;
                             }
                         }else{
-                            $answer = explode(';',$v['option']);
+                            $answer = explode(';',$c_answer);
+                            Log::info($answer);
+                            Log::info($c_answer);
+                            Log::info($v['option']);
                             $dx_zong_cnt = count($answer);
                             if(in_array($v['option'],$answer)){
                                 $dx_cnt++;
                             }
-
                         }
-
                     }
                     if($type==2){
                         if($dx_zong_cnt==$dx_cnt){
                             $verify_answer=1;
                         }
                     }
+                    Log::info([
+                        $verify_answer,
+                        $dx_zong_cnt,
+                        $dx_cnt]
+                    );
                     if($verify_answer==0){
                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"答案不在选项中");
                     }
                 }
             }
-
             $mod = new QuestionsModel();
             $info = $mod->get_question_info_by_c_id($c_id);
             $res = $mod->update_question_info($info,$c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);

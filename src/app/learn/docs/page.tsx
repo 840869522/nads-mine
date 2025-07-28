@@ -56,6 +56,7 @@ const TypeMap = {
 const QuestionPage: React.FC = () => {
 
   const [questions, setQuestions] = useState<QuestionDisplayItem[]>([]);
+  const [firstFlag, setFirstFlag] = useState<boolean>(true);
   const [questionsCount, setQuestionsCount] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
@@ -76,10 +77,11 @@ const QuestionPage: React.FC = () => {
 
   useEffect(() => {
     getQuestionData(1, rowsPerPage);
+    setFirstFlag(false);
   }, [])
 
   useEffect(() => {
-    if (page === 1 && rowsPerPage == 10)
+    if (firstFlag) 
       return
     else {
       if (searchTerm.data.trim() && searchTerm.flag)
@@ -253,7 +255,7 @@ const QuestionPage: React.FC = () => {
 
   // 解析选项
   const parseOptions = (question: any) => {
-    const options = [];
+    const options = question.split("\\");
     for (let i = 1; i <= 4; i++) {
       if (question[`选项${i}`]) {
         options.push({
@@ -296,19 +298,18 @@ const QuestionPage: React.FC = () => {
             return acc;
           }, {} as Record<string, any>);
         });
-        console.log(questionsData)
 
         // 验证并转换数据
-        // const processedData = questionsData.map(question => ({
-        //   id: question['试题ID'],
-        //   question: question['题干'],
-        //   courseName: question['课程ID'],
-        //   answer: question['答案'],
-        //   type: parseQuestionType(question['题目类型']),
-        //   tags: parseTags(question['标签']),
-        //   options: parseOptions(question)
-        // }));
-        // console.log(processedData);
+        const processedData = questionsData.map(question => ({
+          id: question['试题ID'],
+          question: question['题干'],
+          courseName: question['课程ID'],
+          answer: question['答案'],
+          type: parseQuestionType(question['题目类型']),
+          tags: parseTags(question['标签']),
+          options: parseOptions(question['选项'])
+        }));
+        console.log(processedData);
 
         // 调用API批量导入
         // apiClientWithToken.post("/back/api/study/test/question_batch_add", {
@@ -356,8 +357,8 @@ const QuestionPage: React.FC = () => {
 
   const downloadImportTemplate = () => {
     const worksheet = XLSX.utils.aoa_to_sheet([
-      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', '选项A', '选项B', '选项C', '选项D'],
-      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', '选项A', '2', '3', '4', '5']
+      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', '选项'],
+      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', '多个选项使用\\分割，如选项1\\选项2']
     ]);
 
     const workbook = XLSX.utils.book_new();

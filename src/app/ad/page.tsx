@@ -43,6 +43,7 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
 // 假设的自定义钩子，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
+import InstanceDetailsDialog from './instances/InstanceDetailsDialog';
 
 // --- 类型定义 ---
 interface User {
@@ -101,6 +102,11 @@ const AdManagementPage: React.FC = () => {
     const [selectedRedTeamId, setSelectedRedTeamId] = useState<number | ''>('');
     const [selectedBlueTeamId, setSelectedBlueTeamId] = useState<number | ''>('');
     const [teamConflictError, setTeamConflictError] = useState<string | null>(null);
+    // 用于管理实例详情模态框的状态
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+
     const API_BASE_URL = '/back/api';
 
     // --- 数据获取 ---
@@ -263,6 +269,17 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
+    // 处理查看实例详情的函数
+    const handleViewInstanceDetails = (adConfig: AdConfig) => {
+        if (adConfig.c_scene_instance_id) {
+            setSelectedInstanceId(adConfig.c_scene_instance_id);
+            // 使用演练名称作为场景名称，如果需要更精确的场景名称，需要 adConfig 中包含
+            setSelectedScenarioName(adConfig.c_drill_name);
+            setIsDetailsModalOpen(true);
+        } else {
+            setStatusMessage({ type: 'error', message: '此演练没有关联的场景实例ID，无法查看详情。' });
+        }
+    };
     // --- 渲染逻辑 (已恢复所有调用) ---
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
@@ -311,7 +328,16 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell align="right">
                                                     {adConfig.c_status === 'pending' && (<Tooltip title="开始演练"><IconButton color="success" onClick={() => handleAdAction(adConfig.c_id, 'start')}><PlayArrowIcon /></IconButton></Tooltip>)}
                                                     {adConfig.c_status === 'running' && (<Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleAdAction(adConfig.c_id, 'stop')}><StopIcon /></IconButton></Tooltip>)}
-                                                    <Tooltip title="查看详情/报告"><IconButton color="info"><VisibilityIcon /></IconButton></Tooltip>
+                                                    {/* 将查看详情按钮的功能指向新的处理函数 */}
+                                                    <Tooltip title="查看详情/报告">
+                                                        <IconButton 
+                                                            color="info" 
+                                                            onClick={() => handleViewInstanceDetails(adConfig)} 
+                                                            disabled={!adConfig.c_scene_instance_id} // 只有当存在场景实例ID时才启用
+                                                        >
+                                                            <VisibilityIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
                                                     <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status !== 'pending'}><EditIcon /></IconButton></span></Tooltip>
                                                     <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status !== 'pending'}><DeleteIcon /></IconButton></span></Tooltip>
                                                 </TableCell>
@@ -385,6 +411,15 @@ const AdManagementPage: React.FC = () => {
                     <Button onClick={handleDeleteAdConfig} color="error" disabled={isSubmitting}>{isSubmitting ? <CircularProgress size={24} /> : '确认删除'}</Button>
                 </DialogActions>
             </Dialog>
+            {/* 迁移过来的 InstanceDetailsDialog */}
+            {isDetailsModalOpen && selectedInstanceId && (
+                <InstanceDetailsDialog
+                    open={isDetailsModalOpen}
+                    onClose={() => setIsDetailsModalOpen(false)}
+                    instanceId={selectedInstanceId}
+                    scenarioName={selectedScenarioName}
+                />
+            )}
         </Box>
     );
 };

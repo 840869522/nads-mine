@@ -5,11 +5,49 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use App\Utils\JWTControll;
+use App\Utils\GlobalResponse;
+use Illuminate\Support\Facades\Route;
+
+use App\Models\Users\PermissionModel;
+
 
 class Controller extends BaseController
 {
     use AuthorizesRequests, DispatchesJobs, ValidatesRequests;
+
+    public function __construct(Request $request){
+        $action = Route::current()->getActionName();
+        list($controller,$method) = explode("@",$action);
+        $controllerName = class_basename($controller);
+        $controllerName = $controllerName.".".$method;  
+
+        $auth = $request->header("Authorization",null);
+        $jwtRes =  JWTControll::decodeJWT($auth);
+        if ($jwtRes["err"] != null) {
+            return response()->json([
+                "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+            ]);
+        }
+        $request->merge([
+            "token_data"=>$jwtRes["data"]
+        ]);
+        $res = PermissionModel::getPermissionByApi($controllerName);
+        if ($res['code'] != GlobalResponse::$DATABASE_SUCCESS_CODE){
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES);
+        }
+        if ($res['data']['needed']){
+            if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                return response()->json([
+                    'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                    "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                ]);
+            }
+        }
+    }
 
     /**
      * 统一返回值

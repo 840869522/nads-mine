@@ -19,7 +19,7 @@ import {
   IconButton,
   Chip,
   Tooltip,
-  Alert as MuiAlert,
+  Stack,
 } from '@mui/material';
 import CircularProgress from '@mui/material/CircularProgress';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -32,7 +32,8 @@ import PermissionFormModal, { PermissionFormData } from '@/components/admin/Perm
 import { toast } from 'react-toastify';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
-type PermissionDisplayItem = { c_id: string; c_name: string; };
+import { PermissionDisplayItem } from '@/components/admin/PermissionModal';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 
 
@@ -41,6 +42,8 @@ type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_nam
 
 
 const PermissionManagementPage: React.FC = () => {
+  const { updateData } = userPermissionContext();
+  const [firstFlag, setFirstFlag] = useState<boolean>(true);
   const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
   const [page, setPage] = useState(1);
@@ -50,7 +53,7 @@ const PermissionManagementPage: React.FC = () => {
 
   const [count, setDataCount] = useState<number>(0);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
-  const [editingPermission, setEditingPermission] = useState<PermissionFormData | null>(null);
+  const [editingPermission, setEditingPermission] = useState<PermissionDisplayItem | null>(null);
 
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -128,30 +131,31 @@ const PermissionManagementPage: React.FC = () => {
   };
 
   const handleEditPermissionClick = (permision: PermissionDisplayItem) => {
-    apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: permision.c_id })).then((res) => {
-      if (res.data.code === 200) {
-        setEditingPermission({ id: res.data.data.c_id, name: res.data.data.c_name });
-        setIsPermissionModalOpen(true);
-      } else {
-        toast.error(res.data.message, {
-          autoClose: 3000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-      }
-    })
+    // apiClientWithToken.post(`/back/api/support/permission/id`, JSON.stringify({ id: permision.c_id })).then((res) => {
+    //   if (res.data.code === 200) {
+    //     setEditingPermission(res.data.data);
+    //     setIsPermissionModalOpen(true);
+    //   } else {
+    //     toast.error(res.data.message, {
+    //       autoClose: 3000,
+    //       closeOnClick: true,
+    //       pauseOnHover: true,
+    //       draggable: true,
+    //     });
+    //   }
+    // })
+    setEditingPermission(permision);
+    setIsPermissionModalOpen(true);
   };
 
-  const handleSaveUser = async (formData: PermissionFormData, isNew: boolean) => {
+  const handleSavePermission = async (formData: PermissionFormData, isNew: boolean) => {
     var permissionData = {
-      id: formData.id,
-      name: formData.name
+      ...formData
     }
     if (isNew) {
       apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...permissionData } })).then((res) => {
         if (res.data.code === 200) {
-          setPage(1);;
+          setPage(1);
           getPermissionData(1, rowsPerPage);
           toast.success(`权限 "${permissionData.id}" 添加成功。`, {
             autoClose: 3000,
@@ -159,6 +163,7 @@ const PermissionManagementPage: React.FC = () => {
             pauseOnHover: true,
             draggable: true,
           });
+          updateData(true);
         } else {
           toast.error(`权限 "${permissionData.id}" 添加失败。`, {
             autoClose: 3000,
@@ -169,22 +174,24 @@ const PermissionManagementPage: React.FC = () => {
         }
       });
     } else if (editingPermission) {
+      delete permissionData.id;
       const res = await apiClientWithToken.post(`/back/api/support/permission/update`, JSON.stringify({
-        id: editingPermission.id,
+        id: editingPermission.c_id,
         data: {
           ...permissionData
         }
       }));
       if (res.data.code === 200) {
         setPermissions(prev => prev.map(u =>
-          u.c_id === editingPermission.id ? { ...u, c_name: formData.name!, } : u
+          u.c_id === editingPermission.c_id ? { ...u,...permissionData } : u
         ));
-        toast.success(`权限 "${formData.id}" 更新成功。`, {
+        toast.success(`权限 "${editingPermission.c_id}" 更新成功。`, {
           autoClose: 3000,
           closeOnClick: true,
           pauseOnHover: true,
           draggable: true,
         });
+        updateData(true,{...permissionData,id:editingPermission.c_id});
       } else {
         toast.error(`权限 "${formData.id}" 更新失败。`, {
           autoClose: 3000,
@@ -202,7 +209,7 @@ const PermissionManagementPage: React.FC = () => {
     setIsConfirmDeleteOpen(true);
   };
 
-  const confirmDeleteUser = () => {
+  const confirmDeletePermission = () => {
     if (permissionToDelete) {
       apiClientWithToken.post(`/back/api/support/permission/delete`, JSON.stringify({ id: permissionToDelete.c_id })).then((res) => {
         if (res.data.code === 200) {
@@ -213,6 +220,7 @@ const PermissionManagementPage: React.FC = () => {
             pauseOnHover: true,
             draggable: true,
           });
+          updateData(true);
         } else
           toast.error(`权限 "${permissionToDelete.c_id}" 删除失败。`, {
             autoClose: 3000,
@@ -297,7 +305,12 @@ const PermissionManagementPage: React.FC = () => {
             <TableRow>
               {[
                 { id: 'c_id', label: '权限id' },
-                { id: 'c_name', label: '描述' },
+                { id: 'c_label', label: '名称' },
+                { id: "c_des", label: "描述" },
+                { id: "c_api_src", label: "api接口" },
+                { id: "c_src", label: "前端地址" },
+                { id: "c_pid", label: "父项id" },
+                { id: "c_status", label: "状态" },
               ].map((headCell) => (
                 <TableCell
                   key={headCell.id}
@@ -327,7 +340,20 @@ const PermissionManagementPage: React.FC = () => {
                 filteredAndSortedPermissions.map((permission) => (
                   <TableRow key={permission.c_id} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_id}</TableCell>
-                    <TableCell>{permission.c_name}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_label}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_des}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_api_src}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_src.trim() || ""}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_pid === '0' ? "顶层权限" : permission.c_pid}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                        {
+                          permission.c_status ?
+                            <Chip key={`c_status-${permission.c_status}`} label="激活" color='success' size="small" />
+                            : <Chip key={`c_status-${permission.c_status}`} label="未激活" color='error' size="small" />
+                        }
+                      </Box>
+                    </TableCell>
                     <TableCell align="center">
                       <Tooltip title="编辑权限">
                         <IconButton size="small" onClick={() => handleEditPermissionClick(permission)} color="primary">
@@ -368,7 +394,7 @@ const PermissionManagementPage: React.FC = () => {
       <PermissionFormModal
         open={isPermissionModalOpen}
         onClose={() => setIsPermissionModalOpen(false)}
-        onSave={handleSaveUser}
+        onSave={handleSavePermission}
         initialPermission={editingPermission}
       />
 
@@ -378,7 +404,7 @@ const PermissionManagementPage: React.FC = () => {
           onClose={() => setIsConfirmDeleteOpen(false)}
           title="确认删除权限"
           message={`您确定要删除权限 "${permissionToDelete?.c_id}" 吗？此操作无法撤销。`}
-          onConfirm={confirmDeleteUser}
+          onConfirm={confirmDeletePermission}
         />
       )}
 

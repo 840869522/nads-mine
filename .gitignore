@@ -38,3 +38,4 @@ src/.venv
 images
 
 mima.md
+*.sql
