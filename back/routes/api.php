@@ -144,7 +144,7 @@ Route::prefix("ad")->middleware("jwtcheck:ad")->group(function() {
 /**
  * 定义人员测试分系统路由
  */
-Route::prefix("study")->middleware("jwtcheck:study")->group(function () {
+Route::prefix("study")->group(function () {
     Route::prefix('courses')->group(function(){
         Route::get('/',[CourseController::class,'index']);
         Route::get('/{id}',[CourseController::class,'show']);

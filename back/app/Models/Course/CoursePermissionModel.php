@@ -4,6 +4,8 @@ namespace App\Models\Course;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class CoursePermissionModel
 {
@@ -139,8 +141,6 @@ class CoursePermissionModel
                     return [
                         'c_course_id' => $courseId,
                         'c_username' => $userId,
-                        'created_at' => now(),
-                        'updated_at' => now(),
                     ];
                 }, $userIds);
 
@@ -204,7 +204,7 @@ class CoursePermissionModel
 
             DB::beginTransaction();
             $result = DB::insert(
-                'INSERT INTO ' . self::COURSES_USERS_TABLE . ' (c_username, c_course_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                'INSERT INTO ' . self::COURSES_USERS_TABLE . ' (c_username, c_course_id) VALUES (?, ?, NOW(), NOW())',
                 [$userId, $courseId]
             );
 
