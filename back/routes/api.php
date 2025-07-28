@@ -1,26 +1,26 @@
 <?php
 
 
-use App\Http\Controllers\ad\AdConfigController;
-use App\Http\Controllers\scenario\ScenarioPermissionController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Users\UserController;
-use App\Http\Controllers\Users\PermissionController;
-use App\Http\Controllers\Users\RoleController;
-use App\Http\Controllers\scenario\ScenarioController;
-use App\Http\Controllers\scenario\DrillController;
-use App\Http\Controllers\scenario\InstanceController;
-use App\Http\Controllers\scenario\SwitchController;
-use App\Http\Controllers\Docker\ImagesController;
-use App\Http\Controllers\Docker\InstancesController;
-use App\Http\Controllers\Docker\ContainersController;
-use App\Http\Controllers\ad\RefereeController;
-use App\Http\Controllers\ad\TeamController;
-use App\Http\Controllers\Course\CourseController;
-use App\Http\Controllers\Course\CategoryController;
-use App\Http\Controllers\Course\ResourceController;
-use App\Http\Controllers\Vm\VmController;
-use App\Http\Controllers\Course\TestController;
+    use App\Http\Controllers\ad\AdConfigController;
+    use App\Http\Controllers\scenario\ScenarioPermissionController;
+    use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\Users\UserController;
+    use App\Http\Controllers\Users\PermissionController;
+    use App\Http\Controllers\Users\RoleController;
+    use App\Http\Controllers\scenario\ScenarioController;
+    use App\Http\Controllers\scenario\DrillController;
+    use App\Http\Controllers\scenario\InstanceController;
+    use App\Http\Controllers\scenario\SwitchController;
+    use App\Http\Controllers\Docker\ImagesController;
+    use App\Http\Controllers\Docker\InstancesController;
+    use App\Http\Controllers\Docker\ContainersController;
+    use App\Http\Controllers\ad\RefereeController;
+    use App\Http\Controllers\ad\TeamController;
+    use App\Http\Controllers\Course\CourseController;
+    use App\Http\Controllers\Course\CategoryController;
+    use App\Http\Controllers\Course\ResourceController;
+    use App\Http\Controllers\Vm\VmController;
+    use App\Http\Controllers\Course\TestController;
 
 /*
     |--------------------------------------------------------------------------
@@ -143,18 +143,13 @@ Route::prefix('scenarios')->group(function () {
     Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
 });
 
-Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers']); // 应用通用认证
+    Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
+        ;
+    Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
+        Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
+        Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
 
-// ★★★ 2. 获取和保存特定场景的权限 ★★★
-// 此路由组会匹配 /api/scenarios/{id}/permissions
-Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
-
-    // 此路由生成 GET /api/scenarios/{scenarioId}/permissions
-    Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
-
-    // 此路由生成 POST /api/scenarios/{scenarioId}/permissions
-    Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
-});
+    });
 
 Route::prefix('scenariosinstances')->group(function () {
 
@@ -220,90 +215,67 @@ Route::prefix('vms')->group(function () {
     Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
 });
 
-Route::prefix('study')->group(function () {
-    Route::prefix('test')->group(function () {
-        Route::post('/question_add', [TestController::class, 'question_add']);
-        Route::post('/question_up', [TestController::class, 'question_up']);
-        Route::post('/question_del', [TestController::class, 'question_del']);
-        Route::post('/question_list', [TestController::class, 'question_list']);
-        Route::post('/question_info', [TestController::class, 'question_info']);
-        Route::post('/test_add', [TestController::class, 'test_add']);
-        Route::post('/test_update', [TestController::class, 'test_update']);
-        Route::post('/test_del', [TestController::class, 'test_del']);
-        Route::post('/test_list', [TestController::class, 'test_list']);
-        Route::post('/test_info', [TestController::class, 'test_info']);
-        Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
-        Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
-        Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
-        Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
-        Route::post('/get_papers', [TestController::class, 'get_papers']);
-        Route::post('/send_papers', [TestController::class, 'send_papers']);
+    Route::prefix('study')->group(function () {
+        Route::prefix('test')->group(function(){
+            Route::post('/question_add', [TestController::class, 'question_add']);
+            Route::post('/question_up', [TestController::class, 'question_up']);
+            Route::post('/question_del', [TestController::class, 'question_del']);
+            Route::post('/question_list', [TestController::class, 'question_list']);
+            Route::post('/question_info', [TestController::class, 'question_info']);
+            Route::post('/test_add', [TestController::class, 'test_add']);
+            Route::post('/test_update', [TestController::class, 'test_update']);
+            Route::post('/test_del', [TestController::class, 'test_del']);
+            Route::post('/test_list', [TestController::class, 'test_list']);
+            Route::post('/test_info', [TestController::class, 'test_info']);
+            Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
+            Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
+            Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+            Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
+            Route::post('/get_papers', [TestController::class, 'get_papers']);
+            Route::post('/send_papers', [TestController::class, 'send_papers']);
+            Route::post('/submit_papers', [TestController::class, 'submit_papers']);
+            Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
+            Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
+            Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
+            Route::post('/query_results', [TestController::class, 'query_results']);
+        });
     });
-});
 
-Route::get('ad/users', [UserController::class, 'getAllUser']);
-Route::prefix('ad/team')->group(function () {
-    // 获取所有队伍列表
-    // GET /api/ad/team
-    Route::get('/', [TeamController::class, 'index']);
 
-    // 创建一个新队伍
-    // POST /api/ad/team
-    Route::post('/', [TeamController::class, 'store']);
+    Route::get('ad/users', [UserController::class, 'getAllUser']);
+    Route::prefix('ad/team')->group(function () {
+        Route::get('/', [TeamController::class, 'index']);
+        Route::post('/', [TeamController::class, 'store']);
+        Route::get('/{team}', [TeamController::class, 'show']);
+        Route::put('/{team}', [TeamController::class, 'update']);
+        Route::delete('/{team}', [TeamController::class, 'destroy']);
+    });
+    Route::apiResource('ad-configs', AdConfigController::class);
+    Route::prefix('ad-configs/{adConfig}')->group(function () {
+        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+    });
 
-    // 获取单个队伍的详细信息
-    // GET /api/ad/team/{team}
-    // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
-    Route::get('/{team}', [TeamController::class, 'show']);
+    Route::prefix('ad')->group(function () {
 
-    // 更新一个已存在的队伍
-    // PUT /api/ad/team/{team}
-    Route::put('/{team}', [TeamController::class, 'update']);
+        Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
+        Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
 
-    // 删除一个队伍
-    // DELETE /api/ad/team/{team}
-    Route::delete('/{team}', [TeamController::class, 'destroy']);
-});
-Route::apiResource('ad-configs', AdConfigController::class);
-Route::prefix('ad-configs/{adConfig}')->group(function () {
-    // 启动演练
-    // POST /api/ad-configs/{adConfig}/start
-    Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+        Route::get('/referees/all', [RefereeController::class, 'index']);
 
-    // 停止演练
-    // POST /api/ad-configs/{adConfig}/stop
-    Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
-});
+        Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
 
-// --- 3. 演练模块所需的辅助数据路由 ---
-// 这组路由为前端页面提供必要的下拉框数据源等
+        Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
 
-Route::prefix('ad')->group(function () {
-
-    /**
-     * ★ 获取所有用户列表作为裁判候选人 ★
-     *
-     * 这是前端“指派裁判”下拉框的数据源。
-     * 请求: GET /api/ad/users
-     * 控制器: RefereeController@availableUsers
-     */
-    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
-
-    /**
-     * 获取所有团队列表
-     *
-     * 这是前端“红队/蓝队”下拉框的数据源。
-     * 请求: GET /api/ad/team
-     */
-    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
-
-    // 你可能还有其他辅助路由，可以像这样添加
-    // Route::get('some-other-data', [SomeController::class, 'getData']);
-});
+        // 你可能还有其他辅助路由，可以像这样添加
+        // Route::get('some-other-data', [SomeController::class, 'getData']);
+    });
 
 /**
  * 定义安全实验分系统路由
  */
-Route::prefix("ad")->group(function () {});
-
-?>
+//Route::prefix("ad")->group(function() {
+//
+//})->middleware("jwtcheck:ad");
+//
+//?>

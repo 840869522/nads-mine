@@ -184,5 +184,39 @@ class PaperRulesModel extends Model{
     }
 
 
+    /**
+     * Notes:检测该测验是否有主观题
+     * User: zhangnan
+     * DateTime: 2025/7/25 18:49
+     * @param $test_id
+     * @return bool
+     */
+    public function verify_is_zg_question($test_id="")
+    {
+        $mod = new PaperRulesModel();
+        $cnt = $mod->where('c_test_id',$test_id)->where('c_type',4)->count();
+        if($cnt==0){
+            return false;
+        }
+        return true;
+    }
+
+
+    /**
+     * Notes:获取测试主观题规则
+     * User: zhangnan
+     * DateTime: 2025/7/25 19:27
+     * @param $test_id
+     * @return mixed
+     */
+    public function get_is_zg_question($test_id="")
+    {
+        $mod = new PaperRulesModel();
+        $info = $mod->where('c_test_id',$test_id)->where('c_type',4)->first();
+        return $info;
+    }
+
+
+
 }
 ?>

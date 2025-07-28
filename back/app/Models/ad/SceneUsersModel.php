@@ -48,5 +48,56 @@ class SceneUsersModel extends Model
     }
 
 
+    public static function revokePermissions(int $sceneId, array $usernames)
+    {
+        if (empty($usernames)) {
+            return 0;
+        }
+
+        // 使用 whereIn 来批量删除
+        return static::where('c_scene_configs_id', $sceneId)
+            ->whereIn('c_username', $usernames)
+            ->delete();
+    }
+
+    /**
+     * 根据场景ID，移除该场景下的所有用户权限
+     *
+     * @param int $sceneId
+     * @return int The number of records deleted.
+     */
+    public static function revokeAllPermissionsForScene(int $sceneId)
+    {
+        return static::where('c_scene_configs_id', $sceneId)->delete();
+    }
+
+    // 为了让 create 方法工作，需要定义 fillable
+    protected $fillable = ['c_scene_configs_id', 'c_username'];
+
+    // 我们也把另外两个方法改成静态的，并优化一下
+    public static function userHasPermission(int $sceneId, string $username)
+    {
+        return static::where('c_scene_configs_id', $sceneId)
+            ->where('c_username', $username)
+            ->exists();
+    }
+
+    public static function grantPermission(int $sceneId, string $username)
+    {
+        try {
+            // 使用 firstOrCreate 避免重复创建和捕获异常
+            static::firstOrCreate([
+                'c_scene_configs_id' => $sceneId,
+                'c_username'         => $username,
+            ]);
+            return true;
+        } catch (\Exception $e) {
+            // 在真实应用中，这里应该记录日志
+            // Log::error("Failed to grant permission for user {$username} in scene {$sceneId}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+
 
 }
