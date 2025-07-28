@@ -125,5 +125,6 @@ class PapersModel extends Model{
         }
         return $res;
     }
+
 }
 ?>

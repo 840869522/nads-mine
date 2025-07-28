@@ -239,6 +239,11 @@ use Illuminate\Support\Facades\Route;
             Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
             Route::post('/get_papers', [TestController::class, 'get_papers']);
             Route::post('/send_papers', [TestController::class, 'send_papers']);
+            Route::post('/submit_papers', [TestController::class, 'submit_papers']);
+            Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
+            Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
+            Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
+            Route::post('/query_results', [TestController::class, 'query_results']);
         });
     });
 

@@ -3,6 +3,7 @@
 
 namespace App\Http\Controllers\Course;
 
+use App\Models\Course\AnswersModel;
 use App\Models\Course\PaperRulesModel;
 use App\Models\Course\PapersModel;
 use App\Models\Course\QuestionsModel;
@@ -913,14 +914,14 @@ class TestController extends Controller
             $answer_data = [];
             foreach($test_creation as $k=>$v){
                 for($j=0;$j<$v['count'];$j++){
-                    if(isset($question_data[$k])){
+                    if(!isset($question_data[$k])){
                         $question_data[$k] = array(
                             'type'=>$k,
                             'score'=>$v['score'],
                             'data'=>[],
                         );
                     }
-                    if(isset($answer_data[$k])){
+                    if(!isset($answer_data[$k])){
                         $answer_data[$k] = array(
                             'type'=>$k,
                             'data'=>[],
@@ -928,22 +929,24 @@ class TestController extends Controller
                     }
                     $extract_questions_res = $this->extract_questions($single_choice[$k],$selected_data[$k]);
                     $selected_data[$k][]=$extract_questions_res['c_id'];
-                    $question_data[$k]['data'] = array(
+                    $question_data[$k]['data'][] = array(
                         'question_id'=>$extract_questions_res['c_id'],
                         'question'=>$extract_questions_res['c_question'],
                     );
                     if($k==4){
-                        $answer_data[$k]['data'] = array(
+                        $answer_data[$k]['data'][] = array(
                             'question_id'=>$extract_questions_res['c_id'],
                             'answer'=>"*",
                         );
                     }else{
-                        $answer_data[$k]['data'] = array(
+                        $answer_data[$k]['data'][] = array(
                             'question_id'=>$extract_questions_res['c_id'],
                             'answer'=>$extract_questions_res['c_answer']
                         );
                     }
+
                 }
+
             }
             $res[] = array(
                 'question'=>array_values($question_data),
@@ -1146,7 +1149,7 @@ class TestController extends Controller
                 'test_id.required'=>"测试不能为空",
                 'test_id.string'=>"测试id类型错误",
                 'test_id.exists'=>"测试id不存在",
-                'username.exists'=>"用户不能为空",
+                'username.required'=>"用户不能为空",
                 'username.string'=>"用户类型不正确",
                 'username.exists'=>"用户不存在",
             );
@@ -1164,7 +1167,7 @@ class TestController extends Controller
             $test_user_mod = new TestUsersModel();
             $paper_mod =  new PapersModel();
             $check_test_users = $test_user_mod->check_test_users_by_user_name($test_id,$c_username);
-            if(!$check_test_users){
+            if($check_test_users){
                 $paper_id = $check_test_users->c_paper_id;
                 $paper_info = $paper_mod->get_paper_info_by_id($paper_id);
                 if(!$paper_info){
@@ -1221,6 +1224,7 @@ class TestController extends Controller
         foreach($test_users_list as $k=>$v){
             $test_user_papers_dic[] = $v['c_paper_id'];
         }
+
         $result = array_diff($test_user_papers_dic, $papers_dic);
         if(!empty($result)){
             $randomKey = array_rand($result);  // 随机获取一个键
@@ -1234,12 +1238,350 @@ class TestController extends Controller
     }
 
 
+    /**
+     * Notes:交卷评分
+     * User: zhangnan
+     * DateTime: 2025/7/25 10:48
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function submit_papers(Request $request)
+    {
+        try {
+            $test_users_id     = trim($request->input('test_users_id'));
+//            $papers_id     = trim($request->input('papers_id'));
+            $c_username     = trim($request->input('username'));
+            $answers     = $request->input('answers');
+            $validated_data = array(
+                'test_users_id' => 'required|string|exists:c_test_users,c_id',
+                'username' => 'required|string|exists:c_users,c_username',
+                'answers' => 'required|array',
+                'answers.*.type' => 'required|integer|in:1,2,3,4',
+                'answers.*.data' => 'required|array',
+                'answers.*.data.*.question_id' => 'required|string',
+                'answers.*.data.*.answer' => 'required|string',
+            );
+            $validated_msg = array(
+                'test_users_id.required'=>"测试id不能为空",
+                'test_users_id.string'=>"测试id类型错误",
+                'test_users_id.exists'=>"测试id不存在",
+                'username.required'=>"用户不能为空",
+                'username.string'=>"用户类型不正确",
+                'username.exists'=>"用户不存在",
+                'answers.required'=>"答案数据组不能为空",
+                'answers.array'=>"答案数据组格式不正确",
+                'answers.*.type.required'=>"答案数据组中题目类型不能为空",
+                'answers.*.type.integer'=>"答案数据组中题目类型格式不正确",
+                'answers.*.type.in'=>"答案数据组中题目类型不存在",
+                'answers.*.data.required'=>"答案数据组中答案数据不能为空",
+                'answers.*.data.array'=>"答案数据组中答案数据格式不正确",
+                'answers.*.data.*.question_id.required'=>"答案数据组中答案数据题目id不能为空",
+                'answers.*.data.*.question_id.string'=>"答案数据组中答案数据题目id格式不正确",
+                'answers.*.data.*.answer.required'=>"答案数据组中答案数据中答案不能为空",
+                'answers.*.data.*.answer.string'=>"答案数据组中答案数据中答案不正确",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $test_user_mod = new TestUsersModel();
+            $test_user_info = $test_user_mod->get_test_users_info_by_id($test_users_id);
+            if($c_username!=$test_user_info->c_username){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"领用人不符");
+            }
+            $test_id = $test_user_info->c_test_id;
+            $paper_id = $test_user_info->c_paper_id;
+
+            $paper_mod = new PapersModel();
+            $paper_info = $paper_mod->get_paper_info_by_id($paper_id);
+            if(!$paper_info){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"试卷不存在！");
+            }
+
+            $sj_questions = json_decode($paper_info->c_questions,true);
+            $sj_answers = json_decode($paper_info->c_answers,true);
+
+            $yz_answers = [];
+            $correct_answer = [];
+            foreach($sj_answers as $k=>$v){
+                foreach($v['data'] as $k1=>$v1){
+                    $yz_answers[$v['type']][] = $v1['question_id'];
+                    $correct_answer[$v['type']][$v1['question_id']] = $v1['answer'];
+                }
+            }
+            $score_data = [];
+            foreach($sj_questions as $k=>$v){
+                $score_data[$v['type']] = $v['score'];
+            }
+            $zg_type = 2;
+            if(isset($score_data[4])){
+                $zg_type = 1;
+            }
+            $zong_score = 0;
+            $answers_res_data = [];
+            foreach($answers as $k=>$v){
+                foreach($v['data'] as $k1=>$v1){
+                    if(!isset($v1['question_id'],$yz_answers[$v['type']])){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"题目不在试卷中！");
+                    }
+                    if($v['type']==1 || $v['type']==3){
+                        if($correct_answer[$v['type']][$v1['question_id']]==$v1['answer']){
+                            $zong_score+=$score_data[$v['type']];
+                        }
+                    }else if($v['type']==2){
+                        $zq_answer_list = explode(';',$correct_answer[$v['type']][$v1['question_id']]);
+                        $dx_answer = explode(';',$v1['answer']);
+                        $yz = array_diff($dx_answer, $zq_answer_list);
+                        if(empty($yz)){
+                            $zong_score+=$score_data[$v['type']];
+                        }
+                    }else if($v['type']==4){
+                        $answers_res_data[] = array(
+                            'test_id'=>$test_id,
+                            'question_id'=>$v1['question_id'],
+                            'username'=>$c_username,
+                            'answer'=>$v1['answer'],
+                        );
+                    }
+                }
+            }
+
+            $res = $test_user_mod->update_test_users_info($test_user_info,$answers,$zong_score,$zg_type,$answers_res_data);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"交卷失败！");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
 
 
+    /**
+     * Notes:获取主观题作答名单
+     * User: zhangnan
+     * DateTime: 2025/7/25 18:46
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function get_answers_name_list(Request $request)
+    {
+        try {
+            $test_id     = trim($request->input('test_id'));
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试id不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+
+            $paper_rules_mod = new PaperRulesModel();
+            $verify_question = $paper_rules_mod->verify_is_zg_question($test_id);
+            if(!$verify_question){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试无主观题");
+            }
+            $test_users_mod = new TestUsersModel();
+            $test_user_list = $test_users_mod->get_test_user_by_test_id($test_id,1);
+            $data =[];
+            foreach($test_user_list as $k=>$v){
+                $data[] = array(
+                    'username'=>$v['c_username'],
+                    'paper_id'=>$v['c_paper_id'],
+                );
+            }
+
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$data);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+    /**
+     * Notes:获取考生主观题作答
+     * User: zhangnan
+     * DateTime: 2025/7/25 19:16
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function get_answers_name_info(Request $request)
+    {
+        try {
+            $test_id = trim($request->input('test_id'));
+            $c_username     = trim($request->input('username'));
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试id不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+                'username.required'=>"考生不能为空",
+                'username.string'=>"考生类型不正确",
+                'username.exists'=>"考生不存在",
+            );
+            $paper_rules = new PaperRulesModel();
+            $paper_rules_zg = $paper_rules->get_is_zg_question($test_id);
+            if(empty($paper_rules_zg)){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未查询到主观题组卷规则！");
+            }
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $answers_mod = new AnswersModel();
+            $answres_list = $answers_mod->get_answers_list_by_name($test_id,$c_username);
+            $question_mod = new QuestionsModel();
+            $question_dic = $question_mod->get_question_dic();
+            $data = [];
+            foreach($answres_list as $k=>$v){
+                $data[] = array(
+                    'id'=>$v['c_id'],
+                    'question_id'=>$v['c_question_id'],
+                    'question'=>$question_dic[4][$v['c_question_id']]['c_question'],
+                    'highest_score'=>$paper_rules_zg['c_score'],
+                    'answre'=>$v['c_answer'],
+                    'c_update_at'=>$v['c_update_at']
+                );
+            }
+
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$data);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+    /**
+     * Notes:主观题批卷
+     * User: zhangnan
+     * DateTime: 2025/7/25 19:18
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function batch_answers_name(Request $request)
+    {
+        try {
+            $test_id = trim($request->input('test_id'));
+            $c_username     = trim($request->input('username'));
+            $teacher_name     = trim($request->input('teacher_name'));
+            $batch_data     = $request->input('batch_data');
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+                'username' => 'required|string|exists:c_users,c_username',
+                'teacher_name' => 'required|string|exists:c_users,c_username',
+                'batch_data' => 'required|array',
+                'batch_data.*.question_id' => 'required|string',
+                'batch_data.*.score' => 'required|int',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试id不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+                'username.required'=>"考生不能为空",
+                'username.string'=>"考生类型不正确",
+                'username.exists'=>"考生不存在",
+                'teacher_name.required'=>"批改教师不能为空",
+                'teacher_name.string'=>"批改教师格式不正确",
+                'teacher_name.exists'=>"批改教师不存在",
+                'batch_data.required'=>"判卷数据不能为空",
+                'batch_data.array'=>"判卷数据格式不正确",
+                'batch_data.*.question_id.required'=>"判卷数据组中问题id不能为空",
+                'batch_data.*.question_id.string'=>"判卷数据组中问题id格式不正确",
+                'batch_data.*.score.required'=>"判卷数据组中分数不能为空",
+                'batch_data.*.score.int'=>"判卷数据组中分数格式不正确",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $answers_mod = new AnswersModel();
+            $answres_list = $answers_mod->get_answers_list_by_name($test_id,$c_username);
+            $paper_rules = new PaperRulesModel();
+            $paper_rules_zg = $paper_rules->get_is_zg_question($test_id);
+            $zd_score = $paper_rules_zg->c_score;
+            if(empty($paper_rules_zg)){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未查询到主观题组卷规则！");
+            }
+            $question_mod = new QuestionsModel();
+            $question_dic = $question_mod->get_question_dic();
+            $question_ids = [];
+            $data = [];
+            foreach($answres_list as $k=>$v){
+                $question_ids[] = $v['c_question_id'];
+                $data[] = array(
+                    'id'=>$v['c_id'],
+                    'question_id'=>$v['c_question_id'],
+                    'question'=>$question_dic[4][$v['c_question_id']]['c_question'],
+                    'answre'=>$v['c_answer'],
+                    'c_update_at'=>$v['c_update_at']
+                );
+            }
+            $zong_score=0;
+            $mod = new AnswersModel();
+            $answer_data = [];
+            foreach($batch_data as $k=>$v){
+                if(!in_array($v['question_id'],$question_ids)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该考生不存在该试题！");
+                }
+                if($v['score']>$zd_score){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"批改分数大于题目最大分数！");
+                }
+                $zong_score+=$v['score'];
+                $answer_data[$v['question_id']] =$v['score'];
+            }
+            $res = $mod->batch_answers($data,$answer_data,$test_id,$c_username,$teacher_name,$zong_score);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"批改失败！");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
 
 
-
-
-
+    /**
+     * Notes:查询成绩
+     * User: zhangnan
+     * DateTime: 2025/7/28 14:16
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function query_results(Request $request)
+    {
+        try {
+            $test_id = trim($request->input('test_id'));
+            $c_username     = trim($request->input('username'));
+            $validated_data = array(
+                'test_id' => 'required|string|exists:c_tests,c_id',
+                'username' => 'required|string|exists:c_users,c_username',
+            );
+            $validated_msg = array(
+                'test_id.required'=>"测试id不能为空",
+                'test_id.string'=>"测试id类型错误",
+                'test_id.exists'=>"测试id不存在",
+                'username.required'=>"考生不能为空",
+                'username.string'=>"考生类型不正确",
+                'username.exists'=>"考生不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $test_user_mod = new TestUsersModel();
+            $check_test_users = $test_user_mod->check_test_users_by_user_name($test_id,$c_username);
+            if(!$check_test_users){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未查询到答卷信息！");
+            }
+            if($check_test_users->c_correct==0){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"考生未交卷！");
+            }else if($check_test_users->c_correct==1){
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该试卷批改中！");
+            }else{
+                $res = array(
+                    'paper_id'=>$check_test_users->c_paper_id,
+                    'submit'=>$check_test_users->c_submit,
+                    'score'=>$check_test_users->c_score,
+                );
+                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
+            }
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
 
 }
