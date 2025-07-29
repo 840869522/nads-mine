@@ -54,7 +54,7 @@ const CourseLearningPage: React.FC = () => {
                 return;
             }
             try {
-                const response = await apiClientWithToken.get(`${BACK_IP_PORT}/api/support/user/id`, {
+                const response = await apiClientWithToken.get(`/back/api/support/user/id`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const userData = response.data;
@@ -92,7 +92,7 @@ const CourseLearningPage: React.FC = () => {
                 }
 
                 const params = { page: currentPage, pageSize: itemsPerPage };
-                const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+                const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
                     headers: { Authorization: `Bearer ${token}` },
                     params,
                 });
@@ -102,7 +102,7 @@ const CourseLearningPage: React.FC = () => {
                         (coursesData.data.courses || []).map(async (course: any) => {
                             let resources: CourseCaseResource[] = [];
                             try {
-                                const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
                                     headers: { Authorization: `Bearer ${token}` },
                                     params: { page: 1, pageSize: 10 },
                                 });
@@ -112,7 +112,7 @@ const CourseLearningPage: React.FC = () => {
                                         c_resource_id: res.c_resource_id,
                                         c_resource_name: res.c_resource_name,
                                         c_type: getFileType(res.c_type),
-                                        c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                                        c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                                         c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                                     }));
                                 }
