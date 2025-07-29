@@ -54,10 +54,10 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                     }
                 };
 
-                console.log('Sending GET request to:', `${BACK_IP_PORT}/api/study/permissions/usernames`);
+                console.log('Sending GET request to:', `/back/api/study/permissions/usernames`);
                 const [usersRes, permissionsRes] = await Promise.all([
-                    fetch(`${BACK_IP_PORT}/api/study/permissions/usernames`, requestOptions),
-                    fetch(`${BACK_IP_PORT}/api/study/permissions/courses/${course.c_course_id}/users`, requestOptions)
+                    fetch(`/back/api/study/permissions/usernames`, requestOptions),
+                    fetch(`/back/api/study/permissions/courses/${course.c_course_id}/users`, requestOptions)
                 ]);
 
                 console.log('usersRes status:', usersRes.status);
@@ -121,7 +121,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
         setError(null);
         try {
             const grantedUserIds = Object.keys(permissions).filter(userId => permissions[userId]);
-            const response = await fetch(`${BACK_IP_PORT}/api/study/permissions/courses/${course.c_course_id}/users`, {
+            const response = await fetch(`/back/api/study/permissions/courses/${course.c_course_id}/users`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
