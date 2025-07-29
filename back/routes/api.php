@@ -1,6 +1,5 @@
 <?php
 
-
     use App\Http\Controllers\ad\AdConfigController;
     use App\Http\Controllers\scenario\ScenarioPermissionController;
     use Illuminate\Support\Facades\Route;
@@ -21,7 +20,9 @@
     use App\Http\Controllers\Course\ResourceController;
     use App\Http\Controllers\Vm\VmController;
     use App\Http\Controllers\Course\TestController;
-
+    use App\Http\Controllers\Experiment\ExperimentController;
+    use App\Http\Controllers\Experiment\ExperimentResourceController;
+    use App\Http\Controllers\Course\CoursePermissionController;
 /*
     |--------------------------------------------------------------------------
     | API Routes
@@ -91,34 +92,57 @@ Route::prefix("support")->group(function () {
         Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
         Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
     });
+
 });
 
 /**
  * 定义人员测试分系统路由
  */
 Route::prefix("study")->group(function () {
-    Route::prefix('courses')->middleware('jwtcheck')->group(function () {
-        Route::get('/', [CourseController::class, 'index'])->name('courses.index');
-        Route::get('/{id}', [CourseController::class, 'show'])->name('courses.show');
-        Route::post('/', [CourseController::class, 'store'])->name('courses.store');
-        Route::put('/{id}', [CourseController::class, 'update'])->name('courses.update');
-        Route::delete('/{id}', [CourseController::class, 'destroy'])->name('courses.destroy');
-        Route::post('/{courseId}/users', [CourseController::class, 'addUser'])->name('courses.addUser');
+    Route::prefix('courses')->group(function(){
+        Route::get('/',[CourseController::class,'index']);
+        Route::get('/{id}',[CourseController::class,'show']);
+        Route::post('/',[CourseController::class,'store']);
+        Route::put('/{id}',[CourseController::class,'update']);
+        Route::delete('/{id}',[CourseController::class,'destroy']);
     });
-
-    Route::prefix('categories')->middleware('jwtcheck:study')->group(function () {
-        Route::get('/', [CategoryController::class, 'index'])->name('categories.index');
-        Route::post('/', [CategoryController::class, 'store'])->name('categories.store');
-        Route::put('/{id}', [CategoryController::class, 'update'])->name('categories.update');
-        Route::delete('/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+    Route::prefix('permissions')->group(function(){
+        Route::get('/usernames', [CoursePermissionController::class, 'getAllUsernames']);
+        Route::get('/courses/{courseId}/users', [CoursePermissionController::class, 'getUsers']);
+        Route::post('/courses/{courseId}/users', [CoursePermissionController::class, 'syncUsers']);
+        Route::post('/courses/{courseId}/add-user', [CoursePermissionController::class, 'addUserToCourse']);
+    });
+    Route::prefix('categories')->group(function(){
+        Route::get('/', [CategoryController::class, 'index']);
+        Route::post('/', [CategoryController::class, 'store']);
+        Route::put('/{id}', [CategoryController::class, 'update']);
+        Route::delete('/{id}', [CategoryController::class, 'destroy']);
     });
 
     Route::prefix('courses/{courseId}/resources')->group(function () {
-        Route::get('/', [ResourceController::class, 'index'])->name('resources.index');
-        Route::post('/', [ResourceController::class, 'store'])->name('resources.store');
-        Route::post('/upload', [ResourceController::class, 'upload'])->name('resources.upload');
-        Route::delete('/{id}', [ResourceController::class, 'destroy'])->name('resources.destroy');
+        Route::get('/', [ResourceController::class, 'index']);
+        Route::post('/', [ResourceController::class, 'store']);
+        Route::post('/upload', [ResourceController::class, 'upload']);
+        Route::delete('/{id}', [ResourceController::class, 'destroy']);
     });
+
+    Route::prefix('courses/{courseId}/experiments')->group(function () {
+        Route::get('/', [ExperimentController::class, 'index']);
+        Route::post('/', [ExperimentController::class, 'store']);
+        Route::put('/{experimentId}', [ExperimentController::class, 'update']);
+        Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
+        Route::prefix('{experimentId}/resources')->group(function () {
+            Route::get('/', [ExperimentResourceController::class, 'index']);
+            Route::post('/', [ExperimentResourceController::class, 'store']);
+            Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+            Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
+        });
+    });
+    // 新增路由：获取资源文件
+    Route::get('/resources/{c_resource_id}', [ResourceController::class, 'download']);
+    // 新增实验资源下载路由
+    Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
+    Route::get('/users', [CourseController::class, 'getAllUsers']);
 });
 
 /**
@@ -143,13 +167,13 @@ Route::prefix('scenarios')->group(function () {
     Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
 });
 
-    Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
-        ;
-    Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
-        Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
-        Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
+Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
+;
+Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
+    Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
+    Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
 
-    });
+});
 
 Route::prefix('scenariosinstances')->group(function () {
 
@@ -215,61 +239,61 @@ Route::prefix('vms')->group(function () {
     Route::get('/{vm_id}/events', [$c, 'listVmEvents']);
 });
 
-    Route::prefix('study')->group(function () {
-        Route::prefix('test')->group(function(){
-            Route::post('/question_add', [TestController::class, 'question_add']);
-            Route::post('/question_up', [TestController::class, 'question_up']);
-            Route::post('/question_del', [TestController::class, 'question_del']);
-            Route::post('/question_list', [TestController::class, 'question_list']);
-            Route::post('/question_info', [TestController::class, 'question_info']);
-            Route::post('/test_add', [TestController::class, 'test_add']);
-            Route::post('/test_update', [TestController::class, 'test_update']);
-            Route::post('/test_del', [TestController::class, 'test_del']);
-            Route::post('/test_list', [TestController::class, 'test_list']);
-            Route::post('/test_info', [TestController::class, 'test_info']);
-            Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
-            Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
-            Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
-            Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
-            Route::post('/get_papers', [TestController::class, 'get_papers']);
-            Route::post('/send_papers', [TestController::class, 'send_papers']);
-            Route::post('/submit_papers', [TestController::class, 'submit_papers']);
-            Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
-            Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
-            Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
-            Route::post('/query_results', [TestController::class, 'query_results']);
-        });
+Route::prefix('study')->group(function () {
+    Route::prefix('test')->group(function(){
+        Route::post('/question_add', [TestController::class, 'question_add']);
+        Route::post('/question_up', [TestController::class, 'question_up']);
+        Route::post('/question_del', [TestController::class, 'question_del']);
+        Route::post('/question_list', [TestController::class, 'question_list']);
+        Route::post('/question_info', [TestController::class, 'question_info']);
+        Route::post('/test_add', [TestController::class, 'test_add']);
+        Route::post('/test_update', [TestController::class, 'test_update']);
+        Route::post('/test_del', [TestController::class, 'test_del']);
+        Route::post('/test_list', [TestController::class, 'test_list']);
+        Route::post('/test_info', [TestController::class, 'test_info']);
+        Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
+        Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
+        Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+        Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
+        Route::post('/get_papers', [TestController::class, 'get_papers']);
+        Route::post('/send_papers', [TestController::class, 'send_papers']);
+        Route::post('/submit_papers', [TestController::class, 'submit_papers']);
+        Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
+        Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
+        Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
+        Route::post('/query_results', [TestController::class, 'query_results']);
     });
+});
 
 
-    Route::get('ad/users', [UserController::class, 'getAllUser']);
-    Route::prefix('ad/team')->group(function () {
-        Route::get('/', [TeamController::class, 'index']);
-        Route::post('/', [TeamController::class, 'store']);
-        Route::get('/{team}', [TeamController::class, 'show']);
-        Route::put('/{team}', [TeamController::class, 'update']);
-        Route::delete('/{team}', [TeamController::class, 'destroy']);
-    });
-    Route::apiResource('ad-configs', AdConfigController::class);
-    Route::prefix('ad-configs/{adConfig}')->group(function () {
-        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
-        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
-    });
+Route::get('ad/users', [UserController::class, 'getAllUser']);
+Route::prefix('ad/team')->group(function () {
+    Route::get('/', [TeamController::class, 'index']);
+    Route::post('/', [TeamController::class, 'store']);
+    Route::get('/{team}', [TeamController::class, 'show']);
+    Route::put('/{team}', [TeamController::class, 'update']);
+    Route::delete('/{team}', [TeamController::class, 'destroy']);
+});
+Route::apiResource('ad-configs', AdConfigController::class);
+Route::prefix('ad-configs/{adConfig}')->group(function () {
+    Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+    Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+});
 
-    Route::prefix('ad')->group(function () {
+Route::prefix('ad')->group(function () {
 
-        Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
-        Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
+    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
+    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
 
-        Route::get('/referees/all', [RefereeController::class, 'index']);
+    Route::get('/referees/all', [RefereeController::class, 'index']);
 
-        Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
+    Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
 
-        Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
+    Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
 
-        // 你可能还有其他辅助路由，可以像这样添加
-        // Route::get('some-other-data', [SomeController::class, 'getData']);
-    });
+    // 你可能还有其他辅助路由，可以像这样添加
+    // Route::get('some-other-data', [SomeController::class, 'getData']);
+});
 
 /**
  * 定义安全实验分系统路由
