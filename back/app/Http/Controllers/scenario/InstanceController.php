@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File; // ★ 新增：引入File Facade用于目录操作 ★
 
 // ★★★ 步骤 1: 引入 Process 组件和相关异常类 ★★★
 use Symfony\Component\Process\Process;
@@ -98,7 +99,7 @@ class InstanceController extends Controller
 
 
     /**
-     * ★★★ 核心修复：添加了对关联表记录的删除 ★★★
+     * ★★★ 核心修复：添加了对关联表记录和虚拟机实例文件夹的删除 ★★★
      */
     public function destroy(SceneInstance $instance)
     {
@@ -126,7 +127,8 @@ class InstanceController extends Controller
                     $this->docker->stopContainer($container->c_container_id);
                     $this->docker->removeContainer($container->c_container_id);
                 } catch (\Exception $e) {
-                    // ... (省略部分错误处理)
+                    $errors[] = "删除容器 '{$container->c_container_id}' 失败: " . $e->getMessage();
+                    Log::error($errors[count($errors) - 1]);
                 }
             }
 
@@ -134,9 +136,26 @@ class InstanceController extends Controller
                 try {
                     $this->cliService->deleteSwitch($switch->c_switch_name);
                 } catch (\Exception $e) {
-                    // ... (省略部分错误处理)
+                    $errors[] = "删除交换机 '{$switch->c_switch_name}' 失败: " . $e->getMessage();
+                    Log::error($errors[count($errors) - 1]);
                 }
             }
+            
+            // ★★★ 新增：删除虚拟机实例文件夹 ★★★
+            $baseDir = $this->_get_global_directory();
+            $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;
+            try {
+                if (File::isDirectory($instanceDirectory)) {
+                    File::deleteDirectory($instanceDirectory);
+                    Log::info("已成功删除虚拟机实例目录: {$instanceDirectory}");
+                } else {
+                    Log::warning("虚拟机实例目录未找到，无需删除: {$instanceDirectory}");
+                }
+            } catch (\Exception $e) {
+                $errors[] = "删除虚拟机实例目录 '{$instanceDirectory}' 失败: " . $e->getMessage();
+                Log::error($errors[count($errors) - 1]);
+            }
+            // ★★★ 修改结束 ★★★
 
             // --- ★★★ 新增的数据库清理步骤 ★★★ ---
             // 步骤 2: 删除所有关联的数据库记录
