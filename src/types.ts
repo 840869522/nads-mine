@@ -71,7 +71,7 @@ export type DeviceType =
 //场景node编辑
 export interface NodeConfig {
   deviceName: string;
-  Image: string;
+  dockerImage: string;
   portMappings: string;
   env?: string;
   isTarget?: boolean;
@@ -178,12 +178,7 @@ export interface RunningInstance {
   id: string;
   name: string;
   type: string; // <-- 这里被修改，以支持 '虚拟机', '容器', '交换机' 等多种类型
-  /** 实例的 IP 地址 */
-  ipAddress?: string;
-  /** 关联的场景实例 ID */
-  scene_instance_id?: string;
-  /** 关联场景的名称 */
-  scene_name?: string;
+  ipAddress: string;
   status: InstanceStatus;
   /** 端口映射，如 "80->8080" */
   ports?: string;

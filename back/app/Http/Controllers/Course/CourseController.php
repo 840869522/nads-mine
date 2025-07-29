@@ -1,11 +1,6 @@
 <?php
 namespace App\Http\Controllers\Course;
 
-
-use Illuminate\Http\Request;
-use App\Models\ad\CourseModel;
-use Illuminate\Http\JsonResponse;
-
 use App\Http\Controllers\Controller;
 use App\Models\Course\CourseModel;
 use Illuminate\Http\Request;
@@ -96,65 +91,6 @@ class CourseController extends Controller
     {
         $modelRes = CourseModel::deleteCourse($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);
-    }
-    /**
-     * 获取所有用户
-     */
-    public function getAllUsers(Request $request)
-    {
-        $modelRes = CourseModel::getAllUsers();
-        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 500);
-    }
-
-    /**
-     * 获取课程的授权用户
-     */
-    public function getUsers($courseId)
-    {
-        $modelRes = CourseModel::getCourseUsers($courseId);
-        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : ($modelRes['code'] == 404 ? 404 : 500));
-    }
-
-    /**
-     * 批量更新课程的授权用户
-     */
-    public function syncUsers(Request $request, $courseId)
-    {
-        $validator = Validator::make($request->json()->all(), [
-            'users' => 'required|array',
-            'users.*' => 'string|exists:c_users,c_username',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'code' => 422,
-                'message' => $validator->errors()->first(),
-            ], 422);
-        }
-
-        $userIds = $request->json('users', []);
-        $modelRes = CourseModel::syncCourseUsers($courseId, $userIds);
-        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : ($modelRes['code'] == 404 ? 404 : 500));
-    }
-
-    /**
-     *  addUserToCourse 方法，调整路由和参数名
-     */
-    public function addUserToCourse(Request $request, $courseId)
-    {
-        $validator = Validator::make($request->json()->all(), [
-            'c_username' => 'required|string|exists:c_users,c_username',
-        ]);
-        if ($validator->fails()) {
-            return response()->json([
-                'code' => 422,
-                'message' => $validator->errors()->first(),
-            ], 422);
-        }
-
-        $reqData = $request->json()->all();
-        $modelRes = CourseModel::addUserToCourse($reqData['c_username'], $courseId);
-        return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 400);
     }
 
 }
