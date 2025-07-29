@@ -1,6 +1,8 @@
 <?php
 
 
+use App\Http\Controllers\ad\AdConfigController;
+use App\Http\Controllers\scenario\ScenarioPermissionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Users\UserController;
 use App\Http\Controllers\Users\PermissionController;
@@ -17,23 +19,21 @@ use App\Http\Controllers\ad\TeamController;
 use App\Http\Controllers\Course\CourseController;
 use App\Http\Controllers\Course\CategoryController;
 use App\Http\Controllers\Course\ResourceController;
-use App\Http\Controllers\Vm\MainCli\VmController;
+use App\Http\Controllers\Vm\VmController;
 use App\Http\Controllers\Course\TestController;
 use App\Http\Controllers\Experiment\ExperimentController;
 use App\Http\Controllers\Experiment\ExperimentResourceController;
 use App\Http\Controllers\Course\CoursePermissionController;
-
-
 /*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
-*/
+    |--------------------------------------------------------------------------
+    | API Routes
+    |--------------------------------------------------------------------------
+    |
+    | Here is where you can register API routes for your application. These
+    | routes are loaded by the RouteServiceProvider within a group which
+    | is assigned the "api" middleware group. Enjoy building your API!
+    |
+    */
 
 /**
  * 管理员账户：admin
@@ -45,99 +45,53 @@ use App\Http\Controllers\Course\CoursePermissionController;
  */
 
 /**
+ * 较为特殊的路由
+ */
+Route::prefix("")->group(function () {
+    Route::post("support/user/login", [UserController::class, "login"]);
+    Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
+    Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
+});
+
+
+
+/**
  * 定义基础分系统路由
  */
-Route::post("support/user/login",[UserController::class,"login"]);
-Route::prefix("support")->middleware("jwtcheck:support")->group(function() {
-    Route::prefix("user")->middleware("jwtcheck:support_user")->group(function() {
-        Route::post("/id",[UserController::class,"getUserById"]);
-        Route::post("/search",[UserController::class,"searchUser"]);
-        Route::post("/all",[UserController::class,"getAllUser"]);
-        Route::post("/new",[UserController::class,"insertNewUser"]);
-        Route::post("/update",[UserController::class,"updateUserInfo"]);
-        Route::post("/delete",[UserController::class,"deleteUser"]);
+Route::prefix("support")->group(function () {
+    Route::prefix("user")->middleware("jwtcheck:support_user")->group(function () {
+        Route::post("/id", [UserController::class, "getUserById"]);
+        Route::post("/search", [UserController::class, "searchUser"]);
+        Route::post("/all", [UserController::class, "getAllUser"]);
+        Route::post("/new", [UserController::class, "insertNewUser"]);
+        Route::post("/update", [UserController::class, "updateUserInfo"]);
+        Route::post("/delete", [UserController::class, "deleteUser"]);
+        Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
+        Route::post("/up_common", [UserController::class, "updateUserEmail"]);
     });
 
-    Route::prefix("role")->middleware("jwtcheck:support_role")->group(function(){
-        Route::post("/all",[RoleController::class,"getAllRole"]);
-        Route::post("/id",[RoleController::class,"getRoleById"]);
-        Route::post("/search",[RoleController::class,"searchRole"]);
-        Route::post("/new",[RoleController::class,"newRole"]);
-        Route::post("/update",[RoleController::class, "updateRole"]);
-        Route::post("/delete",[RoleController::class,"deleteRole"]);
-        Route::post("/grant", [RoleController::class,"grantRoles2User"]);
-        Route::post("/revoke", [RoleController::class,"revokeRoleFromUser"]);
+    Route::prefix("role")->group(function () {
+        Route::post("/all", [RoleController::class, "getAllRole"]);
+        Route::post("/id", [RoleController::class, "getRoleById"]);
+        Route::post("/search", [RoleController::class, "searchRole"]);
+        Route::post("/new", [RoleController::class, "newRole"]);
+        Route::post("/update", [RoleController::class, "updateRole"]);
+        Route::post("/delete", [RoleController::class, "deleteRole"]);
+        Route::post("/grant", [RoleController::class, "grantRoles2User"]);
+        Route::post("/revoke", [RoleController::class, "revokeRoleFromUser"]);
     });
 
-    Route::prefix('permission')->middleware("jwtcheck:support_permission")->group(function () {
+    Route::prefix('permission')->group(function () {
         Route::post('/all', [PermissionController::class, 'getAllPermission']);
+        Route::post('/all_label', [PermissionController::class, 'getAllPermssionLable']);
         Route::post('/id', [PermissionController::class, 'getPermissionById']);
-        Route::post("/search",[PermissionController::class,"searchPermission"]);
-        Route::post("/role",[PermissionController::class,"getPermissionsByRoleId"]);
+        Route::post("/search", [PermissionController::class, "searchPermission"]);
+        Route::post("/role", [PermissionController::class, "getPermissionsByRoleId"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
         Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
         Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
-    });
-});
-
-
-/**
- * 定义安全实验分系统路由
- */
-Route::prefix("ad")->middleware("jwtcheck:ad")->group(function() {
-    // 特殊路由: 获取可用的用户列表 (用于创建裁判的下拉菜单)
-    // GET /api/ad/available-users
-    // 【注意】这个路由应该定义在 `referee` 资源路由之前，以避免路由冲突
-    // 如果它在后面，'/available-users' 可能会被误匹配为 '/{referee}'。
-    Route::get('available-users', [RefereeController::class, 'availableUsers']);
-
-    // 裁判的 CRUD 路由
-    Route::prefix('referee')->group(function () {
-        // 获取所有裁判列表
-        // GET /api/ad/referee
-        Route::get('/', [RefereeController::class, 'index']);
-
-        // 创建一个新裁判
-        // POST /api/ad/referee
-        Route::post('/', [RefereeController::class, 'store']);
-
-        // 获取单个裁判的详细信息
-        // GET /api/ad/referee/{referee}
-        // {referee} 是路由模型绑定，Laravel 会自动根据 ID (c_id) 查找 Referee
-        Route::get('/{referee}', [RefereeController::class, 'show']);
-
-        // 更新一个已存在的裁判
-        // PUT /api/ad/referee/{referee}
-        Route::put('/{referee}', [RefereeController::class, 'update']);
-
-        // 删除一个裁判
-        // DELETE /api/ad/referee/{referee}
-        Route::delete('/{referee}', [RefereeController::class, 'destroy']);
-    });
-
-    Route::prefix('team')->group(function () {
-        // 获取所有队伍列表
-        // GET /api/ad/team
-        Route::get('/', [TeamController::class, 'index']);
-
-        // 创建一个新队伍
-        // POST /api/ad/team
-        Route::post('/', [TeamController::class, 'store']);
-
-        // 获取单个队伍的详细信息
-        // GET /api/ad/team/{team}
-        // {team} 是路由模型绑定，Laravel 会自动根据 ID 查找 Team
-        Route::get('/{team}', [TeamController::class, 'show']);
-
-        // 更新一个已存在的队伍
-        // PUT /api/ad/team/{team}
-        Route::put('/{team}', [TeamController::class, 'update']);
-
-        // 删除一个队伍
-        // DELETE /api/ad/team/{team}
-        Route::delete('/{team}', [TeamController::class, 'destroy']);
     });
 });
 
@@ -190,12 +144,11 @@ Route::prefix("study")->group(function () {
     Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
     Route::get('/users', [CourseController::class, 'getAllUsers']);
 });
+
 /**
  * 定义环境构建分系统
  */
-Route::prefix("scene")->middleware("jwtcheck:scene")->group(function () {
-
-});
+Route::prefix("scene")->group(function () {});
 
 
 Route::prefix('scenarios')->group(function () {
@@ -212,7 +165,13 @@ Route::prefix('scenarios')->group(function () {
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
     Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+});
 
+Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
+;
+Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
+    Route::get('/', [ScenarioPermissionController::class, 'getPermissions']);
+    Route::post('/', [ScenarioPermissionController::class, 'savePermissions']);
 
 });
 
@@ -227,9 +186,12 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
     // GET /api/scenarios/instances - 获取所有场景实例列表
     Route::get('/', [InstanceController::class, 'index']);
+    // 关键: 确保 DELETE 路由指向 destroy 方法
+    Route::delete('/{instance}', [InstanceController::class, 'destroy']);
     // --- 获取单个场景实例的容器详细信息 ---
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
-
+    // 获取单个场景实例的vm详细信息
+    Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
 });
 
 Route::prefix('images')->group(function () {
@@ -258,7 +220,7 @@ Route::prefix('containers')->group(function () {
 
 
 Route::prefix('vms')->group(function () {
-    $c = \App\Http\Controllers\Vm\MainCli\VmController::class;
+    $c = \App\Http\Controllers\Vm\VmController::class;
     Route::get('/', [$c, 'listVms']);
     Route::get('/images', [$c, 'listVmImages']);
     Route::post('/create', [$c, 'createVm']);
@@ -289,7 +251,55 @@ Route::prefix('study')->group(function () {
         Route::post('/test_del', [TestController::class, 'test_del']);
         Route::post('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
+        Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
+        Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
+        Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+        Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
+        Route::post('/get_papers', [TestController::class, 'get_papers']);
+        Route::post('/send_papers', [TestController::class, 'send_papers']);
+        Route::post('/submit_papers', [TestController::class, 'submit_papers']);
+        Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
+        Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
+        Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
+        Route::post('/query_results', [TestController::class, 'query_results']);
     });
 });
 
-?>
+
+Route::get('ad/users', [UserController::class, 'getAllUser']);
+Route::prefix('ad/team')->group(function () {
+    Route::get('/', [TeamController::class, 'index']);
+    Route::post('/', [TeamController::class, 'store']);
+    Route::get('/{team}', [TeamController::class, 'show']);
+    Route::put('/{team}', [TeamController::class, 'update']);
+    Route::delete('/{team}', [TeamController::class, 'destroy']);
+});
+Route::apiResource('ad-configs', AdConfigController::class);
+Route::prefix('ad-configs/{adConfig}')->group(function () {
+    Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+    Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+});
+
+Route::prefix('ad')->group(function () {
+
+    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
+    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
+
+    Route::get('/referees/all', [RefereeController::class, 'index']);
+
+    Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
+
+    Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
+
+    // 你可能还有其他辅助路由，可以像这样添加
+    // Route::get('some-other-data', [SomeController::class, 'getData']);
+});
+
+/**
+ * 定义安全实验分系统路由
+ */
+//Route::prefix("ad")->group(function() {
+//
+//})->middleware("jwtcheck:ad");
+//
+//?>

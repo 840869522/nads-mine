@@ -41,7 +41,10 @@ return [
             'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
         ],
-
+        'local_resources' => [
+            'driver' => 'local',
+            'root' => env('GLOBAL_DIRECTORY', '/home/ubuntu/web'),
+        ],
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

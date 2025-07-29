@@ -19,6 +19,7 @@ class CoursePermissionModel
         try {
             $users = DB::table('c_users')
                 ->select('c_username')
+                ->where('c_username', '!=', 'admin') // 排除 c_username = 'admin'
                 ->get()
                 ->toArray();
 
