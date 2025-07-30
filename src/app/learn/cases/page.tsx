@@ -337,6 +337,8 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`创建实验失败: ${data.message || '未知错误'}`);
         }
         experimentId = data.data.c_experiment_id;
+        setErrorMessage('实验创建成功，用户权限已同步'); // 添加提示
+        setTimeout(() => setErrorMessage(''), 3000);
       } else {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },

@@ -69,8 +69,17 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
   const [resources, setResources] = useState<CourseCaseResource[]>([]);
   const [selectedRawFiles, setSelectedRawFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isCategoriesLoaded, setIsCategoriesLoaded] = useState(false);
 
   useEffect(() => {
+    // 等待 categories 加载完成
+    if (categories.length > 0) {
+      setIsCategoriesLoaded(true);
+    } else {
+      setIsCategoriesLoaded(false);
+    }
+
+    // 清理资源 URL
     resources.forEach(resource => {
       if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
         URL.revokeObjectURL(resource.c_resource_path);
@@ -78,18 +87,21 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
     });
 
     if (courseCase) {
+      // 编辑模式：直接使用 courseCase.c_category_id
       setCourseName(courseCase.c_course_name || '');
       setDescription(courseCase.c_description || '');
-      setCategoryId(courseCase.c_category_id ?? '');
+      setCategoryId(courseCase.c_category_id || ''); // 保留数据库中的原始值
       setResources(courseCase.resources.map(r => ({ ...r })));
     } else {
+      // 新增模式：选择第一个类别（如果可用）
       setCourseName('');
       setDescription('');
-      setCategoryId(categories.length > 0 && categories[0].c_category_id ? categories[0].c_category_id : '');
+      setCategoryId(categories.length > 0 ? categories[0].c_category_id || '' : '');
       setResources([]);
     }
     setSelectedRawFiles([]);
     setErrors({});
+
     return () => {
       resources.forEach(resource => {
         if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
@@ -99,12 +111,17 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
     };
   }, [courseCase, open, categories]);
 
-  // 当 categories 更新 同步 c_category_id
-  useEffect(() => {
-    if (categories.length > 0 && !categories.some(cat => cat.c_category_id === c_category_id)) {
-      setCategoryId(categories[0].c_category_id || '');
+  // 验证 c_category_id 是否有效，仅在保存时触发
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!c_course_name.trim()) newErrors.c_course_name = '课程标题不能为空。';
+    if (categories.length > 0 && !c_category_id) newErrors.c_category_id = '请选择一个课程分类。';
+    if (c_category_id && !categories.some(cat => cat.c_category_id === c_category_id)) {
+      newErrors.c_category_id = '所选分类无效，请选择一个有效的分类。';
     }
-  }, [categories, c_category_id]);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -132,14 +149,6 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
     setSelectedRawFiles(prevRaw => prevRaw.filter(rawFile => `new-${rawFile.name}-${Date.now()}` !== resourceIdToRemove && rawFile.name !== resourceToRemove?.c_resource_name));
   };
 
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!c_course_name.trim()) newErrors.c_course_name = '课程标题不能为空。';
-    if (!c_category_id && categories.length > 0) newErrors.c_category_id = '请选择一个课程分类。';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = () => {
     if (validate()) {
       const processedResources = resources.map(resource => {
@@ -153,7 +162,7 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
         c_course_id: courseCase?.c_course_id || `temp-id-${Date.now()}`,
         c_course_name,
         c_description,
-        c_category_id: c_category_id ?? '',
+        c_category_id: c_category_id || '',
         c_category_name: categories.find(cat => cat.c_category_id === c_category_id)?.c_category_name || '',
         resources: processedResources,
         created_at: courseCase?.created_at || new Date().toISOString(),
@@ -193,40 +202,42 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
               <Select
                   labelId="course-category-label"
                   name="c_category_id"
-                  value={c_category_id ?? ''}
+                  value={c_category_id}
                   onChange={(e) => setCategoryId(e.target.value as string)}
                   label="课程分类"
-                  disabled={categories.length === 0}
+                  disabled={categories.length === 0 || !isCategoriesLoaded}
                   MenuProps={{
                     PaperProps: {
                       style: {
-                        maxHeight: 250, // 设置最大高度
+                        maxHeight: 250,
                       },
                     },
                   }}
               >
-                {categories.length === 0 ? (
+                {categories.length === 0 || !isCategoriesLoaded ? (
                     <MenuItem value="" disabled>
-                      无可用分类
+                      {isCategoriesLoaded ? '无可用分类' : '正在加载分类...'}
                     </MenuItem>
                 ) : (
                     [
-                      <MenuItem key="placeholder" value="" disabled>
-                        请选择分类
-                      </MenuItem>,
-                      ...categories
-                          .filter(cat => cat.c_category_id)
-                          .map(cat => (
-                              <MenuItem key={cat.c_category_id} value={cat.c_category_id}>
-                                {cat.c_category_name}
-                              </MenuItem>
-                          ))
+                      // 如果 courseCase.c_category_id 存在但不在 categories 中，显示占位符
+                      ...(courseCase && c_category_id && !categories.some(cat => cat.c_category_id === c_category_id)
+                          ? [<MenuItem key="invalid" value={c_category_id} disabled>无效分类 (ID: {c_category_id})</MenuItem>]
+                          : []),
+                      ...categories.map(cat => (
+                          <MenuItem key={cat.c_category_id} value={cat.c_category_id}>
+                            {cat.c_category_name}
+                          </MenuItem>
+                      ))
                     ]
                 )}
               </Select>
               {errors.c_category_id && <FormHelperText>{errors.c_category_id}</FormHelperText>}
               {categories.length === 0 && (
                   <FormHelperText>请先添加分类</FormHelperText>
+              )}
+              {courseCase && c_category_id && !categories.some(cat => cat.c_category_id === c_category_id) && (
+                  <FormHelperText error>当前分类无效，请选择一个有效的分类。</FormHelperText>
               )}
             </FormControl>
             <TextField
