@@ -44,7 +44,7 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import CoursePermissionDialog from '@/components/coursecases/CoursePermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
-import { BACK_IP_PORT } from '@/constants';
+//import { BACK_IP_PORT } from '@/constants';
 import { getCookie } from '@/utils/cookie';
 
 const highlightText = (text: string, keyword: string) => {
@@ -99,6 +99,8 @@ const CourseCasesPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
+  const [isCategoryManagementOpen, setIsCategoryManagementOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   useEffect(() => {
     const debouncedFetchData = debounce(async () => {
@@ -114,7 +116,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch categories
-        const categoriesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/categories`, {
+        const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const categoriesData = categoriesResponse.data;
@@ -128,7 +130,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch scene configs
-        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/scenarios`, {
+        const sceneConfigsResponse = await apiClientWithToken.get(`/back/api/scenarios`, {
           headers: { Authorization: `Bearer ${token}` },
 
         });
@@ -149,7 +151,7 @@ const CourseCasesPage: React.FC = () => {
           ...(searchKeyword && { keyword: searchKeyword }),
           ...(filterCategoryId && { c_category_id: filterCategoryId }),
         };
-        const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+        const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
@@ -160,7 +162,7 @@ const CourseCasesPage: React.FC = () => {
                 let resources: CourseCaseResource[] = [];
                 let experiments: Experiment[] = [];
                 try {
-                  const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                  const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
 
                     headers: { Authorization: `Bearer ${token}` },
                     params: {
@@ -174,7 +176,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                       isExperimentResource: false, // 标记为课程资源
                     }));
@@ -183,7 +185,7 @@ const CourseCasesPage: React.FC = () => {
                   console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
                 }
                 try {
-                  const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                  const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
                     headers: { Authorization: `Bearer ${token}` },
                   });
                   const experimentsData = experimentsResponse.data;
@@ -198,7 +200,7 @@ const CourseCasesPage: React.FC = () => {
                         c_resource_id: res.c_resource_id,
                         c_resource_name: res.c_resource_name,
                         c_type: getFileType(res.c_type),
-                        c_resource_path: `${BACK_IP_PORT}/api/study/experiment-resources/${res.c_resource_id}`,
+                        c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
                         c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                         isExperimentResource: true, // 标记为实验资源
                       })),
@@ -257,7 +259,13 @@ const CourseCasesPage: React.FC = () => {
     setEditingCategory(category || null);
     setIsCategoryModalOpen(true);
   };
+  const handleOpenCategoryManagement = () => {
+    setIsCategoryManagementOpen(true);
+  };
 
+  const handleCloseCategoryManagement = () => {
+    setIsCategoryManagementOpen(false);
+  };
   const handleOpenExperimentModal = (courseId: string, experiment?: Experiment) => {
     setSelectedCourseId(courseId);
     setEditingExperiment(experiment || null);
@@ -293,6 +301,7 @@ const CourseCasesPage: React.FC = () => {
     setErrorMessage('权限保存成功');
     setTimeout(() => setErrorMessage(''), 3000); // 3秒后清除提示
   };
+
   const handleSaveExperiment = async (experiment: Experiment, courseId: string) => {
     try {
       const token = getCookie('_auth');
@@ -320,7 +329,7 @@ const CourseCasesPage: React.FC = () => {
 
       let experimentId = experiment.c_experiment_id;
       if (experiment.c_experiment_id.startsWith('temp-id-')) {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, experimentData, {
+        const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -329,7 +338,7 @@ const CourseCasesPage: React.FC = () => {
         }
         experimentId = data.data.c_experiment_id;
       } else {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -345,7 +354,7 @@ const CourseCasesPage: React.FC = () => {
             formData.append('c_course_id', courseId);
             formData.append('c_experiment_id', experimentId);
             formData.append('file', resource.fileObject);
-            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
+            const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 Authorization: `Bearer ${token}`,
@@ -360,7 +369,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // Refresh experiment list
-      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, {
+      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const experimentsData = coursesResponse.data;
@@ -412,7 +421,7 @@ const CourseCasesPage: React.FC = () => {
 
       let courseId = c_course_id;
       if (editingCase) {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${c_course_id}`, courseData, {
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -420,7 +429,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
         }
       } else {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses`, courseData, {
+        const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -436,7 +445,7 @@ const CourseCasesPage: React.FC = () => {
             const formData = new FormData();
             formData.append('c_course_id', courseId);
             formData.append('file', resource.fileObject);
-            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/resources/upload`, formData, {
+            const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 'Authorization': `Bearer ${token}`,
@@ -451,7 +460,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // 刷新课程列表
-      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
@@ -467,7 +476,7 @@ const CourseCasesPage: React.FC = () => {
               let resources: CourseCaseResource[] = [];
               let experiments: Experiment[] = [];
               try {
-                const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
                 const resourcesData = resourcesResponse.data;
@@ -476,7 +485,7 @@ const CourseCasesPage: React.FC = () => {
                     c_resource_id: res.c_resource_id,
                     c_resource_name: res.c_resource_name,
                     c_type: getFileType(res.c_type),
-                    c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                     c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                   }));
                 }
@@ -484,7 +493,7 @@ const CourseCasesPage: React.FC = () => {
                 console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
               }
               try {
-                const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
@@ -499,7 +508,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                     })),
                     created_at: exp.created_at || new Date().toISOString(),
@@ -534,7 +543,179 @@ const CourseCasesPage: React.FC = () => {
     }
     handleCloseFormModal();
   };
+  const handleRefreshCategories = async () => {
+    try {
+      setIsLoading(true);
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      const response = await apiClientWithToken.get(`/back/api/study/categories`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = response.data;
+      if (data.code === 200) {
+        setCategories(data.data.map((cat: { c_category_id: string; c_category_name: string }) => ({
+          c_category_id: cat.c_category_id,
+          c_category_name: cat.c_category_name,
+        })) || []);
+      } else {
+        throw new Error(`刷新类别失败: ${data.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '刷新类别失败';
+      setErrorMessage(message);
+      console.error('Error refreshing categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const handleRefreshCourses = async () => {
+    try {
+      setIsLoading(true);
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      const params = {
+        page: currentPage,
+        pageSize: itemsPerPage,
+        ...(searchKeyword && { keyword: searchKeyword }),
+        ...(filterCategoryId && { c_category_id: filterCategoryId }),
+      };
+      const response = await apiClientWithToken.get(`/back/api/study/courses`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+      const data = response.data;
+      if (data.code === 200 || data.code === 900) {
+        const mappedCourses = await Promise.all(
+            (data.data.courses || []).map(async (course: any) => {
+              let resources: CourseCaseResource[] = [];
+              let experiments: Experiment[] = [];
+              try {
+                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                  params: { page: 1, pageSize: 10 },
+                });
+                const resourcesData = resourcesResponse.data;
+                if (resourcesData.code === 200) {
+                  resources = (resourcesData.data.resources || []).map((res: any) => ({
+                    c_resource_id: res.c_resource_id,
+                    c_resource_name: res.c_resource_name,
+                    c_type: getFileType(res.c_type),
+                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
+                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                    isExperimentResource: false,
+                  }));
+                }
+              } catch (error: any) {
+                console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
+              }
+              try {
+                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                const experimentsData = experimentsResponse.data;
+                if (experimentsData.code === 200) {
+                  experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
+                    c_experiment_id: exp.c_experiment_id,
+                    c_experiment_name: exp.c_experiment_name,
+                    c_description: exp.c_description || '',
+                    c_config_id: exp.c_config_id,
+                    c_name: exp.c_name || '',
+                    resources: (exp.resources || []).map((res: any) => ({
+                      c_resource_id: res.c_resource_id,
+                      c_resource_name: res.c_resource_name,
+                      c_type: getFileType(res.c_type),
+                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                      isExperimentResource: true,
+                    })),
+                    created_at: exp.created_at || new Date().toISOString(),
+                  }));
+                }
+              } catch (error: any) {
+                console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
+              }
+              return {
+                c_course_id: course.c_course_id,
+                c_course_name: course.c_course_name,
+                c_description: course.c_description || '',
+                c_category_id: course.c_category_id,
+                c_category_name: course.c_category_name,
+                resources,
+                experiments,
+                created_at: course.created_at || new Date().toISOString(),
+                highlightedTitle: highlightText(course.c_course_name, searchKeyword),
+                highlightedDescription: highlightText(course.c_description || '', searchKeyword),
+              };
+            })
+        );
+        setCourseCases(mappedCourses);
+        setTotalCases(data.data.total || 0);
+      } else {
+        throw new Error(`刷新课程失败: ${data.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '刷新课程失败';
+      setErrorMessage(message);
+      console.error('Error refreshing courses:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefreshExperiments = async (courseId: string) => {
+    try {
+      setIsLoading(true);
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+      const response = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = response.data;
+      if (data.code === 200) {
+        setCourseCases(prev =>
+            prev.map(course => {
+              if (course.c_course_id === courseId) {
+                return {
+                  ...course,
+                  experiments: data.data.experiments.map((exp: any) => ({
+                    c_experiment_id: exp.c_experiment_id,
+                    c_experiment_name: exp.c_experiment_name,
+                    c_description: exp.c_description || '',
+                    c_config_id: exp.c_config_id,
+                    c_name: exp.c_name || '',
+                    resources: (exp.resources || []).map((res: any) => ({
+                      c_resource_id: res.c_resource_id,
+                      c_resource_name: res.c_resource_name,
+                      c_type: getFileType(res.c_type),
+                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                      isExperimentResource: true,
+                    })),
+                    created_at: exp.created_at || new Date().toISOString(),
+                  })),
+                };
+              }
+              return course;
+            })
+        );
+      } else {
+        throw new Error(`刷新实验失败: ${data.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '刷新实验失败';
+      setErrorMessage(message);
+      console.error('Error refreshing experiments:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const handleSaveCategory = async (category: Category) => {
     try {
       const token = getCookie('_auth');
@@ -549,7 +730,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       if (category.c_category_id) {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/categories/${category.c_category_id}`, {
+        const response = await apiClientWithToken.put(`/back/api/study/categories/${category.c_category_id}`, {
           c_category_name: category.c_category_name,
         }, {
           headers: { Authorization: `Bearer ${token}` },
@@ -561,7 +742,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`更新类别失败: ${data.message || '未知错误'}`);
         }
       } else {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/categories`, {
+        const response = await apiClientWithToken.post(`/back/api/study/categories`, {
           c_category_name: category.c_category_name,
         }, {
           headers: { Authorization: `Bearer ${token}` },
@@ -580,7 +761,43 @@ const CourseCasesPage: React.FC = () => {
     }
     handleCloseCategoryModal();
   };
-
+  const handleDeleteCategory = async () => {
+    if (categoryToDelete) {
+      try {
+        const token = getCookie('_auth');
+        if (!token) {
+          throw new Error('未登录，请先登录');
+        }
+        const response = await apiClientWithToken.delete(`/back/api/study/categories/${categoryToDelete.c_category_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = response.data;
+        if (data.code === 200) {
+          setCategories(prev => prev.filter(cat => cat.c_category_id !== categoryToDelete.c_category_id));
+          setCourseCases(prev => prev.filter(course => course.c_category_id !== categoryToDelete.c_category_id));
+          setErrorMessage('类别删除成功');
+          setTimeout(() => setErrorMessage(''), 3000);
+        } else {
+          throw new Error(`删除类别失败: ${data.message || '未知错误'}`);
+        }
+      } catch (error: any) {
+        const message = error.response?.data?.message || error.message || '删除类别失败';
+        setErrorMessage(message);
+        console.error('Error deleting category:', error.response?.status, error.response?.data, error.config?.url);
+      }
+    }
+    setCategoryToDelete(null);
+    setIsConfirmDialogOpen(false);
+  };
+  const handleConfirmDelete = () => {
+    if (experimentToDelete) {
+      handleDeleteExperiment();
+    } else if (caseToDelete) {
+      handleDeleteCourseCase();
+    } else if (categoryToDelete) {
+      handleDeleteCategory();
+    }
+  };
   const handleDeleteCourseCase = async () => {
     if (caseToDelete) {
       try {
@@ -593,7 +810,7 @@ const CourseCasesPage: React.FC = () => {
             URL.revokeObjectURL(resource.c_resource_path);
           }
         });
-        const response = await apiClientWithToken.delete(`${BACK_IP_PORT}/api/study/courses/${caseToDelete.c_course_id}`, {
+        const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.c_course_id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -620,7 +837,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error('未登录，请先登录');
         }
         const response = await apiClientWithToken.delete(
-            `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
+            `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
             {
               headers: { Authorization: `Bearer ${token}` },
             }
@@ -663,9 +880,9 @@ const CourseCasesPage: React.FC = () => {
 
       let url = '';
       if (isExperimentResource && experimentId) {
-        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentId}/resources/${resource.c_resource_id}`;
+        url = `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentId}/resources/${resource.c_resource_id}`;
       } else {
-        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/resources/${resource.c_resource_id}`;
+        url = `/back/api/study/courses/${selectedCaseForResources.c_course_id}/resources/${resource.c_resource_id}`;
       }
 
       const response = await apiClientWithToken.delete(url, {
@@ -874,6 +1091,15 @@ const CourseCasesPage: React.FC = () => {
                 />
             )}
 
+            <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleOpenCategoryManagement}
+                sx={{ height: 40 }}
+            >
+              管理类别
+            </Button>
+
             <FormControl sx={{ minWidth: 120 }}>
               <InputLabel id="items-per-page-label">每页条数</InputLabel>
               <Select
@@ -888,9 +1114,19 @@ const CourseCasesPage: React.FC = () => {
                 <MenuItem value="50">50 条/页</MenuItem>
               </Select>
             </FormControl>
+
+            <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleRefreshCourses}
+                disabled={isLoading}
+                startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
+                sx={{ height: 40 }}
+            >
+              刷新课程
+            </Button>
           </Box>
 
-          {/* 右侧：搜索框 + 按钮 */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <TextField
                 label="搜索课程"
@@ -980,16 +1216,16 @@ const CourseCasesPage: React.FC = () => {
             <DialogContentText>
               {experimentToDelete
                   ? `确定要删除实验 "${experimentToDelete.c_experiment_name}" 吗？此操作不可撤销。`
-                  : `确定要删除课程 "${caseToDelete?.c_course_name}" 吗？此操作不可撤销。`}
+                  : caseToDelete
+                      ? `确定要删除课程 "${caseToDelete.c_course_name}" 吗？此操作不可撤销。`
+                      : categoryToDelete
+                          ? `确定要删除类别 "${categoryToDelete.c_category_name}" 吗？此操作将删除该类别下的所有课程，且不可撤销。`
+                          : '确定要删除吗？'}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setIsConfirmDialogOpen(false)}>取消</Button>
-            <Button
-                onClick={experimentToDelete ? handleDeleteExperiment : handleDeleteCourseCase}
-                color="error"
-                variant="contained"
-            >
+            <Button onClick={handleConfirmDelete} color="error" variant="contained">
               删除
             </Button>
           </DialogActions>
@@ -1047,13 +1283,24 @@ const CourseCasesPage: React.FC = () => {
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="subtitle1">实验列表</Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id)}
-                    >
-                      添加实验
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button
+                          variant="contained"
+                          startIcon={<AddIcon />}
+                          onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id)}
+                      >
+                        添加实验
+                      </Button>
+                      <Button
+                          variant="outlined"
+                          color="primary"
+                          onClick={() => handleRefreshExperiments(selectedCaseForResources!.c_course_id)}
+                          disabled={isLoading}
+                          startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
+                      >
+                        刷新实验
+                      </Button>
+                    </Box>
                   </Box>
                   {selectedCaseForResources?.experiments?.length ? (
                       <Table>
@@ -1120,29 +1367,33 @@ const CourseCasesPage: React.FC = () => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedCaseForResources.experiments
+                          {selectedCaseForResources?.experiments
                               .filter(exp => exp.resources.length > 0)
-                              .map(exp =>
-                                  exp.resources.map(resource => (
-                                      <TableRow key={`${exp.c_experiment_id}-${resource.c_resource_id}`}>
-                                        <TableCell>{exp.c_experiment_name || '实验名称'}</TableCell>
-                                        <TableCell>{resource.c_resource_name}</TableCell>
-                                        <TableCell>{resource.c_type}</TableCell>
-                                        <TableCell>{resource.c_size}</TableCell>
-                                        <TableCell>
-                                          <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                            <VisibilityIcon />
-                                          </IconButton>
-                                          <IconButton
-                                              onClick={() => handleDeleteResource(resource, true, exp.c_experiment_id)}
-                                              title="删除"
-                                          >
-                                            <DeleteIcon />
-                                          </IconButton>
-                                        </TableCell>
-                                      </TableRow>
-                                  ))
-                              )}
+                              .flatMap(exp =>
+                                  exp.resources.map(resource => ({
+                                    experiment: exp,
+                                    resource,
+                                  }))
+                              )
+                              .map(({ experiment, resource }, index) => (
+                                  <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
+                                    <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
+                                    <TableCell>{resource.c_resource_name}</TableCell>
+                                    <TableCell>{resource.c_type}</TableCell>
+                                    <TableCell>{resource.c_size}</TableCell>
+                                    <TableCell>
+                                      <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                        <VisibilityIcon />
+                                      </IconButton>
+                                      <IconButton
+                                          onClick={() => handleDeleteResource(resource, true, experiment.c_experiment_id)}
+                                          title="删除"
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </TableCell>
+                                  </TableRow>
+                              ))}
                         </TableBody>
                       </Table>
                   ) : (
@@ -1153,6 +1404,61 @@ const CourseCasesPage: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseResourcesDialog}>关闭</Button>
+          </DialogActions>
+        </Dialog>
+        <Dialog open={isCategoryManagementOpen} onClose={handleCloseCategoryManagement} maxWidth="md" fullWidth>
+          <DialogTitle>管理类别</DialogTitle>
+          <DialogContent>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1">类别列表</Typography>
+              <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleRefreshCategories}
+                  disabled={isLoading}
+                  startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
+              >
+                刷新类别
+              </Button>
+            </Box>
+            {categories.length ? (
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>类别 ID</TableCell>
+                      <TableCell>类别名称</TableCell>
+                      <TableCell>操作</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {categories.map((category, index) => (
+                        <TableRow key={category.c_category_id || `temp-${index}`}>
+                          <TableCell>{category.c_category_id || '未分配 ID'}</TableCell>
+                          <TableCell>{category.c_category_name}</TableCell>
+                          <TableCell>
+                            <IconButton onClick={() => handleOpenCategoryModal(category)} title="编辑">
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                                onClick={() => {
+                                  setCategoryToDelete(category);
+                                  setIsConfirmDialogOpen(true);
+                                }}
+                                title="删除"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+            ) : (
+                <Typography>暂无类别</Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseCategoryManagement} disabled={isLoading}>关闭</Button>
           </DialogActions>
         </Dialog>
         <CourseCaseFormModal

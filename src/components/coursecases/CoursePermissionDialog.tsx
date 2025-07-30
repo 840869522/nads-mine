@@ -37,6 +37,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
         const loadData = async () => {
             if (!course) return;
             const token = getCookie('_auth');
+            console.log('JWT Token:', token);
             if (!token) {
                 setError("用户未认证，请重新登录。");
                 return;
@@ -46,36 +47,43 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
             setError(null);
             try {
                 const requestOptions = {
-                    method: 'POST',
+                    method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ page: 1, pagesize: 100 }) // 设置分页参数
+                    }
                 };
 
+                console.log('Sending GET request to:', `/back/api/study/permissions/usernames`);
                 const [usersRes, permissionsRes] = await Promise.all([
-                    fetch(`${BACK_IP_PORT}/api/support/user/all`, requestOptions), // 使用 support 路由
-                    fetch(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/users`, {
-                        method: 'GET',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    })
+                    fetch(`/back/api/study/permissions/usernames`, requestOptions),
+                    fetch(`/back/api/study/permissions/courses/${course.c_course_id}/users`, requestOptions)
                 ]);
 
-                if (!usersRes.ok || !permissionsRes.ok) {
-                    throw new Error(`加载数据失败 (HTTP 状态: ${usersRes.status}, ${permissionsRes.status})`);
-                }
+                console.log('usersRes status:', usersRes.status);
+                console.log('permissionsRes status:', permissionsRes.status);
 
                 const usersData = await usersRes.json();
-                const permissionsData = await permissionsRes.json();
+                console.log('Raw usersData:', JSON.stringify(usersData, null, 2));
 
-                // 适配 support 路由的响应格式
-                const fetchedUsers: User[] = Array.isArray(usersData.data?.data) ? usersData.data.data.map((u: any) => ({
+                if (usersData.code !== 200) {
+                    setError(usersData.message || '加载用户数据失败');
+                    throw new Error(usersData.message || `加载用户数据失败 (code: ${usersData.code})`);
+                }
+
+                const fetchedUsers: User[] = Array.isArray(usersData.data) ? usersData.data.map((u: any) => ({
                     id: u.c_username,
-                    name: u.c_name || u.c_username // 使用 c_name，若为空则用 c_username
+                    name: u.c_username
                 })) : [];
-                console.log('Fetched users:', fetchedUsers); // 调试日志
+                console.log('Fetched users:', fetchedUsers);
                 setAllUsers(fetchedUsers);
+
+                const permissionsData = await permissionsRes.json();
+                console.log('Raw permissionsData:', JSON.stringify(permissionsData, null, 2));
+                if (permissionsData.code !== 200) {
+                    setError(permissionsData.message || '加载权限数据失败');
+                    throw new Error(permissionsData.message || `加载权限数据失败 (code: ${permissionsData.code})`);
+                }
 
                 const currentPermissionIds: string[] = Array.isArray(permissionsData.data) ? permissionsData.data.map((u: any) => u.c_username) : [];
                 const initialPermissions = fetchedUsers.reduce((acc: Record<string, boolean>, user: User) => {
@@ -83,9 +91,9 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                     return acc;
                 }, {});
                 setPermissions(initialPermissions);
-
             } catch (err: any) {
                 setError(err.message || "发生未知错误");
+                console.error('Fetch error:', err);
             } finally {
                 setIsLoading(false);
             }
@@ -113,7 +121,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
         setError(null);
         try {
             const grantedUserIds = Object.keys(permissions).filter(userId => permissions[userId]);
-            const response = await fetch(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/users`, {
+            const response = await fetch(`/back/api/study/permissions/courses/${course.c_course_id}/users`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
