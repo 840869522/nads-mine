@@ -37,7 +37,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
+
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
@@ -45,6 +45,9 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {TopologyData} from "@/types.ts";
 import {useAuth} from "@/hooks/useAuth.ts";
+
+import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
+
 
 // --- 类型定义 ---
 interface User {
@@ -95,6 +98,11 @@ interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
     // === 状态管理 ===
+
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+
     const { user } = useAuth();
     const [error, setError] = useState<string | null>(null);
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
@@ -205,6 +213,25 @@ const AdManagementPage: React.FC = () => {
 
     const handleCloseForm = () => { setIsFormOpen(false); setEditingAdConfig(null); setSelectedReferees([]); };
 
+    const handleViewDetails = (adConfig: AdConfig) => {
+        // 这里是关键的适配：源数据是 adConfig
+        if (adConfig.c_scene_instance_id) {
+            // 使用 adConfig 中的 c_scene_instance_id
+            setSelectedInstanceId(adConfig.c_scene_instance_id);
+            // 使用 adConfig 中的 c_drill_name 作为标题，更符合上下文
+            setSelectedScenarioName(adConfig.c_drill_name);
+            // 打开对话框
+            setIsDetailsModalOpen(true);
+        } else {
+            alert('此演练尚未启动，无法查看实例详情。');
+        }
+    };
+
+    const handleCloseDetails = () => {
+        setIsDetailsModalOpen(false);
+    };
+
+
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (teamConflictError) { setStatusMessage({ type: 'error', message: teamConflictError }); return; }
@@ -265,20 +292,22 @@ const AdManagementPage: React.FC = () => {
 
     // 启动场景
     const handleAdAction= async (ad: Ad) => {
+        const cj_name = findSceneNameById(ad.c_scene_config_id);
+
         // 1. 从 useAuth Hook 获取用户名
-        const username = user.user.c_username;
+        const username = user?.user?.c_username;
 
         if (!username) {
             alert('无法获取当前用户名，请确保您已登录。');
             return;
         }
 
-        if (!window.confirm(`您确定要启动场景 “${ad.name}” 的演练吗？`)) {
+        if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
             return;
         }
 
         try {
-            const response = await fetch(`/back/api/scenarios/${ad.id}/start`, {
+            const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -295,6 +324,7 @@ const AdManagementPage: React.FC = () => {
             }
 
             alert(result.message);
+            await fetchData(); // 刷新数据
 
         } catch (err: any) {
             setError(err.message || '发生未知网络错误');
@@ -376,14 +406,28 @@ const AdManagementPage: React.FC = () => {
                                                         <Tooltip title="开始/重新开始演练">
                                                             <IconButton
                                                                 color="success"
-                                                                onClick={() => handleAdAction(adConfig.c_id, 'start')}
+                                                                onClick={() => handleAdAction(adConfig)}
                                                             >
                                                                 <PlayArrowIcon />
                                                             </IconButton>
                                                         </Tooltip>
                                                     )}
-                                                    {adConfig.c_status === 'running' && (<Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleAdAction(adConfig.c_id, 'stop')}><StopIcon /></IconButton></Tooltip>)}
-                                                    <Tooltip title="查看详情/报告"><IconButton color="info"><VisibilityIcon /></IconButton></Tooltip>
+
+
+                                                    <Tooltip title="查看详情/报告">
+                                                            <span> {/* 使用 span 以在禁用时显示 Tooltip */}
+                                                                <IconButton
+                                                                    color="info"
+                                                                    // 绑定我们新创建的 handleViewDetails 函数
+                                                                    onClick={() => handleViewDetails(adConfig)}
+                                                                    // 如果没有 c_scene_instance_id，则禁用按钮
+                                                                    disabled={!adConfig.c_scene_instance_id}
+                                                                >
+                                                                    <VisibilityIcon />
+                                                                </IconButton>
+                                                            </span>
+                                                    </Tooltip>
+
                                                     <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status == 'running'}><EditIcon /></IconButton></span></Tooltip>
                                                     <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status == 'running'}><DeleteIcon /></IconButton></span></Tooltip>
                                                 </TableCell>
@@ -478,6 +522,16 @@ const AdManagementPage: React.FC = () => {
                     <Button onClick={handleDeleteAdConfig} color="error" disabled={isSubmitting}>{isSubmitting ? <CircularProgress size={24} /> : '确认删除'}</Button>
                 </DialogActions>
             </Dialog>
+
+            {isDetailsModalOpen && selectedInstanceId && (
+                <InstanceDetailsDialog
+                    open={isDetailsModalOpen}
+                    onClose={handleCloseDetails} // 使用我们创建的独立函数
+                    instanceId={selectedInstanceId}
+                    scenarioName={selectedScenarioName}
+                />
+            )}
+
         </Box>
     );
 };

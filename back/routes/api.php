@@ -244,17 +244,19 @@ Route::prefix('vms')->group(function () {
 
     Route::get('ad/users', [UserController::class, 'getAllUser']);
     Route::prefix('ad/team')->group(function () {
-        Route::get('/', [TeamController::class, 'index']);
+        Route::get('/', [TeamController::class, 'index']); // TeamController.index
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{team}', [TeamController::class, 'show']);
         Route::put('/{team}', [TeamController::class, 'update']);
         Route::delete('/{team}', [TeamController::class, 'destroy']);
     });
     Route::apiResource('ad-configs', AdConfigController::class);
-    Route::prefix('ad-configs/{adConfig}')->group(function () {
-        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
-        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
-    });
+
+      Route::post('/ad-configs/{adConfig}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill'])->name('ad-configs.start-drill');
+//    Route::prefix('ad-configs/{adConfig}')->group(function () {
+//        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+//        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+//    });
 
     Route::prefix('ad')->group(function () {
 
