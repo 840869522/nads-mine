@@ -33,11 +33,11 @@ import CryptoJS from "crypto-js";
 import { toast } from 'react-toastify';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
-type UserDisplayItem = { c_username: string; c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
+type UserDisplayItem = { c_username: string; c_name: string, c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
 
 
 type Order = 'asc' | 'desc';
-type SortableUserKeys = keyof Pick<UserDisplayItem, 'c_username' | 'c_email' | 'c_is_login' | 'c_create_at' | 'c_update_at' | 'c_last_login'>;
+type SortableUserKeys = keyof Pick<UserDisplayItem, 'c_username' | 'c_name' | 'c_email' | 'c_is_login' | 'c_create_at' | 'c_update_at' | 'c_last_login'>;
 
 
 const UserManagementPage: React.FC = () => {
@@ -50,7 +50,7 @@ const UserManagementPage: React.FC = () => {
 
   const [count, setDataCount] = useState<number>(0);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserDisplayItem | null>(null);
+  const [editingUser, setEditingUser] = useState<UserDisplayItem & { c_password: string } | null>(null);
 
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -135,7 +135,7 @@ const UserManagementPage: React.FC = () => {
         setEditingUser(res.data.data);
         setIsUserModalOpen(true);
       } else {
-        toast.error(`发生错误 - ${res.data.message}`,{
+        toast.error(`发生错误 - ${res.data.message}`, {
           autoClose: 3000,
           closeOnClick: true,
           pauseOnHover: true,
@@ -193,12 +193,12 @@ const UserManagementPage: React.FC = () => {
           draggable: true,
         });
       } else {
-       toast.error(`用户 "${formData.username}" 更新失败。`, {
-        autoClose: 3000,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+        toast.error(`用户 "${formData.username}" 更新失败。`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       }
     }
   };
@@ -304,6 +304,7 @@ const UserManagementPage: React.FC = () => {
             <TableRow>
               {[
                 { id: 'c_username', label: '用户名' },
+                { id: 'c_name', label: "姓名" },
                 { id: 'c_email', label: '邮箱' },
                 { id: 'c_is_login', label: '状态' },
                 { id: 'c_create_at', label: '创建日期' },
@@ -338,6 +339,7 @@ const UserManagementPage: React.FC = () => {
                 filteredAndSortedUsers.map((user) => (
                   <TableRow key={user.c_username} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{user.c_username}</TableCell>
+                    <TableCell sx={{fontWeight: "medium"}}>{user.c_name}</TableCell>
                     <TableCell>{user.c_email}</TableCell>
                     <TableCell>
                       <Chip

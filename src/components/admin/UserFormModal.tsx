@@ -23,7 +23,8 @@ import { apiClientWithToken } from '@/utils/axios';
 
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
-  pwdedit? : boolean,
+  name: string,
+  pwdedit?: boolean,
   username?: string;
   email?: string;
   status?: 'active' | 'disabled';
@@ -38,6 +39,7 @@ interface UserFormModalProps {
 }
 
 const DEFAULT_FORM: UserFormData = {
+  name: "",
   username: '',
   role: [UserRole.STUDENT],
   email: '',
@@ -66,6 +68,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
     if (initialUser) {
       setFormData({
         pwdedit: false,
+        name: initialUser.c_name,
         username: initialUser.c_username,
         role: [...initialUser.role],
         email: initialUser.c_email,
@@ -104,7 +107,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (name === "password")
-      setFormData(prev => ({...prev,[name]:value,["pwdedit"]:true}));
+      setFormData(prev => ({ ...prev, [name]: value, ["pwdedit"]: true }));
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
@@ -121,12 +124,12 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
     const newValue = event.target.value as 'active' | 'disabled';
-    
+
     setFormData(prev => ({
       ...prev,
       status: newValue
     }));
-    const {name} = event.target;
+    const { name } = event.target;
     // 实时清除验证错误
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
@@ -161,7 +164,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
       next.password = '新用户必须设置密码';
     } else if (formData.password && formData.password.length < 6) {
       next.password = '密码至少 6 位';
-    }else if (formData.password?.trim()){
+    } else if (formData.password?.trim()) {
       formData.pwdedit = false;
     }
 
@@ -204,6 +207,19 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
             onChange={handleChange}
             error={!!errors.username}
             helperText={errors.username}
+            required
+          />
+
+          <TextField
+            fullWidth
+            name="name"
+            label="姓名"
+            variant="outlined"
+            margin="dense"
+            value={formData.name}
+            onChange={handleChange}
+            error={!!errors.name}
+            helperText={errors.name}
             required
           />
 

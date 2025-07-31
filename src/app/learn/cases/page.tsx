@@ -44,7 +44,6 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import CoursePermissionDialog from '@/components/coursecases/CoursePermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
-import { BACK_IP_PORT } from '@/constants';
 import { getCookie } from '@/utils/cookie';
 
 const highlightText = (text: string, keyword: string) => {
@@ -116,7 +115,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch categories
-        const categoriesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/categories`, {
+        const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const categoriesData = categoriesResponse.data;
@@ -130,7 +129,7 @@ const CourseCasesPage: React.FC = () => {
         }
 
         // Fetch scene configs
-        const sceneConfigsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/scenarios`, {
+        const sceneConfigsResponse = await apiClientWithToken.get(`/back/api/scenarios`, {
           headers: { Authorization: `Bearer ${token}` },
 
         });
@@ -151,7 +150,7 @@ const CourseCasesPage: React.FC = () => {
           ...(searchKeyword && { keyword: searchKeyword }),
           ...(filterCategoryId && { c_category_id: filterCategoryId }),
         };
-        const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+        const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
@@ -162,7 +161,7 @@ const CourseCasesPage: React.FC = () => {
                 let resources: CourseCaseResource[] = [];
                 let experiments: Experiment[] = [];
                 try {
-                  const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                  const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
 
                     headers: { Authorization: `Bearer ${token}` },
                     params: {
@@ -176,7 +175,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                       isExperimentResource: false, // 标记为课程资源
                     }));
@@ -185,7 +184,7 @@ const CourseCasesPage: React.FC = () => {
                   console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
                 }
                 try {
-                  const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                  const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
                     headers: { Authorization: `Bearer ${token}` },
                   });
                   const experimentsData = experimentsResponse.data;
@@ -200,7 +199,7 @@ const CourseCasesPage: React.FC = () => {
                         c_resource_id: res.c_resource_id,
                         c_resource_name: res.c_resource_name,
                         c_type: getFileType(res.c_type),
-                        c_resource_path: `${BACK_IP_PORT}/api/study/experiment-resources/${res.c_resource_id}`,
+                        c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
                         c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                         isExperimentResource: true, // 标记为实验资源
                       })),
@@ -329,7 +328,7 @@ const CourseCasesPage: React.FC = () => {
 
       let experimentId = experiment.c_experiment_id;
       if (experiment.c_experiment_id.startsWith('temp-id-')) {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, experimentData, {
+        const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -338,7 +337,7 @@ const CourseCasesPage: React.FC = () => {
         }
         experimentId = data.data.c_experiment_id;
       } else {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -354,7 +353,7 @@ const CourseCasesPage: React.FC = () => {
             formData.append('c_course_id', courseId);
             formData.append('c_experiment_id', experimentId);
             formData.append('file', resource.fileObject);
-            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
+            const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 Authorization: `Bearer ${token}`,
@@ -369,7 +368,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // Refresh experiment list
-      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, {
+      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const experimentsData = coursesResponse.data;
@@ -421,7 +420,7 @@ const CourseCasesPage: React.FC = () => {
 
       let courseId = c_course_id;
       if (editingCase) {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/courses/${c_course_id}`, courseData, {
+        const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -429,7 +428,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
         }
       } else {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses`, courseData, {
+        const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -445,7 +444,7 @@ const CourseCasesPage: React.FC = () => {
             const formData = new FormData();
             formData.append('c_course_id', courseId);
             formData.append('file', resource.fileObject);
-            const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/courses/${courseId}/resources/upload`, formData, {
+            const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 'Authorization': `Bearer ${token}`,
@@ -460,7 +459,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // 刷新课程列表
-      const coursesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
@@ -476,7 +475,7 @@ const CourseCasesPage: React.FC = () => {
               let resources: CourseCaseResource[] = [];
               let experiments: Experiment[] = [];
               try {
-                const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
                 const resourcesData = resourcesResponse.data;
@@ -485,7 +484,7 @@ const CourseCasesPage: React.FC = () => {
                     c_resource_id: res.c_resource_id,
                     c_resource_name: res.c_resource_name,
                     c_type: getFileType(res.c_type),
-                    c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                     c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                   }));
                 }
@@ -493,7 +492,7 @@ const CourseCasesPage: React.FC = () => {
                 console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
               }
               try {
-                const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
@@ -508,7 +507,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                     })),
                     created_at: exp.created_at || new Date().toISOString(),
@@ -550,7 +549,7 @@ const CourseCasesPage: React.FC = () => {
       if (!token) {
         throw new Error('未登录，请先登录');
       }
-      const response = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/categories`, {
+      const response = await apiClientWithToken.get(`/back/api/study/categories`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
@@ -584,7 +583,7 @@ const CourseCasesPage: React.FC = () => {
         ...(searchKeyword && { keyword: searchKeyword }),
         ...(filterCategoryId && { c_category_id: filterCategoryId }),
       };
-      const response = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses`, {
+      const response = await apiClientWithToken.get(`/back/api/study/courses`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
       });
@@ -595,7 +594,7 @@ const CourseCasesPage: React.FC = () => {
               let resources: CourseCaseResource[] = [];
               let experiments: Experiment[] = [];
               try {
-                const resourcesResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/resources`, {
+                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
                   headers: { Authorization: `Bearer ${token}` },
                   params: { page: 1, pageSize: 10 },
                 });
@@ -605,7 +604,7 @@ const CourseCasesPage: React.FC = () => {
                     c_resource_id: res.c_resource_id,
                     c_resource_name: res.c_resource_name,
                     c_type: getFileType(res.c_type),
-                    c_resource_path: `${BACK_IP_PORT}/api/study/resources/${res.c_resource_id}`,
+                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                     c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                     isExperimentResource: false,
                   }));
@@ -614,7 +613,7 @@ const CourseCasesPage: React.FC = () => {
                 console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
               }
               try {
-                const experimentsResponse = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${course.c_course_id}/experiments`, {
+                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
@@ -629,7 +628,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/experiment-resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                       isExperimentResource: true,
                     })),
@@ -674,7 +673,7 @@ const CourseCasesPage: React.FC = () => {
       if (!token) {
         throw new Error('未登录，请先登录');
       }
-      const response = await apiClientWithToken.get(`${BACK_IP_PORT}/api/study/courses/${courseId}/experiments`, {
+      const response = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
@@ -694,7 +693,7 @@ const CourseCasesPage: React.FC = () => {
                       c_resource_id: res.c_resource_id,
                       c_resource_name: res.c_resource_name,
                       c_type: getFileType(res.c_type),
-                      c_resource_path: `${BACK_IP_PORT}/api/study/experiment-resources/${res.c_resource_id}`,
+                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
                       isExperimentResource: true,
                     })),
@@ -730,7 +729,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       if (category.c_category_id) {
-        const response = await apiClientWithToken.put(`${BACK_IP_PORT}/api/study/categories/${category.c_category_id}`, {
+        const response = await apiClientWithToken.put(`/back/api/study/categories/${category.c_category_id}`, {
           c_category_name: category.c_category_name,
         }, {
           headers: { Authorization: `Bearer ${token}` },
@@ -742,7 +741,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`更新类别失败: ${data.message || '未知错误'}`);
         }
       } else {
-        const response = await apiClientWithToken.post(`${BACK_IP_PORT}/api/study/categories`, {
+        const response = await apiClientWithToken.post(`/back/api/study/categories`, {
           c_category_name: category.c_category_name,
         }, {
           headers: { Authorization: `Bearer ${token}` },
@@ -768,7 +767,7 @@ const CourseCasesPage: React.FC = () => {
         if (!token) {
           throw new Error('未登录，请先登录');
         }
-        const response = await apiClientWithToken.delete(`${BACK_IP_PORT}/api/study/categories/${categoryToDelete.c_category_id}`, {
+        const response = await apiClientWithToken.delete(`/back/api/study/categories/${categoryToDelete.c_category_id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -810,7 +809,7 @@ const CourseCasesPage: React.FC = () => {
             URL.revokeObjectURL(resource.c_resource_path);
           }
         });
-        const response = await apiClientWithToken.delete(`${BACK_IP_PORT}/api/study/courses/${caseToDelete.c_course_id}`, {
+        const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.c_course_id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
@@ -837,7 +836,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error('未登录，请先登录');
         }
         const response = await apiClientWithToken.delete(
-            `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
+            `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
             {
               headers: { Authorization: `Bearer ${token}` },
             }
@@ -880,9 +879,9 @@ const CourseCasesPage: React.FC = () => {
 
       let url = '';
       if (isExperimentResource && experimentId) {
-        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentId}/resources/${resource.c_resource_id}`;
+        url = `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentId}/resources/${resource.c_resource_id}`;
       } else {
-        url = `${BACK_IP_PORT}/api/study/courses/${selectedCaseForResources.c_course_id}/resources/${resource.c_resource_id}`;
+        url = `/back/api/study/courses/${selectedCaseForResources.c_course_id}/resources/${resource.c_resource_id}`;
       }
 
       const response = await apiClientWithToken.delete(url, {
