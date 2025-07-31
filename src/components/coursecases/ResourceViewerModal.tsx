@@ -28,7 +28,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
             const token = getCookie('_auth');
             if (!token) throw new Error('未登录，请先登录');
             const downloadUrl = resource.isExperimentResource
-                ? `${BACK_IP_PORT}/api/study/experiment-resources/${resource.c_resource_id}`
+                ? `/back/api/study/experiment-resources/${resource.c_resource_id}`
                 : resource.c_resource_path;
             const response = await apiClientWithToken.get(downloadUrl, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -86,7 +86,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                 const token = getCookie('_auth');
                 if (!token) throw new Error('未登录，请先登录');
                 const downloadUrl = resource.isExperimentResource
-                    ? `${BACK_IP_PORT}/api/study/experiment-resources/${resource.c_resource_id}`
+                    ? `/back/api/study/experiment-resources/${resource.c_resource_id}`
                     : resource.c_resource_path;
                 const response = await apiClientWithToken.get(downloadUrl, {
                     headers: { Authorization: `Bearer ${token}` },

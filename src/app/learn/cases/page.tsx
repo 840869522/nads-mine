@@ -34,7 +34,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import Pagination from '@mui/material/Pagination';
 import SecurityIcon from '@mui/icons-material/Security';
-import RefreshIcon from '@mui/icons-material/Refresh';
+
 
 import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
@@ -44,6 +44,7 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import CoursePermissionDialog from '@/components/coursecases/CoursePermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
+//import { BACK_IP_PORT } from '@/constants';
 import { getCookie } from '@/utils/cookie';
 
 const highlightText = (text: string, keyword: string) => {
