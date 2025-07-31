@@ -51,6 +51,7 @@ Route::prefix("")->group(function () {
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
+    Route::post("/test",[UserController::class,'userTest']);
 });
 
 
@@ -67,7 +68,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update", [UserController::class, "updateUserInfo"]);
         Route::post("/delete", [UserController::class, "deleteUser"]);
         Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
-        Route::post("/up_common", [UserController::class, "updateUserEmail"]);
+        Route::post("/update_common", [UserController::class, "updateCommonUser"]);
     });
 
     Route::prefix("role")->group(function () {

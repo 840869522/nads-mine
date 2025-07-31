@@ -10,6 +10,7 @@
     use App\Utils\JWTControll;
     use Exception;
     use Illuminate\Support\Facades\Log;
+    use Illuminate\Support\Facades\DB;
 
     class UserController extends Controller{
         
@@ -244,7 +245,7 @@
             }
         }
 
-        public function updateUserEmail (Request $req) {
+        public function updateCommonUser (Request $req) {
             $reqData = $req->json()->all();
             $token_data  = $req->input("token_data");
             try {
@@ -262,7 +263,7 @@
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
-            $modelRes = UserModel::updateUserEmailById($id, $data);
+            $modelRes = UserModel::updateUserCommonById($id, $data);
             if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
@@ -325,6 +326,12 @@
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
+        }
+        public function userTest() {
+            $res = DB::table('c_users')->select(['c_username as id'])->get()->toArray();
+            return response()->json([
+                'data'=>$res
+            ]);
         }
     }
 ?>

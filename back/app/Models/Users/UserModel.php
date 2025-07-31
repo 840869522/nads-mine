@@ -8,7 +8,6 @@
     use App\Utils\GlobalResponse;
     use Exception;
     use Illuminate\Support\Facades\Log;
-use Nette\Schema\Expect;
 
     class UserModel extends Model{
 
@@ -20,7 +19,7 @@ use Nette\Schema\Expect;
 
         public static function getAllUser(int $page = 1, int $pagesize = 10): array{
             $offset = ($page - 1) * $pagesize;
-            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
             $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users`";
             try {
                 $user = db::select($sql, [$pagesize, $offset]);
@@ -110,9 +109,9 @@ use Nette\Schema\Expect;
 
         public static function insertNewUser(array $data): array{
             try {
-                $sql = "INSERT INTO `c_users`(c_username,c_password,c_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(c_username,c_password,c_name,c_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,?,?,NOW(),NOW())";
                 db::beginTransaction();
-                $res = db::insert($sql, [$data['username'], $data['password'], $data["email"], $data["is_login"]]);
+                $res = db::insert($sql, [$data['username'], $data['password'], $data['name'],$data["email"], $data["is_login"]]);
                 if ($res) {
                     db::commit();
                     $roles = array_map(function ($role_id) use ($data) {
@@ -173,10 +172,10 @@ use Nette\Schema\Expect;
 
         public static function updateUserById(string $id, array $data): array
         {
-            $sql = "UPDATE `c_users` SET c_is_login = ?,c_email = ?,c_password = ?, c_update_at = NOW() WHERE c_username = ?";
+            $sql = "UPDATE `c_users` SET c_name = ?,c_is_login = ?,c_email = ?,c_password = ?, c_update_at = NOW() WHERE c_username = ?";
             try {
                 db::beginTransaction();
-                $res = db::update($sql, [$data["is_login"], $data['email'], $data['password'], $id]);
+                $res = db::update($sql, [$data['name'],$data["is_login"], $data['email'], $data['password'], $id]);
                 if ($res) {
                     db::commit();
                     $roles = array_map(function ($role_id) use ($id) {
@@ -208,10 +207,11 @@ use Nette\Schema\Expect;
             }
         }
 
-        public static function updateUserEmailById (string $id, array $data) : array {
-            $sql_common = "UPDATE `c_users` SET c_email = ?,c_update_at = NOW() WHERE c_username = ?";
+        public static function updateUserCommonById (string $id, array $data) : array {
+            $sql_common = "UPDATE `c_users` SET c_name = ? ,c_email = ?,c_update_at = NOW() WHERE c_username = ?";
             try {
                 $email = $data["email"];
+                $name = $data['name'];
             }catch(Exception $e) {
                 Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
@@ -220,7 +220,7 @@ use Nette\Schema\Expect;
             }
             db::beginTransaction();
             try {
-                $res = db::update($sql_common,[$email, $id]);
+                $res = db::update($sql_common,[$name,$email, $id]);
                 if ($res){
                     db::commit();
                     return [

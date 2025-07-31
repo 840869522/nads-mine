@@ -11,8 +11,9 @@ import CryptoJS from "crypto-js";
 const PersonalPage: React.FC = () => {
     const { user } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
-    const [emailError, setEmailError] = useState("");
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [formData, setFormData] = useState({
+        name: "",
         username: '',
         email: "",
     });
@@ -35,9 +36,22 @@ const PersonalPage: React.FC = () => {
     // 初始化表单数据
     useEffect(() => {
         if (user) {
-            setFormData({
-                username: user.user.c_username,
-                email: user.user.c_email || "",
+            apiClientWithToken.post("/back/api/support/user/id", JSON.stringify({ id: user.user.c_username })).then((res) => {
+                const userData = res.data.data;
+                if (res.data.code === 200) {
+                    setFormData({
+                        name: userData.c_name,
+                        username: userData.c_username,
+                        email: userData.c_email
+                    });
+                } else {
+                    toast.error(`${res.data.message}`, {
+                        autoClose: 3000,
+                        draggable: true,
+                        closeOnClick: true,
+                        pauseOnHover: true
+                    })
+                }
             });
         }
     }, [user]);
@@ -45,13 +59,13 @@ const PersonalPage: React.FC = () => {
     const validateEmail = () => {
         let isValid = true;
         if (!formData.email.trim()) {
-            setEmailError("邮箱不能为空");
+            setErrors(prev => ({ ...prev, 'email': "邮箱不能为空" }));
             isValid = false;
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            setEmailError("邮箱格式不正确");
+            setErrors(prev => ({ ...prev, 'email': "邮箱格式不正确" }));
             isValid = false;
         } else {
-            setEmailError("");
+            setErrors(prev => ({ ...prev, 'email': "" }));
         }
 
         return isValid;
@@ -100,11 +114,20 @@ const PersonalPage: React.FC = () => {
         }));
 
         if (name === 'email') {
+            let emailError;
             if (value.trim()) {
-                setEmailError(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? "" : "邮箱格式不正确");
+                emailError = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? "" : "邮箱格式不正确";
             } else {
-                setEmailError("邮箱不能为空");
+                emailError = "邮箱不能为空";
             }
+            setErrors(prev => ({ ...prev, [name]: emailError }));
+        }
+        if (name === "name") {
+            let nameError:string;
+            if (!value.trim()) {
+                nameError = "姓名不能为空";
+            }
+            setErrors(prev => ({ ...prev, [name]: nameError }))
         }
     };
 
@@ -139,7 +162,8 @@ const PersonalPage: React.FC = () => {
         if (!validateEmail()) return;
         apiClientWithToken.post("/back/api/support/user/update_common", JSON.stringify({
             data: {
-                email: formData.email
+                email: formData.email,
+                name: formData.name
             },
             id: user?.user.c_username
         })).then((res) => {
@@ -154,7 +178,7 @@ const PersonalPage: React.FC = () => {
                     }
                 );
             } else {
-                setFormData({...formData, email: user?.user.c_email || ""});
+                setFormData({ ...formData, email: user?.user.c_email || "" });
                 toast.error(`修改信息失败 ${res.data.message}`, {
                     autoClose: 3000,
                     closeOnClick: true,
@@ -212,6 +236,7 @@ const PersonalPage: React.FC = () => {
     const handleCancel = () => {
         if (user) {
             setFormData({
+                name: formData.name,
                 username: formData.username,
                 email: user.user.c_email || "",
             });
@@ -267,8 +292,21 @@ const PersonalPage: React.FC = () => {
                                     margin="dense"
                                     value={formData.email}
                                     onChange={handleEmailChange}
-                                    error={!!emailError}
-                                    helperText={emailError}
+                                    error={!!errors.remail}
+                                    helperText={errors.email}
+                                    required
+                                />
+
+                                <TextField
+                                    fullWidth
+                                    name="name"
+                                    label="姓名"
+                                    variant="outlined"
+                                    margin="dense"
+                                    value={formData.name}
+                                    onChange={handleEmailChange}
+                                    error={!!errors.name}
+                                    helperText={errors.name}
                                     required
                                 />
 
@@ -281,6 +319,10 @@ const PersonalPage: React.FC = () => {
                                 <Box sx={{ mt: 2 }}>
                                     <Typography sx={{ fontWeight: 'bold' }}>用户名:</Typography>
                                     <Typography>{formData.username}</Typography>
+                                </Box>
+                                <Box sx={{ mt: 2 }}>
+                                    <Typography sx={{ fontWeight: 'bold' }}>姓名:</Typography>
+                                    <Typography>{formData.name}</Typography>
                                 </Box>
                                 <Box sx={{ mt: 2 }}>
                                     <Typography sx={{ fontWeight: 'bold' }}>邮箱:</Typography>
@@ -309,7 +351,7 @@ const PersonalPage: React.FC = () => {
                                 <Button
                                     variant="contained"
                                     onClick={handleSubmitInfo}
-                                    disabled={!!emailError}
+                                    // disabled={Object.keys(errors).length !==0}
                                 >
                                     保存
                                 </Button>
