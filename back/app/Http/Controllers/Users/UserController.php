@@ -10,6 +10,7 @@
     use App\Utils\JWTControll;
     use Exception;
     use Illuminate\Support\Facades\Log;
+    use Illuminate\Support\Facades\DB;
 
     class UserController extends Controller{
         
@@ -325,6 +326,12 @@
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
+        }
+        public function userTest() {
+            $res = DB::table('c_users')->select(['c_username as id'])->get()->toArray();
+            return response()->json([
+                'data'=>$res
+            ]);
         }
     }
 ?>

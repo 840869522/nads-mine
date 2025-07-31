@@ -19,7 +19,7 @@
 
         public static function getAllUser(int $page = 1, int $pagesize = 10): array{
             $offset = ($page - 1) * $pagesize;
-            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
             $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users`";
             try {
                 $user = db::select($sql, [$pagesize, $offset]);
@@ -109,7 +109,7 @@
 
         public static function insertNewUser(array $data): array{
             try {
-                $sql = "INSERT INTO `c_users`(c_username,c_password,c_namec_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,?,?,NOW(),NOW())";
+                $sql = "INSERT INTO `c_users`(c_username,c_password,c_name,c_email,c_is_login,c_create_at,c_update_at) VALUES(?,?,?,?,?,NOW(),NOW())";
                 db::beginTransaction();
                 $res = db::insert($sql, [$data['username'], $data['password'], $data['name'],$data["email"], $data["is_login"]]);
                 if ($res) {

@@ -151,7 +151,8 @@ const UserManagementPage: React.FC = () => {
       email: formData.email,
       password: "",
       is_login: formData.status == "active" ? 1 : 0,
-      role: [...formData.role]
+      role: [...formData.role],
+      name : formData.name
     }
     if (isNew) {
       userData.password = CryptoJS.SHA256(formData.password).toString()
@@ -184,7 +185,7 @@ const UserManagementPage: React.FC = () => {
       }));
       if (res.data.code === 200) {
         setUsers(prev => prev.map(u =>
-          u.c_username === editingUser.c_username ? { ...u, username: formData.username!, role: formData.role!, email: formData.email!, status: formData.status as 'active' | 'disabled' } : u
+          u.c_username === editingUser.c_username ? { ...u, c_name: formData.name,c_username: formData.username!, c_role: formData.role!, c_email: formData.email!, c_status: formData.status as 'active' | 'disabled' } : u
         ));
         toast.success(`用户 "${formData.username}" 更新成功。`, {
           autoClose: 3000,

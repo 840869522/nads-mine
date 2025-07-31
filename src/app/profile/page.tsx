@@ -37,8 +37,13 @@ const PersonalPage: React.FC = () => {
     useEffect(() => {
         if (user) {
             apiClientWithToken.post("/back/api/support/user/id", JSON.stringify({ id: user.user.c_username })).then((res) => {
+                const userData = res.data.data;
                 if (res.data.code === 200) {
-                    setFormData(res.data.data);
+                    setFormData({
+                        name: userData.c_name,
+                        username: userData.c_username,
+                        email: userData.c_email
+                    });
                 } else {
                     toast.error(`${res.data.message}`, {
                         autoClose: 3000,
@@ -295,7 +300,7 @@ const PersonalPage: React.FC = () => {
                                 <TextField
                                     fullWidth
                                     name="name"
-                                    label="邮箱"
+                                    label="姓名"
                                     variant="outlined"
                                     margin="dense"
                                     value={formData.name}
@@ -346,7 +351,7 @@ const PersonalPage: React.FC = () => {
                                 <Button
                                     variant="contained"
                                     onClick={handleSubmitInfo}
-                                    disabled={Object.keys(errors).length !==0}
+                                    // disabled={Object.keys(errors).length !==0}
                                 >
                                     保存
                                 </Button>
