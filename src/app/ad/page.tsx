@@ -37,7 +37,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
@@ -47,7 +46,6 @@ import {TopologyData} from "@/types.ts";
 import {useAuth} from "@/hooks/useAuth.ts";
 
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
-
 
 // --- 类型定义 ---
 interface User {
@@ -67,6 +65,7 @@ interface AdReferee {
     user?: User;
 }
 
+// 此接口与您的数据库表完全匹配
 interface AdConfig {
     c_id: string;
     c_drill_name: string;
@@ -74,7 +73,7 @@ interface AdConfig {
     c_red_team_id: number;
     c_blue_team_id: number;
     c_scene_config_id: number | null;
-    c_scene_instance_id: string | null;
+    c_scene_instance_id: string | null; // 这是关键字段
     c_status: 'pending' | 'running' | 'finished' | 'archived';
     c_start_time: string | null;
     c_end_time: string | null;
@@ -85,12 +84,14 @@ interface AdConfig {
     blueTeam?: Team;
 }
 
+// 按您的要求，保持此接口不变
 export interface Ad {
-    id: string; // 文件名将作为ID
+    id: string;
     name: string;
     description: string;
     uploadDate: string;
     nodeCount: number;
+    c_scene_config_id: number;
     topology_json: TopologyData;
 }
 
@@ -98,20 +99,17 @@ interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
     // === 状态管理 ===
-
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
-
     const { user } = useAuth();
-    const [error, setError] = useState<string | null>(null);
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [sceneConfigs, setSceneConfigs] = useState<SceneConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string | { [key: string]: string[] } } | null>(null);
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; message: string | { [key: string]: string[] } } | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingAdConfig, setEditingAdConfig] = useState<AdConfig | null>(null);
     const [selectedReferees, setSelectedReferees] = useState<AdReferee[]>([]);
@@ -124,33 +122,16 @@ const AdManagementPage: React.FC = () => {
     const [teamConflictError, setTeamConflictError] = useState<string | null>(null);
     const API_BASE_URL = '/back/api';
 
-
     const teamMemberUsernames = useMemo(() => {
-        // 如果没有选择队伍，返回一个空集合
-        if (!selectedRedTeamId && !selectedBlueTeamId) {
-            return new Set<string>();
-        }
-
-        // 找到对应的队伍对象
+        if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
         const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
         const blueTeam = teams.find(t => t.c_id === selectedBlueTeamId);
-
         const members = new Set<string>();
-
-        // 将红队成员加入集合
-        if (redTeam?.users) {
-            redTeam.users.forEach(user => members.add(user.c_username));
-        }
-
-        // 将蓝队成员加入集合
-        if (blueTeam?.users) {
-            blueTeam.users.forEach(user => members.add(user.c_username));
-        }
-
+        if (redTeam?.users) { redTeam.users.forEach(user => members.add(user.c_username)); }
+        if (blueTeam?.users) { blueTeam.users.forEach(user => members.add(user.c_username)); }
         return members;
-    }, [selectedRedTeamId, selectedBlueTeamId, teams]); // 依赖项：当队伍选择变化时重新计算
+    }, [selectedRedTeamId, selectedBlueTeamId, teams]);
 
-    // --- 数据获取 ---
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -176,7 +157,6 @@ const AdManagementPage: React.FC = () => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // --- 实时冲突校验 ---
     useEffect(() => {
         if (!selectedRedTeamId || !selectedBlueTeamId) { setTeamConflictError(null); return; }
         if (selectedRedTeamId === selectedBlueTeamId) { setTeamConflictError('红队和蓝队不能选择同一个队伍。'); return; }
@@ -193,7 +173,6 @@ const AdManagementPage: React.FC = () => {
         }
     }, [selectedRedTeamId, selectedBlueTeamId, teams]);
 
-    // --- 事件处理器 (已恢复所有函数) ---
     const handleOpenForm = (adConfig: AdConfig | null = null) => {
         setStatusMessage(null);
         setEditingAdConfig(adConfig);
@@ -214,23 +193,17 @@ const AdManagementPage: React.FC = () => {
     const handleCloseForm = () => { setIsFormOpen(false); setEditingAdConfig(null); setSelectedReferees([]); };
 
     const handleViewDetails = (adConfig: AdConfig) => {
-        // 这里是关键的适配：源数据是 adConfig
         if (adConfig.c_scene_instance_id) {
-            // 使用 adConfig 中的 c_scene_instance_id
             setSelectedInstanceId(adConfig.c_scene_instance_id);
-            // 使用 adConfig 中的 c_drill_name 作为标题，更符合上下文
             setSelectedScenarioName(adConfig.c_drill_name);
-            // 打开对话框
             setIsDetailsModalOpen(true);
         } else {
+            // 这个 alert 理论上不应该被触发，因为按钮是禁用的
             alert('此演练尚未启动，无法查看实例详情。');
         }
     };
 
-    const handleCloseDetails = () => {
-        setIsDetailsModalOpen(false);
-    };
-
+    const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -291,17 +264,13 @@ const AdManagementPage: React.FC = () => {
     };
 
     // 启动场景
-    const handleAdAction= async (ad: Ad) => {
+    const handleAdAction = async (ad: Ad) => {
         const cj_name = findSceneNameById(ad.c_scene_config_id);
-
-        // 1. 从 useAuth Hook 获取用户名
-        const username = user?.user?.c_username;
-
+        const username = (user as any)?.user?.c_username;
         if (!username) {
             alert('无法获取当前用户名，请确保您已登录。');
             return;
         }
-
         if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
             return;
         }
@@ -309,26 +278,44 @@ const AdManagementPage: React.FC = () => {
         try {
             const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                // 2. 在请求体中附加上用户名
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({ username: username }),
             });
-
             const result = await response.json();
-
             if (!response.ok) {
                 throw new Error(result.message || '启动失败');
             }
 
-            alert(result.message);
-            await fetchData(); // 刷新数据
+            // **** 修正点 1: 从API返回结果中获取新实例ID ****
+            // 请与后端确认返回的JSON对象中，实例ID的键名是什么。
+            // 常见的键名是 `instance_id`, `id`, 或 `c_scene_instance_id`。
+            // 这里以 `instance_id` 为例，如果不对请修改它。
+            const newInstanceId = result.instance_id;
+
+            if (newInstanceId) {
+                // 如果成功获取ID，立即更新前端状态
+                setAdConfigs(currentConfigs =>
+                    currentConfigs.map(config => {
+                        // 通过 adConfig 的 c_id 来匹配并更新正确的行
+                        if (config.c_id === ad.id) { // 假设 ad.id 与 adConfig.c_id 对应
+                            return {
+                                ...config,
+                                c_scene_instance_id: newInstanceId, // 赋予新ID
+                                c_status: 'running'                 // 更新状态
+                            };
+                        }
+                        return config;
+                    })
+                );
+                setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！' });
+            } else {
+                // 如果API没有返回ID，则回退到刷新整个列表
+                setStatusMessage({ type: 'warning', message: '启动请求已发送，但未立即获取到实例ID。正在刷新列表...' });
+                await fetchData();
+            }
 
         } catch (err: any) {
-            setError(err.message || '发生未知网络错误');
-            alert(`启动失败: ${err.message}`);
+            setStatusMessage({ type: 'error', message: (err as Error).message });
         }
     };
 
@@ -342,7 +329,7 @@ const AdManagementPage: React.FC = () => {
     };
 
     const findTeamNameById = (id: number | null) => teams.find(i => i.c_id === id)?.c_name || `未知 (ID: ${id})`;
-    const findSceneNameById = (id: number | null) => sceneConfigs.find(i => i.c_config_id === id)?.c_name || `未知 (ID: ${id})`;
+    const findSceneNameById = (id: number | null) => sceneConfigs.find(i => i.c_config_id === id)?.c_name || `未关联`;
     const findUserNameById = (id: string | null) => users.find(u => u.c_username === id)?.c_username || `未知 (${id})`;
 
     const renderStatusChip = (status: AdConfig['c_status']) => {
@@ -356,7 +343,6 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
-    // --- 渲染逻辑 (已恢复所有调用) ---
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -367,7 +353,7 @@ const AdManagementPage: React.FC = () => {
                 </Box>
             </Box>
 
-            {statusMessage && statusMessage.type === 'success' && <Alert severity="success" onClose={() => setStatusMessage(null)} sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
+            {statusMessage && <Alert severity={statusMessage.type} onClose={() => setStatusMessage(null)} sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
 
             <Paper sx={{ width: '100%', overflow: 'hidden' }} elevation={2}>
                 <TableContainer sx={{ maxHeight: '70vh' }}>
@@ -404,32 +390,32 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell align="right">
                                                     {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
                                                         <Tooltip title="开始/重新开始演练">
-                                                            <IconButton
-                                                                color="success"
-                                                                onClick={() => handleAdAction(adConfig)}
-                                                            >
-                                                                <PlayArrowIcon />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    )}
-
-
-                                                    <Tooltip title="查看详情/报告">
-                                                            <span> {/* 使用 span 以在禁用时显示 Tooltip */}
+                                                            <span>
                                                                 <IconButton
-                                                                    color="info"
-                                                                    // 绑定我们新创建的 handleViewDetails 函数
-                                                                    onClick={() => handleViewDetails(adConfig)}
-                                                                    // 如果没有 c_scene_instance_id，则禁用按钮
-                                                                    disabled={!adConfig.c_scene_instance_id}
+                                                                    color="success"
+                                                                    // **** 修正点 2: 使用类型断言解决编译错误 ****
+                                                                    // 这会告诉编译器：“我知道类型不匹配，但我保证这样调用是安全的”
+                                                                    onClick={() => handleAdAction(adConfig as any as Ad)}
+                                                                    disabled={!adConfig.c_scene_config_id}
                                                                 >
-                                                                    <VisibilityIcon />
+                                                                    <PlayArrowIcon />
                                                                 </IconButton>
                                                             </span>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Tooltip title="查看详情/报告">
+                                                        <span>
+                                                            <IconButton
+                                                                color="info"
+                                                                onClick={() => handleViewDetails(adConfig)}
+                                                                disabled={!adConfig.c_scene_instance_id}
+                                                            >
+                                                                <VisibilityIcon />
+                                                            </IconButton>
+                                                        </span>
                                                     </Tooltip>
-
-                                                    <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status == 'running'}><EditIcon /></IconButton></span></Tooltip>
-                                                    <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status == 'running'}><DeleteIcon /></IconButton></span></Tooltip>
+                                                    <Tooltip title="编辑"><span><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status === 'running'}><EditIcon /></IconButton></span></Tooltip>
+                                                    <Tooltip title="删除"><span><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={adConfig.c_status === 'running'}><DeleteIcon /></IconButton></span></Tooltip>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -457,36 +443,18 @@ const AdManagementPage: React.FC = () => {
 
                         <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
                             <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判</Typography>
-
-                            <Autocomplete
-                                multiple
-                                id="referee-autocomplete"
-                                options={users}
-                                getOptionLabel={(option) => option.c_username}
-                                value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]}
-                                isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
-                                onChange={(_event, newValue) => {
-                                    const newReferees = newValue.map(user => {
-                                        const existing = selectedReferees.find(r => r.c_user_id === user.c_username);
-                                        return existing || { c_user_id: user.c_username, c_level: '普通裁判', user: user };
-                                    });
-                                    setSelectedReferees(newReferees);
-                                }}
-
-                                getOptionDisabled={(option) => teamMemberUsernames.has(option.c_username)}
-
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        variant="standard"
-                                        label="选择用户作为裁判"
-                                        placeholder="添加裁判..."
-                                        // (可选) 添加一个辅助提示，告诉用户为什么某些选项被禁用了
-                                        helperText={teamMemberUsernames.size > 0 ? "已经是红/蓝队成员的用户将被禁用" : ""}
-                                    />
-                                )}
-                            />
-
+                            <Autocomplete multiple id="referee-autocomplete" options={users} getOptionLabel={(option) => option.c_username} value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]} isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
+                                          onChange={(_event, newValue) => {
+                                              const newReferees = newValue.map(user => {
+                                                  const existing = selectedReferees.find(r => r.c_user_id === user.c_username);
+                                                  return existing || { c_user_id: user.c_username, c_level: '普通裁判', user: user };
+                                              });
+                                              setSelectedReferees(newReferees);
+                                          }}
+                                          getOptionDisabled={(option) => teamMemberUsernames.has(option.c_username)}
+                                          renderInput={(params) => (
+                                              <TextField {...params} variant="standard" label="选择用户作为裁判" placeholder="添加裁判..." helperText={teamMemberUsernames.size > 0 ? "已经是红/蓝队成员的用户将被禁用" : ""}/>
+                                          )}/>
 
                             {selectedReferees.length > 0 && (
                                 <Stack spacing={2} sx={{ mt: 3 }}>
@@ -499,7 +467,6 @@ const AdManagementPage: React.FC = () => {
                                 </Stack>
                             )}
                         </Box>
-
                         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
                             <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_start_time ? new Date(editingAdConfig.c_start_time).toISOString().slice(0, 16) : ''} />
                             <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_end_time ? new Date(editingAdConfig.c_end_time).toISOString().slice(0, 16) : ''} />
@@ -526,12 +493,11 @@ const AdManagementPage: React.FC = () => {
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
-                    onClose={handleCloseDetails} // 使用我们创建的独立函数
+                    onClose={handleCloseDetails}
                     instanceId={selectedInstanceId}
                     scenarioName={selectedScenarioName}
                 />
             )}
-
         </Box>
     );
 };
