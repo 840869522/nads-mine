@@ -128,6 +128,7 @@ class DrillController extends Controller
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_flag' => $flag,
                     'c_ip' => $containerIp,
+                    'c_container_name' => $containerName, // <-- Added this line
                 ]);
                  $createdItemsInfo[$containerData['id']] = [
                     'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
