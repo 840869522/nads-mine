@@ -96,7 +96,7 @@ export interface Ad {
 interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
-    // === 状态管理 ===
+    // === 状态管理 (无变化) ===
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
@@ -120,6 +120,7 @@ const AdManagementPage: React.FC = () => {
     const [teamConflictError, setTeamConflictError] = useState<string | null>(null);
     const API_BASE_URL = '/back/api';
 
+    // === 所有 Hooks 和辅助函数 (无变化) ===
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
         const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
@@ -273,45 +274,32 @@ const AdManagementPage: React.FC = () => {
         }
 
         try {
+            // ★★★ 核心修改：在请求体中附加上 ad_config_id ★★★
             const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ username: username }),
+                body: JSON.stringify({
+                    username: username,
+                    ad_config_id: ad.id // 传递演练配置的ID
+                }),
             });
+
             const result = await response.json();
             if (!response.ok) {
                 throw new Error(result.message || '启动失败');
             }
 
-            // **** 这是唯一的、决定性的修正 ****
-            // 根据您提供的API响应，从`result.scene_instance_id`获取ID
-            const newInstanceId = result.scene_instance_id;
-
-            if (newInstanceId) {
-                setAdConfigs(currentConfigs =>
-                    currentConfigs.map(config => {
-                        // 通过 ad.id (即 adConfig.c_id) 匹配要更新的行
-                        if (config.c_id === ad.id) {
-                            return {
-                                ...config,
-                                c_scene_instance_id: newInstanceId,
-                                c_status: 'running'
-                            };
-                        }
-                        return config;
-                    })
-                );
-                setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！' });
-            } else {
-                setStatusMessage({ type: 'warning', message: '启动成功，但API未返回实例ID。正在刷新列表...' });
-                await fetchData();
-            }
+            // ★★★ 逻辑简化：不再需要前端乐观更新 ★★★
+            // 后端已经修复，我们只需要简单地重新获取数据即可
+            setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
+            await fetchData();
 
         } catch (err: any) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         }
     };
 
+    // === 其他辅助函数 (无变化) ===
     const handleRefereeLevelChange = (user_id: string, newLevel: string) => {
         setSelectedReferees(prev => prev.map(ref => ref.c_user_id === user_id ? { ...ref, c_level: newLevel } : ref));
     };
@@ -336,6 +324,7 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
+    // === 渲染逻辑 (无变化) ===
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -386,7 +375,6 @@ const AdManagementPage: React.FC = () => {
                                                             <span>
                                                                 <IconButton
                                                                     color="success"
-                                                                    // 使用类型断言来解决编译时错误，同时保持函数签名不变
                                                                     onClick={() => handleAdAction(adConfig as any as Ad)}
                                                                     disabled={!adConfig.c_scene_config_id}
                                                                 >
