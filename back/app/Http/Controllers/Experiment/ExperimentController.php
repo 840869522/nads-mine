@@ -92,7 +92,54 @@ class ExperimentController extends Controller
 
         $data = $request->json()->all();
         $modelRes = ExperimentModel::createExperiment($courseId, $data);
+
+        // 如果实验创建成功，同步用户权限
+        if ($modelRes['code'] == 201) {
+            $this->syncSceneUsers($courseId, $data['c_config_id']);
+        }
+
         return response()->json($modelRes, $modelRes['code'] == 201 ? 201 : 500);
+    }
+
+    /**
+     * 同步课程用户到场景用户权限表
+     */
+    private function syncSceneUsers($courseId, $sceneId)
+    {
+        try {
+            DB::beginTransaction();
+
+            // 获取课程的授权用户
+            $courseUsers = DB::table('c_courses_users')
+                ->where('c_course_id', $courseId)
+                ->pluck('c_username')
+                ->toArray();
+            $courseUsers[] = 'admin'; // 添加默认的 admin 用户
+            $courseUsers = array_unique($courseUsers); // 去重
+
+            // 检查并同步到 c_scene_users
+            foreach ($courseUsers as $username) {
+                $exists = DB::table('c_scene_users')
+                    ->where('c_scene_configs_id', $sceneId)
+                    ->where('c_username', $username)
+                    ->exists();
+
+                if (!$exists) {
+                    DB::table('c_scene_users')->insert([
+                        'c_scene_configs_id' => $sceneId,
+                        'c_username' => $username,
+                        'created_at' => now(),
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('[GENERAL] syncSceneUsers: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
     }
 
     public function update(Request $request, $courseId, $experimentId)

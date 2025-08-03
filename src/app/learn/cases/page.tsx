@@ -52,6 +52,7 @@ const highlightText = (text: string, keyword: string) => {
   const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.replace(regex, '<span style="color: red">$1</span>');
 };
+
 const getFileType = (type: string): CourseCaseResourceFormat => {
   // 如果已经是扩展名，直接返回
   const validExtensions = ['pdf', 'mp4', 'avi', 'pptx', 'docx', 'doc', 'jpg', 'png'];
@@ -108,12 +109,28 @@ const CourseCasesPage: React.FC = () => {
       setErrorMessage('');
       try {
         const token = getCookie('_auth');
+        console.log('JWT Token:', token); // 调试：输出 token
         if (!token) {
           setErrorMessage('未登录，请先登录');
           window.location.href = '/login';
-          setIsLoading(false);
           return;
         }
+
+        // // 解析 JWT 获取 c_username
+        // const payload = parseJwt(token);
+        // console.log('JWT Payload:', payload); // 调试：输出 payload
+        // const username = payload?.c_username || payload?.sub; // 根据实际 JWT payload 字段调整
+        // if (!username) {
+        //   setErrorMessage('无法获取用户信息');
+        //   window.location.href = '/login';
+        //   return;
+        // }
+        // console.log('Username:', username); // 调试：输出 username
+        // if (username !== 'admin') {
+        //   setErrorMessage('您没有权限访问此页面');
+        //   window.location.href = '/learn/learn';
+        //   return;
+        // }
 
         // Fetch categories
         const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
@@ -337,6 +354,8 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`创建实验失败: ${data.message || '未知错误'}`);
         }
         experimentId = data.data.c_experiment_id;
+        setErrorMessage('实验创建成功，用户权限已同步'); // 添加提示
+        setTimeout(() => setErrorMessage(''), 3000);
       } else {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
           headers: { Authorization: `Bearer ${token}` },

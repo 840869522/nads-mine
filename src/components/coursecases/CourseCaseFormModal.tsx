@@ -99,12 +99,12 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
     };
   }, [courseCase, open, categories]);
 
-  // 当 categories 更新 同步 c_category_id
   useEffect(() => {
-    if (categories.length > 0 && !categories.some(cat => cat.c_category_id === c_category_id)) {
+    // 仅在新增模式下（courseCase 为 null）或 c_category_id 无效时重置
+    if (!courseCase && categories.length > 0 && !categories.some(cat => cat.c_category_id === c_category_id)) {
       setCategoryId(categories[0].c_category_id || '');
     }
-  }, [categories, c_category_id]);
+  }, [categories, c_category_id, courseCase]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
