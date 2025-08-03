@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
+use App\Models\ad\AdConfig;
 use App\Models\scenario\SceneConfig;
 use App\Models\scenario\SceneInstance;
 use App\Models\scenario\SceneContainerInstance;
@@ -55,11 +56,12 @@ class AdController extends Controller
      */
     public function startDrill(Request $request, SceneConfig $scenario)
     {
-        $validator = Validator::make($request->all(), ['username' => 'required|string|max:50']);
+        $validator = Validator::make($request->all(), ['username' => 'required|string|max:50', 'ad_config_id' => 'required|uuid',]);
         if ($validator->fails()) {
-            return response()->json(['message' => '请求中必须包含用户名。', 'errors' => $validator->errors()], 422);
+            return response()->json(['message' => '请求格式不正确，必须包含用户名和演练配置ID', 'errors' => $validator->errors()], 422);
         }
         $userName = $request->input('username');
+        $adConfigId = $request->input('ad_config_id');
         $topologyJson = $scenario->c_scene;
 
         $parsedTopology = TopologyParser::parse($topologyJson);
@@ -251,6 +253,21 @@ class AdController extends Controller
             }
             $sceneInstance->c_status = 'RUNNING';
             $sceneInstance->save();
+
+            $adConfig = AdConfig::find($adConfigId);
+            if ($adConfig) {
+                $adConfig->c_scene_instance_id = $sceneInstance->c_scene_instances_id;
+                $adConfig->c_status = 'running'; // 同时更新演练状态为“进行中”
+                $adConfig->save();
+                Log::info("成功更新演练配置的实例ID和状态", [
+                    'ad_config_id' => $adConfigId,
+                    'scene_instance_id' => $sceneInstance->c_scene_instances_id
+                ]);
+            } else {
+                // 这是一个重要的日志，如果发生，说明前端传来的ad_config_id有问题
+                Log::warning("启动场景后，未找到要更新的演练配置记录", ['ad_config_id' => $adConfigId]);
+            }
+
             return response()->json([
                 'message' => '演练场景已成功启动！', 'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                 'created_items' => $createdItemsInfo, 'created_switches' => $createdSwitchesInfo,

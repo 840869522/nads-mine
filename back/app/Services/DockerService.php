@@ -24,10 +24,10 @@ class DockerService
     {
 
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            logger()->debug("windows dockerd detect");
+            #logger()->debug("windows dockerd detect");
             $socket = getenv('DOCKER_HOST') ?: 'tcp://localhost:2375';
         } else {
-            logger()->debug("linux dockerd detect");
+            #logger()->debug("linux dockerd detect");
             $socket = getenv('DOCKER_HOST') ?: 'unix:///var/run/docker.sock';
         }
         $client = DockerClientFactory::create(['remote_socket' => $socket]);
@@ -57,7 +57,7 @@ class DockerService
         $cfg->setAttachStdin(true);
         $cfg->setAttachStdout(true);
         $cfg->setAttachStderr(true);
-        
+
         // --- ENV & CMD ---
         if (!empty($options['cmd'])) {
             $cfg->setCmd($options['cmd']);

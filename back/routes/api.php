@@ -1,5 +1,6 @@
 <?php
 
+
     use App\Http\Controllers\ad\AdConfigController;
     use App\Http\Controllers\scenario\ScenarioPermissionController;
     use Illuminate\Support\Facades\Route;
@@ -50,6 +51,7 @@ Route::prefix("")->group(function () {
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
+    Route::post("/test",[UserController::class,'userTest']);
 });
 
 
@@ -66,7 +68,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update", [UserController::class, "updateUserInfo"]);
         Route::post("/delete", [UserController::class, "deleteUser"]);
         Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
-        Route::post("/up_common", [UserController::class, "updateUserEmail"]);
+        Route::post("/update_common", [UserController::class, "updateCommonUser"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -92,7 +94,6 @@ Route::prefix("support")->group(function () {
         Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
         Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
     });
-
 });
 
 /**
@@ -266,19 +267,21 @@ Route::prefix('study')->group(function () {
 });
 
 
-Route::get('ad/users', [UserController::class, 'getAllUser']);
-Route::prefix('ad/team')->group(function () {
-    Route::get('/', [TeamController::class, 'index']);
-    Route::post('/', [TeamController::class, 'store']);
-    Route::get('/{team}', [TeamController::class, 'show']);
-    Route::put('/{team}', [TeamController::class, 'update']);
-    Route::delete('/{team}', [TeamController::class, 'destroy']);
-});
-Route::apiResource('ad-configs', AdConfigController::class);
-Route::prefix('ad-configs/{adConfig}')->group(function () {
-    Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
-    Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
-});
+    Route::get('ad/users', [UserController::class, 'getAllUser']);
+    Route::prefix('ad/team')->group(function () {
+        Route::get('/', [TeamController::class, 'index']); // TeamController.index
+        Route::post('/', [TeamController::class, 'store']);
+        Route::get('/{team}', [TeamController::class, 'show']);
+        Route::put('/{team}', [TeamController::class, 'update']);
+        Route::delete('/{team}', [TeamController::class, 'destroy']);
+    });
+    Route::apiResource('ad-configs', AdConfigController::class);
+
+      Route::post('/ad-configs/{adConfig}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill'])->name('ad-configs.start-drill');
+//    Route::prefix('ad-configs/{adConfig}')->group(function () {
+//        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
+//        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
+//    });
 
 Route::prefix('ad')->group(function () {
 
