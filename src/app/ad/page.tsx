@@ -65,7 +65,6 @@ interface AdReferee {
     user?: User;
 }
 
-// 此接口与您的数据库表完全匹配
 interface AdConfig {
     c_id: string;
     c_drill_name: string;
@@ -73,7 +72,7 @@ interface AdConfig {
     c_red_team_id: number;
     c_blue_team_id: number;
     c_scene_config_id: number | null;
-    c_scene_instance_id: string | null; // 这是关键字段
+    c_scene_instance_id: string | null;
     c_status: 'pending' | 'running' | 'finished' | 'archived';
     c_start_time: string | null;
     c_end_time: string | null;
@@ -84,7 +83,6 @@ interface AdConfig {
     blueTeam?: Team;
 }
 
-// 按您的要求，保持此接口不变
 export interface Ad {
     id: string;
     name: string;
@@ -198,7 +196,6 @@ const AdManagementPage: React.FC = () => {
             setSelectedScenarioName(adConfig.c_drill_name);
             setIsDetailsModalOpen(true);
         } else {
-            // 这个 alert 理论上不应该被触发，因为按钮是禁用的
             alert('此演练尚未启动，无法查看实例详情。');
         }
     };
@@ -286,22 +283,19 @@ const AdManagementPage: React.FC = () => {
                 throw new Error(result.message || '启动失败');
             }
 
-            // **** 修正点 1: 从API返回结果中获取新实例ID ****
-            // 请与后端确认返回的JSON对象中，实例ID的键名是什么。
-            // 常见的键名是 `instance_id`, `id`, 或 `c_scene_instance_id`。
-            // 这里以 `instance_id` 为例，如果不对请修改它。
-            const newInstanceId = result.instance_id;
+            // **** 这是唯一的、决定性的修正 ****
+            // 根据您提供的API响应，从`result.scene_instance_id`获取ID
+            const newInstanceId = result.scene_instance_id;
 
             if (newInstanceId) {
-                // 如果成功获取ID，立即更新前端状态
                 setAdConfigs(currentConfigs =>
                     currentConfigs.map(config => {
-                        // 通过 adConfig 的 c_id 来匹配并更新正确的行
-                        if (config.c_id === ad.id) { // 假设 ad.id 与 adConfig.c_id 对应
+                        // 通过 ad.id (即 adConfig.c_id) 匹配要更新的行
+                        if (config.c_id === ad.id) {
                             return {
                                 ...config,
-                                c_scene_instance_id: newInstanceId, // 赋予新ID
-                                c_status: 'running'                 // 更新状态
+                                c_scene_instance_id: newInstanceId,
+                                c_status: 'running'
                             };
                         }
                         return config;
@@ -309,8 +303,7 @@ const AdManagementPage: React.FC = () => {
                 );
                 setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！' });
             } else {
-                // 如果API没有返回ID，则回退到刷新整个列表
-                setStatusMessage({ type: 'warning', message: '启动请求已发送，但未立即获取到实例ID。正在刷新列表...' });
+                setStatusMessage({ type: 'warning', message: '启动成功，但API未返回实例ID。正在刷新列表...' });
                 await fetchData();
             }
 
@@ -348,7 +341,7 @@ const AdManagementPage: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h4" component="h1" fontWeight="bold">攻防演练管理</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <TextField variant="outlined" size="small" placeholder="搜索演练名称..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}  InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ minWidth: '300px' }} />
+                    <TextField variant="outlined" size="small" placeholder="搜索演练名称..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ minWidth: '300px' }} />
                     <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()} disabled={isLoading}>创建新演练</Button>
                 </Box>
             </Box>
@@ -393,8 +386,7 @@ const AdManagementPage: React.FC = () => {
                                                             <span>
                                                                 <IconButton
                                                                     color="success"
-                                                                    // **** 修正点 2: 使用类型断言解决编译错误 ****
-                                                                    // 这会告诉编译器：“我知道类型不匹配，但我保证这样调用是安全的”
+                                                                    // 使用类型断言来解决编译时错误，同时保持函数签名不变
                                                                     onClick={() => handleAdAction(adConfig as any as Ad)}
                                                                     disabled={!adConfig.c_scene_config_id}
                                                                 >
