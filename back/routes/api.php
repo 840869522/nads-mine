@@ -60,7 +60,7 @@ Route::prefix("")->group(function () {
  * 定义基础分系统路由
  */
 Route::prefix("support")->group(function () {
-    Route::prefix("user")->middleware("jwtcheck:support_user")->group(function () {
+    Route::prefix("user")->group(function () {
         Route::post("/id", [UserController::class, "getUserById"]);
         Route::post("/search", [UserController::class, "searchUser"]);
         Route::post("/all", [UserController::class, "getAllUser"]);
