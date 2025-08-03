@@ -262,7 +262,7 @@ const AdManagementPage: React.FC = () => {
     };
 
     // 启动场景
-    const handleAdAction = async (ad: Ad) => {
+    const handleAdAction = async (ad: AdConfig) => {
         const cj_name = findSceneNameById(ad.c_scene_config_id);
         const username = (user as any)?.user?.c_username;
         if (!username) {
@@ -280,7 +280,7 @@ const AdManagementPage: React.FC = () => {
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
                     username: username,
-                    ad_config_id: ad.id // 传递演练配置的ID
+                    ad_config_id: ad.c_id // 使用 AdConfig 的 c_id
                 }),
             });
 
@@ -375,7 +375,8 @@ const AdManagementPage: React.FC = () => {
                                                             <span>
                                                                 <IconButton
                                                                     color="success"
-                                                                    onClick={() => handleAdAction(adConfig as any as Ad)}
+                                                                    // ★★★ 类型清理：直接传递adConfig，并修改函数签名 ★★★
+                                                                    onClick={() => handleAdAction(adConfig)}
                                                                     disabled={!adConfig.c_scene_config_id}
                                                                 >
                                                                     <PlayArrowIcon />
