@@ -21,6 +21,7 @@ class SceneInstances extends Model
 
     public function get_c_scene_instances_id($config_id)
     {
+
         $mod = new SceneInstances();
         $res = $mod->where('c_config_id',$config_id)->first();
         if(empty($res)){

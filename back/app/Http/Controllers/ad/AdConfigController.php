@@ -33,6 +33,14 @@ class AdConfigController extends Controller
 
         $adConfigs = $query->latest('c_create_at')->paginate(15);
 
+
+        $adConfigs->each(function($item){
+            $SceneInstances_mod = new SceneInstances();
+            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($item->c_scene_config_id);
+            if($SceneInstances_id){
+                $item->c_scene_instance_id = $SceneInstances_id;
+            }
+        });
         return AdConfigResource::collection($adConfigs);
     }
 
