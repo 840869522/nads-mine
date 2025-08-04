@@ -48,7 +48,8 @@ class SceneContainerInstance extends Model
         'c_container_id',
         'c_scene_instances_id',
         'c_flag',
-        'c_ip', 
+        'c_ip',
+        'c_container_name', // <-- Added this line
     ];
 
     /**
