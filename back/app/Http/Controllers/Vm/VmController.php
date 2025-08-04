@@ -497,7 +497,24 @@ public function listVmsBySceneInstance(string $instance_id)
         } catch (\Throwable $e) {
         }
 
-        $osType = $this->detectVmOs($vmId);
+        $image = null;
+        $osType = null;
+        try {
+            $xml = $this->runVirsh('dumpxml', $vmId);
+            $root = new \SimpleXMLElement($xml);
+            $source = $root->xpath('.//devices/disk[@device="disk"]/source')[0] ?? null;
+            if ($source) {
+                $image = (string)($source['file'] ?? $source['dev']);
+                if ($image) {
+                    try {
+                        $osType = ucfirst($this->detectOs($image));
+                    } catch (\Exception $e) {
+                        $osType = null;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
 
         return response()->json([
             'status' => $state,
@@ -506,6 +523,7 @@ public function listVmsBySceneInstance(string $instance_id)
             'vcpu' => $vcpuInfo,
             'vram' => $vram,
             'osType' => $osType,
+            'image' => $image,
             'persistent' => $persistent,
             'autostart' => $autostart,
             'uuid' => $vmId,
