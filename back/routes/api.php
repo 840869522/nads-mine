@@ -216,6 +216,7 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/logs', [ContainersController::class, 'logs']);
     Route::get('/{id}/inspect', [ContainersController::class, 'inspect']);
     Route::get('/{id}/binds', [ContainersController::class, 'binds']);
+    Route::get('/{id}/info', [ContainersController::class, 'info']);
 });
 
 
