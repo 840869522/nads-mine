@@ -33,14 +33,25 @@ class AdConfigController extends Controller
 
         $adConfigs = $query->latest('c_create_at')->paginate(15);
 
-
-        $adConfigs->each(function($item){
-            $SceneInstances_mod = new SceneInstances();
-            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($item->c_scene_config_id);
-            if($SceneInstances_id){
-                $item->c_scene_instance_id = $SceneInstances_id;
+        $sceneInstancesModel = new SceneInstances();
+        $adConfigs->each(function($item) use ($sceneInstancesModel) {
+            if ($item->c_scene_config_id) {
+                $instance_id = $sceneInstancesModel->get_c_scene_instances_id($item->c_scene_config_id);
+                if ($instance_id) {
+                    // 不仅要动态注入实例ID，还要同步修正演练状态
+                    $item->c_scene_instance_id = $instance_id;
+                    $item->c_status = 'running'; // 强制将状态更新为 'running'
+                }
             }
         });
+
+//        $adConfigs->each(function($item){
+//            $SceneInstances_mod = new SceneInstances();
+//            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($item->c_scene_config_id);
+//            if($SceneInstances_id){
+//                $item->c_scene_instance_id = $SceneInstances_id;
+//            }
+//        });
         return AdConfigResource::collection($adConfigs);
     }
 
