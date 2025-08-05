@@ -34,7 +34,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Download as DownloadIcon } from "@mui/icons-material";
 
 import { apiClientWithToken } from "@/utils/axios";
-import QuestionModalForm, { QuestionFormData, QuestionDisplayItem } from "@/components/learning/QuestionModalForm";
+import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
 import { Array2String, String2Array } from "@/utils/string";
 import { ColorMap } from "@/utils/color";
 import ViewQuestionModal from "@/components/learning/ViewQuesitonModal";
@@ -81,7 +81,7 @@ const QuestionPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (firstFlag) 
+    if (firstFlag)
       return
     else {
       if (searchTerm.data.trim() && searchTerm.flag)
@@ -255,12 +255,15 @@ const QuestionPage: React.FC = () => {
 
   // 解析选项
   const parseOptions = (question: any) => {
-    const options = question.split("\\");
-    for (let i = 1; i <= 4; i++) {
-      if (question[`选项${i}`]) {
+    const options = [];
+    const indexStart = 65;
+    for (let i = 0; i < 4; i++) {
+      let index = String.fromCharCode(indexStart + i)
+      if (question[`${index}`]) {
         options.push({
-          text: question[`选项${i}`],
-          isCorrect: checkAnswer(question[`选项${i}`], question['答案'])
+          c_id: index,
+          c_content: question[index],
+          c_question_id: question['试题ID']
         });
       }
     }
@@ -268,8 +271,17 @@ const QuestionPage: React.FC = () => {
   };
 
   // 验证答案是否正确
-  const checkAnswer = (option: string, answer: string) => {
-    return option === answer;
+  const checkAnswer = (data: {
+    type: number,
+    options: SelectOption[]
+  }, answer: string) => {
+    if (data.type == 2) {
+      let answerList = answer.split(";");
+      return answerList.every(item => data.options.some(option => option.c_content == item));
+    } else if (data.type == 1) {
+      return data.options.some(item => item.c_content == answer);
+    }
+    return true;
   };
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,7 +299,6 @@ const QuestionPage: React.FC = () => {
         const worksheet = workbook.Sheets[sheetName];
         // 将数据转为JSON数组
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        console.log(jsonData);
 
         // 处理数据（假设第一行为标题）
         const headers = jsonData[0] as string[];
@@ -300,44 +311,51 @@ const QuestionPage: React.FC = () => {
         });
 
         // 验证并转换数据
-        const processedData = questionsData.map(question => ({
+        let processedData = questionsData.map(question => ({
           id: question['试题ID'],
           question: question['题干'],
-          courseName: question['课程ID'],
-          answer: question['答案'],
+          course_id: question['课程ID'],
+          answer: question[question['答案']],
           type: parseQuestionType(question['题目类型']),
           tags: parseTags(question['标签']),
-          options: parseOptions(question['选项'])
+          options: parseOptions(question),
         }));
-        console.log(processedData);
+        processedData.map((item) => {
+          checkAnswer(item,item.answer) ? item : null
+        }).filter(Boolean);
 
         // 调用API批量导入
-        // apiClientWithToken.post("/back/api/study/test/question_batch_add", {
-        //   questions: processedData
-        // }).then(res => {
-        //   if (res.data.code === 200) {
-        //     toast.success(`成功导入 ${processedData.length} 道题目`, {
-        //       autoClose: 3000,
-        //       closeOnClick: true,
-        //       pauseOnHover: true,
-        //       draggable: true,
-        //       position: "top-right"
-        //     });
-        //     getQuestionData(1, rowsPerPage);
-        //   } else {
-        //     throw new Error(res.data.message);
-        //   }
-        // }).catch(error => {
-        //   toast.error(`批量导入失败: ${error.message}`, {
-        //     autoClose: 3000,
-        //     closeOnClick: true,
-        //     pauseOnHover: true,
-        //     draggable: true,
-        //     position: "top-right"
-        //   });
-        // }).finally(() => {
-        //   setImportLoading(false);
-        // });
+        apiClientWithToken.post("/back/api/study/test/question_batch_add", {
+          questions: processedData
+        }).then(res => {
+          if (res.data.code === 200) {
+            toast.success(`成功导入 ${processedData.length} 道题目`, {
+              autoClose: 3000,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              position: "top-right"
+            });
+            getQuestionData(1, rowsPerPage);
+          } else {
+            toast.error(`${res.data.message}`,{
+              autoClose: 3000,
+              draggable: true,
+              closeOnClick: true,
+              pauseOnHover:true
+            })
+          }
+        }).catch(error => {
+          toast.error(`批量导入失败: ${error.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            position: "top-right"
+          });
+        }).finally(() => {
+          setImportLoading(false);
+        });
       } catch (error) {
         toast.error('文件解析失败，请确认文件格式正确', {
           autoClose: 3000,
@@ -357,8 +375,21 @@ const QuestionPage: React.FC = () => {
 
   const downloadImportTemplate = () => {
     const worksheet = XLSX.utils.aoa_to_sheet([
-      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', '选项'],
-      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', '多个选项使用\\分割，如选项1\\选项2']
+      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', 'A', 'B', 'C', 'D'],
+      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', 'A', '选项A', '选项B', '选项C', '选项D'],
+      [
+        '1002',
+        '关于数据库服务器、数据库和表的关系，正确的说法是()',
+        '1001',
+        '单选题',
+        '难度1,简单',
+        'B',
+        '一个数据库服务器只能管理一个数据库，一个数据库只能包含一个表',
+        '一个数据库服务器可以管理多个数据库，一个数据库可以包含多个表',
+        '一个数据库服务器只能管理一个数据库，一个数据库可以包含多个表',
+        '一个数据库服务器可以管理多个数据库，一个数据库只能包含一个表'
+      ]
+
     ]);
 
     const workbook = XLSX.utils.book_new();
@@ -517,7 +548,7 @@ const QuestionPage: React.FC = () => {
               disabled={importLoading}
               onClick={handelImpoerQuestionFromCSV}
             >
-              从CSV文件导入
+              从EXCEL文件导入
             </Button>
             <input
               type="file"
