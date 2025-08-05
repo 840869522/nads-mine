@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { createTheme, ThemeProvider, ThemeOptions } from '@mui/material/styles';
 
-import TestManagement from '@/components/learning/TestManagement';
+import TestManagement_user from '@/components/learning/TestManagement_user';
 
 // 定义主题模式类型
 type ThemeMode = 'light' | 'dark';
@@ -126,7 +126,7 @@ const AppContent: React.FC<{
             mb: -5,
             transition: 'margin 0.3s ease'
           }}>
-            {activeTab === 'tests' && <TestManagement />}
+            {activeTab === 'tests' && <TestManagement_user />}
           </Container>
         </Box>
       )}
