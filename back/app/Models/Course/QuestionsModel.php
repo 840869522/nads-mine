@@ -92,9 +92,9 @@ class QuestionsModel extends Model{
                         return false;
                     }
                 }
-                DB::commit();
-                return true;
             }
+            DB::commit();
+            return true;
         }catch(\Exception $e){
             DB::rollback();
             DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','question_log');
