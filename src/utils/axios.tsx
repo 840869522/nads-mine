@@ -7,7 +7,7 @@ import {toast} from "react-toastify"
  * 定义带有 token和拦截器的axios 请求客户端
  */
 export const apiClientWithToken = axios.create({
-    timeout: 6000,
+    timeout: 20000,
     headers: {
         "Content-Type":"application/json"
     }

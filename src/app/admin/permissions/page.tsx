@@ -34,6 +34,7 @@ import { toast } from 'react-toastify';
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 import { PermissionDisplayItem } from '@/components/admin/PermissionModal';
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
+import { permission } from 'process';
 
 
 
@@ -182,8 +183,19 @@ const PermissionManagementPage: React.FC = () => {
         }
       }));
       if (res.data.code === 200) {
+        let updatePerm:PermissionDisplayItem= {
+          c_id : permissionData.id || editingPermission.c_id,
+          c_des: permissionData.des,
+          c_label: permissionData.label,
+          c_src: permissionData.src,
+          c_api_src: permissionData.api_src,
+          c_pid : permissionData.pid,
+          c_status: permissionData.status,
+          c_is_menu: permissionData.is_menu,
+          c_icon: permissionData.icon
+        }
         setPermissions(prev => prev.map(u =>
-          u.c_id === editingPermission.c_id ? { ...u,...permissionData } : u
+          u.c_id === editingPermission.c_id ? { ...u,...updatePerm } : u
         ));
         toast.success(`权限 "${editingPermission.c_id}" 更新成功。`, {
           autoClose: 3000,

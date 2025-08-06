@@ -19,7 +19,9 @@ import {
   Tooltip,
   IconButton,
   Chip,
-  TablePagination
+  TablePagination,
+  Dialog,
+  DialogContent
 } from "@mui/material";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "react-toastify";
@@ -72,6 +74,7 @@ const QuestionPage: React.FC = () => {
   const [isQuestionsModalOpen, setIsQuestionModalOpen] = useState<boolean>(false);
   const [importLoading, setImportLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
 
 
@@ -284,14 +287,15 @@ const QuestionPage: React.FC = () => {
     return true;
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportLoading(true);
+    setIsProcessing(true);
 
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = event.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
@@ -312,7 +316,7 @@ const QuestionPage: React.FC = () => {
 
         // 验证并转换数据
         let processedData = questionsData.map(question => ({
-          id: question['试题ID'],
+          id: question['试题ID'] || null,
           question: question['题干'],
           course_id: question['课程ID'],
           answer: question[question['答案']],
@@ -320,42 +324,37 @@ const QuestionPage: React.FC = () => {
           tags: parseTags(question['标签']),
           options: parseOptions(question),
         }));
-        processedData.map((item) => {
-          checkAnswer(item,item.answer) ? item : null
-        }).filter(Boolean);
+        processedData = processedData.filter(
+          item => item.id !== null && checkAnswer(item, item.answer)
+        )
 
         // 调用API批量导入
-        apiClientWithToken.post("/back/api/study/test/question_batch_add", {
+        const res = await apiClientWithToken.post("/back/api/study/test/batch_question_add", {
           questions: processedData
-        }).then(res => {
-          if (res.data.code === 200) {
-            toast.success(`成功导入 ${processedData.length} 道题目`, {
-              autoClose: 3000,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              position: "top-right"
-            });
-            getQuestionData(1, rowsPerPage);
-          } else {
-            toast.error(`${res.data.message}`,{
-              autoClose: 3000,
-              draggable: true,
-              closeOnClick: true,
-              pauseOnHover:true
-            })
-          }
-        }).catch(error => {
-          toast.error(`批量导入失败: ${error.message}`, {
+        })
+        if (res.data.code === 200) {
+          toast.success(`成功导入 ${processedData.length} 道题目`, {
             autoClose: 3000,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
             position: "top-right"
           });
-        }).finally(() => {
-          setImportLoading(false);
-        });
+          getQuestionData(1, rowsPerPage);
+        } else {
+          toast.error(`${res.data.message}`, {
+            autoClose: 3000,
+            draggable: true,
+            closeOnClick: true,
+            pauseOnHover: true
+          })
+        }
+        setImportLoading(false);
+          setIsProcessing(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        
       } catch (error) {
         toast.error('文件解析失败，请确认文件格式正确', {
           autoClose: 3000,
@@ -367,20 +366,23 @@ const QuestionPage: React.FC = () => {
         setImportLoading(false);
       } finally {
         setImportLoading(false);
+        setIsProcessing(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
-
     reader.readAsBinaryString(file);
   };
 
   const downloadImportTemplate = () => {
     const worksheet = XLSX.utils.aoa_to_sheet([
-      ['试题ID', '题干', '课程ID', '题目类型', '标签', '答案', 'A', 'B', 'C', 'D'],
-      ['1001', '1+1等于？', 'MATH101', '单选', '数学,基础,多个标签使用,分割', 'A', '选项A', '选项B', '选项C', '选项D'],
+      ['试题ID', '课程ID', '题干', '题目类型', '标签', '答案', 'A', 'B', 'C', 'D'],
+      ['1001', 'MATH101', '1+1等于？', '单选', '数学,基础,多个标签使用,分割', 'A', '选项A', '选项B', '选项C', '选项D'],
       [
         '1002',
-        '关于数据库服务器、数据库和表的关系，正确的说法是()',
         '1001',
+        '关于数据库服务器、数据库和表的关系，正确的说法是()',
         '单选题',
         '难度1,简单',
         'B',
@@ -607,7 +609,7 @@ const QuestionPage: React.FC = () => {
                       {question.c_course_id}
                     </TableCell>
                     <TableCell>
-                      {question.c_question}
+                      {question.c_question.length > 20 ? question.c_question.slice(0, 19) + "..." : question.c_question}
                     </TableCell>
                     <TableCell>
                       {TypeMap[question.c_type]}
@@ -677,6 +679,23 @@ const QuestionPage: React.FC = () => {
         onClose={() => setIsQuestionModalOpen(false)}
         initialQuestion={questionToEdit}
       />
+
+      <Dialog
+        open={isProcessing}
+        PaperProps={{ style: { backgroundColor: 'transparent', boxShadow: 'none' } }}
+        aria-labelledby="processing-dialog-title"
+        aria-describedby="processing-dialog-description"
+      >
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 3 }}>
+          <CircularProgress size={60} thickness={4} />
+          <Typography variant="h6" sx={{ mt: 2, color: 'white' }}>
+            正在处理文件...
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1, color: 'white' }}>
+            请勿关闭窗口
+          </Typography>
+        </DialogContent>
+      </Dialog>
 
       {
         questionCheck && (
