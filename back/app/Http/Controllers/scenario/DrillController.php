@@ -101,7 +101,7 @@ class DrillController extends Controller
 
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
-                $this->cliService->createSwitch($switchName);
+                $this->cliService->createSwitch($switchName, null, true);
                 $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([

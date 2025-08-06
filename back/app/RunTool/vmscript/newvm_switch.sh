@@ -1,4 +1,7 @@
 #!/bin/bash
+# 优化版虚拟机创建脚本
+# 使用 backing_file 技术避免高IO的 `convert` 操作
+
 # 遇到任何错误则立即退出
 set -e
 
@@ -40,15 +43,13 @@ if [ -f "$IMAGE_DIR/$IMAGE_BASE_NAME.qcow2" ]; then
     SOURCE_IMAGE_PATH="$IMAGE_DIR/$IMAGE_BASE_NAME.qcow2"
 elif [ -f "$IMAGE_DIR/$IMAGE_BASE_NAME.img" ]; then
     SOURCE_IMAGE_PATH="$IMAGE_DIR/$IMAGE_BASE_NAME.img"
+elif [ -f "$IMAGE_DIR/$IMAGE_PARAM" ]; then
+    SOURCE_IMAGE_PATH="$IMAGE_DIR/$IMAGE_PARAM"
 else
-    # 如果上面的方法找不到，就直接使用参数2作为文件名
-    if [ -f "$IMAGE_DIR/$IMAGE_PARAM" ]; then
-        SOURCE_IMAGE_PATH="$IMAGE_DIR/$IMAGE_PARAM"
-    else
-        echo "Error: Base image not found for '$IMAGE_PARAM' in $IMAGE_DIR"
-        exit 1
-    fi
+    echo "Error: Base image not found for '$IMAGE_PARAM' in $IMAGE_DIR"
+    exit 1
 fi
+
 # 确定目标文件名，统一使用qcow2后缀
 DESTINATION_IMAGE_NAME="$IMAGE_BASE_NAME.qcow2"
 DESTINATION_IMAGE_PATH="$INSTANCE_DIR/$DESTINATION_IMAGE_NAME"
@@ -68,34 +69,33 @@ n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config"
 n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 
-# 將所有慢速操作打包到一個子Shell中，並將其整體放入後台
-(
-  # 創建 cloud-init 使用的 ISO 文件
-  echo "BACKGROUND: Creating cloud-init ISO image..."
-  genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
-  echo "BACKGROUND: ISO image created."
 
-  # 複製並可能轉換基礎镜像到實例目錄
-  echo "BACKGROUND: Copying base image to instance directory..."
-  qemu-img convert -O qcow2 "$SOURCE_IMAGE_PATH" "$DESTINATION_IMAGE_PATH"
-  echo "BACKGROUND: Image copied and converted to qcow2 format."
+# --- MODIFICATION: The following commands will now run in the foreground ---
 
-  # 執行 virt-install 命令
-  echo "BACKGROUND: Starting virt-install..."
-  virt-install --virt-type kvm \
-    --network network=$6,model=virtio \
-    --name "$7" \
-    --ram=2048 \
-    --vcpus=2 \
-    --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
-    --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
-    --os-variant=ubuntu20.04 \
-    --graphics vnc,listen=0.0.0.0 \
-    --noautoconsole \
-    --import
-  
-  echo "BACKGROUND: virt-install command for $7 completed."
+# 創建 cloud-init 使用的 ISO 文件
+echo "FOREGROUND: Creating cloud-init ISO image..."
+genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
+echo "FOREGROUND: ISO image created."
 
-) > /dev/null 2>&1 &
+# ★★★ 使用 backing file 技术创建差分镜像，并明确指定 backing_fmt ★★★
+echo "FOREGROUND: Creating differential image using backing file..."
+qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 "$DESTINATION_IMAGE_PATH" 50G
+echo "FOREGROUND: Differential image created."
 
-echo "DEBUG: All slow tasks for VM '$7' have been dispatched to the background."
+# 執行 virt-install 命令
+echo "FOREGROUND: Starting virt-install..."
+virt-install --virt-type kvm \
+  --network network=$6,model=virtio \
+  --name "$7" \
+  --ram=2048 \
+  --vcpus=2 \
+  --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
+  --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
+  --os-variant=ubuntu20.04 \
+  --graphics vnc,listen=0.0.0.0 \
+  --noautoconsole \
+  --import
+
+echo "FOREGROUND: virt-install command for $7 completed."
+
+echo "DEBUG: All tasks for VM '$7' have completed."

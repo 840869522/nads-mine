@@ -47,6 +47,7 @@ const ScenarioManagementPage: React.FC = () => {
     const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
+    const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
 
  
     
@@ -139,6 +140,9 @@ const ScenarioManagementPage: React.FC = () => {
             return;
         }
 
+        setStartingScenarioId(scenario.id); // 2. 设置加载状态
+        setError(null);
+
         try {
             const response = await fetch(`/back/api/scenarios/${scenario.id}/start`, {
                 method: 'POST',
@@ -157,10 +161,13 @@ const ScenarioManagementPage: React.FC = () => {
             }
 
             alert(result.message);
+            fetchScenarios(); // 4. 成功后刷新数据
 
         } catch (err: any) {
             setError(err.message || '发生未知网络错误');
             alert(`启动失败: ${err.message}`);
+        } finally {
+            setStartingScenarioId(null); // 3. 结束加载状态
         }
     };
     
@@ -264,10 +271,17 @@ const ScenarioManagementPage: React.FC = () => {
                                         <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
                                         <TableCell align="right">
                                             <Tooltip title="启动演练">
-                                                {/* 在这里添加 onClick 事件 */}
-                                                <IconButton color="success" size="small" onClick={() => handleStartDrill(scenario)}>
-                                                    <StartIcon />
-                                                </IconButton>
+                                                {/* 3. 更新按钮，根据状态显示加载动画或图标 */}
+                                                <span>
+                                                    <IconButton
+                                                        color="success"
+                                                        size="small"
+                                                        onClick={() => handleStartDrill(scenario)}
+                                                        disabled={startingScenarioId === scenario.id}
+                                                    >
+                                                        {startingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
+                                                    </IconButton>
+                                                </span>
                                             </Tooltip>
                                             <Tooltip title="权限管理">
                                                 {/* 4. 更新 onClick 事件以打开新弹窗 */}
