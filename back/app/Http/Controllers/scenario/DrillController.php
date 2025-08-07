@@ -36,6 +36,8 @@ use Illuminate\Support\Facades\Validator;
 
 //journalctl -f | grep ovs-vswitchd
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class DrillController extends Controller
 {
@@ -46,6 +48,53 @@ class DrillController extends Controller
         $this->cliService = $cliService;
     }
 
+    /**
+     * 检查系统CPU和内存资源是否在可接受的范围内。
+     *
+     * @return \Illuminate\Http\JsonResponse|null 如果资源超限则返回JSON响应，否则返回null。
+     */
+    private function checkSystemResources()
+    {
+        try {
+            // 检查内存使用率
+            $memCommand = "free | grep Mem | awk '{print $3/$2 * 100.0}'";
+            $processMem = Process::fromShellCommandline($memCommand);
+            $processMem->run();
+            if (!$processMem->isSuccessful()) {
+                throw new ProcessFailedException($processMem);
+            }
+            $memoryUsage = round((float) $processMem->getOutput(), 2);
+
+            if ($memoryUsage > 75) {
+                Log::warning("启动场景失败：内存使用率过高 ({$memoryUsage}%)");
+                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
+            }
+
+            // 检查CPU使用率
+            $cpuCommand = "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'";
+            $processCpu = Process::fromShellCommandline($cpuCommand);
+            $processCpu->run();
+            if (!$processCpu->isSuccessful()) {
+                throw new ProcessFailedException($processCpu);
+            }
+            $cpuUsage = round((float) $processCpu->getOutput(), 2);
+
+            if ($cpuUsage > 75) {
+                Log::warning("启动场景失败：CPU使用率过高 ({$cpuUsage}%)");
+                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503);
+            }
+
+            Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);
+            return null; //一切正常
+
+        } catch (\Exception $e) {
+            Log::error("检查系统资源时发生错误: " . $e->getMessage());
+            // 如果检查过程出错，为安全起见，阻止场景启动
+            return response()->json(['message' => '检查系统资源时发生错误，无法启动场景。'], 500);
+        }
+    }
+
+
         /**
      * 接受指令启动一个演练场景.
      *
@@ -55,6 +104,12 @@ class DrillController extends Controller
      */
     public function startDrill(Request $request, SceneConfig $scenario)
     {
+        // 在执行任何操作前，首先检查系统资源
+        $resourceCheckResponse = $this->checkSystemResources();
+        if ($resourceCheckResponse !== null) {
+            return $resourceCheckResponse;
+        }
+        
         $validator = Validator::make($request->all(), ['username' => 'required|string|max:50']);
         if ($validator->fails()) {
             return response()->json(['message' => '请求中必须包含用户名。', 'errors' => $validator->errors()], 422);
@@ -101,7 +156,7 @@ class DrillController extends Controller
 
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
-                $this->cliService->createSwitch($switchName);
+                $this->cliService->createSwitch($switchName, null, true);
                 $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
