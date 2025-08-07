@@ -28,7 +28,7 @@ class Controller extends BaseController
         Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
-        if ($res['code'] != GlobalResponse::$DATABASE_ERROR_CODE){
+        if ($res['code'] == GlobalResponse::$DATABASE_ERROR_CODE){
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
             exit();
         }
