@@ -17,7 +17,7 @@ import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
 import TestFormDialog from './TestFormDialog';
 import TestUserDrawer from './TestUserDrawer';
-import 'D:/www/nads-main/src/node_modules/moment/locale/zh-cn';
+import '@/node_modules/moment/locale/zh-cn';
 import { useTheme } from '@mui/material/styles';
 
 // 应用中文本地化
