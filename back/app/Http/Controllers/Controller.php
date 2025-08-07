@@ -44,7 +44,7 @@ class Controller extends BaseController
                 if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
                     response()->json([
                         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                        "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                        "message"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
                     ])->send();
                     exit();
                 }

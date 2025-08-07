@@ -62,7 +62,6 @@ apiClientWithToken.interceptors.response.use(
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
-                position:"top-center"
             });
         }
         return res
