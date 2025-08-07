@@ -340,12 +340,12 @@ class PermissionModel extends Model
 
     public static function getPermissionByApi($api){
         try {
-            $res = db::table("c_permissions")->select(["c_id as id"])->where("c_api_src","=",$api)->get()->toArray();
+            $res = db::table("c_permissions")->select(["c_id as id"])->where("c_api_src","=",$api)->limit(1)->get()->toArray();
             if (!empty($res)){
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>[
-                        "permission"=>$res['id'],
+                        "permission"=>$res[0]->id,
                         "needed"=>true
                     ]
                 ];
@@ -359,7 +359,7 @@ class PermissionModel extends Model
                 ];
             }
         }catch (Exception $e){
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            log::info('[DATABASE]: HAAPENDE ERROR : '. $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];

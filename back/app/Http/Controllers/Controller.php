@@ -23,36 +23,35 @@ class Controller extends BaseController
         $action = Route::current()->getActionName();
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
-        $controllerName = $controllerName.".".$method;  
-
-        Log::info($controllerName);
+        $controllerName = $controllerName.".".$method;
 
         $res = PermissionModel::getPermissionByApi($controllerName);
-        if ($res['code'] == GlobalResponse::$DATABASE_ERROR_CODE){
+
+        if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
+            if ($res['data']['needed']){
+                $auth = $request->header("Authorization",null);
+                $jwtRes =  JWTControll::decodeJWT($auth);
+                if ($jwtRes["err"] != null) {
+                    response()->json([
+                        "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                        "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                    ])->send();
+                    exit();
+                }
+                $request->merge([
+                    "token_data"=>$jwtRes["data"]
+                ]);
+                if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                    response()->json([
+                        'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                        "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                    ])->send();
+                    exit();
+                }
+            }
+        }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
             exit();
-        }
-        Log::info($res);
-        if ($res['data']['needed']){
-            $auth = $request->header("Authorization",null);
-            $jwtRes =  JWTControll::decodeJWT($auth);
-            if ($jwtRes["err"] != null) {
-                response()->json([
-                    "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
-                    "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
-                ])->send();
-                exit();
-            }
-            $request->merge([
-                "token_data"=>$jwtRes["data"]
-            ]);
-            if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
-                response()->json([
-                    'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                    "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
-                ])->send();
-                exit();
-            }
         }
     }
 
