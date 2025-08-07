@@ -10,6 +10,7 @@ use Illuminate\Routing\Controller as BaseController;
 use App\Utils\JWTControll;
 use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\Users\PermissionModel;
 
@@ -24,27 +25,33 @@ class Controller extends BaseController
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;  
 
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
-        if ($jwtRes["err"] != null) {
-            return response()->json([
-                "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
-                "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
-            ]);
-        }
-        $request->merge([
-            "token_data"=>$jwtRes["data"]
-        ]);
+        Log::info($controllerName);
+
         $res = PermissionModel::getPermissionByApi($controllerName);
-        if ($res['code'] != GlobalResponse::$DATABASE_SUCCESS_CODE){
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES);
+        if ($res['code'] != GlobalResponse::$DATABASE_ERROR_CODE){
+            $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
+            exit();
         }
+        Log::info($res);
         if ($res['data']['needed']){
+            $auth = $request->header("Authorization",null);
+            $jwtRes =  JWTControll::decodeJWT($auth);
+            if ($jwtRes["err"] != null) {
+                response()->json([
+                    "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                ])->send();
+                exit();
+            }
+            $request->merge([
+                "token_data"=>$jwtRes["data"]
+            ]);
             if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
-                return response()->json([
+                response()->json([
                     'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                     "messaage"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
-                ]);
+                ])->send();
+                exit();
             }
         }
     }
