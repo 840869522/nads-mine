@@ -14,7 +14,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
-import './moment/locale/zh-cn';
+import '@/node_modules/moment/locale/zh-cn';
 import { useTheme } from '@mui/material/styles';
 
 // 应用中文本地化
