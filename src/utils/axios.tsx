@@ -64,7 +64,6 @@ apiClientWithToken.interceptors.response.use(
                 draggable: true,
                 position:"top-center"
             });
-             setTimeout(()=>{},200);
         }
         return res
     }

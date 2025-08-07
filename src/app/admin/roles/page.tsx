@@ -33,6 +33,7 @@ import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModa
 import { apiClientWithToken } from '@/utils/axios';
 import SearchIcon from '@mui/icons-material/Search';
 import { toast } from 'react-toastify';
+import { red } from '@mui/material/colors';
 
 
 interface MockRole {
@@ -209,7 +210,7 @@ const RoleManagementPage: React.FC = () => {
                     pauseOnHover: true,
                     draggable: true,
                   });
-            } else {
+            } else if (res.data.code !== 405 && res.data.code !== 420 ){
                 toast.error(`角色 "${formData.nameDisplay}" ${res.data.message}` , {
                     autoClose: 3000,
                     closeOnClick: true,
