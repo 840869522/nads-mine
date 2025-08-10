@@ -304,6 +304,7 @@ public function listVmsBySceneInstance(string $instance_id)
                         'v.c_vm_name',
                         'v.c_scene_instances_id',
                         'v.c_ip',
+                        'v.c_flag',
                         'sc.c_name as scene_name'
                     )
                     ->whereIn('v.c_vm_name', $names)
@@ -319,6 +320,7 @@ public function listVmsBySceneInstance(string $instance_id)
                 $vm['scene_instance_id'] = $info->c_scene_instances_id ?? null;
                 $vm['scene_name'] = $info->scene_name ?? null;
                 $vm['ip'] = $info->c_ip ?? null;
+                $vm['is_target'] = !empty($info->c_flag ?? null);
             }
         }
 
@@ -516,6 +518,15 @@ public function listVmsBySceneInstance(string $instance_id)
         } catch (\Throwable $e) {
         }
 
+        $flag = null;
+        try {
+            $flag = DB::table('c_scene_vm_instances')
+                ->where('c_vm_name', $vmId)
+                ->value('c_flag');
+        } catch (\Throwable $e) {
+            $flag = null;
+        }
+
         return response()->json([
             'status' => $state,
             'hostNode' => $host,
@@ -528,6 +539,7 @@ public function listVmsBySceneInstance(string $instance_id)
             'autostart' => $autostart,
             'uuid' => $vmId,
             'ipAddress' => $ip,
+            'is_target' => !empty($flag),
         ], 200);
     }
 

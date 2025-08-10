@@ -43,7 +43,7 @@ class InstancesController extends Controller
                 $extra = DB::table('c_scene_container_instances as ci')
                     ->leftJoin('c_scene_instances as si', DB::raw('ci.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
                     ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
-                    ->select('ci.c_container_id', 'ci.c_scene_instances_id', 'ci.c_ip', 'sc.c_name as scene_name')
+                    ->select('ci.c_container_id', 'ci.c_scene_instances_id', 'ci.c_ip', 'ci.c_flag', 'sc.c_name as scene_name')
                     ->whereIn('ci.c_container_id', $ids)
                     ->get()
                     ->keyBy('c_container_id');
@@ -115,6 +115,7 @@ class InstancesController extends Controller
                 'ipAddress' => $infoExtra->c_ip ?? null,
                 'scene_instance_id' => $infoExtra->c_scene_instances_id ?? null,
                 'scene_name' => $infoExtra->scene_name ?? null,
+                'is_target' => !empty($infoExtra->c_flag ?? null),
                 'status' => $this->mapStatus($info->getState()),
                 'ports' => implode(', ', $ports),
                 'imageName' => $info->getImage(),
