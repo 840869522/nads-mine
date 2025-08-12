@@ -1,4 +1,3 @@
-// src/app/scenario/sceneinstances/ContainerInstancesTab.tsx
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -44,6 +43,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
+        is_target: true, // Added for the new column
         imageName: true,
         ports: true,
         cpuUsage: true,
@@ -151,6 +151,21 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
+        // New column for "Is Target"
+        {
+            field: 'is_target',
+            headerName: '是否为靶机',
+            width: 120,
+            hide: !showColumns.is_target,
+            renderCell: (params) => (
+                <Chip
+                    label={params.value ? '是' : '否'}
+                    color={params.value ? 'primary' : 'default'}
+                    size="small"
+                    variant="outlined"
+                />
+            )
+        },
         { field: 'imageName', headerName: '镜像', flex: 2, hide: !showColumns.imageName },
         { field: 'ports', headerName: '端口', flex: 2, hide: !showColumns.ports },
         { field: 'cpuUsage', headerName: 'CPU', width: 100, hide: !showColumns.cpuUsage },
@@ -210,19 +225,19 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     return (
         <Box>
              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
-                 <Typography variant="h6">容器列表</Typography>
-                 <TextField
-                     variant="outlined"
-                     placeholder="搜索容器名称或镜像..."
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     size="small"
-                     InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-                 />
-                 <Button startIcon={<RefreshIcon />} onClick={fetchInstanceDetails} size="small" variant="outlined" disabled={isLoading}>
-                     {isLoading ? '刷新中...' : '刷新'}
-                 </Button>
-                 <Button startIcon={<ViewColumnIcon />} onClick={(e) => setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
-            </Box>
+                  <Typography variant="h6">容器列表</Typography>
+                  <TextField
+                       variant="outlined"
+                       placeholder="搜索容器名称或镜像..."
+                       onChange={(e) => setSearchTerm(e.target.value)}
+                       size="small"
+                       InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
+                  />
+                  <Button startIcon={<RefreshIcon />} onClick={fetchInstanceDetails} size="small" variant="outlined" disabled={isLoading}>
+                       {isLoading ? '刷新中...' : '刷新'}
+                  </Button>
+                  <Button startIcon={<ViewColumnIcon />} onClick={(e) => setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+             </Box>
             {isLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 5 }}>
                     <CircularProgress />
@@ -262,6 +277,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 key === 'ipAddress' ? 'IP' :
                                 key === 'scene_instance_id' ? '场景实例ID' :
                                 key === 'scene_name' ? '场景名称' :
+                                key === 'is_target' ? '是否为靶机' : // Added label for new column
                                 '运行时间'
                             }
                         />
