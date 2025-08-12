@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File; // ★ 新增：引入File Facade用于目录操作 ★
+use Illuminate\Support\Facades\File; 
 
-// ★★★ 步骤 1: 引入 Process 组件和相关异常类 ★★★
+// 步骤 1: 引入 Process 组件和相关异常类 
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -26,7 +26,7 @@ class InstanceController extends Controller
         $this->cliService = $cliService;
     }
 
-    // ... (index, show, mapStatus 方法保持不变) ...
+
     public function index()
     {
         try {
@@ -72,20 +72,21 @@ class InstanceController extends Controller
                     }
 
                     $runningInstances[] = [
-                        'id' => $details->getId(),
-                        'name' => ltrim($details->getName() ?? '', '/'),
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
-                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
-                        'scene_name' => $instance->sceneConfig->c_name ?? null,
-                        'status' => $this->mapStatus($details->getState()->getStatus()),
-                        'ports' => implode(', ', $ports),
-                        'imageName' => $details->getConfig()->getImage(),
-                        'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
-                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
-                        'uptime' => $details->getState()->getStartedAt(),
-                        'createdAt' => $details->getCreated(),
-                    ];
+                    'id' => $details->getId(),
+                    'name' => ltrim($details->getName() ?? '', '/'),
+                    'type' => 'container',
+                    'ipAddress' => $containerInstance->c_ip,
+                    'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                    'scene_name' => $instance->sceneConfig->c_name ?? null,
+                    'status' => $this->mapStatus($details->getState()->getStatus()),
+                    'ports' => implode(', ', $ports),
+                    'imageName' => $details->getConfig()->getImage(),
+                    'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
+                    'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
+                    'uptime' => $details->getState()->getStartedAt(),
+                    'createdAt' => $details->getCreated(),
+                    'is_target' => !empty($containerInstance->c_flag),
+                ];
                 } catch (\Exception $e) {
                     Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
                 }
@@ -99,7 +100,7 @@ class InstanceController extends Controller
 
 
     /**
-     * ★★★ 核心修复：添加了对关联表记录和虚拟机实例文件夹的删除 ★★★
+     *  核心修复：添加了对关联表记录和虚拟机实例文件夹的删除 
      */
     public function destroy(SceneInstance $instance)
     {
@@ -155,9 +156,9 @@ class InstanceController extends Controller
                 $errors[] = "删除虚拟机实例目录 '{$instanceDirectory}' 失败: " . $e->getMessage();
                 Log::error($errors[count($errors) - 1]);
             }
-            // ★★★ 修改结束 ★★★
 
-            // --- ★★★ 新增的数据库清理步骤 ★★★ ---
+
+            //新增的数据库清理步骤
             // 步骤 2: 删除所有关联的数据库记录
             $instance->vms()->delete();
             Log::info("已删除实例 {$instanceId} 的所有虚拟机数据库记录。");
@@ -196,7 +197,7 @@ class InstanceController extends Controller
     }
 
     /**
-     * ★★★ 步骤 3: 修改此函数以使用新的 runCommand 方法 ★★★
+     * 步骤 3: 修改此函数以使用新的 runCommand 方法
      */
     private function deleteVmAndStorage(string $vmName): void
     {
@@ -233,7 +234,7 @@ class InstanceController extends Controller
     }
 
     /**
-     * ★★★ 步骤 2: 添加一个新的私有方法用于执行命令 ★★★
+     * 步骤 2: 添加一个新的私有方法用于执行命令 ★★★
      */
     private function runCommand(array $command): string
     {

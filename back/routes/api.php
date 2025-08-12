@@ -189,7 +189,7 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/', [InstanceController::class, 'index']);
     // 关键: 确保 DELETE 路由指向 destroy 方法
     Route::delete('/{instance}', [InstanceController::class, 'destroy']);
-    // --- 获取单个场景实例的容器详细信息 ---
+    // 获取单个场景实例的容器详细信息
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     // 获取单个场景实例的vm详细信息
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
