@@ -29,8 +29,10 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 
-import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
+import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat, InstanceStatus } from '@/types';
 import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import CourseLearnPermissionDialog from '@/components/coursecases/CourseLearnPermissionDialog'; // 替换为新组件
@@ -77,6 +79,7 @@ const CourseLearningPage: React.FC = () => {
     const [tabValue, setTabValue] = useState(0);
     const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
+    const [experimentStatuses, setExperimentStatuses] = useState<{ [key: string]: InstanceStatus }>({});
 
     useEffect(() => {
         const debouncedFetchData = debounce(async () => {
@@ -146,22 +149,38 @@ const CourseLearningPage: React.FC = () => {
                                 });
                                 const experimentsData = experimentsResponse.data;
                                 if (experimentsData.code === 200) {
-                                    experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
-                                        c_experiment_id: exp.c_experiment_id,
-                                        c_experiment_name: exp.c_experiment_name,
-                                        c_description: exp.c_description || '',
-                                        c_config_id: exp.c_config_id,
-                                        c_name: exp.c_name || '',
-                                        resources: (exp.resources || []).map((res: any) => ({
-                                            c_resource_id: res.c_resource_id,
-                                            c_resource_name: res.c_resource_name,
-                                            c_type: getFileType(res.c_type),
-                                            c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                                            c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                                            isExperimentResource: true,
-                                        })),
-                                        created_at: exp.created_at || new Date().toISOString(),
-                                    }));
+                                    experiments = await Promise.all(
+                                        (experimentsData.data.experiments || []).map(async (exp: any) => {
+                                            let status: InstanceStatus = 'stopped';
+                                            try {
+                                                const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
+                                                    headers: { Authorization: `Bearer ${token}` },
+                                                });
+                                                const instanceData = instanceResponse.data;
+                                                status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
+                                            } catch (error: any) {
+                                                console.warn(`获取实验 ${exp.c_experiment_id} 的场景实例状态失败: ${error.message || '无实例'}`);
+                                            }
+                                            return {
+                                                c_experiment_id: exp.c_experiment_id,
+                                                c_experiment_name: exp.c_experiment_name,
+                                                c_description: exp.c_description || '',
+                                                c_config_id: exp.c_config_id,
+                                                c_scene_config_id: exp.c_config_id,
+                                                c_name: exp.c_name || '',
+                                                resources: (exp.resources || []).map((res: any) => ({
+                                                    c_resource_id: res.c_resource_id,
+                                                    c_resource_name: res.c_resource_name,
+                                                    c_type: getFileType(res.c_type),
+                                                    c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+                                                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                                                    isExperimentResource: true,
+                                                })),
+                                                created_at: exp.created_at || new Date().toISOString(),
+                                                status,
+                                            };
+                                        })
+                                    );
                                 }
                             } catch (error: any) {
                                 console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
@@ -182,6 +201,14 @@ const CourseLearningPage: React.FC = () => {
                     );
                     setCourseCases(mappedCourses);
                     setTotalCases(coursesData.data.total || 0);
+                    const experimentStatuses = mappedCourses.reduce((acc, course) => ({
+                        ...acc,
+                        ...course.experiments.reduce((expAcc, exp) => ({
+                            ...expAcc,
+                            [exp.c_experiment_id]: exp.status || 'stopped',
+                        }), {}),
+                    }), {} as { [key: string]: InstanceStatus });
+                    setExperimentStatuses(experimentStatuses);
                 } else {
                     setErrorMessage(`获取课程失败: ${coursesData.message || '未知错误'}`);
                 }
@@ -205,6 +232,29 @@ const CourseLearningPage: React.FC = () => {
         debouncedFetchData();
         return () => debouncedFetchData.cancel();
     }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
+
+    const handleStartExperiment = async (experiment: Experiment) => {
+        try {
+            setIsLoading(true);
+            const token = getCookie('_auth');
+            const username = getCookie('username') || 'default_user';
+            const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const responseData = response.data;
+            if (responseData.code === 200) {
+                setExperimentStatuses(prev => ({ ...prev, [experiment.c_experiment_id]: 'running' }));
+                setErrorMessage('');
+                alert('实验启动成功！');
+            } else {
+                setErrorMessage(`实验启动失败: ${responseData.message || '未知错误'}`);
+            }
+        } catch (error: any) {
+            setErrorMessage(error.response?.data?.message || '实验启动失败');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleOpenPermissionDialog = (course: CourseCase) => {
         setSelectedCourse(course);
@@ -489,6 +539,7 @@ const CourseLearningPage: React.FC = () => {
                                             <TableCell>场景配置</TableCell>
                                             <TableCell>创建时间</TableCell>
                                             <TableCell>操作</TableCell>
+                                            <TableCell>实验状态</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -505,6 +556,17 @@ const CourseLearningPage: React.FC = () => {
                                                     >
                                                         <VisibilityIcon />
                                                     </IconButton>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="contained"
+                                                        size="small"
+                                                        startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
+                                                        onClick={() => handleStartExperiment(experiment)}
+                                                        disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
+                                                    >
+                                                        {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -527,6 +589,7 @@ const CourseLearningPage: React.FC = () => {
                                             <TableCell>类型</TableCell>
                                             <TableCell>大小</TableCell>
                                             <TableCell>操作</TableCell>
+                                            <TableCell>实验状态</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -548,6 +611,17 @@ const CourseLearningPage: React.FC = () => {
                                                         <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
                                                             <VisibilityIcon />
                                                         </IconButton>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Button
+                                                            variant="contained"
+                                                            size="small"
+                                                            startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
+                                                            onClick={() => handleStartExperiment(experiment)}
+                                                            disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
+                                                        >
+                                                            {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
+                                                        </Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
