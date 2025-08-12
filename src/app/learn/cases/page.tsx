@@ -34,9 +34,10 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import Pagination from '@mui/material/Pagination';
 import SecurityIcon from '@mui/icons-material/Security';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 
-
-import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
+import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat, InstanceStatus } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
 import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
 import ExperimentFormModal from '@/components/coursecases/ExperimentFormModal';
@@ -97,6 +98,7 @@ const CourseCasesPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [totalCases, setTotalCases] = useState<number>(0);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [experimentStatuses, setExperimentStatuses] = useState<{ [key: string]: InstanceStatus }>({});
   const [tabValue, setTabValue] = useState(0);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
@@ -116,22 +118,6 @@ const CourseCasesPage: React.FC = () => {
           return;
         }
 
-        // // 解析 JWT 获取 c_username
-        // const payload = parseJwt(token);
-        // console.log('JWT Payload:', payload); // 调试：输出 payload
-        // const username = payload?.c_username || payload?.sub; // 根据实际 JWT payload 字段调整
-        // if (!username) {
-        //   setErrorMessage('无法获取用户信息');
-        //   window.location.href = '/login';
-        //   return;
-        // }
-        // console.log('Username:', username); // 调试：输出 username
-        // if (username !== 'admin') {
-        //   setErrorMessage('您没有权限访问此页面');
-        //   window.location.href = '/learn/learn';
-        //   return;
-        // }
-
         // Fetch categories
         const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -149,7 +135,6 @@ const CourseCasesPage: React.FC = () => {
         // Fetch scene configs
         const sceneConfigsResponse = await apiClientWithToken.get(`/back/api/scenarios`, {
           headers: { Authorization: `Bearer ${token}` },
-
         });
         const sceneConfigsData = sceneConfigsResponse.data;
         try {
@@ -180,7 +165,6 @@ const CourseCasesPage: React.FC = () => {
                 let experiments: Experiment[] = [];
                 try {
                   const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-
                     headers: { Authorization: `Bearer ${token}` },
                     params: {
                       page: 1,
@@ -195,7 +179,7 @@ const CourseCasesPage: React.FC = () => {
                       c_type: getFileType(res.c_type),
                       c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
                       c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                      isExperimentResource: false, // 标记为课程资源
+                      isExperimentResource: false,
                     }));
                   }
                 } catch (error: any) {
@@ -207,22 +191,38 @@ const CourseCasesPage: React.FC = () => {
                   });
                   const experimentsData = experimentsResponse.data;
                   if (experimentsData.code === 200) {
-                    experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
-                      c_experiment_id: exp.c_experiment_id,
-                      c_experiment_name: exp.c_experiment_name,
-                      c_description: exp.c_description || '',
-                      c_config_id: exp.c_config_id,
-                      c_name: exp.c_name || '',
-                      resources: (exp.resources || []).map((res: any) => ({
-                        c_resource_id: res.c_resource_id,
-                        c_resource_name: res.c_resource_name,
-                        c_type: getFileType(res.c_type),
-                        c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                        c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                        isExperimentResource: true, // 标记为实验资源
-                      })),
-                      created_at: exp.created_at || new Date().toISOString(),
-                    }));
+                    experiments = await Promise.all(
+                        (experimentsData.data.experiments || []).map(async (exp: any) => {
+                          let status: InstanceStatus = 'stopped';
+                          try {
+                            const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            const instanceData = instanceResponse.data;
+                            status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
+                          } catch (error: any) {
+                            console.warn(`获取实验 ${exp.c_experiment_id} 的场景实例状态失败: ${error.message || '无实例'}`);
+                          }
+                          return {
+                            c_experiment_id: exp.c_experiment_id,
+                            c_experiment_name: exp.c_experiment_name,
+                            c_description: exp.c_description || '',
+                            c_config_id: exp.c_config_id,
+                            c_name: exp.c_name || '',
+                            c_scene_config_id: exp.c_config_id,
+                            resources: (exp.resources || []).map((res: any) => ({
+                              c_resource_id: res.c_resource_id,
+                              c_resource_name: res.c_resource_name,
+                              c_type: getFileType(res.c_type),
+                              c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+                              c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                              isExperimentResource: true,
+                            })),
+                            created_at: exp.created_at || new Date().toISOString(),
+                            status,
+                          };
+                        })
+                    );
                   }
                 } catch (error: any) {
                   console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
@@ -243,6 +243,14 @@ const CourseCasesPage: React.FC = () => {
           );
           setCourseCases(mappedCourses);
           setTotalCases(coursesData.data.total || 0);
+          const experimentStatuses = mappedCourses.reduce((acc, course) => ({
+            ...acc,
+            ...course.experiments.reduce((expAcc, exp) => ({
+              ...expAcc,
+              [exp.c_experiment_id]: exp.status || 'stopped',
+            }), {}),
+          }), {} as { [key: string]: InstanceStatus });
+          setExperimentStatuses(experimentStatuses);
         } else {
           setErrorMessage(`获取课程失败: ${coursesData.message || '未知错误'}`);
         }
@@ -264,7 +272,7 @@ const CourseCasesPage: React.FC = () => {
     }, 500);
 
     debouncedFetchData();
-    return () => debouncedFetchData.cancel(); // 清理防抖函数
+    return () => debouncedFetchData.cancel();
   }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
   const handleOpenFormModal = (courseCase?: CourseCase) => {
@@ -317,6 +325,29 @@ const CourseCasesPage: React.FC = () => {
   const handlePermissionSaveSuccess = () => {
     setErrorMessage('权限保存成功');
     setTimeout(() => setErrorMessage(''), 3000); // 3秒后清除提示
+  };
+
+  const handleStartExperiment = async (experiment: Experiment) => {
+    try {
+      setIsLoading(true);
+      const token = getCookie('_auth');
+      const username = getCookie('username') || 'default_user';
+      const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const responseData = response.data;
+      if (responseData.code === 200) {
+        setExperimentStatuses(prev => ({ ...prev, [experiment.c_experiment_id]: 'running' }));
+        setErrorMessage('');
+        alert('实验启动成功！');
+      } else {
+        setErrorMessage(`实验启动失败: ${responseData.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      setErrorMessage(error.response?.data?.message || '实验启动失败');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveExperiment = async (experiment: Experiment, courseId: string) => {
@@ -1330,10 +1361,11 @@ const CourseCasesPage: React.FC = () => {
                             <TableCell>场景配置</TableCell>
                             <TableCell>创建时间</TableCell>
                             <TableCell>操作</TableCell>
+                            <TableCell>实验状态</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedCaseForResources.experiments.map(experiment => (
+                          {(selectedCaseForResources.experiments || []).map((experiment: Experiment) => (
                               <TableRow key={experiment.c_experiment_id}>
                                 <TableCell>{experiment.c_experiment_name}</TableCell>
                                 <TableCell>{experiment.c_description || '-'}</TableCell>
@@ -1362,6 +1394,17 @@ const CourseCasesPage: React.FC = () => {
                                     <VisibilityIcon />
                                   </IconButton>
                                 </TableCell>
+                                <TableCell>
+                                  <Button
+                                      variant="contained"
+                                      size="small"
+                                      startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
+                                      onClick={() => handleStartExperiment(experiment)}
+                                      disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
+                                  >
+                                    {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
+                                  </Button>
+                                </TableCell>
                               </TableRow>
                           ))}
                         </TableBody>
@@ -1383,18 +1426,19 @@ const CourseCasesPage: React.FC = () => {
                             <TableCell>类型</TableCell>
                             <TableCell>大小</TableCell>
                             <TableCell>操作</TableCell>
+                            <TableCell>实验状态</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedCaseForResources?.experiments
-                              .filter(exp => exp.resources.length > 0)
-                              .flatMap(exp =>
-                                  exp.resources.map(resource => ({
+                          {(selectedCaseForResources?.experiments || [])
+                              .filter((exp: Experiment) => exp.resources.length > 0)
+                              .flatMap((exp: Experiment) =>
+                                  exp.resources.map((resource: CourseCaseResource) => ({
                                     experiment: exp,
                                     resource,
                                   }))
                               )
-                              .map(({ experiment, resource }, index) => (
+                              .map(({ experiment, resource }: { experiment: Experiment; resource: CourseCaseResource }, index: number) => (
                                   <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
                                     <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
                                     <TableCell>{resource.c_resource_name}</TableCell>
@@ -1410,6 +1454,17 @@ const CourseCasesPage: React.FC = () => {
                                       >
                                         <DeleteIcon />
                                       </IconButton>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        variant="contained"
+                                        size="small"
+                                        startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
+                                        onClick={() => handleStartExperiment(experiment)}
+                                        disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
+                                      >
+                                        {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
+                                      </Button>
                                     </TableCell>
                                   </TableRow>
                               ))}
@@ -1450,7 +1505,7 @@ const CourseCasesPage: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {categories.map((category, index) => (
+                    {[...categories].sort((a, b) => (a.c_category_id || '').localeCompare(b.c_category_id || '')).map((category, index) => (
                         <TableRow key={category.c_category_id || `temp-${index}`}>
                           <TableCell>{category.c_category_id || '未分配 ID'}</TableCell>
                           <TableCell>{category.c_category_name}</TableCell>
