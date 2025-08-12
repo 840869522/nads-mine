@@ -173,20 +173,26 @@ class DrillController extends Controller
                     'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
-                 $flag = $containerData['isTarget'] ? 'flag{' . Str::uuid()->toString() . '}' : null;
-                 if ($flag) $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
+                
+                // ★★★ 修改部分 1: 容器flag处理 ★★★
+                $flagUuid = null;
+                if ($containerData['isTarget']) {
+                    $flagUuid = Str::uuid()->toString();
+                    // 直接将UUID作为环境变量值
+                    $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+                }
 
                  $containerId = $this->cliService->createContainer($options);
-                $containerIp = $containerIps[$containerData['id']] ?? null;
-                SceneContainerInstance::create([
-                    'c_container_id' => $containerId,
-                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
-                    'c_flag' => $flag,
-                    'c_ip' => $containerIp,
-                    'c_container_name' => $containerName, // <-- Added this line
-                ]);
+                 $containerIp = $containerIps[$containerData['id']] ?? null;
+                 SceneContainerInstance::create([
+                     'c_container_id' => $containerId,
+                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                     'c_flag' => $flagUuid, // 只存储UUID到数据库
+                     'c_ip' => $containerIp,
+                     'c_container_name' => $containerName,
+                 ]);
                  $createdItemsInfo[$containerData['id']] = [
-                    'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
+                     'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
                  ];
             }
 
@@ -220,13 +226,18 @@ class DrillController extends Controller
                 }
                 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
-                $flag = ($parsedVmNode['isTarget'] ?? false) ? 'flag{' . Str::uuid()->toString() . '}' : null;
+                
+                // ★★★ 修改部分 2: VM flag处理 ★★★
+                $flagUuid = null;
+                if ($parsedVmNode['isTarget'] ?? false) {
+                    $flagUuid = Str::uuid()->toString();
+                }
                 
                 $vmInstance = SceneVmInstance::create([
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
-                    'c_flag'               => $flag,
+                    'c_flag'               => $flagUuid, // 只存储UUID到数据库
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
@@ -239,7 +250,7 @@ class DrillController extends Controller
                     'image'               => $correctImageName,
                     'ip'                  => $ip,
                     'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                    'flag'                => $flag ?? 'NULL',
+                    'flag'                => $flagUuid ?? 'NULL', // 直接传递UUID或NULL给脚本
                     'switch_name'         => $actualSwitchName,
                     'image_dir'           => $imageDir,
                     'instance_base_dir'   => $instanceBaseDir,
