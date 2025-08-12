@@ -20,6 +20,9 @@ use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
+
+use Illuminate\Support\Facades\Cache;
 
 class TestController extends Controller
 {
@@ -1677,6 +1680,23 @@ class TestController extends Controller
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
         }
+    }
+
+
+    public function redis_test()
+    {
+        $a = array(
+            'a'=>1,
+            'b'=>2,
+            'c'=>3
+        );
+//        Cache::put('test', json_encode($a));
+
+        $redis = Cache::store('redis');
+        $fs = $redis->put('test',json_encode($a));//发送
+        $fs = $redis->put('test',json_encode($a),10);//带计时
+        $hq = $redis->get('test');//获取
+        $del = $redis->delete('test');//删除
     }
 
 }
