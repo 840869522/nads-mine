@@ -27,7 +27,7 @@ class QuestionsModel extends Model{
      * @param $c_tag
      * @return bool
      */
-    public function create_question_info($c_id="",$c_course_id="",$c_question="",$c_answer="",$c_tag="",$type="single",$content=[])
+    public function create_question_info($c_id="",$c_course_id="",$c_question="",$c_answer="",$c_tag="",$type=0,$content=[])
     {
         DB::beginTransaction();
         $mod = new QuestionsModel();
@@ -40,10 +40,11 @@ class QuestionsModel extends Model{
         try{
             $res = $mod->save();
             if(!$res){
+                DB::rollback();
                 return false;
             }
             $question_options_mod = new QuestionsOptionsModel();
-            if (in_array($type,['single',"multiple","true_false"])){
+            if (in_array($type,[1,2])){
                 $question_options_res = $question_options_mod->create_question_options_info($c_id,$content);
                 if(!$question_options_res){
                     DB::rollback();
@@ -58,6 +59,50 @@ class QuestionsModel extends Model{
             return false;
         }
     }
+
+    public function batch_create_question_info($array=[])
+    {
+        DB::beginTransaction();
+        try{
+            foreach($array as $k=>$v){
+                $mod = new QuestionsModel();
+                $mod->c_id = $v['id'];
+                $mod->c_course_id = $v['course_id'];
+                $mod->c_question = $v['question'];
+                $mod->c_answer = $v['answer'];
+                $mod->c_tag = $v['tags'];
+                $mod->c_type = $v['type'];
+                $res = $mod->save();
+                if(!$res){
+                    DB::rollback();
+                    return false;
+                }
+                $question_options_mod = new QuestionsOptionsModel();
+                if (in_array($v['type'],[1,2])){
+                    $content = [];
+                    foreach($v['options'] as $k1=>$v1){
+                        $content[]=array(
+                            'key'=>$v1['c_id'],
+                            'option'=>$v1['c_content']
+                        );
+                    }
+                    $question_options_res = $question_options_mod->create_question_options_info($v['id'],$content);
+                    if(!$question_options_res){
+                        DB::rollback();
+                        return false;
+                    }
+                }
+            }
+            DB::commit();
+            return true;
+        }catch(\Exception $e){
+            DB::rollback();
+            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','question_log');
+            return false;
+        }
+
+    }
+
 
     /**
      * Notes:验证主键唯一性

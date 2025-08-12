@@ -16,6 +16,7 @@ use Illuminate\Validation\Rule;
 // 【★★★ 核心修复 ★★★】在行尾添加分号
 use Illuminate\Support\Str;
 use App\Models\ad\TeamUsers;
+use App\Models\ad\SceneInstances;
 
 class AdConfigController extends Controller
 {
@@ -32,6 +33,25 @@ class AdConfigController extends Controller
 
         $adConfigs = $query->latest('c_create_at')->paginate(15);
 
+        $sceneInstancesModel = new SceneInstances();
+        $adConfigs->each(function($item) use ($sceneInstancesModel) {
+            if ($item->c_scene_config_id) {
+                $instance_id = $sceneInstancesModel->get_c_scene_instances_id($item->c_scene_config_id);
+                if ($instance_id) {
+                    // 不仅要动态注入实例ID，还要同步修正演练状态
+                    $item->c_scene_instance_id = $instance_id;
+                    $item->c_status = 'running'; // 强制将状态更新为 'running'
+                }
+            }
+        });
+
+//        $adConfigs->each(function($item){
+//            $SceneInstances_mod = new SceneInstances();
+//            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($item->c_scene_config_id);
+//            if($SceneInstances_id){
+//                $item->c_scene_instance_id = $SceneInstances_id;
+//            }
+//        });
         return AdConfigResource::collection($adConfigs);
     }
 
@@ -72,6 +92,12 @@ class AdConfigController extends Controller
 
 
         $adConfig = DB::transaction(function () use ($validated) {
+            $SceneInstances_mod = new SceneInstances();
+            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($validated['c_scene_config_id']);
+            $c_scene_instance_id = null;
+            if($SceneInstances_id){
+                $c_scene_instance_id = $SceneInstances_id;
+            }
             $adConfig = AdConfig::create([
                 // 现在 Str::uuid() 会被正确识别
                 'c_id'                => (string) Str::uuid(),
@@ -80,6 +106,7 @@ class AdConfigController extends Controller
                 'c_red_team_id'       => $validated['c_red_team_id'],
                 'c_blue_team_id'      => $validated['c_blue_team_id'],
                 'c_scene_config_id'   => $validated['c_scene_config_id'] ?? null,
+                'c_scene_instance_id'   => $c_scene_instance_id ?? null,
                 'c_start_time'        => $validated['c_start_time'] ?? null,
                 'c_end_time'          => $validated['c_end_time'] ?? null,
                 'c_status'            => 'pending',
@@ -97,6 +124,10 @@ class AdConfigController extends Controller
                     }
                 }
             }
+
+
+
+
 
 
             $refereesData = collect($validated['referees'])->keyBy('c_user_id')->map(function ($referee) {

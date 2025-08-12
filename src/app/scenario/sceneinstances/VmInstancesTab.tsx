@@ -1,4 +1,3 @@
-// src/app/scenario/sceneinstances/VmInstancesTab.tsx
 "use client";
 
 import * as React from "react";
@@ -20,6 +19,7 @@ import {
     Switch,
     FormControlLabel,
     Tooltip,
+    Chip, // Added Chip import
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -55,6 +55,7 @@ interface VmInstance {
     scene_instance_id?: string;
     scene_name?: string;
     uptime?: string;
+    is_target: boolean; // Added is_target field
 }
 
 interface OverviewData {
@@ -146,6 +147,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         pool: false,
         osType: true,
         ip: true,
+        is_target: true, // Added for the new column
     });
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
@@ -213,10 +215,25 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }
     };
 
-    const columns = React.useMemo<GridColDef[]>(
+    const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
             { field: 'name', headerName: '名称', flex: 1 },
+            // New column for "Is Target"
+            {
+                field: 'is_target',
+                headerName: '是否为靶机',
+                width: 120,
+                hide: !showColumns.is_target,
+                renderCell: (params) => (
+                    <Chip
+                        label={params.value ? '是' : '否'}
+                        color={params.value ? 'primary' : 'default'}
+                        size="small"
+                        variant="outlined"
+                    />
+                )
+            },
             { field: 'osType', headerName: 'OS 类型', width: 120, hide: !showColumns.osType, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.osType ?? 'N/A'}</VmInfoCell> },
             { field: 'hostNode', headerName: '宿主机', width: 120, hide: !showColumns.hostNode, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.hostNode}</VmInfoCell> },
             { field: 'pool', headerName: '存储池', width: 120, hide: !showColumns.pool, renderCell: (p) => <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell> },
@@ -229,7 +246,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 sortable: false,
                 width: 160,
                 renderCell: (params) => {
-                    const vm = params.row as VmInstance;
+                    const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
                     const state = info?.status || vm.state;
                     const isRunning = state === 'running';
@@ -298,7 +315,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     <MenuItem key={key}>
                         <FormControlLabel
                             control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} />}
-                            label={key === 'hostNode' ? '宿主机' : key === 'pool' ? '存储池' : key === 'osType' ? '系统类型' : 'IP地址'}
+                            label={
+                                key === 'hostNode' ? '宿主机' :
+                                key === 'pool' ? '存储池' :
+                                key === 'osType' ? '系统类型' :
+                                key === 'ip' ? 'IP地址' :
+                                key === 'is_target' ? '是否为靶机' :
+                                key // Fallback label
+                            }
                         />
                     </MenuItem>
                 ))}

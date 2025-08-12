@@ -36,6 +36,8 @@ use Illuminate\Support\Facades\Validator;
 
 //journalctl -f | grep ovs-vswitchd
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class DrillController extends Controller
 {
@@ -46,6 +48,53 @@ class DrillController extends Controller
         $this->cliService = $cliService;
     }
 
+    /**
+     * 检查系统CPU和内存资源是否在可接受的范围内。
+     *
+     * @return \Illuminate\Http\JsonResponse|null 如果资源超限则返回JSON响应，否则返回null。
+     */
+    private function checkSystemResources()
+    {
+        try {
+            // 检查内存使用率
+            $memCommand = "free | grep Mem | awk '{print $3/$2 * 100.0}'";
+            $processMem = Process::fromShellCommandline($memCommand);
+            $processMem->run();
+            if (!$processMem->isSuccessful()) {
+                throw new ProcessFailedException($processMem);
+            }
+            $memoryUsage = round((float) $processMem->getOutput(), 2);
+
+            if ($memoryUsage > 75) {
+                Log::warning("启动场景失败：内存使用率过高 ({$memoryUsage}%)");
+                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
+            }
+
+            // 检查CPU使用率
+            $cpuCommand = "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'";
+            $processCpu = Process::fromShellCommandline($cpuCommand);
+            $processCpu->run();
+            if (!$processCpu->isSuccessful()) {
+                throw new ProcessFailedException($processCpu);
+            }
+            $cpuUsage = round((float) $processCpu->getOutput(), 2);
+
+            if ($cpuUsage > 75) {
+                Log::warning("启动场景失败：CPU使用率过高 ({$cpuUsage}%)");
+                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503);
+            }
+
+            Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);
+            return null; //一切正常
+
+        } catch (\Exception $e) {
+            Log::error("检查系统资源时发生错误: " . $e->getMessage());
+            // 如果检查过程出错，为安全起见，阻止场景启动
+            return response()->json(['message' => '检查系统资源时发生错误，无法启动场景。'], 500);
+        }
+    }
+
+
         /**
      * 接受指令启动一个演练场景.
      *
@@ -55,6 +104,12 @@ class DrillController extends Controller
      */
     public function startDrill(Request $request, SceneConfig $scenario)
     {
+        // 在执行任何操作前，首先检查系统资源
+        $resourceCheckResponse = $this->checkSystemResources();
+        if ($resourceCheckResponse !== null) {
+            return $resourceCheckResponse;
+        }
+        
         $validator = Validator::make($request->all(), ['username' => 'required|string|max:50']);
         if ($validator->fails()) {
             return response()->json(['message' => '请求中必须包含用户名。', 'errors' => $validator->errors()], 422);
@@ -101,7 +156,7 @@ class DrillController extends Controller
 
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
-                $this->cliService->createSwitch($switchName);
+                $this->cliService->createSwitch($switchName, null, true);
                 $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
@@ -118,19 +173,26 @@ class DrillController extends Controller
                     'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
-                 $flag = $containerData['isTarget'] ? 'flag{' . Str::uuid()->toString() . '}' : null;
-                 if ($flag) $options['env'][] = ['key' => 'FLAG', 'value' => $flag];
+                
+                // ★★★ 修改部分 1: 容器flag处理 ★★★
+                $flagUuid = null;
+                if ($containerData['isTarget']) {
+                    $flagUuid = Str::uuid()->toString();
+                    // 直接将UUID作为环境变量值
+                    $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+                }
 
                  $containerId = $this->cliService->createContainer($options);
-                $containerIp = $containerIps[$containerData['id']] ?? null;
-                SceneContainerInstance::create([
-                    'c_container_id' => $containerId,
-                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
-                    'c_flag' => $flag,
-                    'c_ip' => $containerIp,
-                ]);
+                 $containerIp = $containerIps[$containerData['id']] ?? null;
+                 SceneContainerInstance::create([
+                     'c_container_id' => $containerId,
+                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                     'c_flag' => $flagUuid, // 只存储UUID到数据库
+                     'c_ip' => $containerIp,
+                     'c_container_name' => $containerName,
+                 ]);
                  $createdItemsInfo[$containerData['id']] = [
-                    'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
+                     'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
                  ];
             }
 
@@ -164,13 +226,18 @@ class DrillController extends Controller
                 }
                 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
-                $flag = ($parsedVmNode['isTarget'] ?? false) ? 'flag{' . Str::uuid()->toString() . '}' : null;
+                
+                // ★★★ 修改部分 2: VM flag处理 ★★★
+                $flagUuid = null;
+                if ($parsedVmNode['isTarget'] ?? false) {
+                    $flagUuid = Str::uuid()->toString();
+                }
                 
                 $vmInstance = SceneVmInstance::create([
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
-                    'c_flag'               => $flag,
+                    'c_flag'               => $flagUuid, // 只存储UUID到数据库
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
@@ -183,7 +250,7 @@ class DrillController extends Controller
                     'image'               => $correctImageName,
                     'ip'                  => $ip,
                     'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                    'flag'                => $flag ?? 'NULL',
+                    'flag'                => $flagUuid ?? 'NULL', // 直接传递UUID或NULL给脚本
                     'switch_name'         => $actualSwitchName,
                     'image_dir'           => $imageDir,
                     'instance_base_dir'   => $instanceBaseDir,

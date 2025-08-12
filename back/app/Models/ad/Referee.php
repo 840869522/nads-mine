@@ -1,4 +1,5 @@
 <?php
+// file: app/Models/ad/Referee.php (正确的内容)
 
 namespace App\Models\ad;
 
@@ -18,7 +19,6 @@ class Referee extends Model
     const CREATED_AT = 'c_create_at';
     const UPDATED_AT = 'c_update_at';
 
-    // 可赋值字段在总览视图中不重要，但保留无妨
     protected $fillable = [
         'c_user_id',
         'c_ad_config_id',
@@ -35,7 +35,6 @@ class Referee extends Model
 
     /**
      * 定义与 AdConfig 模型的关系。
-     * 假设你有一个 App\Models\ad\AdConfig 模型，且主键是 c_id
      */
     public function adConfig(): BelongsTo
     {

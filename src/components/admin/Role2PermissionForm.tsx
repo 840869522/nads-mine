@@ -53,7 +53,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                     });
                     const someChildSelected = currentParent?.children?.some(child => {
                         const descendants = getAllDescendantKeys(child);
-                        return descendants.every(desc => newSelected.includes(desc));
+                        return descendants.some(desc => newSelected.includes(desc));
                     })
 
                     const parentKey = currentParent.key;
@@ -63,10 +63,11 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                             newSelected.push(parentKey);
                         }
                     } else {
-                        const idx = newSelected.indexOf(parentKey);
-                        if (idx > -1) {
-                            newSelected.splice(idx, 1);
-                        }
+                        // const idx = newSelected.indexOf(parentKey);
+                        // if (idx > -1) {
+                        //     newSelected.splice(idx, 1);
+                        // }
+                        newSelected = newSelected.filter(k=> k!== parentKey);
                     }
                     // 继续向上查找父级
                     const parentResult = findPermissionByKey(appAllPermission, currentParent.key);
@@ -82,7 +83,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
             const updated = isChecked
                 ? [...newSelected, permissionKey]
                 : newSelected.filter(k => k !== permissionKey);
-
+                console.log(updated)
             newSelected.length = 0;
             newSelected.push(...updated);
             // 3. 向上更新所有父级权限的选中状态
@@ -94,7 +95,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                 });
                 const someChildSelected = currentParent?.children?.some(child => {
                     const descendants = getAllDescendantKeys(child);
-                    return descendants.every(desc => newSelected.includes(desc));
+                    return descendants.some(desc => newSelected.includes(desc));
                 })
 
                 const parentKey = currentParent.key;
@@ -104,10 +105,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                         newSelected.push(parentKey);
                     }
                 } else {
-                    const idx = newSelected.indexOf(parentKey);
-                    if (idx > -1) {
-                        newSelected.splice(idx, 1);
-                    }
+                    newSelected = newSelected.filter(k=> k!== parentKey);
                 }
                 // 继续向上查找父级
                 const parentResult = findPermissionByKey(appAllPermission, currentParent.key);

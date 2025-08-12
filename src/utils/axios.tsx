@@ -7,7 +7,7 @@ import {toast} from "react-toastify"
  * 定义带有 token和拦截器的axios 请求客户端
  */
 export const apiClientWithToken = axios.create({
-    timeout: 6000,
+    timeout: 20000,
     headers: {
         "Content-Type":"application/json"
     }
@@ -16,7 +16,7 @@ export const apiClientWithToken = axios.create({
  * 定义不带有 token和拦截器的 axios 请求客户端
  */
 export const apiClient = axios.create({
-    timeout: 6000,
+    timeout: 20000,
     headers: {
         "Content-Type":"application/json"
     }
@@ -62,10 +62,7 @@ apiClientWithToken.interceptors.response.use(
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
-                position:"top-center"
             });
-             setTimeout(()=>{},200);
-            window.location.href = "/";
         }
         return res
     }

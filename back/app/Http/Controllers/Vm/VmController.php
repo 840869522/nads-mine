@@ -45,14 +45,13 @@ public function listVmsBySceneInstance(string $instance_id)
     // 2. 从数据库查询与该场景实例ID关联的虚拟机的详细信息
     try {
         $vmDetailsFromDb = DB::table('c_scene_vm_instances as v')
-            // VVVVVV  THE FIX IS HERE  VVVVVV
             ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
-            // ^^^^^^  THE FIX IS HERE  ^^^^^^
             ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
             ->select(
                 'v.c_vm_name',
                 'v.c_scene_instances_id',
                 'v.c_ip',
+                'v.c_flag', // ★★★ 1. 查询 c_flag 字段 ★★★
                 'sc.c_name as scene_name'
             )
             // 核心筛选条件：只选择属于特定场景实例的VM
@@ -78,6 +77,8 @@ public function listVmsBySceneInstance(string $instance_id)
             $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
             $vm['scene_name']        = $dbInfo->scene_name;
             $vm['ip']                = $dbInfo->c_ip;
+            // ★★★ 2. 根据 c_flag 是否为空来设置 is_target ★★★
+            $vm['is_target']         = !empty($dbInfo->c_flag);
 
             $resultVms[] = $vm;
         }
@@ -304,6 +305,7 @@ public function listVmsBySceneInstance(string $instance_id)
                         'v.c_vm_name',
                         'v.c_scene_instances_id',
                         'v.c_ip',
+                        // 'v.c_flag',
                         'sc.c_name as scene_name'
                     )
                     ->whereIn('v.c_vm_name', $names)
@@ -319,6 +321,7 @@ public function listVmsBySceneInstance(string $instance_id)
                 $vm['scene_instance_id'] = $info->c_scene_instances_id ?? null;
                 $vm['scene_name'] = $info->scene_name ?? null;
                 $vm['ip'] = $info->c_ip ?? null;
+                // $vm['is_target'] = !empty($info->c_flag ?? null);
             }
         }
 
@@ -497,7 +500,33 @@ public function listVmsBySceneInstance(string $instance_id)
         } catch (\Throwable $e) {
         }
 
-        $osType = $this->detectVmOs($vmId);
+        $image = null;
+        $osType = null;
+        try {
+            $xml = $this->runVirsh('dumpxml', $vmId);
+            $root = new \SimpleXMLElement($xml);
+            $source = $root->xpath('.//devices/disk[@device="disk"]/source')[0] ?? null;
+            if ($source) {
+                $image = (string)($source['file'] ?? $source['dev']);
+                if ($image) {
+                    try {
+                        $osType = ucfirst($this->detectOs($image));
+                    } catch (\Exception $e) {
+                        $osType = null;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
+        // $flag = null;
+        // try {
+        //     $flag = DB::table('c_scene_vm_instances')
+        //         ->where('c_vm_name', $vmId)
+        //         ->value('c_flag');
+        // } catch (\Throwable $e) {
+        //     $flag = null;
+        // }
 
         return response()->json([
             'status' => $state,
@@ -506,10 +535,12 @@ public function listVmsBySceneInstance(string $instance_id)
             'vcpu' => $vcpuInfo,
             'vram' => $vram,
             'osType' => $osType,
+            'image' => $image,
             'persistent' => $persistent,
             'autostart' => $autostart,
             'uuid' => $vmId,
             'ipAddress' => $ip,
+            // 'is_target' => !empty($flag),
         ], 200);
     }
 

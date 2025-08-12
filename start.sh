@@ -137,7 +137,7 @@ start_services() {
         if [ "$mode" = "build" ]; then
             command="cd $FRONTEND_DIR && npm install && npm run build && npm start >> $FRONTEND_LOG"
         elif [ "$mode" = "dev" ]; then 
-            command="cd $FRONTEND_DIR && npm install && npm run dev >> $FRONTEND_LOG"
+            command="cd $FRONTEND_DIR && npm run dev >> $FRONTEND_LOG"
         else 
             echo "无效的输入，以build模式运行前端服务"
             command="cd $FRONTEND_DIR && npm run build && npm start >> $FRONTEND_LOG"

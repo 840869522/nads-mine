@@ -20,6 +20,9 @@ use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
+
+use Illuminate\Support\Facades\Cache;
 
 class TestController extends Controller
 {
@@ -83,7 +86,20 @@ class TestController extends Controller
                     if(!$verify_options_only){
                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
                     }
-                    if($v['option']==$c_answer){
+                    if($type==1){
+                        if($v['option']==$c_answer){
+                            $verify_answer=1;
+                        }
+                    }else{
+                        $answer = explode(';',$c_answer);
+                        $dx_zong_cnt = count($answer);
+                        if(in_array($v['option'],$answer)){
+                            $dx_cnt++;
+                        }
+                    }
+                }
+                if($type==2){
+                    if($dx_zong_cnt==$dx_cnt){
                         $verify_answer=1;
                     }
                 }
@@ -108,6 +124,7 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
         }
     }
+
 
 
     /**
@@ -182,9 +199,6 @@ class TestController extends Controller
                             }
                         }else{
                             $answer = explode(';',$c_answer);
-                            Log::info($answer);
-                            Log::info($c_answer);
-                            Log::info($v['option']);
                             $dx_zong_cnt = count($answer);
                             if(in_array($v['option'],$answer)){
                                 $dx_cnt++;
@@ -196,11 +210,6 @@ class TestController extends Controller
                             $verify_answer=1;
                         }
                     }
-                    Log::info([
-                        $verify_answer,
-                        $dx_zong_cnt,
-                        $dx_cnt]
-                    );
                     if($verify_answer==0){
                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"答案不在选项中");
                     }
@@ -218,6 +227,90 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
         }
     }
+
+
+    public function batch_question_add(Request $request)
+    {
+        try {
+            $questions = $request->input('questions');
+
+            $validated_data = array(
+                'questions' => 'required|array',
+                'questions.*.question' => 'required',
+                'questions.*.answer' => 'required',
+                'questions.*.course_id' => 'required|exists:c_courses,c_course_id',
+                'questions.*.id' => 'required',
+                'questions.*.tags' => 'required',
+                'questions.*.type' => 'required',
+            );
+            $validated_msg = array(
+                'questions.required'=>"questions不能为空",
+                'questions.array'=>"questions数据格式不正确",
+                'questions.*.question.required'=>"问题不能为空",
+                'questions.*.answer.required'=>"答案不能为空",
+                'questions.*.course_id.required'=>"课程id不能为空",
+                'questions.*.course_id.exists'=>"课程id不存在",
+                'questions.*.id.required'=>"问题主键不能为空",
+                'questions.*.tags.required'=>"问题标签不能为空",
+                'questions.*.type.required'=>"问题类型不能为空",
+            );
+
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            $QuestionsOptionsMod = new QuestionsOptionsModel();
+            foreach($questions as $k=>$v){
+                if(in_array($v['type'],[1,2])){
+                    if(!isset($v['options'])){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项不能为空");
+                    }
+                    $verify_answer = 0;
+
+                    foreach($v['options'] as $k1=>$v1){
+
+                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['id']);
+                        if(!$verify_options_only){
+                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
+                        }
+                        if($v['type']==1){
+                            if($v1['c_content']==$v['answer']){
+                                $verify_answer=1;
+                            }
+                        }else{
+                            $answer = explode(';',$v['answer']);
+                            $dx_zong_cnt = count($answer);
+                            if(in_array($v1['c_content'],$answer)){
+                                $dx_cnt++;
+                            }
+                        }
+                    }
+                    if($v['type']==2){
+                        if($dx_zong_cnt==$dx_cnt){
+                            $verify_answer=1;
+                        }
+                    }
+                    if($verify_answer==0){
+                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"答案不在选项中");
+                    }
+                }
+
+                $mod = new QuestionsModel();
+                $verify = $mod->verify_c_id_only($v['id']);
+                if(!$verify){
+                    return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+                }
+            }
+
+
+            $res = $mod->batch_create_question_info($questions);
+            if(!$res){
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"题目批量插入失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
 
 
     /**
@@ -1587,6 +1680,23 @@ class TestController extends Controller
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
         }
+    }
+
+
+    public function redis_test()
+    {
+        $a = array(
+            'a'=>1,
+            'b'=>2,
+            'c'=>3
+        );
+//        Cache::put('test', json_encode($a));
+
+        $redis = Cache::store('redis');
+        $fs = $redis->put('test',json_encode($a));//发送
+        $fs = $redis->put('test',json_encode($a),10);//带计时
+        $hq = $redis->get('test');//获取
+        $del = $redis->delete('test');//删除
     }
 
 }

@@ -189,7 +189,7 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/', [InstanceController::class, 'index']);
     // 关键: 确保 DELETE 路由指向 destroy 方法
     Route::delete('/{instance}', [InstanceController::class, 'destroy']);
-    // --- 获取单个场景实例的容器详细信息 ---
+    // 获取单个场景实例的容器详细信息
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     // 获取单个场景实例的vm详细信息
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
@@ -216,6 +216,7 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/logs', [ContainersController::class, 'logs']);
     Route::get('/{id}/inspect', [ContainersController::class, 'inspect']);
     Route::get('/{id}/binds', [ContainersController::class, 'binds']);
+    Route::get('/{id}/info', [ContainersController::class, 'info']);
 });
 
 
@@ -263,6 +264,8 @@ Route::prefix('study')->group(function () {
         Route::post('/get_answers_name_info', [TestController::class, 'get_answers_name_info']);
         Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
         Route::post('/query_results', [TestController::class, 'query_results']);
+        Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
+        Route::post('/redis_test', [TestController::class, 'redis_test']);
     });
 });
 
