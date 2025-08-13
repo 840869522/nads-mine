@@ -10,7 +10,8 @@ import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
     Visibility as ViewIcon,
-    Delete as DeleteIcon, // <-- 关键改动：导入删除图标
+    Delete as DeleteIcon,
+    Pause as PauseIcon, // <-- Import Pause icon
 } from '@mui/icons-material';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 
@@ -105,6 +106,31 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         }
     };
 
+    //  实现暂停场景实例的功能
+    const handlePauseInstance = async (instanceId: string, scenarioName: string) => {
+        if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
+            setIsLoading(true);
+            try {
+                const response = await fetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
+                    method: 'POST',
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
+                }
+                // 操作成功后刷新列表
+                fetchInstances();
+
+            } catch (err: any) {
+                setError(err.message || '暂停过程中发生错误');
+            } finally {
+                setIsLoading(false);
+            }
+        }
+    };
+
+
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -153,7 +179,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     />
                 </Box>
                 
-                {/* [关键改动] 如果有错误信息，则显示 */}
                 {error && <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
                 <TableContainer>
@@ -201,7 +226,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                         </TableCell>
                                         <TableCell align="right">
                                             <Tooltip title="查看详情"><IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}><ViewIcon /></IconButton></Tooltip>
-                                            {/* [关键改动] 修改为删除按钮 */}
+                                            <Tooltip title="暂停场景"><IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}><PauseIcon /></IconButton></Tooltip>
                                             <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}><DeleteIcon /></IconButton></Tooltip>
                                         </TableCell>
                                     </TableRow>

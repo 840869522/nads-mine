@@ -256,4 +256,86 @@ class InstanceController extends Controller
         if ($dockerStatus === 'exited') return 'stopped';
         return $dockerStatus;
     }
+
+     /**
+     * 清理并删除指定场景实例的所有底层资源（VM、容器、交换机），
+     * 但保留数据库中的所有相关记录，并将实例状态更新为 'STOPPED'。
+     *
+     * @param  \App\Models\scenario\SceneInstance  $instance
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function tearDownResources(SceneInstance $instance)
+    {
+        $instanceId = $instance->c_scene_instances_id;
+        Log::info("开始清理场景实例的底层资源: {$instanceId}");
+
+        // 加载所有关联的资源模型
+        $instance->load(['containers', 'vms', 'switches']);
+        $errors = [];
+
+        // 步骤 1: 清理物理资源 (虚拟机、容器、交换机)
+        foreach ($instance->vms as $vm) {
+            try {
+                $this->deleteVmAndStorage($vm->c_vm_name);
+            } catch (\Exception $e) {
+                $errors[] = "删除虚拟机 '{$vm->c_vm_name}' 失败: " . $e->getMessage();
+                Log::error($errors[count($errors) - 1]);
+            }
+        }
+
+        foreach ($instance->containers as $container) {
+            try {
+                // 使用Docker服务停止容器
+                $this->docker->stopContainer($container->c_container_id);
+                // 直接调用Docker客户端删除容器，以绕过服务层中删除数据库记录的逻辑
+                $this->docker->docker->containerDelete($container->c_container_id, ['force' => true]);
+            } catch (\Exception $e) {
+                $errors[] = "删除容器 '{$container->c_container_id}' 失败: " . $e->getMessage();
+                Log::error($errors[count($errors) - 1]);
+            }
+        }
+
+        foreach ($instance->switches as $switch) {
+            try {
+                $this->cliService->deleteSwitch($switch->c_switch_name);
+            } catch (\Exception $e) {
+                $errors[] = "删除交换机 '{$switch->c_switch_name}' 失败: " . $e->getMessage();
+                Log::error($errors[count($errors) - 1]);
+            }
+        }
+        
+        // 步骤 2: 删除虚拟机实例文件夹
+        $baseDir = $this->_get_global_directory();
+        $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;
+        try {
+            if (File::isDirectory($instanceDirectory)) {
+                File::deleteDirectory($instanceDirectory);
+                Log::info("已成功删除虚拟机实例目录: {$instanceDirectory}");
+            } else {
+                Log::warning("虚拟机实例目录未找到，无需删除: {$instanceDirectory}");
+            }
+        } catch (\Exception $e) {
+            $errors[] = "删除虚拟机实例目录 '{$instanceDirectory}' 失败: " . $e->getMessage();
+            Log::error($errors[count($errors) - 1]);
+        }
+
+        // 步骤 3: 更新实例状态为 'STOPPED'，但不删除记录
+        try {
+            $instance->c_status = 'STOPPED';
+            $instance->save();
+            Log::info("已将实例 {$instanceId} 的状态更新为 STOPPED。");
+        } catch (\Exception $e) {
+             $errors[] = "更新实例 {$instanceId} 的状态失败: " . $e->getMessage();
+             Log::error($errors[count($errors) - 1]);
+        }
+
+        if (!empty($errors)) {
+            return response()->json([
+                'message' => '场景资源清理完成，但过程中出现部分错误。',
+                'detail' => implode('; ', $errors),
+            ], 207); // 207 Multi-Status
+        }
+
+        return response()->json(['message' => '场景实例的底层资源已成功清理，所有数据库记录已保留。'], 200);
+    }
 }
