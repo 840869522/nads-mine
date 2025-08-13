@@ -11,10 +11,13 @@ import {
     Search as SearchIcon,
     Delete as DeleteIcon,
     Pause as PauseIcon,
-    ArrowBack as ArrowBackIcon
+    ArrowBack as ArrowBackIcon,
+    Visibility as ViewIcon, // <-- 确认导入
 } from '@mui/icons-material';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+// [MODIFICATION] 导入详情对话框组件
+import InstanceDetailsDialog from '../../sceneinstances/InstanceDetailsDialog';
 
 interface ScenarioInstance {
     instance_id: string;
@@ -34,10 +37,9 @@ const statusColors: Record<ScenarioInstance['status'], 'success' | 'warning' | '
     STOPPED: 'default',
 };
 
-// 内联一个包装组件以在 Suspense 中使用 hooks
 const ScenarioInstanceListPageContent: React.FC = () => {
     const searchParams = useSearchParams();
-    const scenarioName = searchParams.get('name');
+    const scenarioNameFromUrl = searchParams.get('name');
 
     const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +49,12 @@ const ScenarioInstanceListPageContent: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
+    
+    // [MODIFICATION] 新增状态用于控制详情弹窗
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+
 
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);
@@ -58,8 +66,7 @@ const ScenarioInstanceListPageContent: React.FC = () => {
                 throw new Error(errorData.message);
             }
             const data: ScenarioInstance[] = await response.json();
-            // 根据 URL 参数筛选
-            const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
+            const filteredData = scenarioNameFromUrl ? data.filter(inst => inst.scenario_name === scenarioNameFromUrl) : data;
             setInstances(filteredData);
         } catch (err: any) {
             setError(err.message || '发生未知错误');
@@ -67,7 +74,7 @@ const ScenarioInstanceListPageContent: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [scenarioName]);
+    }, [scenarioNameFromUrl]);
 
     useEffect(() => {
         fetchInstances();
@@ -76,14 +83,19 @@ const ScenarioInstanceListPageContent: React.FC = () => {
     const handleRefresh = () => {
         fetchInstances();
     };
+    
+    // [MODIFICATION] 新增查看详情的处理函数
+    const handleViewDetails = (instance: ScenarioInstance) => {
+        setSelectedInstanceId(instance.instance_id);
+        setSelectedScenarioName(instance.scenario_name);
+        setIsDetailsModalOpen(true);
+    };
 
     const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
         if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
             setIsLoading(true);
             try {
-                const response = await fetch(`/back/api/scenariosinstances/${instanceId}`, {
-                    method: 'DELETE',
-                });
+                const response = await fetch(`/back/api/scenariosinstances/${instanceId}`, { method: 'DELETE' });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `删除失败，状态码: ${response.status}`);
@@ -101,9 +113,7 @@ const ScenarioInstanceListPageContent: React.FC = () => {
         if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
             setIsLoading(true);
             try {
-                const response = await fetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
-                    method: 'POST',
-                });
+                const response = await fetch(`/back/api/scenariosinstances/${instanceId}/teardown`, { method: 'POST' });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
@@ -147,7 +157,7 @@ const ScenarioInstanceListPageContent: React.FC = () => {
                         返回场景管理
                     </Button>
                     <Typography variant="h4" component="h1" fontWeight="bold">
-                        场景实例: {scenarioName || '所有'}
+                        场景: {scenarioNameFromUrl || '所有'}
                     </Typography>
                 </Box>
                 <Button
@@ -209,6 +219,14 @@ const ScenarioInstanceListPageContent: React.FC = () => {
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
+                                            {/* [MODIFICATION] 添加查看详情按钮 */}
+                                            {instance.status !== 'STOPPED' && (
+                                                <Tooltip title="查看详情">
+                                                    <IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}>
+                                                        <ViewIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             <Tooltip title="暂停场景">
                                                 <IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
                                                     <PauseIcon />
@@ -238,19 +256,26 @@ const ScenarioInstanceListPageContent: React.FC = () => {
                     labelRowsPerPage="每页行数:"
                 />
             </Paper>
+            
+            {/* [MODIFICATION] 添加详情对话框的渲染逻辑 */}
+            {isDetailsModalOpen && selectedInstanceId && (
+                <InstanceDetailsDialog
+                    open={isDetailsModalOpen}
+                    onClose={() => setIsDetailsModalOpen(false)}
+                    instanceId={selectedInstanceId}
+                    scenarioName={selectedScenarioName} 
+                />
+            )}
         </Paper>
     );
 };
 
-
-// 导出包含 Suspense 的主组件
 const ScenarioInstanceManagementPage: React.FC = () => {
     return (
-        <Suspense fallback={<CircularProgress />}>
+        <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>}>
             <ScenarioInstanceListPageContent />
         </Suspense>
     );
 };
-
 
 export default ScenarioInstanceManagementPage;
