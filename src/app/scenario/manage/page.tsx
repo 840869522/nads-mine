@@ -1,3 +1,4 @@
+// /var/www/nads/src/app/scenario/manage/page.tsx
 "use client";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -13,8 +14,10 @@ import {
     PlayCircleOutline as StartIcon,
     Edit as EditIcon,
     Add as AddIcon,
-    PeopleAlt as PermissionIcon
+    PeopleAlt as PermissionIcon,
+    Visibility as ViewInstancesIcon // <-- 新增图标
 } from '@mui/icons-material';
+import Link from 'next/link'; // <-- 新增导入
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
 import ScenarioPermissionDialog  from './ScenarioPermissionDialog'
@@ -49,10 +52,10 @@ const ScenarioManagementPage: React.FC = () => {
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
 
- 
-    
+
+
     const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-    
+
     const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
     const fetchScenarios = useCallback(async () => {
         setIsLoading(true);
@@ -71,7 +74,7 @@ const ScenarioManagementPage: React.FC = () => {
             setIsLoading(false);
         }
     }, []);
-    
+
     const handleOpenPermissionDialog = (scenario: Scenario) => {
         setPermissionScenario(scenario);
     };
@@ -170,7 +173,7 @@ const ScenarioManagementPage: React.FC = () => {
             setStartingScenarioId(null); // 3. 结束加载状态
         }
     };
-    
+
     // 新增一个临时的编辑处理函数
     const handleEditScenario = (scenario: Scenario) => {
         setEditingScenario(scenario);
@@ -270,6 +273,18 @@ const ScenarioManagementPage: React.FC = () => {
                                         </TableCell>
                                         <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
                                         <TableCell align="right">
+                                            {/* --- MODIFICATION START --- */}
+                                            <Tooltip title="查看实例">
+                                                <IconButton
+                                                    component={Link}
+                                                    href={`/scenario/manage/instances?name=${encodeURIComponent(scenario.name)}`}
+                                                    color="info"
+                                                    size="small"
+                                                >
+                                                    <ViewInstancesIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                            {/* --- MODIFICATION END --- */}
                                             <Tooltip title="启动演练">
                                                 {/* 3. 更新按钮，根据状态显示加载动画或图标 */}
                                                 <span>
