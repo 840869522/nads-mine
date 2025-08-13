@@ -11,7 +11,7 @@ import {
     Search as SearchIcon,
     Visibility as ViewIcon,
     Delete as DeleteIcon,
-    Pause as PauseIcon, // <-- Import Pause icon
+    Pause as PauseIcon, // <-- 导入 Pause 图标
 } from '@mui/icons-material';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 
@@ -105,7 +105,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
             }
         }
     };
-
+    
     //  实现暂停场景实例的功能
     const handlePauseInstance = async (instanceId: string, scenarioName: string) => {
         if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
@@ -119,7 +119,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
                 }
-                // 操作成功后刷新列表
+                // 操作成功后刷新列表，以更新实例状态
                 fetchInstances();
 
             } catch (err: any) {
@@ -129,7 +129,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
             }
         }
     };
-
 
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
@@ -225,9 +224,23 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
-                                            <Tooltip title="查看详情"><IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}><ViewIcon /></IconButton></Tooltip>
-                                            <Tooltip title="暂停场景"><IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}><PauseIcon /></IconButton></Tooltip>
-                                            <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}><DeleteIcon /></IconButton></Tooltip>
+                                            {instance.status !== 'STOPPED' && (
+                                                <Tooltip title="查看详情">
+                                                    <IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}>
+                                                        <ViewIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+                                            <Tooltip title="暂停场景">
+                                                <IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
+                                                    <PauseIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="删除场景">
+                                                <IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}>
+                                                    <DeleteIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))
