@@ -168,6 +168,8 @@ export interface Experiment {
   c_description?: string;
   c_config_id: number;
   c_name?: string;
+  c_scene_config_id?: number; // 新增：用于场景分系统的 scenario_id
+  status?: InstanceStatus; // 新增：实验的运行状态
   resources: CourseCaseResource[];
   created_at: string;
 }

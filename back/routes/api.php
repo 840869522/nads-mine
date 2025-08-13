@@ -254,6 +254,7 @@ Route::prefix('study')->group(function () {
         Route::post('/batch_answers_name', [TestController::class, 'batch_answers_name']);
         Route::post('/query_results', [TestController::class, 'query_results']);
         Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
+        Route::post('/redis_test', [TestController::class, 'redis_test']);
     });
 });
 
