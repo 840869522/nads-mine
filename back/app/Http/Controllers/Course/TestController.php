@@ -278,6 +278,9 @@ class TestController extends Controller
                             $answer = explode(';',$v['answer']);
                             $dx_zong_cnt = count($answer);
                             if(in_array($v1['c_content'],$answer)){
+                                if(!isset($dx_cnt)){
+                                    $dx_cnt=0;
+                                }
                                 $dx_cnt++;
                             }
                         }
