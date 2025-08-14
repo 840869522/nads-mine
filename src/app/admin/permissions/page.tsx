@@ -34,7 +34,6 @@ import { toast } from 'react-toastify';
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 import { PermissionDisplayItem } from '@/components/admin/PermissionModal';
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
-import { permission } from 'process';
 
 
 
@@ -61,7 +60,9 @@ const PermissionManagementPage: React.FC = () => {
   const [permissionToDelete, setPermissionToDelete] = useState<PermissionDisplayItem | null>(null);
 
   useEffect(() => {
-    getPermissionData(page, rowsPerPage)
+    if (searchTerm.data.trim())
+      getPerimissionDataSearch(page,rowsPerPage);
+    else getPermissionData(page, rowsPerPage)
   }, [page, rowsPerPage]);
 
   const getPermissionData = (page: number, pagesize: number) => {
@@ -79,36 +80,38 @@ const PermissionManagementPage: React.FC = () => {
     });
   }
 
+  const getPerimissionDataSearch =(page: number, pagesize: number) => {
+    setTableLoading(true);
+      apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
+        page: page,
+        pagesize: pagesize,
+        name: searchTerm.data
+      })).then(res=>{
+        if (res.data.code === 200) {
+          setPermissions(res.data.data.data);
+          setDataCount(res.data.data.count);
+          setPage(1);
+        } else {
+          setPermissions([]);
+          toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
+        }
+      }).finally(()=>{
+          setTableLoading(false);
+      });
+  }
+
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
     setPage(1);
   };
 
   const handleSearchSubmit = async () => {
-    setTableLoading(true);
-    try {
-      const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
-        page: 1,
-        pagesize: rowsPerPage,
-        name: searchTerm.data
-      }));
-
-      if (res.data.code === 200) {
-        setPermissions(res.data.data.data);
-        setDataCount(res.data.data.count);
-        setPage(1);
-      } else {
-        setPermissions([]);
-        toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
-          autoClose: 3000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-      }
-    } finally {
-      setTableLoading(false);
-    }
+    getPerimissionDataSearch(1,rowsPerPage);
   };
 
   const handleRequestSort = (property: SortablePermissionsKeys) => {
@@ -183,19 +186,19 @@ const PermissionManagementPage: React.FC = () => {
         }
       }));
       if (res.data.code === 200) {
-        let updatePerm:PermissionDisplayItem= {
-          c_id : permissionData.id || editingPermission.c_id,
+        let updatePerm: PermissionDisplayItem = {
+          c_id: permissionData.id || editingPermission.c_id,
           c_des: permissionData.des,
           c_label: permissionData.label,
           c_src: permissionData.src,
           c_api_src: permissionData.api_src,
-          c_pid : permissionData.pid,
+          c_pid: permissionData.pid,
           c_status: permissionData.status,
           c_is_menu: permissionData.is_menu,
           c_icon: permissionData.icon
         }
         setPermissions(prev => prev.map(u =>
-          u.c_id === editingPermission.c_id ? { ...u,...updatePerm } : u
+          u.c_id === editingPermission.c_id ? { ...u, ...updatePerm } : u
         ));
         toast.success(`权限 "${editingPermission.c_id}" 更新成功。`, {
           autoClose: 3000,
@@ -203,7 +206,7 @@ const PermissionManagementPage: React.FC = () => {
           pauseOnHover: true,
           draggable: true,
         });
-        updateData(true,{...permissionData,id:editingPermission.c_id});
+        updateData(true, { ...permissionData, id: editingPermission.c_id });
       } else {
         toast.error(`权限 "${formData.id}" 更新失败。`, {
           autoClose: 3000,
@@ -353,7 +356,7 @@ const PermissionManagementPage: React.FC = () => {
                   <TableRow key={permission.c_id} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_id}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_label}</TableCell>
-                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_des}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_des.length > 10 ? permission.c_des.slice(0, 9) + "..." : permission.c_des}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_api_src}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_src.trim() || ""}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_pid === '0' ? "顶层权限" : permission.c_pid}</TableCell>

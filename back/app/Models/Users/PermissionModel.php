@@ -346,7 +346,7 @@ class PermissionModel extends Model
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>[
                         "permission"=>$res[0]->id,
-                        "needed"=>true
+                        "found"=>true,
                     ]
                 ];
             }else{
@@ -354,7 +354,7 @@ class PermissionModel extends Model
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=> [
                         "permission"=>"",
-                        "needed"=>false
+                        "found"=>false
                     ]
                 ];
             }

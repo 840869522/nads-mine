@@ -10,8 +10,6 @@ use Illuminate\Routing\Controller as BaseController;
 use App\Utils\JWTControll;
 use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Log;
-
 use App\Models\Users\PermissionModel;
 
 
@@ -28,7 +26,8 @@ class Controller extends BaseController
         $res = PermissionModel::getPermissionByApi($controllerName);
 
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
-            if ($res['data']['needed']){
+            if ($res['data']['found']){
+                // if ($res['data'][])
                 $auth = $request->header("Authorization",null);
                 $jwtRes =  JWTControll::decodeJWT($auth);
                 if ($jwtRes["err"] != null) {
@@ -48,6 +47,14 @@ class Controller extends BaseController
                     ])->send();
                     exit();
                 }
+            }else {
+                // if (!in_array($controllerName, ['UserController.login','PermissionController.getSystemAllMenu',"PermissionController.getSystemAllPermission"])){
+                //     response()->json([
+                //         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                //         "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
+                //     ])->send();
+                //     exit();
+                // }
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
