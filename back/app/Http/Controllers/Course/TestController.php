@@ -711,14 +711,15 @@ class TestController extends Controller
                 if(in_array($v['data']['key'],$verify_key)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."组卷规则主键重复！");
                 }
-                $cnt = $question_mod->get_question_cnt($v['type']);
+                $cnt = $question_mod->get_question_cnt($v['type'],$v['data']['tag']);
                 if($cnt<$v['data']['count']){
-                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，请更新题库后重试！");
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，或者符合tag标签的题目不足，请更新题库后重试！");
                 }
                 $v['data']['type'] = $v['type'];
                 $res_data[] = $v['data'];
                 $verify_key[] = $v['data']['key'];
                 $test_creation[$v['type']]['count'] = $v['data']['count'];
+                $test_creation[$v['type']]['tag'] = $v['data']['tag'];
                 $test_creation[$v['type']]['score'] = $v['data']['score'];
             }
 
@@ -850,14 +851,15 @@ class TestController extends Controller
                 if(in_array($v['data']['key'],$verify_key)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."组卷规则主键重复！");
                 }
-                $cnt = $question_mod->get_question_cnt($v['type']);
+                $cnt = $question_mod->get_question_cnt($v['type'],$v['data']['tag']);
                 if($cnt<$v['data']['count']){
-                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，请更新题库后重试！");
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v['name']."题库题目不足，或者符合tag标签的题目不足,请更新题库后重试！");
                 }
                 $v['data']['type'] = $v['type'];
                 $res_data[] = $v['data'];
                 $verify_key[] = $v['data']['key'];
                 $test_creation[$v['type']]['count'] = $v['data']['count'];
+                $test_creation[$v['type']]['tag'] = $v['data']['tag'];
                 $test_creation[$v['type']]['score'] = $v['data']['score'];
             }
             //自动组题
@@ -995,14 +997,14 @@ class TestController extends Controller
     public function automatic_question_grouping($paper_count=0,$test_creation=[])
     {
         $question_mod = new QuestionsModel();
-        $question_list = $question_mod->get_question_all();
+//        $question_list = $question_mod->get_question_all();
         $single_choice = [];
         $multiple_choice = [];
         $true_or_false = [];
         $subjective = [];
-        foreach($question_list as $k=>$v){
-            $single_choice[$v['c_type']][$v['c_id']] = $v;
-        }
+//        foreach($question_list as $k=>$v){
+//            $single_choice[$v['c_type']][$v['c_id']] = $v;
+//        }
         $res = [];
         for($i=0;$i<$paper_count;$i++){
             $selected_data = array(
@@ -1027,6 +1029,10 @@ class TestController extends Controller
                             'type'=>$k,
                             'data'=>[],
                         );
+                    }
+                    $question_list = $question_mod->get_question_by_tag($k,$v['tag']);
+                    foreach($question_list as $k1=>$v1){
+                        $single_choice[$v1['c_type']][$v1['c_id']] = $v1;
                     }
                     $extract_questions_res = $this->extract_questions($single_choice[$k],$selected_data[$k]);
                     $selected_data[$k][]=$extract_questions_res['c_id'];
