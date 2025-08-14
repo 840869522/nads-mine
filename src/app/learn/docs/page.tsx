@@ -287,6 +287,21 @@ const QuestionPage: React.FC = () => {
     return true;
   };
 
+
+  const parseGetAnswer = (data : any)=>{
+    if(data['题目类型'] === "单选") {
+      return data[data['答案']]
+    }else if (data['题目类型'] === "多选"){
+      let answer = data['答案'].split(",")
+      answer = answer.map((item: string)=>{
+        return data[item];
+      })
+      return answer.join(';');
+    }else {
+      return data['答案']
+    }
+  }
+
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -319,7 +334,7 @@ const QuestionPage: React.FC = () => {
           id: question['试题ID'] || null,
           question: question['题干'],
           course_id: question['课程ID'],
-          answer: question[question['答案']],
+          answer: parseGetAnswer(question),
           type: parseQuestionType(question['题目类型']),
           tags: parseTags(question['标签']),
           options: parseOptions(question),
@@ -327,6 +342,8 @@ const QuestionPage: React.FC = () => {
         processedData = processedData.filter(
           item => item.id !== null && checkAnswer(item, item.answer)
         )
+
+        console.log(processedData);
 
         // 调用API批量导入
         const res = await apiClientWithToken.post("/back/api/study/test/batch_question_add", {
@@ -383,7 +400,7 @@ const QuestionPage: React.FC = () => {
         '1002',
         '1001',
         '关于数据库服务器、数据库和表的关系，正确的说法是()',
-        '单选题',
+        '单选',
         '难度1,简单',
         'B',
         '一个数据库服务器只能管理一个数据库，一个数据库只能包含一个表',
