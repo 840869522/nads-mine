@@ -343,8 +343,6 @@ const QuestionPage: React.FC = () => {
           item => item.id !== null && checkAnswer(item, item.answer)
         )
 
-        console.log(processedData);
-
         // 调用API批量导入
         const res = await apiClientWithToken.post("/back/api/study/test/batch_question_add", {
           questions: processedData

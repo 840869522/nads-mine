@@ -48,13 +48,13 @@ class Controller extends BaseController
                     exit();
                 }
             }else {
-                // if (!in_array($controllerName, ['UserController.login','PermissionController.getSystemAllMenu',"PermissionController.getSystemAllPermission"])){
-                //     response()->json([
-                //         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                //         "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
-                //     ])->send();
-                //     exit();
-                // }
+                if (!in_array($controllerName, ['UserController.login','PermissionController.getSystemAllMenu',"PermissionController.getSystemAllPermission"])){
+                    response()->json([
+                        'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                        "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
+                    ])->send();
+                    exit();
+                }
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
