@@ -38,8 +38,8 @@
         }
 
         public static function searchUserByName(string $name, int $page = 1, int $pagesize = 10): array{
-            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `c_username` LIKE ?";
+            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ? LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
                 $user = db::select($sql, ['%' . $name . '%', $pagesize, $offset]);
@@ -244,7 +244,7 @@
 
         public static function deleteUserById(string $id): array{
             $sql = "DELETE FROM `c_users` WHERE c_username = ?";
-            $sql_user_role = "DELETE FROM `c_roles_users` WHERE c_user_id = ?";
+            $sql_user_role = "DELETE FROM `c_users_roles` WHERE c_user_id = ?";
             try {
                 if (!$id)
                     return [
