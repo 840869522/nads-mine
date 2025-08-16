@@ -9,6 +9,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import { AuthContext } from '@/contexts/AuthContext'; // 确保路径与您的 AuthContext 文件匹配
 import { getCookie } from '@/utils/cookie';           // 确保路径与您的 cookie 工具函数文件匹配
+import { customFetch } from '@/utils/fetch';
 
 // 类型定义
 export interface Scenario {
@@ -64,8 +65,8 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
                 };
 
                 const [usersRes, permissionsRes] = await Promise.all([
-                    fetch(`${API_PREFIX}/permissions/users`, requestOptions),
-                    fetch(`${API_PREFIX}/scenarios/${scenario.id}/permissions`, requestOptions)
+                    customFetch(`${API_PREFIX}/permissions/users`, requestOptions),
+                    customFetch(`${API_PREFIX}/scenarios/${scenario.id}/permissions`, requestOptions)
                 ]);
 
                 // 关键检查 2: 检查 API 响应是否成功
@@ -126,7 +127,7 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
         setError(null);
         try {
             const grantedUserIds = Object.keys(permissions).filter(userId => permissions[userId]);
-            const response = await fetch(`${API_PREFIX}/scenarios/${scenario.id}/permissions`, {
+            const response = await customFetch(`${API_PREFIX}/scenarios/${scenario.id}/permissions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -14,6 +14,7 @@ import {
     Pause as PauseIcon, // <-- 导入 Pause 图标
 } from '@mui/icons-material';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
+import { customFetch } from '@/utils/fetch';
 
 interface ScenarioInstance {
     instance_id: string;
@@ -51,7 +52,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('/back/api/scenariosinstances');
+            const response = await customFetch('/back/api/scenariosinstances');
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
                 throw new Error(errorData.message);
@@ -85,7 +86,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
             setIsLoading(true); // 开始加载，防止用户重复点击
             try {
-                const response = await fetch(`/back/api/scenariosinstances/${instanceId}`, {
+                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}`, {
                     method: 'DELETE',
                 });
 
@@ -111,7 +112,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
             setIsLoading(true);
             try {
-                const response = await fetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
+                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
                     method: 'POST',
                 });
 

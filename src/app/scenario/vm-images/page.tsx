@@ -33,6 +33,7 @@ import {
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
 import dayjs from "dayjs"
 import CreateVmModal from "@/components/vm/CreateVmModal"
+import { customFetch } from "@/utils/fetch"
 
 interface VmImage {
     id: string
@@ -63,7 +64,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     // 从后端获取镜像列表
     useEffect(() => {
-        fetch('/back/api/vms/images')
+        customFetch('/back/api/vms/images')
             .then(res => res.json())
             .then((data: VmImage[]) => setImages(data))
             .catch(() => {})
