@@ -11,7 +11,6 @@ use App\Utils\JWTControll;
 use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\Route;
 use App\Models\Users\PermissionModel;
-use Illuminate\Support\Facades\Log;
 
 
 class Controller extends BaseController
@@ -24,14 +23,12 @@ class Controller extends BaseController
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
 
-        $auth = $request->header("Authorization",null);
-                $jwtRes =  JWTControll::decodeJWT($auth);
-                Log::info($auth);
-
         $res = PermissionModel::getPermissionByApi($controllerName);
 
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
             if ($res['data']['found']){
+                $auth = $request->header("Authorization",null);
+                $jwtRes =  JWTControll::decodeJWT($auth);
                 if ($jwtRes["err"] != null) {
                     response()->json([
                         "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
@@ -50,6 +47,7 @@ class Controller extends BaseController
                     exit();
                 }
             }else {
+                // 暂时恢复默认 放行未添加权限的请求
                 // if (!in_array($controllerName, ['UserController.login','PermissionController.getSystemAllMenu',"PermissionController.getSystemAllPermission"])){
                 //     response()->json([
                 //         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
