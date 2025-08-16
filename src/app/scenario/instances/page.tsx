@@ -49,6 +49,7 @@ import BindMountsModal from '@/components/scenario/BindMountsModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
+import { customFetch } from "@/utils/fetch"
 
 
 const RunningInstancesPage: React.FC = () => {
@@ -190,8 +191,8 @@ const RunningInstancesPage: React.FC = () => {
     const fetchInstances = React.useCallback(async () => {
         if (!user) return;
         try {
-            const res = await fetch(`${API_BASE}/instances`);
-            if (!res.ok) throw new Error('fetch failed');
+            const res = await customFetch(`${API_BASE}/instances`);
+            if (!res.ok && (res.code ==420 || res.code == 405)) throw new Error('fetch failed');
             const data = await res.json();
             setInstances(data);
             setFetchError(null);

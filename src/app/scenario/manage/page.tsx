@@ -23,6 +23,9 @@ import ScenarioEditDialog from './ScenarioEditDialog';
 import ScenarioPermissionDialog  from './ScenarioPermissionDialog'
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
+import { customFetch } from '@/utils/fetch';
+
+
 // 定义场景的数据结构
 export interface Scenario {
     id: string; // 文件名将作为ID
@@ -61,7 +64,7 @@ const ScenarioManagementPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('/back/api/scenarios');
+            const response = await customFetch('/back/api/scenarios');
             if (!response.ok) {
                 throw new Error('获取场景列表失败');
             }
