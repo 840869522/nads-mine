@@ -262,10 +262,10 @@ class QuestionsModel extends Model{
      * @param $c_type
      * @return mixed
      */
-    public function get_question_cnt($c_type=0)
+    public function get_question_cnt($c_type=0,$tag="")
     {
         $mod = new QuestionsModel();
-        $cnt = $mod->where('c_type',$c_type)->count();
+        $cnt = $mod->where('c_type',$c_type)->where('c_tag',$tag)->count();
         return $cnt;
     }
 
@@ -280,6 +280,14 @@ class QuestionsModel extends Model{
     {
         $mod = new QuestionsModel();
         $list = $mod->get()->toArray();;
+        return $list;
+    }
+
+
+    public function get_question_by_tag($type=0,$tag="")
+    {
+        $mod = new QuestionsModel();
+        $list = $mod->where('c_type',$type)->where('c_tag',$tag)->get()->toArray();
         return $list;
     }
 

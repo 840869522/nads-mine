@@ -71,7 +71,8 @@ const RoleManagementPage: React.FC = () => {
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
 
     useEffect(() => {
-        getRoleData(page, rowsPerPage);
+        if (searchTerm.data.trim()) getRoleDataSeearch(page, rowsPerPage);
+        else getRoleData(page, rowsPerPage);
     }, [page, rowsPerPage]);
 
 
@@ -99,16 +100,44 @@ const RoleManagementPage: React.FC = () => {
                     setCount(res.data.data.count);
                 }
                 else {
-                    toast.error(res.data.message , {
+                    toast.error(res.data.message, {
                         autoClose: 3000,
                         closeOnClick: true,
                         pauseOnHover: true,
                         draggable: true,
-                      });
+                    });
                 }
             }).finally(() => {
                 setTableLoading(false);
             });
+    };
+
+    const getRoleDataSeearch = (page: number, pageSize: number) => {
+        setTableLoading(true);
+        try {
+            apiClientWithToken.post(`/back/api/support/role/search`, JSON.stringify({
+                page: page,
+                pagesize: pageSize,
+                name: searchTerm.data
+            })).then((res) => {
+                if (res.data.code === 200) {
+                    setRoles(res.data.data.data);
+                    setCount(res.data.data.count);
+                } else {
+                    throw new Error(res.data.message);
+                }
+            }
+            )
+        } catch (error) {
+            toast.error(`搜索用户时发生错误 - ${error.message}`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+            });
+        } finally {
+            setTableLoading(false);
+        }
     }
 
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,31 +146,8 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleSearchSubmit = async () => {
-        setTableLoading(true);
-        try {
-            const res = await apiClientWithToken.post(`/back/api/support/role/search`, JSON.stringify({
-                page: 1,
-                pagesize: rowsPerPage,
-                name: searchTerm.data
-            }));
-
-            if (res.data.code === 200) {
-                setRoles(res.data.data.data);
-                setCount(res.data.data.count);
-                setPage(1);
-            }else {
-                throw new Error(res.data.message);
-            }
-        } catch (error) {
-            toast.error(`搜索用户时发生错误 - ${error.message}`, {
-                autoClose: 3000,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-              });
-        } finally {
-            setTableLoading(false);
-        }
+        getRoleDataSeearch(1, rowsPerPage);
+        setPage(1);
     };
 
     const handleEditRoleClick = (role: MockRole) => {
@@ -151,12 +157,12 @@ const RoleManagementPage: React.FC = () => {
                 setEditingRole({ ...role, permissions: permision });
                 setIsRoleModalOpen(true);
             } else {
-               toast.error(res.data.message,{
-                autoClose: 3000,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-              });
+                toast.error(res.data.message, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                });
             }
         });
     };
@@ -175,19 +181,19 @@ const RoleManagementPage: React.FC = () => {
             if (data.code === 200) {
                 setPage(1);
                 getRoleData(1, rowsPerPage);
-                toast.success(`角色 "${formData.nameDisplay}" 添加成功。` , {
+                toast.success(`角色 "${formData.nameDisplay}" 添加成功。`, {
                     autoClose: 3000,
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
+                });
             } else {
-                toast.error(`角色 "${formData.nameDisplay}" 添加失败。` , {
+                toast.error(`角色 "${formData.nameDisplay}" 添加失败。`, {
                     autoClose: 3000,
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
+                });
             }
         } else if (editingRole) {
             const res = await apiClientWithToken.post(`/back/api/support/role/update`, JSON.stringify({
@@ -209,14 +215,14 @@ const RoleManagementPage: React.FC = () => {
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
-            } else if (res.data.code !== 405 && res.data.code !== 420 ){
-                toast.error(`角色 "${formData.nameDisplay}" ${res.data.message}` , {
+                });
+            } else if (res.data.code !== 405 && res.data.code !== 420) {
+                toast.error(`角色 "${formData.nameDisplay}" ${res.data.message}`, {
                     autoClose: 3000,
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
+                });
             }
         }
     };
@@ -224,12 +230,12 @@ const RoleManagementPage: React.FC = () => {
 
     const handleDeleteRoleClick = (role: MockRole) => {
         if (role.c_id === UserRole.ADMIN || role.c_id === UserRole.STUDENT) {
-            toast.error( `核心角色 "${role.c_id}" 不能被删除。`, {
+            toast.error(`核心角色 "${role.c_id}" 不能被删除。`, {
                 autoClose: 3000,
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
-              });
+            });
             return;
         }
         setRoleToDelete(role);
@@ -242,21 +248,21 @@ const RoleManagementPage: React.FC = () => {
     const confirmDeleteRole = async () => {
         if (roleToDelete) {
             const res = await apiClientWithToken.post(`/back/api/support/role/delete`, JSON.stringify({ id: roleToDelete.c_id }));
-            if (res.data.code === 200){
+            if (res.data.code === 200) {
                 toast.success(`角色 "${roleToDelete.c_name}" 已删除。`, {
                     autoClose: 3000,
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
-                  getRoleData(1, rowsPerPage);
-            }else {
+                });
+                getRoleData(1, rowsPerPage);
+            } else {
                 toast.error(`角色 "${roleToDelete.c_name}" 删除失败 - ${res.data.message}。`, {
                     autoClose: 3000,
                     closeOnClick: true,
                     pauseOnHover: true,
                     draggable: true,
-                  });
+                });
             }
         }
         setIsConfirmDeleteOpen(false);

@@ -1,6 +1,6 @@
-// src/app/scenario/sceneinstances/page.tsx
+// /var/www/nads/src/app/scenario/manage/instances/page.tsx
 "use client";
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import {
     Typography, Box, Paper, Button, TextField, InputAdornment, Table,
     TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
@@ -9,12 +9,17 @@ import {
 import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
-    Visibility as ViewIcon,
     Delete as DeleteIcon,
-    Pause as PauseIcon, // <-- 导入 Pause 图标
+    Pause as PauseIcon,
+    ArrowBack as ArrowBackIcon,
+    Visibility as ViewIcon, // <-- 确认导入
 } from '@mui/icons-material';
-import InstanceDetailsDialog from './InstanceDetailsDialog';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+// [MODIFICATION] 导入详情对话框组件
+import InstanceDetailsDialog from '../../sceneinstances/InstanceDetailsDialog';
 import { customFetch } from '@/utils/fetch';
+
 
 interface ScenarioInstance {
     instance_id: string;
@@ -34,7 +39,10 @@ const statusColors: Record<ScenarioInstance['status'], 'success' | 'warning' | '
     STOPPED: 'default',
 };
 
-const ScenarioInstanceManagementPage: React.FC = () => {
+const ScenarioInstanceListPageContent: React.FC = () => {
+    const searchParams = useSearchParams();
+    const scenarioNameFromUrl = searchParams.get('name');
+
     const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -43,10 +51,12 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
-
+    
+    // [MODIFICATION] 新增状态用于控制详情弹窗
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+
 
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);
@@ -58,14 +68,15 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 throw new Error(errorData.message);
             }
             const data: ScenarioInstance[] = await response.json();
-            setInstances(data);
+            const filteredData = scenarioNameFromUrl ? data.filter(inst => inst.scenario_name === scenarioNameFromUrl) : data;
+            setInstances(filteredData);
         } catch (err: any) {
             setError(err.message || '发生未知错误');
             setInstances([]);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [scenarioNameFromUrl]);
 
     useEffect(() => {
         fetchInstances();
@@ -74,55 +85,42 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const handleRefresh = () => {
         fetchInstances();
     };
-
+    
+    // [MODIFICATION] 新增查看详情的处理函数
     const handleViewDetails = (instance: ScenarioInstance) => {
         setSelectedInstanceId(instance.instance_id);
         setSelectedScenarioName(instance.scenario_name);
         setIsDetailsModalOpen(true);
     };
 
-    //  实现删除场景实例的功能
     const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
         if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
-            setIsLoading(true); // 开始加载，防止用户重复点击
+            setIsLoading(true);
             try {
-                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}`, {
-                    method: 'DELETE',
-                });
-
+                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}`, { method: 'DELETE' });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `删除失败，状态码: ${response.status}`);
                 }
-
-                // 删除成功后，从列表中移除该实例，实现实时刷新
                 setInstances(prevInstances => prevInstances.filter(inst => inst.instance_id !== instanceId));
-                
             } catch (err: any) {
-                // 显示错误提示
                 setError(err.message || '删除过程中发生错误');
             } finally {
-                setIsLoading(false); // 结束加载
+                setIsLoading(false);
             }
         }
     };
-    
-    //  实现暂停场景实例的功能
+
     const handlePauseInstance = async (instanceId: string, scenarioName: string) => {
         if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
             setIsLoading(true);
             try {
-                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
-                    method: 'POST',
-                });
-
+                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}/teardown`, { method: 'POST' });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
                 }
-                // 操作成功后刷新列表，以更新实例状态
                 fetchInstances();
-
             } catch (err: any) {
                 setError(err.message || '暂停过程中发生错误');
             } finally {
@@ -139,7 +137,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
 
     const filteredAndSortedInstances = useMemo(() => {
         let filtered = instances.filter(inst =>
-            (inst.scenario_name || '').toLowerCase().includes(searchText.toLowerCase()) ||
             (inst.username || '').toLowerCase().includes(searchText.toLowerCase())
         );
         filtered.sort((a, b) => {
@@ -157,9 +154,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     return (
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4" component="h1" fontWeight="bold">
-                    场景实例管理
-                </Typography>
+                <Box>
+                    <Button component={Link} href="/scenario/manage" startIcon={<ArrowBackIcon />} sx={{ mb: 1 }}>
+                        返回场景管理
+                    </Button>
+                    <Typography variant="h4" component="h1" fontWeight="bold">
+                        场景: {scenarioNameFromUrl || '所有'}
+                    </Typography>
+                </Box>
                 <Button
                     variant="outlined"
                     startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
@@ -173,12 +175,12 @@ const ScenarioInstanceManagementPage: React.FC = () => {
             <Paper elevation={2}>
                 <Box sx={{ p: 2 }}>
                     <TextField
-                        fullWidth variant="outlined" placeholder="搜索场景名称或启动用户..." value={searchText}
+                        fullWidth variant="outlined" placeholder="搜索启动用户..." value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>),}}
                     />
                 </Box>
-                
+
                 {error && <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
                 <TableContainer>
@@ -186,11 +188,6 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         <TableHead>
                            <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 'bold' } }}>
                                 <TableCell>实例 ID</TableCell>
-                                <TableCell>
-                                    <TableSortLabel active={orderBy === 'scenario_name'} direction={orderBy === 'scenario_name' ? order : 'asc'} onClick={() => handleRequestSort('scenario_name')}>
-                                        场景名称
-                                    </TableSortLabel>
-                                </TableCell>
                                 <TableCell>
                                     <TableSortLabel active={orderBy === 'username'} direction={orderBy === 'username' ? order : 'asc'} onClick={() => handleRequestSort('username')}>
                                         启动用户
@@ -211,20 +208,20 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading && instances.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
                             ) : paginatedInstances.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
                             ) : (
                                 paginatedInstances.map((instance) => (
                                     <TableRow key={instance.instance_id} hover>
                                         <TableCell><Tooltip title={instance.instance_id}><code>{(instance.instance_id || '').substring(0, 8)}...</code></Tooltip></TableCell>
-                                        <TableCell sx={{ fontWeight: 'medium' }}>{instance.scenario_name}</TableCell>
                                         <TableCell>{instance.username}</TableCell>
                                         <TableCell>{new Date(instance.runtime).toLocaleString()}</TableCell>
                                         <TableCell>
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
+                                            {/* [MODIFICATION] 添加查看详情按钮 */}
                                             {instance.status !== 'STOPPED' && (
                                                 <Tooltip title="查看详情">
                                                     <IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}>
@@ -262,6 +259,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 />
             </Paper>
             
+            {/* [MODIFICATION] 添加详情对话框的渲染逻辑 */}
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
@@ -271,6 +269,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 />
             )}
         </Paper>
+    );
+};
+
+const ScenarioInstanceManagementPage: React.FC = () => {
+    return (
+        <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>}>
+            <ScenarioInstanceListPageContent />
+        </Suspense>
     );
 };
 

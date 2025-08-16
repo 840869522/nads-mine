@@ -16,6 +16,7 @@ import { DataGrid, GridColDef, GridRowsProp } from '@mui/x-data-grid';
 import { Refresh as RefreshIcon, Delete as DeleteIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import Link from 'next/link';
+import { customFetch } from '@/utils/fetch';
 
 // API 基础路径
 const API_BASE = "/back";
@@ -41,7 +42,7 @@ const AllSwitchesPage: React.FC = () => {
         setError(null);
         try {
             const url = `${API_BASE}/api/scenariosinstances/switches`;
-            const response = await fetch(url);
+            const response = await customFetch(url);
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.detail || `获取交换机列表失败，状态码: ${response.status}`);
@@ -74,7 +75,7 @@ const AllSwitchesPage: React.FC = () => {
             // 假设删除交换机的 API 端点是 DELETE /api/scenariosinstances/switches/{switch_name}
             // ！！！请确保您的后端实现了此接口 ！！！
             const url = `${API_BASE}/api/scenariosinstances/switches/${switchName}`;
-            const response = await fetch(url, {
+            const response = await customFetch(url, {
                 method: 'DELETE',
             });
 

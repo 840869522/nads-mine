@@ -18,6 +18,7 @@ import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
+import { customFetch } from '@/utils/fetch';
 
 const API_BASE = "/back";
 
@@ -74,7 +75,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setFetchError(null);
         const url = `${API_BASE}/api/scenariosinstances/${instanceId}`;
         try {
-            const res = await fetch(url);
+            const res = await customFetch(url);
             if (!res.ok) throw new Error(`获取容器列表失败，状态码: ${res.status}`);
             const data = await res.json();
             setInstances(data);
@@ -101,7 +102,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 const action = instance.status === 'paused' ? 'unpause' : 'start';
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
                 fetchInstanceDetails();
             },
         });
@@ -125,7 +126,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `暂停实例: ${instance.name}`,
             message: `您确定要暂停实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
                 fetchInstanceDetails();
             },
         });
@@ -137,10 +138,10 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `删除实例: ${instance.name}`,
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
                 if (user) {
                     const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
-                    await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
+                    await customFetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
                 fetchInstanceDetails();
             },

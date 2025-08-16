@@ -39,5 +39,6 @@
         public static string $USER_LOGIN_IS_DEL_MES  = "账户被限制，请联系系统管理员";
         public static string $USER_LOGIN_FAILED_MES  = self::HTTP_STATUS_ERROR_MES;
         public static string $HTTP_ROUTER_NOT_FOUND_MES  = "NOT FOUND";
+        public static string $HTTP_PERMISSION_NOT_FOUND = "权限未被添加";
     }
 ?>
