@@ -243,8 +243,8 @@
 
 
         public static function deleteUserById(string $id): array{
+            // 在数据库方面设置 用户-角色表的外键属性 cascade 无需再次对用户-角色表进行删除
             $sql = "DELETE FROM `c_users` WHERE c_username = ?";
-            $sql_user_role = "DELETE FROM `c_users_roles` WHERE c_user_id = ?";
             try {
                 if (!$id)
                     return [
@@ -252,8 +252,7 @@
                     ];
                 db::beginTransaction();
                 $res = db::delete($sql, [$id]);
-                $res_user_role = db::delete($sql_user_role, [$id]);
-                if ($res && $res_user_role) {
+                if ($res) {
                     db::commit();
                     return [
                         "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
