@@ -151,9 +151,9 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleEditRoleClick = (role: MockRole) => {
-        apiClientWithToken.post(`/back/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`/back/api/support/role/id`, JSON.stringify({ id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
-                const permision = res.data.data.map(p => p.c_id);
+                const permision = res.data.data.permission;
                 setEditingRole({ ...role, permissions: permision });
                 setIsRoleModalOpen(true);
             } else {
@@ -277,9 +277,9 @@ const RoleManagementPage: React.FC = () => {
     };
 
     const handleViewPermissions = (role: MockRole) => {
-        apiClientWithToken.post(`/back/api/support/permission/role`, JSON.stringify({ role_id: role.c_id })).then((res) => {
+        apiClientWithToken.post(`/back/api/support/role/id`, JSON.stringify({ id: role.c_id })).then((res) => {
             if (res.data.code === 200) {
-                const permision = res.data.data.map(p => p.c_id);
+                const permision = res.data.data.permission;
                 setViewingRolePerms({ nameDisplay: role.c_id, permissions: permision });
                 setIsViewPermsModalOpen(true);
             }

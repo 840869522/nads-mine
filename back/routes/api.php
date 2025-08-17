@@ -51,7 +51,6 @@ Route::prefix("")->group(function () {
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
-    Route::post("/test",[UserController::class,'userTest']);
 });
 
 
@@ -78,8 +77,6 @@ Route::prefix("support")->group(function () {
         Route::post("/new", [RoleController::class, "newRole"]);
         Route::post("/update", [RoleController::class, "updateRole"]);
         Route::post("/delete", [RoleController::class, "deleteRole"]);
-        Route::post("/grant", [RoleController::class, "grantRoles2User"]);
-        Route::post("/revoke", [RoleController::class, "revokeRoleFromUser"]);
     });
 
     Route::prefix('permission')->group(function () {
@@ -87,12 +84,9 @@ Route::prefix("support")->group(function () {
         Route::post('/all_label', [PermissionController::class, 'getAllPermssionLable']);
         Route::post('/id', [PermissionController::class, 'getPermissionById']);
         Route::post("/search", [PermissionController::class, "searchPermission"]);
-        Route::post("/role", [PermissionController::class, "getPermissionsByRoleId"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
-        Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
-        Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
     });
 });
 

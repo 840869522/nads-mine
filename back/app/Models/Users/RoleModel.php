@@ -52,12 +52,23 @@
 
         public static function getRoleById(?string $id) :array {
             try {
-                $sql = "SELECT * FROM  `c_roles` WHERE `id` = ?";
+                $sql = "SELECT * FROM  `c_roles` WHERE `c_id` = ?";
                 $res = db::selectOne($sql,[$id]);
-                return [
-                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
-                    "data"=>$res
-                ];
+                $permissionModelRes = PermissionModel::getPermissionsByRoleId($res->c_id);
+                if ($permissionModelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE){
+                    $res->permission = array_map(function ($item){
+                        return $item->c_id;
+                    },$permissionModelRes['data']);
+                    return [
+                        "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                        "data"=>$res
+                    ];
+                }else {
+                    return [
+                        "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                        "data"=>$res
+                    ];
+                }
             }catch (QueryException $e) {
                 log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [

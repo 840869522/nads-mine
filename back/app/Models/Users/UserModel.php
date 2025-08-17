@@ -76,7 +76,7 @@
         public static function getUserPrimissions(string $id): array{
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT crp.c_permission_id FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.c_role_id = crp.c_role_id  WHERE cur.c_user_id = ?";
+                $sql = "SELECT DISTINCT cper.c_id,cper.c_api_src FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.c_role_id = crp.c_role_id JOIN `c_permissions` AS cper ON cper.c_id = crp.c_permission_id WHERE cur.c_user_id = ? AND cper.c_status = 1";
                 $res = db::select($sql, [$id]);
                 db::commit();
                 return [
