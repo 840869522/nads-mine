@@ -90,7 +90,6 @@ const PermissionManagementPage: React.FC = () => {
         if (res.data.code === 200) {
           setPermissions(res.data.data.data);
           setDataCount(res.data.data.count);
-          setPage(1);
         } else {
           setPermissions([]);
           toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
@@ -112,6 +111,7 @@ const PermissionManagementPage: React.FC = () => {
 
   const handleSearchSubmit = async () => {
     getPerimissionDataSearch(1,rowsPerPage);
+    setPage(1);
   };
 
   const handleRequestSort = (property: SortablePermissionsKeys) => {
@@ -329,15 +329,8 @@ const PermissionManagementPage: React.FC = () => {
               ].map((headCell) => (
                 <TableCell
                   key={headCell.id}
-                  sortDirection={orderBy === headCell.id ? order : false}
                 >
-                  <TableSortLabel
-                    active={orderBy === headCell.id}
-                    direction={orderBy === headCell.id ? order : 'asc'}
-                    onClick={() => handleRequestSort(headCell.id as SortablePermissionsKeys)}
-                  >
-                    {headCell.label}
-                  </TableSortLabel>
+                  {headCell.label}
                 </TableCell>
               ))}
               <TableCell align="center">操作</TableCell>

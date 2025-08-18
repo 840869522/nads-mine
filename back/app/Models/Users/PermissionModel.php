@@ -165,7 +165,8 @@ class PermissionModel extends Model
                 "c_is_menu"=> $data['is_menu'],
                 "c_label"=>$data['label'],
                 "c_icon"=>$data['icon'],
-                "c_status"=> $data['status']
+                "c_status"=> $data['status'],
+                "sort"=>100
             ];
             $res = db::table("c_permissions")->insert($value);
             if ($res) {
@@ -300,7 +301,7 @@ class PermissionModel extends Model
             if ($menu) {
                 $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to', 'c_icon as icon','sort'])->where('c_is_menu', '=', $menu)->orderBy("sort")->get()->toArray();
             } else {
-                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to','sort'])->orderBy("sort")->get()->toArray();
+                $res = db::table("c_permissions")->select(['c_id', 'c_pid', 'c_label as label', 'c_is_menu', 'c_src as to','sort'])->where("c_status","=","1")->orderBy("sort")->get()->toArray();
             }
             $menuData = self::buildTreeData($res, $menu);
             return [
@@ -323,7 +324,7 @@ class PermissionModel extends Model
         $offset = ($page - 1) * $pagesize;
         $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions`";
         try {
-            $res  = db::table("c_permissions")->select(['c_id', 'c_label','sort'])->offset($offset)->limit($pagesize)->orderBy('sort')->get()->toArray();
+            $res  = db::table("c_permissions")->select(['c_id', 'c_label','sort'])->where("c_status","=", 1)->offset($offset)->limit($pagesize)->orderBy('sort')->get()->toArray();
             $count = db::selectOne($sql_count);
             return [
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -340,13 +341,14 @@ class PermissionModel extends Model
 
     public static function getPermissionByApi($api){
         try {
-            $res = db::table("c_permissions")->select(["c_id as id"])->where("c_api_src","=",$api)->limit(1)->get()->toArray();
+            $res = db::table("c_permissions")->select(["c_id as id",'c_status as status'])->where("c_api_src","=",$api)->limit(1)->get()->toArray();
             if (!empty($res)){
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>[
                         "permission"=>$res[0]->id,
                         "found"=>true,
+                        "status"=>$res[0]->status
                     ]
                 ];
             }else{

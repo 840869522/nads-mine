@@ -17,6 +17,7 @@ import {
   FormHelperText,
   SelectChangeEvent,
   Chip,
+  Alert as MuiAlert,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Stack from '@mui/material/Stack';
@@ -43,6 +44,7 @@ import UserGroupIcon from '@heroicons/react/24/outline/UserGroupIcon';
 import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
 import ArrowLeftEndOnRectangleIcon from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
 import MenuIcon from '@mui/icons-material/Menu'; // 设置通用图标
+import { common } from '@mui/material/colors';
 
 // ------ 图标导入结束 ------
 
@@ -91,7 +93,7 @@ export type PermissionDisplayItem = {
   c_src: string,
   c_icon: string,
   c_is_menu: number,
-  c_status: number,
+  c_status: number
 };
 
 const defaultData: PermissionFormData = { id: '', des: '', label: "", pid: "", api_src: "", src: "", status: 1, is_menu: 0, icon: "MenuIcon" };
@@ -134,7 +136,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
           src: initialPermission.c_src,
           status: initialPermission.c_status,
           is_menu: initialPermission.c_is_menu,
-          icon: initialPermission.c_icon
+          icon: initialPermission.c_icon,
         });
       } else {
         setFormData({ ...defaultData });
@@ -188,8 +190,6 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
       setCurrentPage((prev) => prev + 1);
     }
   };
-
-
   // ------ 父项选择处理结束 ------
 
   // ------ 表单输入处理 ------
@@ -267,6 +267,10 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
         {isNewRole ? '添加新权限' : `编辑权限: ${formData.label}`}
       </DialogTitle>
       <DialogContent dividers>
+        <MuiAlert severity="warning" sx={{ mt: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>系统提示</Typography>
+          如果权限状态选择“禁用”，那么所有用户默认具有此权限，并且不会再角色管理处显示。
+        </MuiAlert>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>权限信息</Typography>
@@ -369,7 +373,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
               onChange={handleChange}
               error={!!errors.src}
               helperText={errors.src}
-              required
+              required={formData.is_menu ? true: false}
             />
             <TextField
               name="api_src"
@@ -380,7 +384,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
               onChange={handleChange}
               error={!!errors.api_src}
               helperText={errors.api_src}
-              required
+              required={formData.is_menu ? false: true}
             />
 
             <FormControl fullWidth margin="dense" error={!!errors.status}>
@@ -437,8 +441,8 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
                 value={formData.status == 1 ? "active" : "disabled"}
                 onChange={handleStatusChange}
               >
-                <MenuItem value="active">已激活</MenuItem>
-                <MenuItem value="disabled">已禁用</MenuItem>
+                <MenuItem value="active">激活</MenuItem>
+                <MenuItem value="disabled">禁用</MenuItem>
               </Select>
               {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
             </FormControl>
