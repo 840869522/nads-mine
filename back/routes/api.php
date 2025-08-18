@@ -246,7 +246,7 @@ Route::prefix('study')->group(function () {
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
         Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
         Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
-        Route::post('/get_papers', [TestController::class, 'get_papers']);
+        Route::get('get_papers', [TestController::class, 'get_papers']);
         Route::post('/send_papers', [TestController::class, 'send_papers']);
         Route::post('/submit_papers', [TestController::class, 'submit_papers']);
         Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
@@ -255,6 +255,9 @@ Route::prefix('study')->group(function () {
         Route::post('/query_results', [TestController::class, 'query_results']);
         Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
         Route::post('/redis_test', [TestController::class, 'redis_test']);
+        Route::get('/get_all_paper_rules', [TestController::class, 'get_all_paper_rules']);
+        Route::get('get_paper_details', [TestController::class, 'get_paper_details']);
+        Route::post('export_paper_to_word', [TestController::class, 'export_paper_to_word']);
     });
 });
 

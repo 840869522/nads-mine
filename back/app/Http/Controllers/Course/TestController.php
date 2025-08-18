@@ -24,6 +24,9 @@ use Illuminate\Support\Facades\Redis;
 
 use Illuminate\Support\Facades\Cache;
 
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+
 class TestController extends Controller
 {
 
@@ -599,6 +602,68 @@ class TestController extends Controller
     }
 
 
+        /**
+         * Notes:获取所有组卷规则
+         * User: zhangnan
+         * DateTime: 2025/7/11 17:01
+         * @param Request $request
+         * @return JsonResponse
+         */
+    public function get_all_paper_rules(Request $request)
+    {
+        try {
+            $mod = new PaperRulesModel();
+            $allRules = $mod->get_all_paper_rules();
+            
+            $typeDict = [
+                '1' => 'single_choice',
+                '2' => 'multiple_choice',
+                '3' => 'true_or_false',
+                '4' => 'subjective',
+            ];
+            
+            $groupedRules = [];
+            foreach ($allRules as $rule) {
+                $testId = $rule->testId;
+                
+                if (!isset($groupedRules[$testId])) {
+                    $groupedRules[$testId] = [
+                        'testId' => $testId,
+                        'items' => []
+                    ];
+                }
+                
+                // 遍历 items 时，访问 c_type 而非 type
+                foreach ($rule->items as $item) { 
+                    // 关键修正：用 $item->c_type 替代 $item->type
+                    if (isset($typeDict[(string)$item->c_type])) { 
+                        $groupedRules[$testId]['items'][] = [
+                            'key' => $item->key,
+                            'tag' => $item->c_tag,
+                            'type' => (int)$item->c_type,  // 正确使用 c_type
+                            'count' => (int)$item->c_count,
+                            'score' => (int)$item->c_score
+                        ];
+                    }
+                }
+            }
+            
+            $result = array_values($groupedRules);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                GlobalResponse::HTTP_STATUS_OK_MES,
+                $result
+            );
+            
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                $e->getMessage()
+            );
+        }
+    }
+
     /**
      * Notes:添加组题规则
      * User: zhangnan
@@ -1080,6 +1145,7 @@ class TestController extends Controller
         return $randomValue;
     }
 
+    
 
     /**
      * Notes:通过测试id获取试卷
@@ -1088,31 +1154,381 @@ class TestController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
-    public function get_papers(Request $request)
+        public function get_papers(Request $request)
     {
         try {
-            $test_id     = trim($request->input('test_id'));
+            $testId = $request->input('test_id');
             $validated_data = array(
                 'test_id' => 'required|string|exists:c_tests,c_id',
             );
             $validated_msg = array(
-                'test_id.required'=>"测试不能为空",
-                'test_id.string'=>"测试id类型错误",
-                'test_id.exists'=>"测试id不存在",
+                'test_id.required' => "测试ID不能为空",
+                'test_id.string' => "测试ID类型错误",
+                'test_id.exists' => "测试不存在",
             );
+            
             $validatedData = $request->validate($validated_data, $validated_msg);
-            $mod = new PapersModel();
-            $info = $mod->get_paper_list($test_id);
-            if(!$info){
-                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
+            
+            // 获取试卷列表
+            $papers = DB::table('c_papers')
+                ->where('c_test_id', $testId)
+                ->select('c_id as paperId', 'c_test_id as testId')
+                ->get();
+                
+            // 如果没有试卷，直接返回空数组
+            if ($papers->isEmpty()) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    GlobalResponse::HTTP_STATUS_OK_MES,
+                    []
+                );
             }
-            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
-
+            
+            // 计算每份试卷的总分
+            $papersWithScores = $papers->map(function ($paper) {
+                $questions = json_decode(
+                    DB::table('c_papers')
+                        ->where('c_id', $paper->paperId)
+                        ->value('c_questions'),
+                    true
+                );
+                
+                $totalScore = 0;
+                foreach ($questions as $typeGroup) {
+                    $count = count($typeGroup['data']);
+                    $score = $typeGroup['score'];
+                    $totalScore += $count * $score;
+                }
+                
+                $paper->totalScore = $totalScore;
+                $paper->questionCount = array_reduce($questions, function ($carry, $item) {
+                    return $carry + count($item['data']);
+                }, 0);
+                
+                return $paper;
+            });
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                GlobalResponse::HTTP_STATUS_OK_MES,
+                $papersWithScores
+            );
+            
         } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                $e->getMessage()
+            );
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '获取试卷失败: ' . $e->getMessage()
+            );
         }
     }
 
+    /**
+     * Notes: 获取试卷详细信息（从c_question_options表获取选项）
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function get_paper_details(Request $request)
+    {
+        try {
+            $paperId = $request->input('paper_id');
+            
+            // 验证参数
+            $validatedData = $request->validate([
+                'paper_id' => 'required|string|exists:c_papers,c_id'
+            ], [
+                'paper_id.required' => '试卷ID不能为空',
+                'paper_id.string' => '试卷ID类型错误',
+                'paper_id.exists' => '试卷不存在'
+            ]);
+            
+            // 获取试卷基本信息
+            $paper = DB::table('c_papers')
+                ->where('c_id', $paperId)
+                ->first();
+            
+            if (!$paper) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "试卷不存在"
+                );
+            }
+            
+            // 解析题目JSON
+            try {
+                $questions = json_decode($paper->c_questions, true, 512, JSON_THROW_ON_ERROR);
+                $answers = json_decode($paper->c_answers, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                    '试卷数据解析失败: ' . $e->getMessage()
+                );
+            }
+            
+            // 创建题目ID到答案的映射
+            $answerMap = [];
+            foreach ($answers as $answerGroup) {
+                if (isset($answerGroup['data']) && is_array($answerGroup['data'])) {
+                    foreach ($answerGroup['data'] as $answerItem) {
+                        if (!empty($answerItem['question_id'])) {
+                            $answerMap[$answerItem['question_id']] = $answerItem['answer'];
+                        }
+                    }
+                }
+            }
+            
+            // 题型映射
+            $typeMap = [
+                '1' => '单选题',
+                '2' => '多选题',
+                '3' => '判断题',
+                '4' => '主观题'
+            ];
+            
+            // 收集所有题目ID（去重）
+            $questionIds = [];
+            foreach ($questions as $typeGroup) {
+                foreach ($typeGroup['data'] as $questionData) {
+                    if (!empty($questionData['question_id'])) {
+                        $questionIds[] = $questionData['question_id'];
+                    }
+                }
+            }
+            $questionIds = array_unique($questionIds);
+            
+            // 1. 查询所有题目详情（从c_questions表）
+            $questionDetails = DB::table('c_questions')
+                ->whereIn('c_id', $questionIds)
+                ->select('c_id', 'c_question', 'c_type')
+                ->get()
+                ->keyBy('c_id');
+            
+            // 2. 查询所有题目选项（从c_question_options表），并按question_id分组
+            $optionsGroup = [];
+            if (!empty($questionIds)) {
+                $options = DB::table('c_question_options')
+                    ->whereIn('c_question_id', $questionIds)
+                    ->select('c_question_id', 'c_content', 'c_id as option_id')
+                    ->get()
+                    ->toArray();
+                
+                foreach ($options as $opt) {
+                    $qId = $opt->c_question_id;
+                    if (!isset($optionsGroup[$qId])) {
+                        $optionsGroup[$qId] = [];
+                    }
+                    $optionsGroup[$qId][] = [
+                        'optionId' => $opt->option_id,
+                        'content' => $opt->c_content
+                    ];
+                }
+            }
+            
+            // 构建题目列表
+            $questionList = [];
+            $totalScore = 0;
+            
+            foreach ($questions as $typeGroup) {
+                $type = $typeGroup['type'] ?? '';
+                $typeName = $typeMap[$type] ?? '未知题型';
+                $score = $typeGroup['score'] ?? 0;
+                
+                if (empty($typeGroup['data']) || !is_array($typeGroup['data'])) {
+                    continue;
+                }
+                
+                foreach ($typeGroup['data'] as $questionData) {
+                    $questionId = $questionData['question_id'] ?? 'unknown_' . uniqid();
+                    
+                    // 处理题目内容
+                    $questionContent = '题目内容缺失';
+                    if (isset($questionDetails[$questionId])) {
+                        $questionContent = trim($questionDetails[$questionId]->c_question) ?: $questionContent;
+                    } else {
+                        $questionContent = trim($questionData['question'] ?? '') ?: $questionContent;
+                    }
+                    
+                    // 处理选项
+                    $options = [];
+                    $currentQuestionType = $questionDetails[$questionId]->c_type ?? $type;
+                    if (in_array($currentQuestionType, ['1', '2', '3'])) {
+                        $options = $optionsGroup[$questionId] ?? [];
+                    }
+                    
+                    // 获取本题答案
+                    $correctAnswer = $answerMap[$questionId] ?? '';
+                    
+                    // 组装题目项
+                    $questionItem = [
+                        'id' => $questionId,
+                        'type' => $typeName,
+                        'content' => $questionContent,
+                        'score' => $score,
+                        'options' => $options,
+                        'answer' => $correctAnswer  // 新增正确答案字段
+                    ];
+                    
+                    $questionList[] = $questionItem;
+                    $totalScore += $score;
+                }
+            }
+            
+            // 响应数据
+            $response = [
+                'paperId' => $paper->c_id ?? '',
+                'testId' => $paper->c_test_id ?? '',
+                'totalScore' => $totalScore,
+                'questions' => $questionList
+            ];
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                GlobalResponse::HTTP_STATUS_OK_MES,
+                $response
+            );
+            
+        } catch (ValidationException $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                $e->getMessage()
+            );
+        } catch (\Exception $e) {
+            \Log::error('获取试卷详情异常', [
+                'paper_id' => $paperId ?? '未知',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '获取试卷详情失败，请稍后重试'
+            );
+        }
+    }
+
+    /**
+     * Notes: 导出试卷为Word
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function export_paper_to_word(Request $request)
+    {
+        try {
+            $paperId = $request->input('paper_id');
+            $validated_data = array(
+                'paper_id' => 'required|string|exists:c_papers,c_id',
+            );
+            $validated_msg = array(
+                'paper_id.required' => "试卷ID不能为空",
+                'paper_id.string' => "试卷ID类型错误",
+                'paper_id.exists' => "试卷不存在",
+            );
+            
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // 获取试卷详情
+            $paperResponse = $this->get_paper_details($request);
+            $paperData = json_decode($paperResponse->getContent(), true);
+            
+            if ($paperData['code'] !== GlobalResponse::$HTTP_STATUS_OK_CODE) {
+                throw new \Exception($paperData['message']);
+            }
+            
+            $paper = $paperData['data'];
+            // 确保questions是数组
+            $questions = isset($paper['questions']) && is_array($paper['questions']) ? $paper['questions'] : [];
+            
+            // 创建Word文档
+            $phpWord = new PhpWord();
+            $section = $phpWord->addSection();
+            
+            // 添加试卷标题
+            $section->addText("试卷 {$paper['paperId']}", ['bold' => true, 'size' => 16], ['alignment' => 'center']);
+            $section->addTextBreak(1);
+            
+            // 添加试卷信息
+            $questionCount = count($questions);
+            $infoText = "测试ID: {$paper['testId']} | 试卷ID: {$paper['paperId']} | 总分: {$paper['totalScore']}分 | 题数: {$questionCount}题";
+            $section->addText($infoText, ['size' => 12], ['alignment' => 'center']);
+            $section->addTextBreak(2);
+            
+            // 添加题目
+            foreach ($questions as $index => $question) {
+                // 题目编号和类型
+                $section->addText(
+                    ($index + 1) . ". [{$question['type']}] （{$question['score']}分）",
+                    ['bold' => true]
+                );
+                
+                // 题目内容
+                $section->addText($question['content']);
+                
+                // 选项（如果是选择题）
+                if (isset($question['options']) && is_array($question['options']) && count($question['options']) > 0) {
+                    foreach ($question['options'] as $optIndex => $option) {
+                        // 提取选项内容（兼容数组或对象格式）
+                        $optionContent = is_array($option) ? ($option['content'] ?? '未知选项') : ($option->content ?? '未知选项');
+                        
+                        $section->addText(
+                            chr(65 + $optIndex) . ". " . $optionContent,
+                            [],
+                            ['indentation' => ['left' => 200]]
+                        );
+                    }
+                }
+                
+                $section->addTextBreak(1);
+            }
+            
+            // 添加答案部分 - 显示在试卷最下端
+            if (!empty($questions)) {
+                $section->addTextBreak(2);
+                $section->addText('参考答案', ['bold' => true, 'color' => 'FF0000', 'size' => 14]);
+                $section->addTextBreak(1);
+                
+                foreach ($questions as $index => $question) {
+                    $answer = isset($question['answer']) ? $question['answer'] : '无答案';
+                    $section->addText(
+                        ($index + 1) . ". " . $answer,
+                        ['size' => 12]
+                    );
+                }
+            }
+            
+            // 保存临时文件
+            $tempFile = tempnam(sys_get_temp_dir(), 'paper') . '.docx';
+            $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
+            $objWriter->save($tempFile);
+            
+            // 读取文件内容
+            $fileContent = file_get_contents($tempFile);
+            
+            // 删除临时文件
+            unlink($tempFile);
+            
+            // 返回文件 - 设置正确的Content-Type
+            return response()->make($fileContent, 200, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Content-Disposition' => 'attachment; filename="试卷_' . $paper['testId'] . '_' . $paper['paperId'] . '.docx"'
+            ]);
+                
+        } catch (ValidationException $e) {
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                'message' => '导出失败: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 
     /**
      * Notes:试卷修改(未完成)
