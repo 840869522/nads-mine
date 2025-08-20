@@ -265,12 +265,12 @@ public function listVmsBySceneInstance(string $instance_id)
             $vol = $parts[0];
             $path = $parts[1] ?? rtrim($poolPath, '/') . '/' . $vol;
             try {
-                $lsOut = $this->runCommand(['ls', '-l', '--time-style=long-iso', $path]);
+                $lsOut = $this->runCommand(['ls', '-l', '--time-style=long-iso', '--block-size=1M', $path]);
             } catch (\RuntimeException $e) {
                 continue;
             }
             $lsParts = preg_split('/\s+/', trim($lsOut), 9);
-            $bytes = (int)($lsParts[4] ?? 0);
+            $sizeMb = $lsParts[4] ?? '0M';
             $date = $lsParts[5] ?? '';
             $time = $lsParts[6] ?? '';
             $uploadDate = ($date && $time) ? date('c', strtotime("$date $time")) : null;
@@ -279,10 +279,42 @@ public function listVmsBySceneInstance(string $instance_id)
                 'id' => $vol,
                 'name' => $vol,
                 'pool' => 'default',
-                'size' => sprintf('%.1f MB', $bytes / 1024 / 1024),
+                'size' => $sizeMb,
                 'path' => $path,
                 'modifiedDate' => $uploadDate,
                 'status' => 'available',
+            ];
+        }
+        return $images;
+    }
+
+    private function fetchVmImagePaths(): array
+    {
+        $images = [];
+        try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+        } catch (\RuntimeException $e) {
+            return $images;
+        }
+        $poolRoot = new \SimpleXMLElement($poolXml);
+        $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+
+        try {
+            $output = $this->runVirsh('vol-list', 'default');
+        } catch (\RuntimeException $e) {
+            return $images;
+        }
+
+        $lines = array_slice(preg_split('/\n/', trim($output)), 2);
+        foreach ($lines as $line) {
+            if (!trim($line)) { continue; }
+            $parts = preg_split('/\s+/', trim($line));
+            if (count($parts) < 1) { continue; }
+            $vol = $parts[0];
+            $path = $parts[1] ?? rtrim($poolPath, '/') . '/' . $vol;
+            $images[] = [
+                'name' => $vol,
+                'path' => $path,
             ];
         }
         return $images;
@@ -344,6 +376,17 @@ public function listVmsBySceneInstance(string $instance_id)
             unset($img['version'], $img['osType'], $img['architecture']);
         }
 
+        return response()->json($data, 200);
+    }
+
+    // GET /vms/image-options
+    public function listVmImageOptions()
+    {
+        try {
+            $data = $this->fetchVmImagePaths();
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
         return response()->json($data, 200);
     }
 
