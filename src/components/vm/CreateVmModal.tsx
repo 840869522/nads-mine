@@ -14,7 +14,6 @@ import {
 import Autocomplete from '@mui/material/Autocomplete';
 
 interface VmImage {
-  id: string;
   name: string;
   path: string;
 }
@@ -42,7 +41,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       setForm(f => ({ ...f, image: name }));
       setImages([]);
     } else {
-      fetch("/back/api/vms/images")
+      fetch("/back/api/vms/image-options")
         .then(res => res.json())
         .then(data => setImages(data));
     }
