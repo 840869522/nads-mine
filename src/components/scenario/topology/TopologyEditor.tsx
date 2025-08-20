@@ -130,7 +130,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         // 根据中文名映射为英文名
         switch (deviceDetails.name) {
             case '容器':
-                englishLabel = `Container-${nodeCount}`;
+                englishLabel = `C-${nodeCount}`;
                 break;
             case '虚拟机':
                 englishLabel = `VM-${nodeCount}`;
@@ -142,7 +142,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 englishLabel = `Router-${nodeCount}`;
                 break;
             case 'NAT网桥':
-                englishLabel = `NAT-Bridge-${nodeCount}`;
+                englishLabel = `br0`;
                 break;
             default:
                 // 如果有其他类型，保留原样或指定一个通用英文名
