@@ -244,39 +244,42 @@ public function listVmsBySceneInstance(string $instance_id)
     {
         $images = [];
         try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+        } catch (\RuntimeException $e) {
+            return $images;
+        }
+        $poolRoot = new \SimpleXMLElement($poolXml);
+        $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+
+        try {
             $output = $this->runVirsh('vol-list', 'default');
         } catch (\RuntimeException $e) {
             return $images;
         }
+
         $lines = array_slice(preg_split('/\n/', trim($output)), 2);
         foreach ($lines as $line) {
             if (!trim($line)) { continue; }
             $parts = preg_split('/\s+/', trim($line));
-            if (count($parts) < 2) { continue; }
+            if (count($parts) < 1) { continue; }
             $vol = $parts[0];
-            $path = $parts[1];
+            $path = $parts[1] ?? rtrim($poolPath, '/') . '/' . $vol;
             try {
-                $infoOut = $this->runVirsh('vol-info', $vol, '--pool', 'default');
+                $lsOut = $this->runCommand(['ls', '-l', '--time-style=long-iso', $path]);
             } catch (\RuntimeException $e) {
                 continue;
             }
-            $sizeMb = 0.0;
-            foreach (preg_split('/\n/', trim($infoOut)) as $l) {
-                if (str_starts_with($l, 'Capacity:')) {
-                    $infoParts = preg_split('/\s+/', $l);
-                    if (count($infoParts) >= 3) {
-                        $sizeMb = $this->sizeToMb((float)$infoParts[1], $infoParts[2]);
-                    }
-                    break;
-                }
-            }
-            $mtime = @filemtime($path);
-            $uploadDate = $mtime ? date('c', $mtime) : null;
+            $lsParts = preg_split('/\s+/', trim($lsOut), 9);
+            $bytes = (int)($lsParts[4] ?? 0);
+            $date = $lsParts[5] ?? '';
+            $time = $lsParts[6] ?? '';
+            $uploadDate = ($date && $time) ? date('c', strtotime("$date $time")) : null;
+
             $images[] = [
                 'id' => $vol,
                 'name' => $vol,
                 'pool' => 'default',
-                'size' => sprintf('%.1f MB', $sizeMb),
+                'size' => sprintf('%.1f MB', $bytes / 1024 / 1024),
                 'path' => $path,
                 'modifiedDate' => $uploadDate,
                 'status' => 'available',

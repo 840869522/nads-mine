@@ -10,12 +10,9 @@ import {
   IconButton,
   Box,
   Stack,
-  MenuItem,
-  InputLabel,
-  FormControl,
-  Select,
   Typography
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
@@ -115,19 +112,15 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
           {fixedImage ? (
             <TextField label="镜像" value={image} fullWidth disabled />
           ) : (
-            <FormControl fullWidth>
-              <InputLabel id="image-select-label">镜像</InputLabel>
-              <Select
-                labelId="image-select-label"
-                value={image}
-                label="镜像"
-                onChange={e => setImage(e.target.value)}
-              >
-                {images.map(img => (
-                  <MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              freeSolo
+              options={images.map(img => `${img.name}:${img.version}`)}
+              value={image}
+              inputValue={image}
+              onInputChange={(_, val) => setImage(val)}
+              onChange={(_, val) => setImage(val || '')}
+              renderInput={(params) => <TextField {...params} label="镜像" />}
+            />
           )}
           <TextField label="容器名称" value={name} onChange={e => setName(e.target.value)} fullWidth />
           <Box>

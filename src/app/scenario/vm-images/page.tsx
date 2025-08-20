@@ -183,7 +183,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             minWidth: 160,
             // Align with container pages: parse ISO string and format as locale date
             valueFormatter: (params) => {
-                return dayjs(params).format('YYYY年M月D日');
+                return dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss');
             }
         },
         {

@@ -8,13 +8,10 @@ import {
   Button,
   TextField,
   Stack,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormControlLabel,
   Checkbox
 } from "@mui/material";
+import Autocomplete from '@mui/material/Autocomplete';
 
 interface VmImage {
   id: string;
@@ -83,19 +80,15 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
           {fixedImage ? (
             <TextField label="镜像" value={form.image} fullWidth disabled />
           ) : (
-            <FormControl fullWidth>
-              <InputLabel id="img-label">镜像</InputLabel>
-              <Select
-                labelId="img-label"
-                value={form.image}
-                label="镜像"
-                onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
-              >
-                {images.map(img => (
-                  <MenuItem key={img.id} value={img.name}>{img.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              freeSolo
+              options={images.map(img => img.name)}
+              value={form.image}
+              inputValue={form.image}
+              onInputChange={(_, val) => setForm(f => ({ ...f, image: val }))}
+              onChange={(_, val) => setForm(f => ({ ...f, image: val || '' }))}
+              renderInput={(params) => <TextField {...params} label="镜像" />}
+            />
           )}
           <TextField label="实例名称" value={form.vm_name}
             onChange={e => setForm(f => ({ ...f, vm_name: e.target.value }))} fullWidth />
