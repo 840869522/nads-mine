@@ -302,13 +302,42 @@ class DrillController extends Controller
                     $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
                 }
             }
-            // 配置网关IP和所有容器的路由 
+            // 配置网关IP和所有容器的路由
             $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
             $containersToRoute = [];
-            foreach ($parsedTopology['containers'] as $containerData) {
-                // 从之前创建的 items 信息中获取容器的真实名称
-                $actualContainerName = $createdItemsInfo[$containerData['id']]['actual_name'];
-                $containersToRoute[] = ['name' => $actualContainerName];
+
+            // 核心修复：只为连接到 br0 的容器配置路由
+            // 1. 找出所有连接到 nat_bridge (即 br0) 的 OVS 交换机
+            $switchesConnectedToBridge = [];
+            foreach ($connections as $conn) {
+                if ($conn['source']['type'] === 'nat_bridge' && $conn['target']['type'] === 'switch') {
+                    $switchesConnectedToBridge[$conn['target']['id']] = true;
+                } elseif ($conn['target']['type'] === 'nat_bridge' && $conn['source']['type'] === 'switch') {
+                    $switchesConnectedToBridge[$conn['source']['id']] = true;
+                }
+            }
+
+            // 2. 找出所有连接到上述交换机的容器
+            if (!empty($switchesConnectedToBridge)) {
+                foreach ($connections as $conn) {
+                    $containerNode = null;
+                    $switchNode = null;
+
+                    if ($conn['source']['type'] === 'container' && $conn['target']['type'] === 'switch') {
+                        $containerNode = $conn['source'];
+                        $switchNode = $conn['target'];
+                    } elseif ($conn['target']['type'] === 'container' && $conn['source']['type'] === 'switch') {
+                        $containerNode = $conn['target'];
+                        $switchNode = $conn['source'];
+                    }
+
+                    // 如果这个连接是一个容器到交换机的连接，并且该交换机已连接到 br0
+                    if ($containerNode && isset($switchesConnectedToBridge[$switchNode['id']])) {
+                        // 从之前创建的 items 信息中获取容器的真实名称
+                        $actualContainerName = $createdItemsInfo[$containerNode['id']]['actual_name'];
+                        $containersToRoute[] = ['name' => $actualContainerName];
+                    }
+                }
             }
 
             // 如果有需要配置路由的容器，则执行配置
