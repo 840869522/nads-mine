@@ -41,7 +41,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       setForm(f => ({ ...f, image: name }));
       setImages([]);
     } else {
-      fetch("/back/api/vms/image-options")
+      fetch("/back/api/vms/images")
         .then(res => res.json())
         .then(data => setImages(data));
     }
