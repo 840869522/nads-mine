@@ -136,10 +136,10 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 englishLabel = `VM-${nodeCount}`;
                 break;
             case '交换机':
-                englishLabel = `Switch-${nodeCount}`;
+                englishLabel = `S-${nodeCount}`;
                 break;
             case '路由器':
-                englishLabel = `Router-${nodeCount}`;
+                englishLabel = `R-${nodeCount}`;
                 break;
             case 'NAT网桥':
                 englishLabel = `br0`;
