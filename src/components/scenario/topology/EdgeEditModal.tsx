@@ -23,10 +23,10 @@ const EdgeEditModal: React.FC<EdgeEditModalProps> = ({ isOpen, onClose, edge, so
 
   useEffect(() => {
     if (edge) {
-      setSourceInterface(edge.config.sourceInterface);
-      setSourceIp(edge.config.sourceIp);
-      setTargetInterface(edge.config.targetInterface);
-      setTargetIp(edge.config.targetIp);
+      setSourceInterface(edge.config.sourceInterface || ''); // 使用 || '' 来处理 null
+      setSourceIp(edge.config.sourceIp || '');
+      setTargetInterface(edge.config.targetInterface || '');
+      setTargetIp(edge.config.targetIp || '');
       setErrors({});
     }
   }, [edge]);
