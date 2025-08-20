@@ -50,7 +50,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
       setImage(fixedImage);
       setImages([]);
     } else if (user) {
-      fetch(`${API_BASE}/images?userId=${user.id}&role=${user.role}`)
+      fetch(`${API_BASE}/images`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
