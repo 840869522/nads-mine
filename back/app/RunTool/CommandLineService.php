@@ -403,7 +403,7 @@ XML;
     if (!empty($options['scene_instance_id']) && !empty($options['name'])) {
         $command[] = '-e';
         // 将环境变量 SCENE_ID 的值设置为 "容器名_场景实例ID" 的格式
-        $command[] = "SCENE_ID={$options['name']}_{$options['scene_instance_id']}";
+        $command[] = "SCENE_ID={$options['scene_instance_id']}_{$options['name']}";
     }
 
         // c. 添加端口映射

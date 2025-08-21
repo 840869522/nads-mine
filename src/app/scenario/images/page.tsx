@@ -111,7 +111,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user || !imageToDelete) return;
     const id = imageToDelete.id;
     const q = `?id=${id}`;
-    await customcustomFetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
+    await customFetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
     await fetchImages();
     handleCloseConfirmDialog();
   };
@@ -138,7 +138,7 @@ const ImageManagementPage: React.FC = () => {
     { field: 'size', headerName: '大小', flex: 1, hide: !showColumns.size },
     { field: 'uploadDate', headerName: '上传日期', flex: 1, hide: !showColumns.uploadDate,
       valueFormatter: (params) => {
-        return dayjs(params).format('YYYY年M月D日');
+        return dayjs(params).format('YYYY年M月D日 HH:mm:ss');
       }
     },
     {

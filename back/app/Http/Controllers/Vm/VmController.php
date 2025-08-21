@@ -243,43 +243,176 @@ public function listVmsBySceneInstance(string $instance_id)
     private function fetchVmImages(): array
     {
         $images = [];
+
+        // 1) 拿 pool 路径 & 类型（一次 virsh）
+        $poolPath = '';
+        $poolType = '';
+        try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+            $poolRoot = new \SimpleXMLElement($poolXml);
+            $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+            $poolType = (string)($poolRoot->xpath('string(/pool/@type)') ?: '');
+        } catch (\RuntimeException $e) {
+            // 如果连 pool 信息都拿不到，直接空返回
+            return $images;
+        }
+
+        // 2) 优先：dir pool 直接扫目录（最快）
+        if ($poolPath && is_dir($poolPath) && is_readable($poolPath) && ($poolType === '' || $poolType === 'dir')) {
+            $it = new \FilesystemIterator(
+                $poolPath,
+                \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_FILEINFO
+            );
+
+            foreach ($it as $fi) {
+                /** @var \SplFileInfo $fi */
+                // 仅处理普通文件；隐藏/临时文件自己按需调整
+                if (!$fi->isFile()) { continue; }
+
+                $vol  = $fi->getFilename();
+                $path = $fi->getPathname();
+
+                // 这些信息在底层已缓存，基本不触发额外子进程
+                $sizeBytes  = $fi->getSize();
+                $mtime      = $fi->getMTime();
+
+                $images[] = [
+                    'id'           => $vol,
+                    'name'         => $vol,
+                    'pool'         => 'default',
+                    'size'         => (int)ceil($sizeBytes / 1048576) . 'M',
+                    'path'         => $path,
+                    'modifiedDate' => $mtime ? date('c', $mtime) : null,
+                    'status'       => '可用',
+                ];
+            }
+
+            return $images;
+        }
+
+        // 3) 非 dir pool 或目录不可读时：一次 virsh --details（无逐卷命令）
+        try {
+            $cmd = ['virsh', '-r', '-q', 'vol-list', '--pool', 'default', '--details'];
+            $output = $this->runCommand($cmd);
+        } catch (\RuntimeException $e) {
+            return $images;
+        }
+
+        $lines = explode("\n", trim($output));
+        if (count($lines) <= 2) {
+            return $images;
+        }
+
+        // 跳过表头两行
+        $dataLines = array_slice($lines, 2);
+
+        foreach ($dataLines as $line) {
+            $line = rtrim($line);
+            if ($line === '' || $line[0] === '-') { continue; }
+
+            // virsh --details 通常是固定列宽，用 2+ 空格分割最稳
+            // 列顺序一般为：Name  Path  Type  Capacity  Allocation
+            $cols = preg_split('/\s{2,}/', $line);
+            if (!$cols || count($cols) < 2) { continue; }
+
+            // 尽量容错：从右往左拿 Capacity/Allocation；最左是 Name；中间合并为 Path
+            $name = $cols[0];
+            $capacityStr   = null;
+            $allocationStr = null;
+
+            if (count($cols) >= 5) {
+                $allocationStr = $cols[count($cols) - 1];
+                $capacityStr   = $cols[count($cols) - 2];
+                // $type = $cols[count($cols) - 3]; // 若需要可取
+                $pathParts     = array_slice($cols, 1, count($cols) - 4);
+                $path          = implode('  ', $pathParts); // 保留单空格的情况
+            } else {
+                // 某些版本只输出 Name/Path
+                $path = $cols[1];
+            }
+
+            // 用 Capacity 为主（更快且不触发 I/O）；没有就留空
+            $bytes = $capacityStr ? $this->parseVirshSizeToBytes($capacityStr) : null;
+
+            $images[] = [
+                'id'           => $name,
+                'name'         => $name,
+                'pool'         => 'default',
+                'size'         => $bytes !== null ? (int)ceil($bytes / 1048576) . 'M' : null,
+                'path'         => isset($path) ? $path : null,
+                'modifiedDate' => null, // 不做逐卷 I/O，保持极速
+                'status'       => 'available',
+            ];
+        }
+
+        return $images;
+    }
+
+    /**
+     * 把 virsh 的容量字符串（如 "10.00 GiB" / "512.0 MiB" / "0.00 B"）转成字节数
+     */
+    private function parseVirshSizeToBytes(string $s): ?int
+    {
+        $s = trim($s);
+        if ($s === '' || $s === '-') { return null; }
+
+        if (!preg_match('/^\s*([\d.]+)\s*([KMGTPE]?i?B)\s*$/i', $s, $m)) {
+            // 有些环境可能直接给字节数字符串
+            if (ctype_digit($s)) { return (int)$s; }
+            return null;
+        }
+        $num  = (float)$m[1];
+        $unit = strtoupper($m[2]);
+
+        $map = [
+            'B'   => 1,
+            'KIB' => 1024,
+            'MIB' => 1024**2,
+            'GIB' => 1024**3,
+            'TIB' => 1024**4,
+            'PIB' => 1024**5,
+            // 兼容如果某些发行版返回十进制单位（很少见）
+            'KB'  => 1000,
+            'MB'  => 1000**2,
+            'GB'  => 1000**3,
+            'TB'  => 1000**4,
+            'PB'  => 1000**5,
+        ];
+
+        $mul = $map[$unit] ?? 1;
+        // 防止极大值溢出，用 round
+        return (int)round($num * $mul);
+    }
+
+
+
+    private function fetchVmImagePaths(): array
+    {
+        $images = [];
+        try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+        } catch (\RuntimeException $e) {
+            return $images;
+        }
+        $poolRoot = new \SimpleXMLElement($poolXml);
+        $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+
         try {
             $output = $this->runVirsh('vol-list', 'default');
         } catch (\RuntimeException $e) {
             return $images;
         }
+
         $lines = array_slice(preg_split('/\n/', trim($output)), 2);
         foreach ($lines as $line) {
             if (!trim($line)) { continue; }
             $parts = preg_split('/\s+/', trim($line));
-            if (count($parts) < 2) { continue; }
+            if (count($parts) < 1) { continue; }
             $vol = $parts[0];
-            $path = $parts[1];
-            try {
-                $infoOut = $this->runVirsh('vol-info', $vol, '--pool', 'default');
-            } catch (\RuntimeException $e) {
-                continue;
-            }
-            $sizeMb = 0.0;
-            foreach (preg_split('/\n/', trim($infoOut)) as $l) {
-                if (str_starts_with($l, 'Capacity:')) {
-                    $infoParts = preg_split('/\s+/', $l);
-                    if (count($infoParts) >= 3) {
-                        $sizeMb = $this->sizeToMb((float)$infoParts[1], $infoParts[2]);
-                    }
-                    break;
-                }
-            }
-            $mtime = @filemtime($path);
-            $uploadDate = $mtime ? date('c', $mtime) : null;
+            $path = $parts[1] ?? rtrim($poolPath, '/') . '/' . $vol;
             $images[] = [
-                'id' => $vol,
                 'name' => $vol,
-                'pool' => 'default',
-                'size' => sprintf('%.1f MB', $sizeMb),
                 'path' => $path,
-                'modifiedDate' => $uploadDate,
-                'status' => 'available',
             ];
         }
         return $images;
@@ -341,6 +474,17 @@ public function listVmsBySceneInstance(string $instance_id)
             unset($img['version'], $img['osType'], $img['architecture']);
         }
 
+        return response()->json($data, 200);
+    }
+
+    // GET /vms/image-options
+    public function listVmImageOptions()
+    {
+        try {
+            $data = $this->fetchVmImagePaths();
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
         return response()->json($data, 200);
     }
 
@@ -510,7 +654,8 @@ public function listVmsBySceneInstance(string $instance_id)
                 $image = (string)($source['file'] ?? $source['dev']);
                 if ($image) {
                     try {
-                        $osType = ucfirst($this->detectOs($image));
+                        //$osType = ucfirst($this->detectOs($image));
+                        $osType = null;
                     } catch (\Exception $e) {
                         $osType = null;
                     }
