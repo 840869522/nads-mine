@@ -119,7 +119,8 @@ const VmImageManagementPage: React.FC = () => {
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
-        img.description?.toLowerCase().includes(search.toLowerCase())
+        img.description?.toLowerCase().includes(search.toLowerCase()) ||
+        img.osType?.toLowerCase().includes(search.toLowerCase())
     )
 
     const handleDelete = (id: string) => {
@@ -156,7 +157,24 @@ const VmImageManagementPage: React.FC = () => {
 
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
-        //{ field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
+        {
+            field: 'osType',
+            headerName: '操作系统',
+            width: 120,
+            valueFormatter: params => {
+                switch (params.value) {
+                    case 'Linux':
+                        return 'Linux'
+                    case 'Windows':
+                        return 'Windows'
+                    case 'Other':
+                        return '其他'
+                    default:
+                        return params.value
+                }
+            },
+        },
+        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',
