@@ -15,23 +15,10 @@ import {
   Search as SearchIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  SearchOff as SearchOffIcon
 } from '@mui/icons-material';
-import axios from 'axios';
-
-// 定义API客户端
-const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-});
-
-// 获取带token的API客户端
-const getApiClientWithToken = () => {
-  const token = localStorage.getItem('authToken');
-  return axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-    headers: { Authorization: `Bearer ${token}` }
-  });
-};
+import { apiClientWithToken } from "@/utils/axios";
 
 type QuestionType = '单选题' | '多选题' | '判断题' | '主观题';
 
@@ -45,6 +32,7 @@ interface RuleItem {
 
 interface Rule {
   testId: string;
+  testName: string; // 新增：测试名称
   items: RuleItem[];
 }
 
@@ -107,11 +95,10 @@ const PaperManagementSystem: React.FC = () => {
     fetchRules();
   }, []);
 
-  // 获取所有规则
+  // 获取所有规则（包含测试名称）
 const fetchRules = async () => {
   setLoading(true);
   try {
-    const apiClientWithToken = getApiClientWithToken();
     const response = await apiClientWithToken.get('/back/api/study/test/get_all_paper_rules');
     
     // 确保数据是数组格式
@@ -124,6 +111,7 @@ const fetchRules = async () => {
       
       return {
         testId: rule.testId,
+        testName: rule.testName || '未知名称', // 测试名称
         items: items.map((item: any) => ({
           key: item.key || '',
           tag: item.tag || '',
@@ -161,7 +149,7 @@ const fetchRules = async () => {
 const fetchRuleFromApi = async (testId: string) => {
   setEditLoading(true);
   try {
-    const apiClientWithToken = getApiClientWithToken();
+
     const response = await apiClientWithToken.get(`/back/api/study/test/get_paper_rules_info?test_id=${testId}`);
     const ruleData = response.data?.data || {};
     const items: RuleItem[] = [];
@@ -188,7 +176,11 @@ const fetchRuleFromApi = async (testId: string) => {
     });
 
     // 设置编辑状态（testId对应后端的test_id）
-    setEditingRule({ testId, items });
+    setEditingRule({ 
+      testId, 
+      testName: '', // 暂时为空，编辑时不需要显示名称
+      items 
+    });
     setIsModalOpen(true);
   } catch (error) {
     console.error('加载规则失败:', error);
@@ -264,7 +256,6 @@ const handleDeleteRule = async (testId: string) => {
   
   try {
     setLoading(true);
-    const apiClientWithToken = getApiClientWithToken();
     
     const response = await apiClientWithToken.delete(`/back/api/study/test/paper_rules_del?test_id=${testId}`);
     
@@ -280,6 +271,12 @@ const handleDeleteRule = async (testId: string) => {
   } finally {
     setLoading(false);
   }
+};
+
+// 查询试卷处理函数（新增）
+const handleQueryPapers = async (testId: string) => {
+  setInputTestId(testId);
+  await fetchPapersByTestId(testId);
 };
 
 const prepareRuleData = (rule: Rule) => {
@@ -316,7 +313,6 @@ const addRule = async (rule: Rule) => {
   if (!validateRule(rule)) return false;
   
   try {
-    const apiClientWithToken = getApiClientWithToken();
     const requestData = prepareRuleData(rule);
     
     const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_add', requestData);
@@ -341,7 +337,6 @@ const updateRule = async (rule: Rule) => {
   if (!validateRule(rule)) return false;
   
   try {
-    const apiClientWithToken = getApiClientWithToken();
     const requestData = prepareRuleData(rule);
     
     const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_update', requestData);
@@ -492,6 +487,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
     ? rules.filter(rule => {
         if (!searchTerm) return true;
         if (rule.testId?.toLowerCase().includes(searchTerm.toLowerCase())) return true;
+        if (rule.testName?.toLowerCase().includes(searchTerm.toLowerCase())) return true; // 搜索测试名称
         return rule.items?.some(item => 
           item.key?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.tag?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -511,7 +507,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
   const fetchPapersByTestId = async (testId: string) => {
     setLoading(true);
     try {
-      const apiClientWithToken = getApiClientWithToken();
+
       const response = await apiClientWithToken.get(`/back/api/study/test/get_papers?test_id=${testId}`);
       
       // 处理原始数据，确保正确计算题目数量
@@ -551,7 +547,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
   const fetchPaperDetails = async (paperId: string) => {
     setLoadingPaperDetails(true);
     try {
-      const apiClientWithToken = getApiClientWithToken();
       const response = await apiClientWithToken.get(
         '/back/api/study/test/get_paper_details', 
         { params: { paper_id: paperId } }
@@ -596,7 +591,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
     if (!generatedPaper) return;
     
     try {
-      const apiClientWithToken = getApiClientWithToken();
       const response = await apiClientWithToken.post(
         '/back/api/study/test/export_paper_to_word',
         { paper_id: generatedPaper.paperId },
@@ -648,7 +642,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
               
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <TextField
-                  label="搜索测试ID或规则ID"
+                  label="搜索测试ID、名称或规则ID"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   InputProps={{
@@ -670,6 +664,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                   onClick={() => {
                     setEditingRule({
                       testId: '',
+                      testName: '',
                       items: [{
                         key: '',
                         tag: '',
@@ -685,16 +680,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                 >
                   添加规则
                 </Button>
-                
-                <Button 
-                  variant="contained" 
-                  color="secondary"
-                  startIcon={<PdfIcon />}
-                  onClick={() => setIsGeneratePaperModalOpen(true)}
-                  sx={{ ml: 1 }}
-                >
-                  查询试卷
-                </Button>
               </Box>
             </Box>
             
@@ -704,6 +689,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
           <TableHead>
             <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
               <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试ID</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试名称</TableCell> {/* 新增列 */}
               <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>规则ID</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题型</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>标签</TableCell>
@@ -745,6 +731,19 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                             {rule.testId}
                           </TableCell>
                         )}
+                        {/* 新增测试名称列 */}
+                        {itemIndex === 0 && (
+                          <TableCell 
+                            rowSpan={rule.items.length} 
+                            sx={{ 
+                              color: isDarkMode ? '#fff' : '#000',
+                              verticalAlign: 'middle',
+                              textAlign: 'center'
+                            }}
+                          >
+                            {rule.testName}
+                          </TableCell>
+                        )}
                         <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
                           {item.key}
                         </TableCell>
@@ -784,6 +783,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                           </TableCell>
                         )}
                         
+                        {/* 操作栏 - 按钮上下排布 */}
                         {itemIndex === 0 && (
                           <TableCell 
                             rowSpan={rule.items.length} 
@@ -792,7 +792,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                               textAlign: 'center'
                             }}
                           >
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                               <IconButton 
                                 onClick={() => handleEdit(rule.testId)}
                                 sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
@@ -806,6 +806,13 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                                 aria-label="删除规则"
                               >
                                 <DeleteIcon />
+                              </IconButton>
+                              <IconButton 
+                                onClick={() => handleQueryPapers(rule.testId)}
+                                sx={{ color: isDarkMode ? '#a5d6a7' : '#43a047' }}
+                                aria-label="查询试卷"
+                              >
+                                <PdfIcon />
                               </IconButton>
                             </Box>
                           </TableCell>
@@ -1096,39 +1103,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
               loading={editLoading}
             >
               {rules.some(r => r.testId === editingRule?.testId) ? "保存修改" : "添加规则"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-        
-        {/* 生成试卷模态框 */}
-        <Dialog 
-          open={isGeneratePaperModalOpen} 
-          onClose={() => setIsGeneratePaperModalOpen(false)}
-          sx={{
-            '& .MuiDialog-paper': {
-              backgroundColor: getCardBgColor(),
-              color: isDarkMode ? '#ffffff' : '#000000'
-            }
-          }}
-        >
-          <DialogTitle sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
-            输入测试ID查询试卷
-          </DialogTitle>
-          <DialogContent sx={{ pt: 3 }}>
-            <TextField
-              autoFocus
-              margin="dense"
-              label="测试ID"
-              fullWidth
-              variant="outlined"
-              value={inputTestId}
-              onChange={(e) => setInputTestId(e.target.value)}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setIsGeneratePaperModalOpen(false)}>取消</Button>
-            <Button onClick={() => fetchPapersByTestId(inputTestId)} disabled={!inputTestId.trim()}>
-              查询试卷
             </Button>
           </DialogActions>
         </Dialog>

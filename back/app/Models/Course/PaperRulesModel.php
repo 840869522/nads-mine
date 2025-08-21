@@ -17,34 +17,38 @@ class PaperRulesModel extends Model{
     ];
     public $pageSize = 20;
 
-/**
- * 获取所有组卷规则（按测试ID分组，聚合同一测试的所有规则项，保持对象类型）
- * 
- * @return \Illuminate\Support\Collection
- */
-public function get_all_paper_rules()
-{
-    // 1. 查询所有规则（返回对象集合，每个元素是stdClass对象）
-    $rules = DB::table('c_paper_rules')
-        ->select([
-            'c_test_id',
-            'c_id as key',  // 映射为前端需要的key字段
-            'c_type',
-            'c_tag',
-            'c_count',
-            'c_score'
-        ])
-        ->get();  // get()返回Collection，包含stdClass对象
+    /**
+     * 获取所有组卷规则（关联测试名称）
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    public function get_all_paper_rules()
+    {
+        // 1. 关联查询c_paper_rules和c_tests表，获取测试名称
+        $rules = DB::table('c_paper_rules')
+            // 关联c_tests表（通过c_test_id匹配）
+            ->leftJoin('c_tests', 'c_paper_rules.c_test_id', '=', 'c_tests.c_id')
+            ->select([
+                'c_paper_rules.c_test_id',
+                'c_tests.c_name as testName', // 获取测试名称
+                'c_paper_rules.c_id as key',
+                'c_paper_rules.c_type',
+                'c_paper_rules.c_tag',
+                'c_paper_rules.c_count',
+                'c_paper_rules.c_score'
+            ])
+            ->get();
 
-    // 2. 按c_test_id分组，聚合同一测试的所有规则项（保持对象类型）
-    return $rules->groupBy('c_test_id')->map(function ($group, $testId) {
-        // 转换为前端需要的结构：testId + items对象集合
-        return (object)[  // 用(object)强制转为对象
-            'testId' => $testId,
-            'items' => $group  // 直接使用原始对象集合（不转为数组）
-        ];
-    })->values();  // 移除分组的key，返回纯对象集合
-}
+        // 2. 按c_test_id分组，包含测试名称
+        return $rules->groupBy('c_test_id')->map(function ($group, $testId) {
+            return (object)[
+                'testId' => $testId,
+                'testName' => $group[0]->testName, // 测试名称（同组内名称相同）
+                'items' => $group
+            ];
+        })->values();
+    }
+
     /**
      * Notes:添加组卷规则
      * User: zhangnan
@@ -52,7 +56,7 @@ public function get_all_paper_rules()
      * @param $data
      * @return bool
      */
-    public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
+     public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
     {
         DB::beginTransaction();
         try{

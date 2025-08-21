@@ -12,7 +12,7 @@ import moment from 'moment';
 const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
   const theme = useTheme();
   
-  // 增加测试类型状态，默认为理论测试
+  // 增加测试类型和模式状态
   const [formData, setFormData] = useState({
     c_name: test?.c_name || '',
     c_description: test?.c_description || '',
@@ -20,8 +20,8 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
     c_course_id: test?.c_course_id || '',
     c_start: test ? moment(test.c_start) : null,
     c_end: test ? moment(test.c_end) : null,
-    // 新增测试类型字段
-    c_type: test?.c_type || '理论测试', // 默认值设为理论测试
+    c_type: test?.c_type || '理论测试', // 测试类型：理论测试/实践操作
+    c_test_type: test?.c_test_type || '考试' // 新增：模式类型：考试/练习
   });
 
   const inputStyles = {
@@ -30,7 +30,8 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
     paperCount: { width: '380px', height: '60px' },
     courseId: { width: '380px', height: '60px' },
     datePicker: { width: '380px', height: '60px' },
-    testType: { width: '800px', height: '60px' } // 新增测试类型的样式
+    testType: { width: '800px', height: '60px' }, // 测试类型样式
+    testMode: { width: '800px', height: '60px' } // 新增：模式类型样式
   };
 
   const handleChange = (e) => {
@@ -46,7 +47,7 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
     setFormData({ ...formData, [name]: date });
   };
 
-  // 处理测试类型变化
+  // 处理测试类型（理论/实践）变化
   const handleTypeChange = (e) => {
     const type = e.target.value;
     setFormData({ 
@@ -57,9 +58,18 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
     });
   };
 
+  // 新增：处理模式类型（考试/练习）变化
+  const handleTestModeChange = (e) => {
+    setFormData({
+      ...formData,
+      c_test_type: e.target.value
+    });
+  };
+
   const handleSubmit = () => {
     if (!formData.c_name || !formData.c_description || 
-        !formData.c_course_id || !formData.c_start || !formData.c_end) {
+        !formData.c_course_id || !formData.c_start || !formData.c_end ||
+        !formData.c_test_type) { // 新增验证：必选模式类型
       alert('请填写所有必填字段');
       return;
     }
@@ -166,7 +176,7 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
             />
           </Box>
 
-          {/* 新增：测试类型选择 */}
+          {/* 测试类型选择（理论测试/实践操作） */}
           <Box sx={{ width: '100%' }}>
             <InputLabel sx={{ 
               color: theme.palette.text.secondary,
@@ -200,6 +210,44 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
               >
                 <MenuItem value="理论测试" sx={{ fontSize: '1.1rem' }}>理论测试</MenuItem>
                 <MenuItem value="实践操作" sx={{ fontSize: '1.1rem' }}>实践操作</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* 新增：类型选择（考试/练习） */}
+          <Box sx={{ width: '100%' }}>
+            <InputLabel sx={{ 
+              color: theme.palette.text.secondary,
+              fontSize: '1.1rem',
+              fontWeight: 500,
+              mb: 1,
+              pl: 1
+            }}>
+              类型 *
+            </InputLabel>
+            <FormControl fullWidth>
+              <Select
+                name="c_test_type"
+                value={formData.c_test_type}
+                onChange={handleTestModeChange}
+                required
+                sx={{ 
+                  borderRadius: '8px',
+                  border: `2px solid ${theme.palette.divider}`,
+                  transition: 'all 0.3s',
+                  '&:hover': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  '&.Mui-focused': {
+                    borderColor: theme.palette.primary.main,
+                    boxShadow: `0 0 0 3px ${theme.palette.primary.light}`
+                  },
+                  color: theme.palette.text.primary
+                }}
+                style={inputStyles.testMode}
+              >
+                <MenuItem value="考试" sx={{ fontSize: '1.1rem' }}>考试</MenuItem>
+                <MenuItem value="练习" sx={{ fontSize: '1.1rem' }}>练习</MenuItem>
               </Select>
             </FormControl>
           </Box>

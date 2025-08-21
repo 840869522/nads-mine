@@ -208,6 +208,7 @@ Route::prefix('vms')->group(function () {
     $c = \App\Http\Controllers\Vm\VmController::class;
     Route::get('/', [$c, 'listVms']);
     Route::get('/images', [$c, 'listVmImages']);
+    Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
     Route::get('/{vm_id}', [$c, 'getVmInfo']);
@@ -234,7 +235,7 @@ Route::prefix('study')->group(function () {
         Route::post('/test_add', [TestController::class, 'test_add']);
         Route::post('/test_update', [TestController::class, 'test_update']);
         Route::post('/test_del', [TestController::class, 'test_del']);
-        Route::post('/test_list', [TestController::class, 'test_list']);
+        Route::get('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);

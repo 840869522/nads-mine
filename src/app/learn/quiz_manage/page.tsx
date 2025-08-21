@@ -4,7 +4,7 @@ import {
   Box, CssBaseline, Toolbar, Typography, Container,
   useMediaQuery, CircularProgress, useTheme
 } from '@mui/material';
-import { createTheme, ThemeProvider, ThemeOptions } from '@mui/material/styles';
+
 
 import TestManagement from '@/components/learning/TestManagement';
 
@@ -24,7 +24,7 @@ function App() {
   // 处理平台主题消息
   const handlePlatformThemeChange = useCallback((event: MessageEvent) => {
     // 验证消息来源（生产环境应替换为实际父平台域名）
-    const trustedOrigins = ['http://localhost:3000', 'http://localhost:8080'];
+    const trustedOrigins = ['http://localhost:3000', 'http://localhost:8000'];
     if (!trustedOrigins.includes(event.origin)) {
       console.log('忽略非信任来源的消息:', event.origin);
       return;

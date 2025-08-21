@@ -412,6 +412,8 @@ class TestController extends Controller
     {
         try {
             $c_name     = trim($request->input('name'));
+            $c_test_type     = trim($request->input('test_type'));
+            $c_type     = trim($request->input('type'));
             $c_description     = trim($request->input('description'));
             $c_paper_count     = trim($request->input('paper_count'));
             $c_start     = trim($request->input('start'));
@@ -419,6 +421,8 @@ class TestController extends Controller
             $c_course_id     = trim($request->input('course_id'));
             $validated_data = array(
                 'name' => 'required|max:100',
+                'test_type' => 'required|max:50',
+                'type' => 'required|max:50',
                 'description' => 'required',
                 'paper_count' => 'required|integer|max:11',
                 'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
@@ -446,7 +450,7 @@ class TestController extends Controller
 
             $mod = new TestsModel();
 
-            $res = $mod->create_test_info($c_name,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
+            $res = $mod->create_test_info($c_name,$c_test_type,$c_type,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
             if(!$res){
                 return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试插入失败");
             }
@@ -469,6 +473,8 @@ class TestController extends Controller
     {
         try {
             $c_id     = trim($request->input('id'));
+            $c_test_type     = trim($request->input('test_type'));
+            $c_type     = trim($request->input('type'));
             $c_name     = trim($request->input('name'));
             $c_description     = trim($request->input('description'));
             $c_paper_count     = trim($request->input('paper_count'));
@@ -478,6 +484,8 @@ class TestController extends Controller
             $validated_data = array(
                 'id' => 'required|string|exists:c_tests,c_id',
                 'name' => 'required|max:100',
+                'test_type' => 'required|max:50',
+                'type' => 'required|max:50',
                 'description' => 'required',
                 'paper_count' => 'required|integer|max:11',
                 'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
@@ -508,7 +516,7 @@ class TestController extends Controller
 
             $mod = new TestsModel();
             $info = $mod->get_test_info($c_id);
-            $res = $mod->update_test_info($info,$c_name,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
+            $res = $mod->update_test_info($info,$c_name,$c_test_type,$c_type,$c_description,$c_paper_count,$c_start,$c_end,$c_course_id);
             if(!$res){
                 return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试修改失败");
             }
@@ -609,60 +617,59 @@ class TestController extends Controller
          * @param Request $request
          * @return JsonResponse
          */
-    public function get_all_paper_rules(Request $request)
-    {
-        try {
-            $mod = new PaperRulesModel();
-            $allRules = $mod->get_all_paper_rules();
-            
-            $typeDict = [
-                '1' => 'single_choice',
-                '2' => 'multiple_choice',
-                '3' => 'true_or_false',
-                '4' => 'subjective',
-            ];
-            
-            $groupedRules = [];
-            foreach ($allRules as $rule) {
-                $testId = $rule->testId;
+        public function get_all_paper_rules(Request $request)
+        {
+            try {
+                $mod = new PaperRulesModel();
+                $allRules = $mod->get_all_paper_rules();
                 
-                if (!isset($groupedRules[$testId])) {
-                    $groupedRules[$testId] = [
-                        'testId' => $testId,
-                        'items' => []
-                    ];
-                }
+                $typeDict = [
+                    '1' => 'single_choice',
+                    '2' => 'multiple_choice',
+                    '3' => 'true_or_false',
+                    '4' => 'subjective',
+                ];
                 
-                // 遍历 items 时，访问 c_type 而非 type
-                foreach ($rule->items as $item) { 
-                    // 关键修正：用 $item->c_type 替代 $item->type
-                    if (isset($typeDict[(string)$item->c_type])) { 
-                        $groupedRules[$testId]['items'][] = [
-                            'key' => $item->key,
-                            'tag' => $item->c_tag,
-                            'type' => (int)$item->c_type,  // 正确使用 c_type
-                            'count' => (int)$item->c_count,
-                            'score' => (int)$item->c_score
+                $groupedRules = [];
+                foreach ($allRules as $rule) {
+                    $testId = $rule->testId;
+                    
+                    if (!isset($groupedRules[$testId])) {
+                        $groupedRules[$testId] = [
+                            'testId' => $testId,
+                            'testName' => $rule->testName, // 新增：测试名称
+                            'items' => []
                         ];
                     }
+                    
+                    foreach ($rule->items as $item) { 
+                        if (isset($typeDict[(string)$item->c_type])) { 
+                            $groupedRules[$testId]['items'][] = [
+                                'key' => $item->key,
+                                'tag' => $item->c_tag,
+                                'type' => (int)$item->c_type,
+                                'count' => (int)$item->c_count,
+                                'score' => (int)$item->c_score
+                            ];
+                        }
+                    }
                 }
+                
+                $result = array_values($groupedRules);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    GlobalResponse::HTTP_STATUS_OK_MES,
+                    $result
+                );
+                
+            } catch (\Exception $e) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    $e->getMessage()
+                );
             }
-            
-            $result = array_values($groupedRules);
-            
-            return $this->_response(
-                GlobalResponse::$HTTP_STATUS_OK_CODE,
-                GlobalResponse::HTTP_STATUS_OK_MES,
-                $result
-            );
-            
-        } catch (\Exception $e) {
-            return $this->_response(
-                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                $e->getMessage()
-            );
         }
-    }
 
     /**
      * Notes:添加组题规则
