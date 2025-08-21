@@ -48,9 +48,13 @@ const VmImageManagementPage: React.FC = () => {
     const [openDialog, setOpenDialog] = useState(false)
     const [editingImage, setEditingImage] = useState<VmImage | null>(null)
     const [createModalImage, setCreateModalImage] = useState<string | null>(null)
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        name: string
+        osType: VmImage["osType"] | ""
+        description: string
+    }>({
         name: "",
-        osType: "Linux" as VmImage["osType"],
+        osType: "",
         description: "",
     })
 
@@ -72,7 +76,7 @@ const VmImageManagementPage: React.FC = () => {
         setEditingImage(image)
         setFormData({
             name: image.name,
-            osType: image.osType,
+            osType: image.osType ?? "",
             description: image.description || '',
         })
         setOpenDialog(true)
@@ -94,18 +98,18 @@ const VmImageManagementPage: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: editingImage.name,
-                    osType: formData.osType,
-                    description: formData.description,
+                    osType: formData.osType || undefined,
+                    description: formData.description || undefined,
                 }),
             })
             setOverrides(prev => ({
                 ...prev,
-                [editingImage.name]: { osType: formData.osType, description: formData.description },
+                [editingImage.name]: { osType: formData.osType || undefined, description: formData.description || undefined },
             }))
             setImages(prev =>
                 prev.map(img =>
                     img.id === editingImage.id
-                        ? { ...img, osType: formData.osType, description: formData.description }
+                        ? { ...img, osType: formData.osType || undefined, description: formData.description || undefined }
                         : img
                 )
             )
@@ -162,7 +166,7 @@ const VmImageManagementPage: React.FC = () => {
             headerName: '操作系统',
             width: 120,
             valueFormatter: params => {
-                switch (params.value) {
+                switch (params?.value) {
                     case 'Linux':
                         return 'Linux'
                     case 'Windows':
@@ -170,7 +174,7 @@ const VmImageManagementPage: React.FC = () => {
                     case 'Other':
                         return '其他'
                     default:
-                        return params.value
+                        return params?.value || ''
                 }
             },
         },
@@ -190,9 +194,10 @@ const VmImageManagementPage: React.FC = () => {
             flex: 1,
             minWidth: 160,
             // Align with container pages: parse ISO string and format as locale date
-            valueFormatter: (params) => {
-                return dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss');
-            }
+            valueFormatter: (params) =>
+                params?.value
+                    ? dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss')
+                    : ''
         },
         {
             field: 'actions',
@@ -269,8 +274,17 @@ const VmImageManagementPage: React.FC = () => {
                             <Select
                                 value={formData.osType}
                                 label="操作系统类型"
-                                onChange={(e) => setFormData((prev) => ({ ...prev, osType: e.target.value as VmImage["osType"] }))}
+                                displayEmpty
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        osType: e.target.value as VmImage["osType"] | "",
+                                    }))
+                                }
                             >
+                                <MenuItem value="">
+                                    <em>未指定</em>
+                                </MenuItem>
                                 <MenuItem value="Linux">Linux</MenuItem>
                                 <MenuItem value="Windows">Windows</MenuItem>
                                 <MenuItem value="Other">其他</MenuItem>
