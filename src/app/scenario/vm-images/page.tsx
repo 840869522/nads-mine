@@ -166,7 +166,7 @@ const VmImageManagementPage: React.FC = () => {
             headerName: '操作系统',
             width: 120,
             valueFormatter: params => {
-                switch (params?.value) {
+                switch (params) {
                     case 'Linux':
                         return 'Linux'
                     case 'Windows':
@@ -174,7 +174,7 @@ const VmImageManagementPage: React.FC = () => {
                     case 'Other':
                         return '其他'
                     default:
-                        return params?.value || ''
+                        return params|| ''
                 }
             },
         },
@@ -194,10 +194,9 @@ const VmImageManagementPage: React.FC = () => {
             flex: 1,
             minWidth: 160,
             // Align with container pages: parse ISO string and format as locale date
-            valueFormatter: (params) =>
-                params?.value
-                    ? dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss')
-                    : ''
+            valueFormatter: (params) => {
+                return dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss');
+            }
         },
         {
             field: 'actions',
