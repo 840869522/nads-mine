@@ -38,12 +38,12 @@
         }
 
         public static function searchUserByName(string $name, int $page = 1, int $pagesize = 10): array{
-            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ? LIMIT ? OFFSET ?";
+            $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ? LIMIT ? OFFSET ?";
             $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
-                $user = db::select($sql, ['%' . $name . '%', $pagesize, $offset]);
-                $count = db::selectOne($sql_count, ['%' . $name . '%']);
+                $user = db::select($sql, ['%' . $name . '%', '%' . $name . '%',$pagesize, $offset]);
+                $count = db::selectOne($sql_count, ['%' . $name . '%','%' . $name . '%']);
                 return [
                     "data" => $user,
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,

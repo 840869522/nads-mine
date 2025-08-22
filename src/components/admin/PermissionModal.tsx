@@ -45,6 +45,7 @@ import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
 import ArrowLeftEndOnRectangleIcon from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
 import MenuIcon from '@mui/icons-material/Menu'; // 设置通用图标
 import { common } from '@mui/material/colors';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 // ------ 图标导入结束 ------
 
@@ -106,6 +107,7 @@ interface PermissionFormModalProps {
 }
 
 const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose, onSave, initialPermission }) => {
+  const {id2nameMap} = userPermissionContext();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState<PermissionFormData>({ ...defaultData });
@@ -315,11 +317,11 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
             />
 
             <FormControl fullWidth margin="dense" error={!!errors.pid} required>
-              <InputLabel id="perm-pid-label">父项</InputLabel>
+              <InputLabel id="perm-pid-label">所属父项</InputLabel>
               <Select
                 labelId="perm-pid-label"
                 name="pid"
-                label="父项"
+                label="所属父项"
                 value={formData.pid || ""}
                 onChange={handleSelectChange}
                 onOpen={() => setIsRoleMenuOpen(true)}
@@ -333,7 +335,7 @@ const PermissionFormModal: React.FC<PermissionFormModalProps> = ({ open, onClose
                   },
                 }}
                 renderValue={(selected) => (
-                  <Chip key={selected} label={selected == '0' ? "顶层权限" : selected} />
+                  <Chip key={selected} label={id2nameMap[selected]} />
                 )}
               >
                 {

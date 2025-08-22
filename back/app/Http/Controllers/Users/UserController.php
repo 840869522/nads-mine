@@ -251,7 +251,9 @@ use Ramsey\Uuid\Uuid;
 
         public function updateCommonUser (Request $req) {
             $reqData = $req->json()->all();
+            Log::info($reqData);
             $token_data  = $req->input("token_data");
+            Log::info($token_data);
             try {
                 $id = $reqData["id"];
                 $data = $reqData["data"];
