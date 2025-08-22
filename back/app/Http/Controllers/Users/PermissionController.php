@@ -151,30 +151,7 @@
                 ]);
             }
         }
-
-        public function getPermissionsByRoleId(Request $req) {
-            $reqData = $req->json()->all();
-            try {
-                $role_id = $reqData['role_id'];
-            }catch (Exception $e) {
-                return response()->json([
-                    "code"=>GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    "message"=>GlobalResponse::$HTTP_REQUEST_ERROR_MES
-                ]);
-            }
-            $modelRes = PermissionModel::getPermissionsByRoleId($role_id);
-            if ($modelRes['code'] == GlobalResponse::$DATABASE_ERROR_CODE) {
-                return response()->json([
-                    "code"=>GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                    "message"=>GlobalResponse::$DATABASE_ERROR_MES
-                ]);
-            }
-            return response()->json([
-                "code"=>GlobalResponse::$HTTP_STATUS_OK_CODE,
-                "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
-                'data'=>$modelRes["data"]
-            ]);
-        }
+        
 
         public function grantPermission2Role(Request $req){
             $reqData = $req->json()->all();

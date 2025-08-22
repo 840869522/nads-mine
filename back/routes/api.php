@@ -51,7 +51,6 @@ Route::prefix("")->group(function () {
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
-    Route::post("/test",[UserController::class,'userTest']);
 });
 
 
@@ -78,8 +77,6 @@ Route::prefix("support")->group(function () {
         Route::post("/new", [RoleController::class, "newRole"]);
         Route::post("/update", [RoleController::class, "updateRole"]);
         Route::post("/delete", [RoleController::class, "deleteRole"]);
-        Route::post("/grant", [RoleController::class, "grantRoles2User"]);
-        Route::post("/revoke", [RoleController::class, "revokeRoleFromUser"]);
     });
 
     Route::prefix('permission')->group(function () {
@@ -87,12 +84,9 @@ Route::prefix("support")->group(function () {
         Route::post('/all_label', [PermissionController::class, 'getAllPermssionLable']);
         Route::post('/id', [PermissionController::class, 'getPermissionById']);
         Route::post("/search", [PermissionController::class, "searchPermission"]);
-        Route::post("/role", [PermissionController::class, "getPermissionsByRoleId"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
-        Route::post('/grant', [PermissionController::class, 'grantPermission2Role']);
-        Route::post('/revoke', [PermissionController::class, 'revokePermissionFromRole']);
     });
 });
 
@@ -214,6 +208,7 @@ Route::prefix('vms')->group(function () {
     $c = \App\Http\Controllers\Vm\VmController::class;
     Route::get('/', [$c, 'listVms']);
     Route::get('/images', [$c, 'listVmImages']);
+    Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
     Route::get('/{vm_id}', [$c, 'getVmInfo']);
@@ -240,13 +235,13 @@ Route::prefix('study')->group(function () {
         Route::post('/test_add', [TestController::class, 'test_add']);
         Route::post('/test_update', [TestController::class, 'test_update']);
         Route::post('/test_del', [TestController::class, 'test_del']);
-        Route::post('/test_list', [TestController::class, 'test_list']);
+        Route::get('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
         Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
         Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
-        Route::post('/get_papers', [TestController::class, 'get_papers']);
+        Route::get('get_papers', [TestController::class, 'get_papers']);
         Route::post('/send_papers', [TestController::class, 'send_papers']);
         Route::post('/submit_papers', [TestController::class, 'submit_papers']);
         Route::post('/get_answers_name_list', [TestController::class, 'get_answers_name_list']);
@@ -255,6 +250,9 @@ Route::prefix('study')->group(function () {
         Route::post('/query_results', [TestController::class, 'query_results']);
         Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
         Route::post('/redis_test', [TestController::class, 'redis_test']);
+        Route::get('/get_all_paper_rules', [TestController::class, 'get_all_paper_rules']);
+        Route::get('get_paper_details', [TestController::class, 'get_paper_details']);
+        Route::post('export_paper_to_word', [TestController::class, 'export_paper_to_word']);
     });
 });
 

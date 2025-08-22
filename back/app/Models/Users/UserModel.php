@@ -38,12 +38,12 @@
         }
 
         public static function searchUserByName(string $name, int $page = 1, int $pagesize = 10): array{
-            $sql = "SELECT c_username,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? LIMIT ? OFFSET ?";
-            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `c_username` LIKE ?";
+            $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ? LIMIT ? OFFSET ?";
+            $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users` WHERE `c_username` LIKE ? OR `c_name` LIKE ?";
             $offset = ($page - 1) * $pagesize;
             try {
-                $user = db::select($sql, ['%' . $name . '%', $pagesize, $offset]);
-                $count = db::selectOne($sql_count, ['%' . $name . '%']);
+                $user = db::select($sql, ['%' . $name . '%', '%' . $name . '%',$pagesize, $offset]);
+                $count = db::selectOne($sql_count, ['%' . $name . '%','%' . $name . '%']);
                 return [
                     "data" => $user,
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -76,7 +76,7 @@
         public static function getUserPrimissions(string $id): array{
             try {
                 db::beginTransaction();
-                $sql = "SELECT DISTINCT crp.c_permission_id FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.c_role_id = crp.c_role_id  WHERE cur.c_user_id = ?";
+                $sql = "SELECT DISTINCT cper.c_id,cper.c_api_src FROM `c_users_roles` AS cur JOIN `c_roles_permissions` AS crp  ON cur.c_role_id = crp.c_role_id JOIN `c_permissions` AS cper ON cper.c_id = crp.c_permission_id WHERE cur.c_user_id = ? AND cper.c_status = 1";
                 $res = db::select($sql, [$id]);
                 db::commit();
                 return [
@@ -243,8 +243,8 @@
 
 
         public static function deleteUserById(string $id): array{
-            $sql = "DELETE * FROM `c_users` WHERE c_username = ?";
-            $sql_user_role = "DELETE * FROM `c_roles_users` WHERE c_user_id = ?";
+            // 在数据库方面设置 用户-角色表的外键属性 cascade 无需再次对用户-角色表进行删除
+            $sql = "DELETE FROM `c_users` WHERE c_username = ?";
             try {
                 if (!$id)
                     return [
@@ -252,8 +252,7 @@
                     ];
                 db::beginTransaction();
                 $res = db::delete($sql, [$id]);
-                $res_user_role = db::delete($sql_user_role, [$id]);
-                if ($res && $res_user_role) {
+                if ($res) {
                     db::commit();
                     return [
                         "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,

@@ -9,8 +9,10 @@
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;
-    use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
     use Illuminate\Support\Facades\DB;
+use Ramsey\Uuid\Uuid;
 
     class UserController extends Controller{
         
@@ -142,12 +144,14 @@
                     "message" => GlobalResponse::$USER_LOGIN_FAILED_MES,
                 ]);
             }
+            $user_login_key = Uuid::uuid4()->toString();
+            Cache::put($user_login_key,$permissionRes["data"],now()->addHours(5));
             $permissions = array_map(function ($item) {
-                return $item->c_permission_id ;
+                return $item->c_id ;
             }, $permissionRes["data"]);
             $jwtRes = JWTControll::encodeJWT([
                 "id" => $user->c_username,
-                "permission" => $permissions
+                "permission" => $user_login_key
             ]);
             if ($jwtRes["err"] != null) {
                 return response()->json([
@@ -326,12 +330,6 @@
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
                 ]);
             }
-        }
-        public function userTest() {
-            $res = DB::table('c_users')->select(['c_username as id'])->get()->toArray();
-            return response()->json([
-                'data'=>$res
-            ]);
         }
     }
 ?>

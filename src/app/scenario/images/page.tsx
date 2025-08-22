@@ -35,6 +35,8 @@ import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
+import { customFetch } from '@/utils/fetch';
+
 const API_BASE = '/back/api';
 
 const ImageManagementPage: React.FC = () => {
@@ -58,7 +60,7 @@ const ImageManagementPage: React.FC = () => {
   const fetchImages = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/images`);
+      const res = await customFetch(`${API_BASE}/images`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setImages(data);
@@ -84,11 +86,11 @@ const ImageManagementPage: React.FC = () => {
   const handleSaveImage = (image: ManagedImage) => {
     if (!user) return;
     if (editingImage) {
-      fetch(`${API_BASE}/images`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
+      customFetch(`${API_BASE}/images`, { method: 'PUT', body: JSON.stringify(image) }).then(() => {
         setImages(prevImages => prevImages.map(img => (img.id === image.id ? image : img)));
       });
     } else {
-      fetch(`${API_BASE}/images`, { method: 'POST', body: JSON.stringify(image) })
+      customFetch(`${API_BASE}/images`, { method: 'POST', body: JSON.stringify(image) })
           .then(res => res.json())
           .then(data => setImages(prevImages => [...prevImages, { ...image, id: data.id }]));
     }
@@ -109,7 +111,7 @@ const ImageManagementPage: React.FC = () => {
     if (!user || !imageToDelete) return;
     const id = imageToDelete.id;
     const q = `?id=${id}`;
-    await fetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
+    await customFetch(`${API_BASE}/images${q}`, { method: 'DELETE' });
     await fetchImages();
     handleCloseConfirmDialog();
   };
@@ -136,7 +138,7 @@ const ImageManagementPage: React.FC = () => {
     { field: 'size', headerName: '大小', flex: 1, hide: !showColumns.size },
     { field: 'uploadDate', headerName: '上传日期', flex: 1, hide: !showColumns.uploadDate,
       valueFormatter: (params) => {
-        return dayjs(params).format('YYYY年M月D日');
+        return dayjs(params).format('YYYY年M月D日 HH:mm:ss');
       }
     },
     {

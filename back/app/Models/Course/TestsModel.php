@@ -30,11 +30,13 @@ class TestsModel extends Model{
      * @param $c_course_id
      * @return bool
      */
-    public function create_test_info($c_name="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
+    public function create_test_info($c_name="",$c_test_type="",$c_type="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
     {
         $mod = new TestsModel();
         $mod->c_id = Str::uuid()->toString();;
         $mod->c_name = $c_name;
+        $mod->c_test_type = $c_test_type;
+        $mod->c_type = $c_type;
         $mod->c_description = $c_description;
         $mod->c_paper_count = $c_paper_count;
         $mod->c_start = $c_start;
@@ -52,39 +54,42 @@ class TestsModel extends Model{
         }
     }
 
-    /**
-     * Notes:修改测试
-     * User: zhangnan
-     * DateTime: 2025/7/11 13:43
-     * @param $info
-     * @param $c_name
-     * @param $c_description
-     * @param $c_paper_count
-     * @param $c_start
-     * @param $c_end
-     * @param $c_course_id
-     * @return bool
-     */
-    public function update_test_info($info="",$c_name="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
-    {
-        $info->c_name = $c_name;
-        $info->c_description = $c_description;
-        $info->c_paper_count = $c_paper_count;
-        $info->c_start = $c_start;
-        $info->c_end = $c_end;
-        $info->c_course_id = $c_course_id;
-        try{
-            $res = $info->save();
-            if(!$res){
-                return false;
-            }
-            return true;
-        }catch(\Exception $e){
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+/**
+ * Notes:修改测试
+ * User: zhangnan
+ * DateTime: 2025/7/11 13:43
+ * @param $info
+ * @param $c_name
+ * @param $c_test_type
+ * @param $c_type
+ * @param $c_description
+ * @param $c_paper_count
+ * @param $c_start
+ * @param $c_end
+ * @param $c_course_id
+ * @return bool
+ */
+public function update_test_info($info="",$c_name="",$c_test_type="",$c_type="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
+{
+    $info->c_name = $c_name;
+    $info->c_test_type = $c_test_type; // 修复：用$info而非未定义的$mod
+    $info->c_type = $c_type; // 修复：用$info而非未定义的$mod
+    $info->c_description = $c_description;
+    $info->c_paper_count = $c_paper_count;
+    $info->c_start = $c_start;
+    $info->c_end = $c_end;
+    $info->c_course_id = $c_course_id;
+    try{
+        $res = $info->save();
+        if(!$res){
             return false;
         }
+        return true;
+    }catch(\Exception $e){
+        DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+        return false;
     }
-
+}
 
     /**
      * 获取测试详情

@@ -30,11 +30,6 @@ bootcmd:
  - echo "nameserver 8.8.8.8" > /etc/resolv.conf
  - /opt/zeek/bin/zeekctl deploy
  - /opt/zeek/bin/zeekctl start
- - echo "SCENE_ID=${SCENE_ID}" >> /etc/ctf-config
- - echo "TARGET_ID=$n" >> /etc/ctf-config
- - echo "ATTACKER_ID=$n" >> /etc/ctf-config
- - echo "LASTICSEARCH_HOST=10.100.0.88" >> /etc/ctf-config
- - echo "ELASTICSEARCH_PORT=9200" >> /etc/ctf-config
  - echo "FLAG=$flag" >> /etc/ctf-config
  - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
  - sed -i '/^\[Service\]/a Environment="TARGET_ID=$n"' /lib/systemd/system/td-agent.service
@@ -42,6 +37,10 @@ bootcmd:
  - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_HOST=10.100.0.88"' /lib/systemd/system/td-agent.service
  - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_PORT=9200"' /lib/systemd/system/td-agent.service
  - systemctl daemon-reload
+ - if ! id -u ubuntu &>/dev/null; then useradd -m -s /bin/bash -G sudo ubuntu; fi
+ - echo "ubuntu:123456" | chpasswd
+ - echo "root:123456" | chpasswd
+ - echo "127.0.0.1 ns$n" | sudo tee -a /etc/hosts
 
 runcmd:
  - export FLAG=$flag

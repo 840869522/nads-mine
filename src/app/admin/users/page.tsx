@@ -58,7 +58,8 @@ const UserManagementPage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    getUserData(page, rowsPerPage)
+    if (searchTerm.data.trim()) getUserDataSearch(page,rowsPerPage);
+    else getUserData(page, rowsPerPage)
   }, [page, rowsPerPage]);
 
   const getUserData = (page: number, pagesize: number) => {
@@ -74,26 +75,21 @@ const UserManagementPage: React.FC = () => {
       }, 600);
 
     });
-  }
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
-    setPage(1);
   };
 
-  const handleSearchSubmit = async () => {
+
+  const getUserDataSearch = async (page: number,pagesize:number)=>{
     setTableLoading(true);
     try {
       const res = await apiClientWithToken.post(`/back/api/support/user/search`, JSON.stringify({
-        page: 1,
-        pagesize: rowsPerPage,
+        page: page,
+        pagesize: pagesize,
         name: searchTerm.data
       }));
 
       if (res.data.code === 200) {
         setUsers(res.data.data.data);
         setDataCount(res.data.data.count);
-        setPage(1);
       } else {
         throw new Error(res.data.message);
       }
@@ -107,6 +103,16 @@ const UserManagementPage: React.FC = () => {
     } finally {
       setTableLoading(false);
     }
+  }
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
+    setPage(1);
+  };
+
+  const handleSearchSubmit = async () => {
+    await getUserDataSearch(1,rowsPerPage);
+    setPage(1);
   };
 
   const handleRequestSort = (property: SortableUserKeys) => {
