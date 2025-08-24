@@ -343,6 +343,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 onClose={() => setIsNodeEditModalOpen(false)}
                 node={editingNode}
                 onSave={saveNodeChanges}
+                allNodes={nodes} 
             />
             <VirtualMachineEditModal
                 isOpen={isVMEditModalOpen}

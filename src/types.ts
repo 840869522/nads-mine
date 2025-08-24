@@ -76,7 +76,23 @@ export interface NodeConfig {
   env?: string;
   isTarget?: boolean;
 }
+// 1. 定义 Iptables 规则接口
+export interface IptablesRule {
+  hostPort: string;
+  instanceName: string;
+  instancePort: string;
+}
 
+// 2. 在 NodeConfig 接口中添加 iptablesRules 字段
+export interface NodeConfig {
+  deviceName: string;
+  Image?: string;
+  portMappings?: string;
+  env?: string;
+  isTarget?: boolean;
+  // ... 其他已有字段
+  iptablesRules?: IptablesRule[]; // 新增：用于存储iptables规则
+}
 export interface TopologyNode {
   id: string;
   type: DeviceType;

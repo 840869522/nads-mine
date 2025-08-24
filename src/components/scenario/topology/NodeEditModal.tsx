@@ -20,7 +20,8 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
-import { TopologyNode, NodeConfig } from '../../../types';
+// 确保从 types 文件中导入新增的 IptablesRule 类型
+import { TopologyNode, NodeConfig, IptablesRule } from '../../../types';
 
 // 假设 ManagedImage 类型已定义或从其他地方导入
 interface ManagedImage {
@@ -30,24 +31,29 @@ interface ManagedImage {
 }
 
 const COMPUTE_RESOURCE_TYPES = ['容器'];
+const BRIDGE_TYPES = ['NAT网桥'];
 
 interface NodeEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   node: TopologyNode | null;
   onSave: (nodeId: string, newConfig: NodeConfig, newLabel: string) => void;
+  allNodes?: TopologyNode[]; // 新增：接收所有节点的列表
 }
 
-const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, onSave }) => {
+const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, onSave, allNodes = [] }) => {
   // --- 状态管理 ---
   const [label, setLabel] = useState('');
   const [deviceName, setDeviceName] = useState('');
   const [dockerImage, setDockerImage] = useState('');
   const [ports, setPorts] = useState<{ hostPort: string; containerPort: string }[]>([]);
-  const [isTarget, setIsTarget] = useState(false); // 新增：是否为靶机的状态
+  const [isTarget, setIsTarget] = useState(false);
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
   const [images, setImages] = useState<ManagedImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // --- 新增：iptables 规则状态 ---
+  const [iptablesRules, setIptablesRules] = useState<IptablesRule[]>([]);
 
   // --- 副作用钩子 ---
   useEffect(() => {
@@ -56,10 +62,10 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       setLabel(node.label);
       setDeviceName(node.config.deviceName);
       setDockerImage(node.config.Image || '');
-      setIsTarget(node.config.isTarget || false); // 新增：设置初始状态
+      setIsTarget(node.config.isTarget || false);
       setErrors({});
 
-      // 解析端口映射
+      // 解析端口映射 (容器)
       const parsedPorts = node.config.portMappings
           ? node.config.portMappings.split(',').map(p => {
             const [hostPort = '', containerPort = ''] = p.split(':');
@@ -68,7 +74,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
           : [];
       setPorts(parsedPorts);
 
-      // 新增：解析环境变量
+      // 解析环境变量 (容器)
       const parsedEnvs = node.config.env
           ? node.config.env.split(',').map(e => {
             const parts = e.split('=');
@@ -79,9 +85,11 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
           : [];
       setEnvs(parsedEnvs);
 
-      // 获取镜像列表
-      const isComputeResource = COMPUTE_RESOURCE_TYPES.includes(node.config.deviceName);
-      if (isComputeResource) {
+      // --- 新增：解析 iptables 规则 (网桥) ---
+      setIptablesRules(node.config.iptablesRules || []);
+
+      // 获取镜像列表 (容器)
+      if (COMPUTE_RESOURCE_TYPES.includes(node.config.deviceName)) {
         fetch('/back/api/images')
             .then(res => res.json())
             .then(data => setImages(data))
@@ -90,12 +98,11 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
     }
   }, [node]);
 
-  // 表单验证 (保持不变)
   const validate = (): boolean => {
-    // ... 验证逻辑保持不变 ...
-    return true; // 为简洁起见，此处省略，您应保留原来的验证逻辑
+    // 您可以根据需要添加对 iptables 规则的验证
+    return true;
   };
-
+  
   // --- 端口映射处理函数 (保持不变) ---
   const handleAddPort = () => setPorts([...ports, { hostPort: '', containerPort: '' }]);
   const handleRemovePort = (i: number) => setPorts(ports.filter((_, idx) => idx !== i));
@@ -103,37 +110,62 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
     setPorts(ports.map((p, idx) => (idx === i ? { ...p, [key]: value } : p)));
   };
 
-  // --- 新增：环境变量处理函数 (从 CreateContainerModal 复制而来) ---
+  // --- 环境变量处理函数 (保持不变) ---
   const handleAddEnv = () => setEnvs([...envs, { key: '', value: '' }]);
   const handleRemoveEnv = (i: number) => setEnvs(envs.filter((_, idx) => idx !== i));
   const handleEnvChange = (i: number, key: 'key' | 'value', value: string) => {
     setEnvs(envs.map((e, idx) => (idx === i ? { ...e, [key]: value } : e)));
   };
 
+  // --- 新增：iptables 规则处理函数 ---
+  const handleAddIptablesRule = () => {
+    setIptablesRules([...iptablesRules, { hostPort: '', instanceName: '', instancePort: '' }]);
+  };
+
+  const handleRemoveIptablesRule = (index: number) => {
+    setIptablesRules(iptablesRules.filter((_, i) => i !== index));
+  };
+  
+  const handleIptablesRuleChange = (index: number, field: keyof IptablesRule, value: string) => {
+    setIptablesRules(
+      iptablesRules.map((rule, i) => (i === index ? { ...rule, [field]: value } : rule))
+    );
+  };
+
+
   // --- 保存操作 (更新) ---
   const handleSave = () => {
     if (!node || !validate()) return;
 
-    // 转换端口映射为字符串
-    const portMappingsString = ports
-        .filter(p => p.hostPort && p.containerPort)
-        .map(p => `${p.hostPort}:${p.containerPort}`)
-        .join(',');
+    // --- 容器相关配置 ---
+    const portMappingsString = ports.filter(p => p.hostPort && p.containerPort).map(p => `${p.hostPort}:${p.containerPort}`).join(',');
+    const envString = envs.filter(e => e.key).map(e => `${e.key}=${e.value}`).join(',');
 
-    // 新增：转换环境变量为字符串
-    const envString = envs
-        .filter(e => e.key)
-        .map(e => `${e.key}=${e.value}`)
-        .join(',');
+    const isComputeNode = COMPUTE_RESOURCE_TYPES.includes(deviceName);
+    const isBridgeNode = BRIDGE_TYPES.includes(deviceName);
 
-    const newConfig: NodeConfig = {
+    let newConfig: NodeConfig = {
+      ...node.config,
       deviceName,
-      Image: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? dockerImage : '',
-      portMappings: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? portMappingsString : '',
-      // 新增：将环境变量添加到配置中
-      env: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? envString : '',
-      isTarget: COMPUTE_RESOURCE_TYPES.includes(deviceName) ? isTarget : false, 
     };
+
+    if (isComputeNode) {
+      newConfig = {
+        ...newConfig,
+        Image: dockerImage,
+        portMappings: portMappingsString,
+        env: envString,
+        isTarget: isTarget,
+      };
+    }
+    
+    // --- 新增：将 iptables 规则添加到配置中 ---
+    if (isBridgeNode) {
+        newConfig.iptablesRules = iptablesRules.filter(
+            rule => rule.hostPort && rule.instanceName && rule.instancePort
+        );
+    }
+    
     onSave(node.id, newConfig, label);
     onClose();
   };
@@ -141,31 +173,29 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
   if (!node) return null;
 
   const showAdvancedConfig = COMPUTE_RESOURCE_TYPES.includes(deviceName);
+  const showIptablesConfig = BRIDGE_TYPES.includes(deviceName);
+
+  // 过滤出可作为转发目标的节点（容器和虚拟机）
+  const targetableNodes = allNodes.filter(n => ['container', 'virtual_machine'].includes(n.type));
 
   return (
       <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
         <DialogTitle>编辑节点: {node?.label}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            {/* 节点名称和设备类型 (保持不变) */}
             <TextField label="节点名称 (标签)" value={label} onChange={(e) => setLabel(e.target.value)} required fullWidth />
             <TextField label="设备类型/名称" value={deviceName} fullWidth disabled />
 
+            {/* 容器的高级配置 */}
             {showAdvancedConfig && (
                 <>
-                  {/* Docker 镜像下拉菜单 (保持不变) */}
                   <FormControl fullWidth>
                     <InputLabel id="docker-image-select-label">Docker 镜像</InputLabel>
                     <Select labelId="docker-image-select-label" value={dockerImage} label="Docker 镜像" onChange={(e) => setDockerImage(e.target.value)} required>
                       {images.map((img) => (<MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>))}
                     </Select>
                   </FormControl>
-                   {/* 新增：是否为靶机选项 */}
-                  <FormControlLabel
-                      control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />}
-                      label="设置为靶机"
-                  />
-                  {/* 端口映射 (保持不变) */}
+                  <FormControlLabel control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />} label="设置为靶机" />
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
                     {ports.map((p, idx) => (
@@ -173,13 +203,11 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                           <TextField label="主机端口" size="small" value={p.hostPort} onChange={e => handlePortChange(idx, 'hostPort', e.target.value)} sx={{ flex: 1 }}/>
                           <Typography>:</Typography>
                           <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }}/>
-                          <IconButton onClick={() => handleRemovePort(idx)} size="small" aria-label="移除端口映射"><RemoveCircleOutlineIcon /></IconButton>
+                          <IconButton onClick={() => handleRemovePort(idx)} size="small"><RemoveCircleOutlineIcon /></IconButton>
                         </Box>
                     ))}
                     <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddPort} size="small">添加端口</Button>
                   </Box>
-
-                  {/* 新增：环境变量编辑 UI (从 CreateContainerModal 复制而来) */}
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>环境变量</Typography>
                     {envs.map((ev, idx) => (
@@ -191,9 +219,53 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                     ))}
                     <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small">添加变量</Button>
                   </Box>
-
                 </>
             )}
+
+            {/* --- 新增：网桥的 IPTables 配置 --- */}
+            {showIptablesConfig && (
+              <Box>
+                <Typography variant="h6" gutterBottom>IPTables 端口转发规则</Typography>
+                {iptablesRules.map((rule, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, border: '1px solid #ddd', borderRadius: '4px' }}>
+                    <TextField
+                      label="主机暴露端口"
+                      size="small"
+                      value={rule.hostPort}
+                      onChange={e => handleIptablesRuleChange(idx, 'hostPort', e.target.value)}
+                      sx={{ flex: 1 }}
+                    />
+                    <FormControl size="small" sx={{ flex: 2 }}>
+                      <InputLabel>转发至实例</InputLabel>
+                      <Select
+                        value={rule.instanceName}
+                        label="转发至实例"
+                        onChange={e => handleIptablesRuleChange(idx, 'instanceName', e.target.value)}
+                      >
+                        <MenuItem value=""><em>-- 选择实例 --</em></MenuItem>
+                        {targetableNodes.map(n => (
+                          <MenuItem key={n.id} value={n.label}>{n.label} ({n.type})</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      label="实例端口"
+                      size="small"
+                      value={rule.instancePort}
+                      onChange={e => handleIptablesRuleChange(idx, 'instancePort', e.target.value)}
+                      sx={{ flex: 1 }}
+                    />
+                    <IconButton onClick={() => handleRemoveIptablesRule(idx)} size="small">
+                      <RemoveCircleOutlineIcon />
+                    </IconButton>
+                  </Box>
+                ))}
+                <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddIptablesRule} size="small">
+                  添加转发规则
+                </Button>
+              </Box>
+            )}
+
           </Stack>
         </DialogContent>
         <DialogActions>
