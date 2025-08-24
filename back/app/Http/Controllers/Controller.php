@@ -11,7 +11,8 @@ use App\Utils\JWTControll;
 use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\Route;
 use App\Models\Users\PermissionModel;
-
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class Controller extends BaseController
 {
@@ -36,25 +37,30 @@ class Controller extends BaseController
                     ])->send();
                     exit();
                 }
+                $permissions = Cache::get($jwtRes["data"]["permission"]);
+                $permissions = array_map(function ($item){
+                    return $item->c_id;
+                },$permissions);
+                $jwtRes["data"]['permission'] = $permissions;
                 $request->merge([
                     "token_data"=>$jwtRes["data"]
                 ]);
-                if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
-                    response()->json([
-                        'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                        "message"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
-                    ])->send();
-                    exit();
+                if ($res['data']['status']){
+                    if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                        response()->json([
+                            'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                            "message"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
+                        ])->send();
+                        exit();
+                    }
                 }
             }else {
                 // 暂时恢复默认 放行未添加权限的请求
-                // if (!in_array($controllerName, ['UserController.login','PermissionController.getSystemAllMenu',"PermissionController.getSystemAllPermission"])){
-                //     response()->json([
-                //         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                //         "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
-                //     ])->send();
-                //     exit();
-                // }
+                // response()->json([
+                //     'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
+                //     "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
+                // ])->send();
+                // exit();
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();

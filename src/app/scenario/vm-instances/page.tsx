@@ -270,12 +270,12 @@ export default function VmPage() {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
+                                {/*<IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
                                         <PauseIcon fontSize="small" />
                                     </IconButton>
                                     <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
                                         <StopIcon fontSize="small" color="error" />
-                                    </IconButton>
+                                    </IconButton>*/}
                                     <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
                                         <ResetIcon fontSize="small" />
                                     </IconButton>

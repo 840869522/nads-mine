@@ -17,6 +17,37 @@ class PaperRulesModel extends Model{
     ];
     public $pageSize = 20;
 
+    /**
+     * 获取所有组卷规则（关联测试名称）
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    public function get_all_paper_rules()
+    {
+        // 1. 关联查询c_paper_rules和c_tests表，获取测试名称
+        $rules = DB::table('c_paper_rules')
+            // 关联c_tests表（通过c_test_id匹配）
+            ->leftJoin('c_tests', 'c_paper_rules.c_test_id', '=', 'c_tests.c_id')
+            ->select([
+                'c_paper_rules.c_test_id',
+                'c_tests.c_name as testName', // 获取测试名称
+                'c_paper_rules.c_id as key',
+                'c_paper_rules.c_type',
+                'c_paper_rules.c_tag',
+                'c_paper_rules.c_count',
+                'c_paper_rules.c_score'
+            ])
+            ->get();
+
+        // 2. 按c_test_id分组，包含测试名称
+        return $rules->groupBy('c_test_id')->map(function ($group, $testId) {
+            return (object)[
+                'testId' => $testId,
+                'testName' => $group[0]->testName, // 测试名称（同组内名称相同）
+                'items' => $group
+            ];
+        })->values();
+    }
 
     /**
      * Notes:添加组卷规则
@@ -25,7 +56,7 @@ class PaperRulesModel extends Model{
      * @param $data
      * @return bool
      */
-    public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
+     public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
     {
         DB::beginTransaction();
         try{
