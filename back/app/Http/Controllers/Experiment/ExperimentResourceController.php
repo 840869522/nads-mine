@@ -205,10 +205,91 @@ class ExperimentResourceController extends Controller
             ], 500);
         }
     }
+    public function viewResource(Request $request, $c_resource_id)
+    {
+        try {
+            $validator = Validator::make(['c_resource_id' => $c_resource_id], [
+                'c_resource_id' => 'required|string|uuid',
+            ]);
+            if ($validator->fails()) {
+                Log::error('Validation failed in ExperimentResourceController::viewResource', [
+                    'errors' => $validator->errors()->toArray(),
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            }
+
+            $resource = DB::table('c_experiment_resources')->where('c_resource_id', $c_resource_id)->first();
+            if (!$resource) {
+                Log::error('Experiment resource not found in ExperimentResourceController::viewResource', [
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json(['code' => 404, 'message' => 'Experiment resource not found'], 404);
+            }
+
+            $downloadUrl = url("/api/study/experiment-resources/{$c_resource_id}?disposition=attachment");
+            $viewUrl = url("/api/study/experiment-resources/{$c_resource_id}?disposition=inline");
+
+            // 检查文件类型（使用扩展名以保持一致性）
+            $isImage = in_array($resource->c_type, ['jpg', 'jpeg', 'png']);
+            $isPdf = $resource->c_type === 'pdf';
+            $isVideo = in_array($resource->c_type, ['mp4', 'avi']);
+            $isWord = in_array($resource->c_type, ['doc', 'docx']);
+            $isPptx = $resource->c_type === 'pptx';
+
+            if ($isImage) {
+                $viewerContent = "<img src='{$viewUrl}' style='max-width: 100%; max-height: 100%; object-fit: contain;' alt='{$resource->c_resource_name}'>";
+            } elseif ($isPdf) {
+                $viewerContent = "<embed src='{$viewUrl}' type='application/pdf' width='100%' height='100%' />";
+            } elseif ($isVideo) {
+                $viewerContent = "<video controls width='100%' height='auto'><source src='{$viewUrl}' type='video/{$resource->c_type}' />您的浏览器不支持视频播放。</video>";
+            } elseif ($isWord || $isPptx) {
+                // DOCX 和 PPTX 将在前端模态框预览，此处仅提供占位提示
+                $viewerContent = "<p>此文件将在模态框中预览。如果不支持，请下载。</p>";
+            } else {
+                $viewerContent = "<object id='viewer' data='{$viewUrl}' type='application/octet-stream' width='100%' height='100%'>
+                <p>浏览器不支持此文件类型，请下载查看。</p>
+            </object>";
+            }
+
+            $html = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{$resource->c_resource_name}.{$resource->c_type}</title>  <!-- 显示完整文件名 -->
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: Arial, sans-serif; }
+        #viewer { max-width: 100%; max-height: calc(100% - 50px); object-fit: contain; }
+        #download-bar { padding: 10px; background: #f0f0f0; text-align: center; width: 100%; position: fixed; bottom: 0; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #1976d2; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #1565c0; }
+        p { text-align: center; margin: 20px; }
+        img, video, embed, object { max-width: 100%; max-height: calc(100vh - 50px); object-fit: contain; }
+    </style>
+</head>
+<body>
+    {$viewerContent}
+    <div id="download-bar">
+        <button onclick="window.location.href='{$downloadUrl}'">下载文件</button>  <!-- 确保所有类型有下载按钮 -->
+    </div>
+</body>
+</html>
+HTML;
+
+            return response($html)->header('Content-Type', 'text/html');
+        } catch (\Exception $e) {
+            Log::error('[CONTROLLER] ExperimentResourceController::viewResource: ' . $e->getMessage(), [
+                'c_resource_id' => $c_resource_id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['code' => 500, 'message' => 'Failed to view experiment resource'], 500);
+        }
+    }
     public function download(Request $request, $c_resource_id)
     {
         try {
-            // 验证 c_resource_id
             $validator = Validator::make(['c_resource_id' => $c_resource_id], [
                 'c_resource_id' => 'required|string|max:36',
             ]);
@@ -223,10 +304,7 @@ class ExperimentResourceController extends Controller
                 ], 422);
             }
 
-            // 查询实验资源
-            $resource = DB::table('c_experiment_resources')
-                ->where('c_resource_id', $c_resource_id)
-                ->first();
+            $resource = DB::table('c_experiment_resources')->where('c_resource_id', $c_resource_id)->first();
             if (!$resource) {
                 Log::error('Experiment resource not found', [
                     'c_resource_id' => $c_resource_id,
@@ -240,7 +318,6 @@ class ExperimentResourceController extends Controller
             $path = $resource->c_resource_path;
             $fullPath = Storage::disk('local_resources')->path($path);
 
-            // 检查文件是否存在和可读性
             if (!Storage::disk('local_resources')->exists($path) || !is_readable($fullPath)) {
                 Log::error('Experiment resource file not found or not readable', [
                     'c_resource_id' => $c_resource_id,
@@ -255,8 +332,8 @@ class ExperimentResourceController extends Controller
                 ], 404);
             }
 
-            // 处理 MIME 类型
-            $mimeTypes = [
+            $disposition = $request->query('disposition', 'attachment');
+            $contentType = [
                 'pdf' => 'application/pdf',
                 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'doc' => 'application/msword',
@@ -264,41 +341,35 @@ class ExperimentResourceController extends Controller
                 'avi' => 'video/x-msvideo',
                 'jpg' => 'image/jpeg',
                 'png' => 'image/png',
-            ];
-            $contentType = $mimeTypes[strtolower($resource->c_type)] ?? 'application/octet-stream';
+            ][strtolower($resource->c_type)] ?? 'application/octet-stream';
 
-            // 确保下载文件名包含扩展名
             $downloadFileName = $resource->c_resource_name . '.' . $resource->c_type;
-            // 编码文件名以支持中文
             $encodedFileName = rawurlencode($downloadFileName);
-            $headers = [
-                'Content-Type' => $contentType,
-                'Content-Disposition' => "attachment; filename*=UTF-8''{$encodedFileName}",
-            ];
 
-            // 日志记录
             Log::info('Downloading experiment resource', [
                 'c_resource_id' => $c_resource_id,
                 'c_resource_path' => $path,
                 'full_path' => $fullPath,
                 'file_name' => $downloadFileName,
                 'content_type' => $contentType,
-                'headers' => $headers,
+                'disposition' => $disposition,
             ]);
 
-            // 返回文件流
-            return Storage::disk('local_resources')->response($path, $downloadFileName, $headers);
-    } catch (\Exception $e) {
-        Log::error('[CONTROLLER] ExperimentResourceController::download: ' . $e->getMessage(), [
-            'c_resource_id' => $c_resource_id,
-            'c_resource_path' => $path ?? 'N/A',
-            'full_path' => isset($path) ? Storage::disk('local_resources')->path($path) : 'N/A',
-            'trace' => $e->getTraceAsString(),
-        ]);
-        return response()->json([
-            'code' => 500,
-            'message' => 'Unexpected error in ExperimentResourceController::download: ' . $e->getMessage(),
-        ], 500);
+            return Storage::disk('local_resources')->response($path, $downloadFileName, [
+                'Content-Type' => $contentType,
+                'Content-Disposition' => "{$disposition}; filename*=UTF-8''{$encodedFileName}",
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[CONTROLLER] ExperimentResourceController::download: ' . $e->getMessage(), [
+                'c_resource_id' => $c_resource_id,
+                'c_resource_path' => $path ?? 'N/A',
+                'full_path' => isset($path) ? Storage::disk('local_resources')->path($path) : 'N/A',
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code' => 500,
+                'message' => 'Unexpected error in ExperimentResourceController::download: ' . $e->getMessage(),
+            ], 500);
+        }
     }
-}
 }

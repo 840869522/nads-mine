@@ -28,6 +28,7 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/scenario/instances', key: 'support_instances_manage' },
   { prefix: '/scenario/vm-images', key: 'support_scenario_images_manage' },
   { prefix: '/scenario/vm-instances', key: 'support_scenario_instances_manage' },
+   { prefix: '/visualization', key: 'visualization' },
 ];
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
@@ -48,7 +49,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       const match = ROUTE_PERMISSIONS.find(r => pathname === r.prefix);
       if (match) {
         if (!roleData.includes(UserRole.ADMIN) )
-          if (!permissionsData.includes(match.key)) {
+          if (!permissionsData.includes(match.key) && !pathname.startsWith('/visualization')) {
             router.replace('/');
             return;
           }
@@ -57,7 +58,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   }, [user, pathname, router]);
 
 
-  const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac');
+  const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac') && !pathname.startsWith('/visualization');
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
