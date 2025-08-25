@@ -2,5 +2,8 @@
   "cirros-0.6.2.qcow2": {
     "osType": "Windows",
     "description": "safasfsa"
+  },
+  "v_att_tcpScanning.qcow2": {
+    "description": "tcp扫描"
   }
 }
