@@ -1,4 +1,4 @@
-import { PermissionDisplayItem, PermissionFormData } from "@/components/admin/PermissionModal";
+import {  PermissionFormData } from "@/components/admin/PermissionModal";
 import { useAuth } from "@/hooks/useAuth";
 import { AppPermission, NavItemType } from "@/types";
 import { apiClient } from "@/utils/axios";
@@ -7,7 +7,14 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 interface PermissionAndMenuContextType {
     appAllPermission: AppPermission[] | [],
     userSiderMenu: NavItemType[] | [],
+    id2nameMap ,
     updateData: (add: boolean, data?: PermissionFormData) => void
+}
+
+type PerData = {
+    label: string,
+    key: string,
+    children : PerData[] | null
 }
 
 const PermissionAndMenuContext = createContext<PermissionAndMenuContextType | undefined>(undefined);
@@ -22,6 +29,16 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
     const { user } = useAuth();
     const [appAllPermission, setAppAllPermission] = useState<AppPermission[] | []>([]);
     const [userSiderMenu, setUserSiderMenu] = useState<NavItemType[] | []>([]);
+    const [id2nameMap, setId2NameMap] = useState<{string: string} | {}>({});
+
+    const mapId2Name = (data, per:PerData[])=>{
+        per.map(item => {
+            data[item.key] = item.label;
+            if (item.children) {
+                mapId2Name(data,item.children)
+            }
+        })
+    }
 
 
     const getPermissionLabelAndMenuData = () => {
@@ -31,8 +48,12 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
                     setUserSiderMenu(res.data.data);
             })
             apiClient.post("/back/api/support/permission/all_permission").then((res) => {
-                if (res.data.code === 200)
+                if (res.data.code === 200){
                     setAppAllPermission(res.data.data);
+                    var map = {'0': '顶级权限'}
+                    mapId2Name(map,res.data.data);
+                    setId2NameMap(map);
+                }
             })
         }
     }
@@ -59,7 +80,7 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
     useEffect(() => {
         getPermissionLabelAndMenuData();
     }, [user]);
-    return <PermissionAndMenuContext.Provider value={{ appAllPermission, userSiderMenu, updateData }}>
+    return <PermissionAndMenuContext.Provider value={{ appAllPermission, userSiderMenu, id2nameMap,updateData }}>
         {children}
     </PermissionAndMenuContext.Provider>
 };

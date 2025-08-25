@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react"
 import {
     Box,
     Typography,
-    Button,
     Paper,
     IconButton,
     Chip,
@@ -14,11 +13,11 @@ import {
     DialogActions,
     TextField,
     InputAdornment,
-    MenuItem,
     FormControl,
     InputLabel,
     Select,
-    Alert,
+    MenuItem,
+    Button,
     Tooltip,
     useTheme,
 } from "@mui/material"
@@ -26,8 +25,6 @@ import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     PlayArrow as StartIcon,
-    CloudUpload as UploadIcon,
-    Computer as ComputerIcon,
     Search as SearchIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
@@ -38,87 +35,84 @@ import { customFetch } from "@/utils/fetch"
 interface VmImage {
     id: string
     name: string
-    version?: string
     osType?: "Windows" | "Linux" | "Other"
-    architecture?: "x86_64" | "arm64"
     size: string
     description?: string
     modifiedDate?: string
     status?: "available" | "uploading" | "error"
-    filePath?: string
 }
 
 const VmImageManagementPage: React.FC = () => {
     const [images, setImages] = useState<VmImage[]>([])
+    const [overrides, setOverrides] = useState<Record<string, { osType?: VmImage["osType"]; description?: string }>>({})
     const [openDialog, setOpenDialog] = useState(false)
     const [editingImage, setEditingImage] = useState<VmImage | null>(null)
     const [createModalImage, setCreateModalImage] = useState<string | null>(null)
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        name: string
+        osType: VmImage["osType"] | ""
+        description: string
+    }>({
         name: "",
-        version: "",
-        osType: "Linux" as const,
-        architecture: "x86_64" as const,
+        osType: "",
         description: "",
     })
-const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-    // 从后端获取镜像列表
     useEffect(() => {
-        customFetch('/back/api/vms/images')
-            .then(res => res.json())
-            .then((data: VmImage[]) => setImages(data))
-            .catch(() => {})
+        Promise.all([
+            customFetch('/back/api/vms/images').then(res => res.json()).catch(() => []),
+            fetch('/api/vm-image-overrides').then(res => res.json()).catch(() => ({})),
+        ]).then(([imgData, overrideData]) => {
+            setOverrides(overrideData)
+            const merged = (imgData as VmImage[]).map(img => {
+                const o = overrideData?.[img.name]
+                return o ? { ...img, osType: o.osType, description: o.description } : img
+            })
+            setImages(merged)
+        })
     }, [])
 
-    const handleOpenDialog = (image?: VmImage) => {
-        if (image) {
-            setEditingImage(image)
-            setFormData({
-                name: image.name,
-                version: image.version || '',
-                osType: image.osType || 'Linux',
-                architecture: image.architecture || 'x86_64',
-                description: image.description || '',
-            })
-        } else {
-            setEditingImage(null)
-            setFormData({
-                name: "",
-                version: "",
-                osType: "Linux",
-                architecture: "x86_64",
-                description: "",
-            })
-        }
-        setSelectedFile(null)
+    const handleOpenDialog = (image: VmImage) => {
+        setEditingImage(image)
+        setFormData({
+            name: image.name,
+            osType: image.osType ?? "",
+            description: image.description || '',
+        })
         setOpenDialog(true)
     }
 
     const handleCloseDialog = () => {
         setOpenDialog(false)
         setEditingImage(null)
-        setSelectedFile(null)
     }
 
     const handleStart = (image: VmImage) => {
         setCreateModalImage(image.name)
     }
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (editingImage) {
-            // 编辑现有镜像
-            setImages((prev) => prev.map((img) => (img.id === editingImage.id ? { ...img, ...formData } : img)))
-        } else {
-            // 添加新镜像
-            const newImage: VmImage = {
-                id: Date.now().toString(),
-                ...formData,
-                size: selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "0 MB",
-                modifiedDate: new Date().toISOString(),
-                status: "available",
-                filePath: selectedFile ? `/images/${selectedFile.name}` : undefined,
-            }
-            setImages((prev) => [...prev, newImage])
+            await fetch('/api/vm-image-overrides', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: editingImage.name,
+                    osType: formData.osType || undefined,
+                    description: formData.description || undefined,
+                }),
+            })
+            setOverrides(prev => ({
+                ...prev,
+                [editingImage.name]: { osType: formData.osType || undefined, description: formData.description || undefined },
+            }))
+            setImages(prev =>
+                prev.map(img =>
+                    img.id === editingImage.id
+                        ? { ...img, osType: formData.osType || undefined, description: formData.description || undefined }
+                        : img
+                )
+            )
         }
         handleCloseDialog()
     }
@@ -129,7 +123,8 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
-        img.description?.toLowerCase().includes(search.toLowerCase())
+        img.description?.toLowerCase().includes(search.toLowerCase()) ||
+        img.osType?.toLowerCase().includes(search.toLowerCase())
     )
 
     const handleDelete = (id: string) => {
@@ -166,7 +161,24 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
     const columns = useMemo<GridColDef[]>(() => [
         { field: 'name', headerName: '名称', flex: 1, minWidth: 160 },
-        //{ field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
+        {
+            field: 'osType',
+            headerName: '操作系统',
+            width: 120,
+            valueFormatter: params => {
+                switch (params) {
+                    case 'Linux':
+                        return 'Linux'
+                    case 'Windows':
+                        return 'Windows'
+                    case 'Other':
+                        return '其他'
+                    default:
+                        return params || ''
+                }
+            },
+        },
+        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
         {
             field: 'status',
@@ -182,9 +194,10 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
             flex: 1,
             minWidth: 160,
             // Align with container pages: parse ISO string and format as locale date
-            valueFormatter: (params) => {
-                return dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss');
-            }
+            valueFormatter: (params) =>
+                params
+                    ? dayjs(params.value as string).format('YYYY年M月D日 HH:mm:ss')
+                    : ''
         },
         {
             field: 'actions',
@@ -253,38 +266,27 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                         <TextField
                             label="镜像名称"
                             value={formData.name}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                             fullWidth
-                            required
-                        />
-                        <TextField
-                            label="版本"
-                            value={formData.version}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, version: e.target.value }))}
-                            fullWidth
-                            required
+                            disabled
                         />
                         <FormControl fullWidth>
                             <InputLabel>操作系统类型</InputLabel>
                             <Select
                                 value={formData.osType}
                                 label="操作系统类型"
-                                onChange={(e) => setFormData((prev) => ({ ...prev, osType: e.target.value as any }))}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        osType: e.target.value as VmImage["osType"] | "",
+                                    }))
+                                }
                             >
+                                <MenuItem value="">
+                                    <em>未指定</em>
+                                </MenuItem>
                                 <MenuItem value="Linux">Linux</MenuItem>
                                 <MenuItem value="Windows">Windows</MenuItem>
                                 <MenuItem value="Other">其他</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <FormControl fullWidth>
-                            <InputLabel>架构</InputLabel>
-                            <Select
-                                value={formData.architecture}
-                                label="架构"
-                                onChange={(e) => setFormData((prev) => ({ ...prev, architecture: e.target.value as any }))}
-                            >
-                                <MenuItem value="x86_64">x86_64</MenuItem>
-                                <MenuItem value="arm64">ARM64</MenuItem>
                             </Select>
                         </FormControl>
                         <TextField
@@ -295,31 +297,11 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
                             multiline
                             rows={3}
                         />
-                        {!editingImage && (
-                            <Box>
-                                <Button variant="outlined" component="label" startIcon={<UploadIcon />} fullWidth>
-                                    选择镜像文件
-                                    <input
-                                        type="file"
-                                        hidden
-                                        accept=".qcow2,.vmdk,.vdi,.img"
-                                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                                    />
-                                </Button>
-                                {selectedFile && (
-                                    <Alert severity="info" sx={{ mt: 1 }}>
-                                        已选择文件: {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
-                                    </Alert>
-                                )}
-                            </Box>
-                        )}
                     </Box>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>取消</Button>
-                    <Button onClick={handleSave} variant="contained">
-                        {editingImage ? "保存" : "添加"}
-                    </Button>
+                    <Button onClick={handleSave} variant="contained">保存</Button>
                 </DialogActions>
             </Dialog>
             <CreateVmModal

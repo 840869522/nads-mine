@@ -11,7 +11,7 @@ import {
     Search as SearchIcon,
     Visibility as ViewIcon,
     Delete as DeleteIcon,
-    Pause as PauseIcon, // <-- 导入 Pause 图标
+    Stop as StopIcon, // <-- 修改：导入 Stop 图标
 } from '@mui/icons-material';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import { customFetch } from '@/utils/fetch';
@@ -81,10 +81,9 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setIsDetailsModalOpen(true);
     };
 
-    //  实现删除场景实例的功能
     const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
         if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
-            setIsLoading(true); // 开始加载，防止用户重复点击
+            setIsLoading(true);
             try {
                 const response = await customFetch(`/back/api/scenariosinstances/${instanceId}`, {
                     method: 'DELETE',
@@ -95,21 +94,19 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     throw new Error(errorData.detail || `删除失败，状态码: ${response.status}`);
                 }
 
-                // 删除成功后，从列表中移除该实例，实现实时刷新
                 setInstances(prevInstances => prevInstances.filter(inst => inst.instance_id !== instanceId));
                 
             } catch (err: any) {
-                // 显示错误提示
                 setError(err.message || '删除过程中发生错误');
             } finally {
-                setIsLoading(false); // 结束加载
+                setIsLoading(false);
             }
         }
     };
     
-    //  实现暂停场景实例的功能
-    const handlePauseInstance = async (instanceId: string, scenarioName: string) => {
-        if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
+    // 修改：实现停止场景实例的功能
+    const handleStopInstance = async (instanceId: string, scenarioName: string) => {
+        if (window.confirm(`您确定要停止场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
             setIsLoading(true);
             try {
                 const response = await customFetch(`/back/api/scenariosinstances/${instanceId}/teardown`, {
@@ -118,13 +115,13 @@ const ScenarioInstanceManagementPage: React.FC = () => {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
+                    throw new Error(errorData.detail || `停止失败，状态码: ${response.status}`);
                 }
                 // 操作成功后刷新列表，以更新实例状态
                 fetchInstances();
 
             } catch (err: any) {
-                setError(err.message || '暂停过程中发生错误');
+                setError(err.message || '停止过程中发生错误');
             } finally {
                 setIsLoading(false);
             }
@@ -232,9 +229,10 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
-                                            <Tooltip title="暂停场景">
-                                                <IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
-                                                    <PauseIcon />
+                                            {/* 修改：停止按钮 */}
+                                            <Tooltip title="停止场景">
+                                                <IconButton color="warning" size="small" onClick={() => handleStopInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
+                                                    <StopIcon />
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="删除场景">

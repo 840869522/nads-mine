@@ -42,7 +42,7 @@ type SortablePermissionsKeys = keyof Pick<PermissionDisplayItem, 'c_id' | 'c_nam
 
 
 const PermissionManagementPage: React.FC = () => {
-  const { updateData } = userPermissionContext();
+  const { updateData, id2nameMap } = userPermissionContext();
   const [firstFlag, setFirstFlag] = useState<boolean>(true);
   const [permissions, setPermissions] = useState<PermissionDisplayItem[]>([]);
   const [searchTerm, setSearchTerm] = useState({ data: '', flag: false });
@@ -324,7 +324,7 @@ const PermissionManagementPage: React.FC = () => {
                 { id: "c_des", label: "描述" },
                 { id: "c_api_src", label: "api接口" },
                 { id: "c_src", label: "前端地址" },
-                { id: "c_pid", label: "父项id" },
+                { id: "c_pid", label: "所属父项" },
                 { id: "c_status", label: "状态" },
               ].map((headCell) => (
                 <TableCell
@@ -352,7 +352,7 @@ const PermissionManagementPage: React.FC = () => {
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_des.length > 10 ? permission.c_des.slice(0, 9) + "..." : permission.c_des}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_api_src}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_src.trim() || ""}</TableCell>
-                    <TableCell sx={{ fontWeight: 'medium' }}>{permission.c_pid === '0' ? "顶层权限" : permission.c_pid}</TableCell>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{id2nameMap[permission.c_pid]}</TableCell>
                     <TableCell sx={{ fontWeight: 'medium' }}>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
                         {

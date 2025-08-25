@@ -30,10 +30,6 @@ class Controller extends BaseController
             if ($res['data']['found']){
                 $auth = $request->header("Authorization",null);
                 $jwtRes =  JWTControll::decodeJWT($auth);
-                $permissions = Cache::get($jwtRes["data"]["permission"]);
-                $permissions = array_map(function ($item){
-                    return $item->c_id;
-                },$permissions);
                 if ($jwtRes["err"] != null) {
                     response()->json([
                         "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
@@ -41,8 +37,11 @@ class Controller extends BaseController
                     ])->send();
                     exit();
                 }
+                $permissions = Cache::get($jwtRes["data"]["permission"]);
+                $permissions = array_map(function ($item){
+                    return $item->c_id;
+                },$permissions);
                 $jwtRes["data"]['permission'] = $permissions;
-                Log::info($jwtRes['data']);
                 $request->merge([
                     "token_data"=>$jwtRes["data"]
                 ]);
