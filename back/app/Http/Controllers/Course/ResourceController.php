@@ -247,7 +247,7 @@ class ResourceController extends Controller
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$resource['c_resource_name']}.{$resource['c_type']}</title>  <!-- 显示完整文件名 -->
+    <title>{$resource['c_resource_name']}</title>  <!-- 显示完整文件名 -->
     <style>
         body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: Arial, sans-serif; }
         #viewer { max-width: 100%; max-height: calc(100% - 50px); object-fit: contain; }

@@ -112,7 +112,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
             fullScreen={fullScreen}
             PaperProps={{ sx: { borderRadius: 2 } }}
         >
-            <DialogTitle>{`${resource?.c_resource_name}.${resource?.c_type}` || '资源查看'}</DialogTitle>  {/* 修改：模态框标题显示完整文件名 */}
+            <DialogTitle>{resource?.c_resource_name || '资源查看'}</DialogTitle>  {/* 修改：模态框标题显示完整文件名 */}
             <DialogContent dividers sx={{ maxHeight: '80vh', overflowY: 'auto' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', py: 2 }}>
                     <Typography variant="body2" color="text.secondary">
