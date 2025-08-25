@@ -324,6 +324,10 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
+    const handleOpenView = () => {
+        window.open('/visualization', '_blank');
+    }    
+
     // === 渲染逻辑 (无变化) ===
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
@@ -349,12 +353,13 @@ const AdManagementPage: React.FC = () => {
                                 <TableCell sx={{ fontWeight: 'bold' }}>裁判团队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>场景模板</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>计划开始时间</TableCell>
+                                <TableCell sx={{fontWeight: 'bold'}}>可视化</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>操作</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isLoading ? ( <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
+                            {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
+                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
                                     : (
                                         adConfigs.map((adConfig) => (
                                             <TableRow hover key={adConfig.c_id}>
@@ -369,6 +374,9 @@ const AdManagementPage: React.FC = () => {
                                                 </TableCell>
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
+                                                <TableCell sx={{fontWeight: 'bold'}}>
+                                                    <Button variant="contained" onClick={() => handleOpenView()}>可视化</Button>
+                                                </TableCell>
                                                 <TableCell align="right">
                                                     {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
                                                         <Tooltip title="开始/重新开始演练">

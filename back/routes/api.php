@@ -24,6 +24,7 @@
     use App\Http\Controllers\Experiment\ExperimentController;
     use App\Http\Controllers\Experiment\ExperimentResourceController;
     use App\Http\Controllers\Course\CoursePermissionController;
+    use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
 /*
     |--------------------------------------------------------------------------
     | API Routes
@@ -290,7 +291,20 @@ Route::prefix('ad')->group(function () {
     // 你可能还有其他辅助路由，可以像这样添加
     // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
-
+// Flag 相关接口路由组，统一添加 JWT 认证
+Route::prefix('flag')->middleware('jwt.auth')->group(function () {
+    // Flag 提交接口，添加限流保护
+    Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
+    
+    // 历史记录查询接口
+    Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    
+    // 获取场景实例列表接口
+    Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
+    
+    // 获取靶机实例列表接口  
+    Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
+});
 /**
  * 定义安全实验分系统路由
  */

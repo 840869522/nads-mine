@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react";
-import styles from "../../styles/main/team.module.css"
-import { websocketClient } from "@/utils/websocket";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faClipboardList, faShieldAlt, faCrosshairs } from '@fortawesome/free-solid-svg-icons'
 
 export type TeamInfo = {
     teamId: number;
@@ -74,9 +74,9 @@ function LogInfo(props: {logList: LogInfo[]}){
             bottom-[10px] overflow-y-visible
             relative">
             <div className="text-base mb-2 text-[#7dd3fc] h-[20px] flex items-center gap-[6px]">
-                {/* <FontAwesomeIcon icon={faClipboardList}/> 过程日志 */}
+                <FontAwesomeIcon icon={faClipboardList}/> 过程日志
             </div>
-            <ul className="list-none overflow-y-auto h-[calc(100%-30px)] pr-[5px] mb-2.5" id="blue-log">
+            <ul className="list-none overflow-y-auto h-[calc(100%-30px)] pr-[5px] mb-2.5 text-white" id="blue-log">
                 {props.logList.slice().reverse().map((logInfo) => (
                     <LogItem key={logInfo.logId} {...logInfo} />
                 ))}
@@ -102,7 +102,7 @@ export default function Team(team:BattlefieldInfo) {
                     z-[999] top-[20px] bottom-[80px] left-[20px]">
                 <div className="flex items-center gap-0 px-3 py-2.5 rounded-md mb-3 h-[40px] bg-gray-800">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
-                        {/* <FontAwesomeIcon icon={faShieldAlt}/> */}
+                        <FontAwesomeIcon icon={faShieldAlt}/>
                     </div>
                     <h2 className="text-[1.3rem] font-bold uppercase text-white">蓝方队伍</h2>
                 </div>
@@ -118,7 +118,7 @@ export default function Team(team:BattlefieldInfo) {
                     z-[999] top-[20px] bottom-[80px] right-[20px]">
                 <div className="flex items-center gap-0 px-3 py-2.5 rounded-md mb-3 h-[40px] bg-gray-800">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
-                        {/* <FontAwesomeIcon icon={faCrosshairs}/> */}
+                        <FontAwesomeIcon icon={faCrosshairs}/>
                     </div>
                     <h2 className="text-[1.3rem] font-bold uppercase text-white">红方队伍</h2>
                 </div>

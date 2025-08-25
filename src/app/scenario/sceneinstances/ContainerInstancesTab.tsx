@@ -8,7 +8,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
-    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon
+    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
@@ -16,6 +16,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
+import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
@@ -40,6 +41,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
+    const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
@@ -177,13 +179,14 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 180,
+            field: 'actions', headerName: '操作', sortable: false, width: 220,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
                 const isStopped = instance.status === 'exited' || instance.status === 'stopped';
                 const isRunning = instance.status === 'running';
                 const isPaused = instance.status === 'paused';
+                const isTarget = instance.is_target; // 检查是否为靶机
                 return (
                     <Box>
                         <Tooltip title={isRunning ? '暂停' : '启动'}>
@@ -207,6 +210,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </IconButton>
                             </span>
                         </Tooltip>
+                        {/* 只有靶机才显示Flag提交按钮 */}
+                        {isTarget && (
+                            <Tooltip title="提交Flag">
+                                <span>
+                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
                 );
@@ -317,6 +330,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             {logsModalId && <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />}
             {inspectModalId && <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />}
             {bindsModalId && <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />}
+            {flagSubmissionModalId && (
+                <FlagSubmissionModal 
+                    open={Boolean(flagSubmissionModalId)}
+                    onClose={() => setFlagSubmissionModalId(null)}
+                    instanceId={flagSubmissionModalId}
+                    instanceType="docker"
+                    sceneInstanceId={instanceId || ''}
+                    instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
+                />
+            )}
         </Box>
     );
 };
