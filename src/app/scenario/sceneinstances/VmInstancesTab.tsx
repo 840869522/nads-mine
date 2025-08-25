@@ -38,9 +38,11 @@ import {
     KeyboardArrowDown as ArrowDownIcon,
     ViewColumn as ViewColumnIcon,
     Refresh as RefreshIcon,
+    Flag as FlagIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
+import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -142,6 +144,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const [actionLoading, setActionLoading] = React.useState(false);
     const [showRunningOnly, setShowRunningOnly] = React.useState(false);
     const [columnAnchor, setColumnAnchor] = React.useState<null | HTMLElement>(null);
+    const [flagSubmissionModalId, setFlagSubmissionModalId] = React.useState<string | null>(null);
     const [showColumns, setShowColumns] = React.useState({
         hostNode: false,
         pool: false,
@@ -244,13 +247,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 160,
+                width: 200,
                 renderCell: (params) => {
                     const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
                     const state = info?.status || vm.state;
                     const isRunning = state === 'running';
                     const isPaused = state === 'paused';
+                    const isTarget = vm.is_target; // 检查是否为靶机
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
@@ -263,6 +267,16 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                 <Tooltip title={isPaused ? "恢复" : "启动"}><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}><StartIcon fontSize="small" color="success" /></IconButton></Tooltip>
                             )}
                             <Tooltip title="删除"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}><DeleteIcon fontSize="small" color="error" /></IconButton></Tooltip>
+                            {/* 只有靶机才显示Flag提交按钮 */}
+                            {isTarget && (
+                                <Tooltip title="提交Flag">
+                                    <span>
+                                        <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
+                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            )}
                             <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
                         </Box>
                     );
@@ -356,6 +370,17 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             <Backdrop open={actionLoading} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
                 <CircularProgress color="inherit" />
             </Backdrop>
+
+            {flagSubmissionModalId && (
+                <FlagSubmissionModal 
+                    open={Boolean(flagSubmissionModalId)}
+                    onClose={() => setFlagSubmissionModalId(null)}
+                    instanceId={flagSubmissionModalId}
+                    instanceType="vm"
+                    sceneInstanceId={instanceId || ''}
+                    instanceName={data?.find(vm => vm.id === flagSubmissionModalId)?.name}
+                />
+            )}
         </Box>
     );
 };
