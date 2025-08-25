@@ -1,9 +1,242 @@
 {
-  "cirros-0.6.2.qcow2": {
-    "osType": "Windows",
-    "description": "safasfsa"
-  },
   "v_att_tcpScanning.qcow2": {
-    "description": "tcp扫描"
+    "osType": "Linux",
+    "description": "TCP端口扫描攻击攻击镜像"
+  },
+  "v_att_dbTheft.qcow2": {
+    "osType": "Linux",
+    "description": "数据库信息窃取攻击镜像"
+  },
+  "v_att_fingerprint.qcow2": {
+    "osType": "Linux",
+    "description": "主机指纹探测攻击镜像"
+  },
+  "v_tar_ICMPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "ICMP泛洪攻击靶机镜像"
+  },
+  "v_att_smbPasswd.qcow2": {
+    "osType": "Linux",
+    "description": "SMB口令探测攻击镜像"
+  },
+  "v_att_SYNflooding.qcow2": {
+    "osType": "Linux",
+    "description": "SYN泛洪攻击攻击镜像"
+  },
+  "v_att_ICMPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "ICMP泛洪攻击攻击镜像"
+  },
+  "v_att_serviceVersion.qcow2": {
+    "osType": "Linux",
+    "description": "服务版本探测攻击镜像"
+  },
+  "v_tar_passwordCrack.qcow2": {
+    "osType": "Linux",
+    "description": "密码破解攻击靶机镜像"
+  },
+  "v_tar_tcpScanning.qcow2": {
+    "osType": "Linux",
+    "description": "TCP端口扫描攻击靶机镜像"
+  },
+  "v_att_windowsRemote.qcow2": {
+    "osType": "Linux",
+    "description": "Windows远程溢出漏洞探测攻击镜像"
+  },
+  "v_att_networkSniffing.qcow2": {
+    "osType": "Linux",
+    "description": "网络嗅探攻击镜像"
+  },
+  "v_att_dbTamper.qcow2": {
+    "osType": "Linux",
+    "description": "数据库信息篡改攻击镜像"
+  },
+  "v_tar_MiddlewareAttacks.qcow2": {
+    "osType": "Linux",
+    "description": "中间件漏洞攻击靶机镜像"
+  },
+  "v_tar_oracleRemoteAttack.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle远程命令执行攻击靶机镜像"
+  },
+  "v_att_hostfileTheft.qcow2": {
+    "osType": "Linux",
+    "description": "主机文件窃取攻击镜像"
+  },
+  "v_att_smbRemote.qcow2": {
+    "osType": "Linux",
+    "description": "SMB远程溢出拒绝攻击攻击镜像"
+  },
+  "v_att_udpScanning.qcow2": {
+    "osType": "Linux",
+    "description": "UDP端口扫描攻击攻击镜像"
+  },
+  "v_tar_dbTamper.qcow2": {
+    "osType": "Linux",
+    "description": "数据库信息篡改靶机镜像"
+  },
+  "v_att_dbFingerprint.qcow2": {
+    "osType": "Linux",
+    "description": "数据库指纹探测攻击镜像"
+  },
+  "v_tar_dbFingerprint.qcow2": {
+    "osType": "Linux",
+    "description": "数据库指纹探测靶机镜像"
+  },
+  "v_tar_SYNflooding.qcow2": {
+    "osType": "Linux",
+    "description": "SYN泛洪攻击靶机镜像"
+  },
+  "v_tar_oraclePasswd.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle口令探测靶机镜像"
+  },
+  "v_att_smbImplant.qcow2": {
+    "osType": "Linux",
+    "description": "SMB远程溢出植入远控攻击镜像"
+  },
+  "v_tar_fingerprint_win.qcow2": {
+    "osType": "Windows",
+    "description": "主机指紋探测靶机镜像"
+  },
+  "v_tar_smbPasswd.qcow2": {
+    "osType": "Linux",
+    "description": "SMB口令探测靶机镜像"
+  },
+  "v_att_oracleCommandAttack.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle远程命令执行攻击攻击镜像"
+  },
+  "v_tar_serviceVersion.qcow2": {
+    "osType": "Linux",
+    "description": "服务版本探测靶机镜像"
+  },
+  "v_att_UDPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "UDP泛洪攻击攻击镜像"
+  },
+  "v_tar_RDPblueScreen.qcow2": {
+    "osType": "Linux",
+    "description": "RDP远程溢出蓝屏攻击靶机镜像"
+  },
+  "v_tar_oracleRemote.qcow2": {
+    "osType": "Linux",
+    "description": ""
+  },
+  "v_tar_fingerprint.qcow2": {
+    "osType": "Linux",
+    "description": "主机指纹探测靶机镜像"
+  },
+  "v_att_windowsControl.qcow2": {
+    "osType": "Linux",
+    "description": "Windows系统账号控制攻击镜像"
+  },
+  "v_tar_hostfileTheft.qcow2": {
+    "osType": "Linux",
+    "description": "主机文件窃取靶机镜像"
+  },
+  "v_tar_serviceop.qcow2": {
+    "osType": "Linux",
+    "description": "软件服务启停靶机镜像"
+  },
+  "v_att_TCPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "TCP泛洪攻击攻击镜像"
+  },
+  "v_tar_windowsRemote.qcow2": {
+    "osType": "Windows",
+    "description": "Windows远程溢出漏洞探测靶机镜像"
+  },
+  "v_tar_windowsControl.qcow2": {
+    "osType": "Windows",
+    "description": "Windows系统账号控制靶机镜像"
+  },
+  "ICMP泛洪攻击.qcow2": {
+    "osType": "Linux",
+    "description": "ICMP泛洪攻击攻击镜像"
+  },
+  "v_tar_MiddlewareRemote.qcow2": {
+    "osType": "Linux",
+    "description": "中间件漏洞植入远控靶机镜像"
+  },
+  "v_tar_dbTheft.qcow2": {
+    "osType": "Linux",
+    "description": "数据库信息窃取靶机镜像"
+  },
+  "v_att_MiddlewareAttacks.qcow2": {
+    "osType": "Linux",
+    "description": "中间件漏洞攻击攻击镜像"
+  },
+  "v_att_serviceop.qcow2": {
+    "osType": "Linux",
+    "description": "软件服务启停攻击镜像"
+  },
+  "v_tar_oracleCommandAttack.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle远程命令执行攻击靶机镜像"
+  },
+  "v_tar_oracleRemoteControl.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle数据库控制靶机镜像"
+  },
+  "v_tar_oracleImplant.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle命令执行植入远控靶机镜像"
+  },
+  "v_att_oraclePasswd.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle口令探测攻击镜像"
+  },
+  "v_att_oracleRemoteAttack.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle远程命令执行攻击攻击镜像"
+  },
+  "v_att_oracleRemote.qcow2": {
+    "osType": "Linux",
+    "description": ""
+  },
+  "v_att_oracleRemoteControl.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle数据库控制攻击镜像"
+  },
+  "v_tar_UDPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "UDP泛洪攻击靶机镜像"
+  },
+  "v_att_passwordCrack.qcow2": {
+    "osType": "Linux",
+    "description": "密码破解攻击攻击镜像"
+  },
+  "v_tar_smbRemote.qcow2": {
+    "osType": "Linux",
+    "description": "SMB远程溢出拒绝攻击靶机镜像"
+  },
+  "v_tar_smbImplant.qcow2": {
+    "osType": "Linux",
+    "description": "SMB远程溢出植入远控靶机镜像"
+  },
+  "v_tar_udpScanning.qcow2": {
+    "osType": "Linux",
+    "description": "UDP端口扫描攻击靶机镜像"
+  },
+  "v_att_MiddlewareRemote.qcow2": {
+    "osType": "Linux",
+    "description": "中间件漏洞植入远控攻击镜像"
+  },
+  "v_att_RDPblueScreen.qcow2": {
+    "osType": "Linux",
+    "description": "RDP远程溢出蓝屏攻击攻击镜像"
+  },
+  "v_tar_networkSniffing.qcow2": {
+    "osType": "Linux",
+    "description": "网络嗅探靶机镜像"
+  },
+  "v_tar_TCPflooding.qcow2": {
+    "osType": "Linux",
+    "description": "TCP泛洪攻击靶机镜像"
+  },
+  "v_att_oracleImplant.qcow2": {
+    "osType": "Linux",
+    "description": "Oracle命令执行植入远控攻击镜像"
   }
 }
