@@ -109,7 +109,7 @@ const FlagSubmissionModal: React.FC<FlagSubmissionModalProps> = ({
             };
 
             const response = await apiClientWithToken.post(
-                `${BACK_IP_PORT}/api/flag/submit-flag`, 
+                `/back/api/flag/submit-flag`,  // 使用相对路径避免端口问题
                 requestBody
             );
 
@@ -131,8 +131,22 @@ const FlagSubmissionModal: React.FC<FlagSubmissionModalProps> = ({
         } catch (error: any) {
             console.error('Flag submission error:', error);
             setIsSuccess(false);
-            if (error.response?.data?.message) {
+            
+            // 增强错误处理，提供更详细的错误信息
+            if (error.code === 'ERR_NETWORK') {
+                setMessage('网络连接失败，请检查网络连接或稍后重试');
+            } else if (error.response?.status === 404) {
+                setMessage('API路径不存在，请联系管理员检查系统配置');
+            } else if (error.response?.status === 401) {
+                setMessage('身份验证失败，请重新登录');
+            } else if (error.response?.status === 429) {
+                setMessage('请求过于频繁，请稍后再试');
+            } else if (error.response?.status === 500) {
+                setMessage('服务器内部错误，请稍后重试或联系管理员');
+            } else if (error.response?.data?.message) {
                 setMessage(error.response.data.message);
+            } else if (error.message) {
+                setMessage(`提交失败：${error.message}`);
             } else {
                 setMessage('提交失败，请稍后重试');
             }
