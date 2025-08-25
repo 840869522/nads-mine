@@ -59,7 +59,7 @@ class ExperimentResourceController extends Controller
         $validator = Validator::make($request->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id',
             'c_experiment_id' => 'required|string|exists:c_course_experiments,c_experiment_id',
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:102400',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:2097152',
         ]);
         if ($validator->fails()) {
             return response()->json([

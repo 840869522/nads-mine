@@ -107,7 +107,7 @@ class ResourceController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id',
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,mp4,pptx,avi|max:102400',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,mp4,pptx,avi|max:2097152',
         ]);
         if ($validator->fails()) {
             return response()->json([
