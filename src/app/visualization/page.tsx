@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 const Battlefield = dynamic(() => import('./battlefield'), { ssr: false });
 
 if (typeof window !== 'undefined') {
-    ;(window as any).CESIUM_BASE_URL = 'http://localhost:11180/cesium/';
+    ;(window as any).CESIUM_BASE_URL = '/mapdata/cesium/';
 }
 
 // async function getVmsByAdConfigId(adConfigId: string) {

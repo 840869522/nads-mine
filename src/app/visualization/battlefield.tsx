@@ -44,7 +44,7 @@ function addPlaneEntity(options: PlaneEntityOptions) {
         heading = 0,
         pitch = 0,
         roll = 0,
-        modelUri = 'http:localhost:11180/model/Cesium_Air.glb',
+        modelUri = '/mapdata/model/Cesium_Air.glb',
     } = options;
 
     const entity = viewer.entities.add({
@@ -74,7 +74,7 @@ function addPlaneEntity(options: PlaneEntityOptions) {
 // 加载地形的异步函数
 async function addWorldTerrainAsync(viewer: Cesium.Viewer) {
     try {
-        const terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl('http:localhost:11180/terrain/', {
+        const terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl('/mapdata/terrain/', {
             requestWaterMask: true,
             requestVertexNormals: true,
         });
@@ -93,7 +93,7 @@ async function addWorldImageryAsync(viewer: Cesium.Viewer) {
     viewer.imageryLayers.removeAll();
 
     const tmsImageryProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'http:localhost:11180/map/laiwu/{z}/{x}/{y}.png',
+        url: '/mapdata/map4/laiwu/{z}/{x}/{y}.png',
         tilingScheme: new Cesium.WebMercatorTilingScheme(),
         minimumLevel: 0,
         maximumLevel: 15,
