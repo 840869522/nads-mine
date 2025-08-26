@@ -24,6 +24,7 @@ import { apiClientWithToken } from '@/utils/axios';
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
   name: string,
+  pwdedit? : boolean,
   username?: string;
   email?: string;
   status?: 'active' | 'disabled';
