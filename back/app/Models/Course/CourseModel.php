@@ -629,6 +629,11 @@ class CourseModel
     public static function updateCourseIdAndRelated($oldCourseId, $newCourseId)
     {
         return DB::transaction(function () use ($oldCourseId, $newCourseId) {
+            Log::info('Starting updateCourseIdAndRelated', [
+                'oldCourseId' => $oldCourseId,
+                'newCourseId' => $newCourseId
+            ]);
+
             // 1. 更新课程表
             DB::table('c_courses')
                 ->where('c_course_id', $oldCourseId)
@@ -651,7 +656,7 @@ class CourseModel
                 ]);
 
             // 4. 更新实验资源表
-            DB::table('c_experiment_resources')
+            $updatedResources = DB::table('c_experiment_resources')
                 ->where('c_course_id', $oldCourseId)
                 ->update([
                     'c_course_id' => $newCourseId,
@@ -659,12 +664,14 @@ class CourseModel
                     'c_resource_id' => DB::raw("REPLACE(c_resource_id, '{$oldCourseId}', '{$newCourseId}')"),
                     'c_resource_path' => DB::raw("REPLACE(c_resource_path, '{$oldCourseId}', '{$newCourseId}')")
                 ]);
+            Log::info('Updated experiment resources', ['rows_affected' => $updatedResources]);
 
             // 5. 移动文件夹
             $oldPath = storage_path("app/resources/{$oldCourseId}");
             $newPath = storage_path("app/resources/{$newCourseId}");
             if (\File::exists($oldPath)) {
                 \File::move($oldPath, $newPath);
+                Log::info('Moved folder', ['oldPath' => $oldPath, 'newPath' => $newPath]);
             }
 
             return [

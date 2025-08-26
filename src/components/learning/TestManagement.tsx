@@ -3,8 +3,9 @@ import {
   Box, Button, TextField, Typography, Paper, Table, TableBody, 
   TableCell, TableContainer, TableHead, TableRow, Chip, 
   IconButton, Tooltip, Pagination, Grid,
-  Accordion, AccordionSummary, AccordionDetails, Snackbar, Alert,
-  CircularProgress, Tabs, Tab
+  Snackbar, Alert, CircularProgress, Tabs, Tab,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  DialogContentText
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -14,7 +15,7 @@ import {
   People as PeopleIcon,
   Code as CodeIcon,
   MenuBook as MenuBookIcon,
-  ExpandMore as ExpandMoreIcon
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -42,19 +43,28 @@ interface TestData {
 }
 
 interface TestUser {
-  id: string;
+  id?: string;
   username: string;
-  name: string;
-  email: string;
-  role: string;
+  name?: string;
+  email?: string;
+  role?: string;
   c_test_id: string;
   c_paper_id: string;
-  c_answers: string;
-  c_start: Date;
-  c_end: Date;
-  c_submit: Date | null;
-  c_score: number;
-  c_correct: number;
+  c_answers: any;
+  start_time: string | null;
+  end_time: string | null;
+  submit_time: string | null;
+  score: number;
+  correct_status: number;
+  correct_status_text: string;
+}
+
+interface Paper {
+  paperId: string;
+  testId: string;
+  totalScore: number;
+  questionCount: number;
+  paperName?: string;
 }
 
 interface SnackbarState {
@@ -86,10 +96,17 @@ const TestManagement = () => {
   const [currentTest, setCurrentTest] = useState<TestData | null>(null);
   const [testUsers, setTestUsers] = useState<TestUser[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [papers, setPapers] = useState<Paper[]>([]);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'success' });
   const [totalCount, setTotalCount] = useState<number>(0);
-  // 新增：当前激活的标签页（默认显示实践操作）
   const [activeTab, setActiveTab] = useState<TestTab>('practice');
+  const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
+  const [loadingPapers, setLoadingPapers] = useState<boolean>(false);
+  
+  // 新增：删除相关状态
+  const [deletingKey, setDeletingKey] = useState<string | null>(null); // 正在删除的用户标识（避免重复点击）
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false); // 删除确认弹窗
+  const [userToDelete, setUserToDelete] = useState<TestUser | null>(null); // 待删除的用户信息
 
   // 显示提示消息
   const showSnackbar = (message: string, severity: SnackbarState['severity'] = 'success') => {
@@ -104,7 +121,6 @@ const TestManagement = () => {
   // 切换标签页
   const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
     setActiveTab(newValue);
-    // 切换时重置对应标签页的页码
     if (newValue === 'practice') {
       setPagePractice(1);
     } else {
@@ -112,30 +128,27 @@ const TestManagement = () => {
     }
   };
 
-  // 获取测试列表（带字段过滤，只保留表格所需字段）
+  // 获取测试列表
   const fetchTests = async (page: number = 1, pageSize: number = 10) => {
     try {
       setLoading(true);
-      // 发送GET请求获取测试列表
       const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/test_list', {
         params: { page, pageSize }
       });
       if (response.data.code === 200) {
         const responseData = response.data.data || [];
         const rawTests = responseData.data || [];
-        // 过滤无用字段，只保留表格需要展示的字段
         const filteredTests = rawTests.map((item: any) => ({
-          c_id: item.c_id,                  // 测试ID（用于编辑/删除等操作）
-          c_name: item.c_name,              // 测试名称（表格展示）
-          c_description: item.c_description, // 测试描述（表格展示）
-          c_type: item.c_type,              // 测试类型（实践/理论，用于分类展示）
-          c_test_type: item.c_test_type,    // 测试子类型（考试/练习，表格展示）
-          c_course_id: item.c_course_id,    // 课程ID（表格展示）
-          c_start: item.c_start,            // 开始时间（表格展示）
-          c_end: item.c_end                 // 结束时间（表格展示）
+          c_id: item.c_id,
+          c_name: item.c_name,
+          c_description: item.c_description,
+          c_type: item.c_type,
+          c_test_type: item.c_test_type,
+          c_course_id: item.c_course_id,
+          c_start: item.c_start,
+          c_end: item.c_end
         }));
         
-        // 更新状态，存储过滤后的数据
         setTests(filteredTests);
         setTotalCount(responseData.count || 0);
       } else {
@@ -148,7 +161,162 @@ const TestManagement = () => {
       setLoading(false);
     }
   };
+  
+  // 获取所有用户
+  const fetchAllUsers = async () => {
+    try {
+      const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/getAllUsers');
+      if (response.data.code === 200) {
+        setAllUsers(response.data.data || []);
+      } else {
+        showSnackbar('获取用户列表失败: ' + response.data.message, 'error');
+      }
+    } catch (error: any) {
+      console.error('获取用户列表失败:', error);
+      showSnackbar('获取用户列表失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+  };
+  
+  // 根据测试ID获取试卷
+  const fetchPapersByTestId = async (testId: string) => {
+    try {
+      setLoadingPapers(true);
+      const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/get_papers', {
+        params: { test_id: testId }
+      });
+      
+      if (response.data.code === 200) {
+        const papersWithNames = (response.data.data || []).map((paper: any, index: number) => ({
+          ...paper,
+          paperName: `试卷${index + 1}`
+        }));
+        
+        setPapers(papersWithNames);
+        return papersWithNames;
+      } else {
+        showSnackbar('获取试卷列表失败: ' + response.data.message, 'error');
+        return [];
+      }
+    } catch (error: any) {
+      console.error('获取试卷列表失败:', error);
+      showSnackbar('获取试卷列表失败: ' + (error.response?.data?.message || error.message), 'error');
+      return [];
+    } finally {
+      setLoadingPapers(false);
+    }
+  };
+  
+  // 根据测试ID获取关联用户信息
+  const fetchTestUsers = async (testId: string) => {
+    try {
+      setLoadingUsers(true);
+      const response = await apiClientWithToken.get<ApiResponse>(
+        '/back/api/study/test/getTestUsersByTestId',
+        { params: { test_id: testId } }
+      );
+      
+      if (response.data.code === 200) {
+        const formattedUsers = response.data.data.map((user: any) => {
+          const userInfo = allUsers.find(u => u.username === user.username);
+          
+          return {
+            id: `${user.test_id}-${user.username}`,
+            username: user.username,
+            name: user.name || userInfo?.name || user.username,
+            c_test_id: user.test_id,
+            c_paper_id: user.paper_id,
+            c_answers: user.answers,
+            start_time: user.start_time,
+            end_time: user.end_time,
+            submit_time: user.submit_time,
+            score: user.score,
+            correct_status: user.correct_status,
+            correct_status_text: user.correct_status_text
+          };
+        });
+        
+        return formattedUsers;
+      } else {
+        showSnackbar('获取用户数据失败: ' + response.data.message, 'error');
+        return [];
+      }
+    } catch (error: any) {
+      console.error('获取用户数据失败:', error);
+      const errorMsg = error.response?.data?.message || 
+                      error.message || 
+                      '网络请求失败，请稍后重试';
+      showSnackbar(`获取用户数据失败: ${errorMsg}`, 'error');
+      return [];
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // 批量添加测试用户
+  const batchAddTestUsers = async (usersData: any[]) => {
+    try {
+      const response = await apiClientWithToken.post<ApiResponse>(
+        '/back/api/study/test/batchStoreTestUsers',
+        { users: usersData }
+      );
+      
+      if (response.data.code === 200) {
+        showSnackbar(`成功添加 ${response.data.data.count} 个用户`);
+        return true;
+      } else {
+        showSnackbar('批量添加用户失败: ' + response.data.message, 'error');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('批量添加用户失败:', error);
+      showSnackbar('批量添加用户失败: ' + (error.response?.data?.message || error.message), 'error');
+      return false;
+    }
+  };
+
+  // 新增：单个删除测试用户（对接后端destroy接口）
+  const deleteTestUser = async () => {
+    if (!userToDelete || !currentTest?.c_id) return false;
     
+    try {
+      // 生成唯一删除标识（避免重复点击）
+      const deleteKey = `${userToDelete.c_test_id}-${userToDelete.username}-${userToDelete.c_paper_id}`;
+      setDeletingKey(deleteKey);
+      
+      // 调用后端删除接口
+      const response = await apiClientWithToken.post<ApiResponse>(
+        '/back/api/study/test/destroy', // 与后端路由一致
+        {
+          c_test_id: userToDelete.c_test_id,
+          c_username: userToDelete.username,
+          c_paper_id: userToDelete.c_paper_id
+        }
+      );
+      
+      if (response.data.code === 200) {
+        showSnackbar('用户删除成功');
+        // 重新获取用户列表，同步更新界面
+        const updatedUsers = await fetchTestUsers(currentTest.c_id);
+        setTestUsers(updatedUsers);
+        setDeleteConfirmOpen(false);
+        setUserToDelete(null);
+        return true;
+      } else {
+        // 处理后端返回的业务错误（如已交卷不允许删除）
+        showSnackbar(`删除失败: ${response.data.message}`, 'error');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('删除测试用户失败:', error);
+      const errorMsg = error.response?.data?.message || 
+                      error.message || 
+                      '网络请求失败，请稍后重试';
+      showSnackbar(`删除用户失败: ${errorMsg}`, 'error');
+      return false;
+    } finally {
+      setDeletingKey(null); // 重置删除状态
+    }
+  };
 
   // 添加测试
   const handleAddTest = async (testData: TestData) => {
@@ -157,7 +325,7 @@ const TestManagement = () => {
       
       if (response.data.code === 200) {
         showSnackbar('测试添加成功');
-        fetchTests(); // 刷新列表
+        fetchTests();
         return true;
       } else {
         showSnackbar('测试添加失败: ' + response.data.message, 'error');
@@ -177,7 +345,7 @@ const TestManagement = () => {
       
       if (response.data.code === 200) {
         showSnackbar('测试更新成功');
-        fetchTests(); // 刷新列表
+        fetchTests();
         return true;
       } else {
         showSnackbar('测试更新失败: ' + response.data.message, 'error');
@@ -201,7 +369,7 @@ const TestManagement = () => {
       
       if (response.data.code === 200) {
         showSnackbar('测试删除成功');
-        fetchTests(); // 刷新列表
+        fetchTests();
       } else {
         showSnackbar('测试删除失败: ' + response.data.message, 'error');
       }
@@ -233,14 +401,13 @@ const TestManagement = () => {
 
   // 初始化数据
   useEffect(() => {
-    console.log('组件初始化，调用fetchTests');
     fetchTests();
+    fetchAllUsers();
   }, []);
 
   // 搜索处理
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchText(e.target.value);
-    // 搜索时重置两个标签页的页码
     setPagePractice(1);
     setPageTheory(1);
   };
@@ -265,34 +432,24 @@ const TestManagement = () => {
 
   // 管理测试用户
   const handleManageUsers = async (test: TestData) => {
+    if (!test.c_id) {
+      showSnackbar('测试ID不存在，无法获取用户数据', 'error');
+      return;
+    }
+    
     setCurrentTest(test);
-    setLoading(true);
+    setLoadingUsers(true);
     
     try {
-      // 模拟数据（实际项目替换为真实API）
-      const mockUsers: TestUser[] = Array.from({ length: 10 }, (_, i) => ({
-        id: `user-${i + 1}`,
-        username: `user${i + 1}`,
-        name: `用户 ${i + 1}`,
-        email: `user${i + 1}@example.com`,
-        role: i % 3 === 0 ? '学生' : i % 3 === 1 ? '教师' : '管理员',
-        c_test_id: test.c_id || '',
-        c_paper_id: `paper-${Math.floor(Math.random() * 100)}`,
-        c_answers: JSON.stringify(Array.from({ length: 10 }, () => Math.random() > 0.3 ? 'A' : '*')),
-        c_start: moment().subtract(Math.random() * 30, 'days').toDate(),
-        c_end: moment().add(Math.random() * 30, 'days').toDate(),
-        c_submit: Math.random() > 0.3 ? moment().subtract(Math.random() * 20, 'days').toDate() : null,
-        c_score: Math.floor(Math.random() * 100),
-        c_correct: Math.random() > 0.5 ? 2 : 1,
-      }));
-      
-      setTestUsers(mockUsers);
+      await fetchPapersByTestId(test.c_id);
+      const users = await fetchTestUsers(test.c_id);
+      setTestUsers(users);
       setIsDrawerOpen(true);
     } catch (error) {
       console.error("获取用户数据失败:", error);
-      showSnackbar('获取用户数据失败', 'error');
+      showSnackbar('获取用户数据失败，请检查网络连接', 'error');
     } finally {
-      setLoading(false);
+      setLoadingUsers(false);
     }
   };
 
@@ -307,10 +464,46 @@ const TestManagement = () => {
     }
   };
 
-  // 保存测试用户
-  const handleSaveTestUsers = (updatedUsers: TestUser[]) => {
-    setTestUsers(updatedUsers);
-    showSnackbar('用户信息已更新');
+  // 保存测试用户（批量添加）
+  const handleSaveTestUsers = async (updatedUsers: TestUser[]) => {
+    const newUsers = updatedUsers.filter(user => !user.id);
+    
+    if (newUsers.length > 0 && currentTest?.c_id) {
+      const usersData = newUsers.map(user => ({
+        c_test_id: currentTest.c_id,
+        c_username: user.username,
+        c_paper_id: user.c_paper_id
+      }));
+      
+      const success = await batchAddTestUsers(usersData);
+      
+      if (success) {
+        const users = await fetchTestUsers(currentTest.c_id);
+        setTestUsers(users);
+        showSnackbar('用户已成功添加到测试');
+      }
+    } else {
+      setTestUsers(updatedUsers);
+      showSnackbar('用户信息已更新');
+    }
+  };
+
+  // 新增：打开删除确认弹窗
+  const handleOpenDeleteConfirm = (user: TestUser, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止事件冒泡（避免触发用户详情）
+    // 提前判断是否已交卷（前端预校验，减少后端请求）
+    if (user.submit_time || user.correct_status === 2) {
+      showSnackbar('已交卷/已批改的用户不允许删除', 'warning');
+      return;
+    }
+    setUserToDelete(user);
+    setDeleteConfirmOpen(true);
+  };
+
+  // 新增：关闭删除确认弹窗
+  const handleCloseDeleteConfirm = () => {
+    setDeleteConfirmOpen(false);
+    setUserToDelete(null);
   };
 
   // 获取测试状态
@@ -328,7 +521,7 @@ const TestManagement = () => {
     }
   };
 
-  // 过滤测试（支持搜索和日期筛选）
+  // 过滤测试
   const filteredTests = tests.filter(test => {
     const matchesSearch = test.c_name.toLowerCase().includes(searchText.toLowerCase()) || 
                           test.c_description.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -344,21 +537,20 @@ const TestManagement = () => {
   const practiceTests = filteredTests.filter(test => test.c_test_type === '实践操作');
   const theoryTests = filteredTests.filter(test => test.c_test_type === '理论测试');
 
-  // 实践操作测试分页
+  // 分页处理
   const pagePracticeCount = Math.ceil(practiceTests.length / rowsPerPage);
   const paginatedPracticeTests = practiceTests.slice(
     (pagePractice - 1) * rowsPerPage, 
     pagePractice * rowsPerPage
   );
 
-  // 理论测试分页
   const pageTheoryCount = Math.ceil(theoryTests.length / rowsPerPage);
   const paginatedTheoryTests = theoryTests.slice(
     (pageTheory - 1) * rowsPerPage, 
     pageTheory * rowsPerPage
   );
 
-  // 渲染测试表格（移除Accordion，直接展示表格）
+  // 渲染测试表格
   const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatch<React.SetStateAction<number>>, pageCount: number) => {
     if (loading) {
       return (
@@ -400,9 +592,9 @@ const TestManagement = () => {
                     <TableCell sx={{ fontWeight: 500 }}>{test.c_name}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={test.c_test_type} 
+                        label={test.c_type} 
                         size="small" 
-                        color={test.c_test_type === '考试' ? 'primary' : 'secondary'}
+                        color={test.c_type === '考试' ? 'primary' : 'secondary'}
                         sx={{ borderRadius: 1, fontWeight: 500 }}
                       />
                     </TableCell>
@@ -430,7 +622,11 @@ const TestManagement = () => {
                       </Tooltip>
                       <Tooltip title="管理用户">
                         <IconButton onClick={() => handleManageUsers(test)} color="secondary">
-                          <PeopleIcon fontSize="small" />
+                          {loadingUsers && currentTest?.c_id === test.c_id ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <PeopleIcon fontSize="small" />
+                          )}
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="删除测试">
@@ -516,7 +712,7 @@ const TestManagement = () => {
         </Grid>
       </Grid>
       
-      {/* 新增：标签页切换组件 */}
+      {/* 标签页切换组件 */}
       <Box sx={{ mb: 3 }}>
         <Tabs 
           value={activeTab} 
@@ -553,23 +749,20 @@ const TestManagement = () => {
         </Tabs>
       </Box>
       
-      {/* 根据激活的标签页显示对应内容 */}
+      {/* 测试表格内容 */}
       {activeTab === 'practice' && (
         <Box>
-          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 500 }}>
-          </Typography>
           {renderTestTable(paginatedPracticeTests, pagePractice, setPagePractice, pagePracticeCount)}
         </Box>
       )}
       
       {activeTab === 'theory' && (
         <Box>
-          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 500 }}>
-          </Typography>
           {renderTestTable(paginatedTheoryTests, pageTheory, setPageTheory, pageTheoryCount)}
         </Box>
       )}
       
+      {/* 测试表单对话框 */}
       <TestFormDialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
@@ -577,15 +770,68 @@ const TestManagement = () => {
         test={currentTest}
       />
       
+      {/* 测试用户管理抽屉 */}
       <TestUserDrawer
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         test={currentTest}
         testUsers={testUsers}
         allUsers={allUsers}
+        papers={papers}
         onSave={handleSaveTestUsers}
+        loading={loadingUsers || loadingPapers}
+        onDeleteUser={handleOpenDeleteConfirm} // 传递删除触发函数
+        deletingKey={deletingKey} // 传递删除加载状态
       />
 
+      {/* 删除确认弹窗 */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleCloseDeleteConfirm}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          style: { borderRadius: 8 }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#f5f5f5', 
+          borderRadius: '8px 8px 0 0',
+          display: 'flex',
+          alignItems: 'center'
+        }}>
+          <WarningIcon color="warning" sx={{ mr: 2 }} />
+          确认删除
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            确定要删除用户 <b>{userToDelete?.name}（{userToDelete?.username}）</b> 与该测试的关联关系吗？
+            <br />
+            <span style={{ color: '#d32f2f', fontSize: '0.875rem', marginTop: '8px', display: 'block' }}>
+              提示：此操作仅解除用户与测试的关联，不会删除用户本身。
+            </span>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
+          <Button 
+            onClick={handleCloseDeleteConfirm}
+            variant="outlined"
+            sx={{ mr: 1 }}
+          >
+            取消
+          </Button>
+          <Button 
+            onClick={deleteTestUser}
+            variant="contained"
+            color="error"
+            disabled={!!deletingKey}
+          >
+            {deletingKey ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '确认删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 提示消息 */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -601,3 +847,4 @@ const TestManagement = () => {
 };
 
 export default TestManagement;
+    

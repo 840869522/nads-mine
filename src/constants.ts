@@ -279,7 +279,8 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
   container: {
     deviceName: '容器',
     dockerImage: 'ubuntu:latest',
-    portMappings: '80:80'
+    // portMappings: '80:80',
+    env: 'ZEEK_INTERFACE=eth0,ELASTICSEARCH_HOST=10.100.0.88,ELASTICSEARCH_PORT=9200'
   },
   switch: {
     deviceName: '交换机',

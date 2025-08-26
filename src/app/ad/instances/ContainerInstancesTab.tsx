@@ -1,4 +1,3 @@
-// src/app/scenario/sceneinstances/ContainerInstancesTab.tsx
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -9,7 +8,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
-    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon
+    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
@@ -17,8 +16,10 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
+import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
+import { customFetch } from '@/utils/fetch';
 
 const API_BASE = "/back";
 
@@ -40,10 +41,12 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [logsModalId, setLogsModalId] = useState<string | null>(null);
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
+    const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
+        is_target: true, // Added for the new column
         imageName: true,
         ports: true,
         cpuUsage: true,
@@ -74,7 +77,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setFetchError(null);
         const url = `${API_BASE}/api/scenariosinstances/${instanceId}`;
         try {
-            const res = await fetch(url);
+            const res = await customFetch(url);
             if (!res.ok) throw new Error(`获取容器列表失败，状态码: ${res.status}`);
             const data = await res.json();
             setInstances(data);
@@ -101,7 +104,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
                 const action = instance.status === 'paused' ? 'unpause' : 'start';
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
                 fetchInstanceDetails();
             },
         });
@@ -119,13 +122,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         });
         setIsConfirmDialogOpen(true);
     }, [fetchInstanceDetails]);
-    
+
     const handlePauseInstance = useCallback((instance: RunningInstance) => {
         setConfirmActionProps({
             title: `暂停实例: ${instance.name}`,
             message: `您确定要暂停实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=pause`, { method: 'POST' });
                 fetchInstanceDetails();
             },
         });
@@ -137,10 +140,10 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `删除实例: ${instance.name}`,
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
                 if (user) {
                     const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
-                    await fetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
+                    await customFetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
                 }
                 fetchInstanceDetails();
             },
@@ -151,6 +154,21 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
+        // New column for "Is Target"
+        {
+            field: 'is_target',
+            headerName: '是否为靶机',
+            width: 120,
+            hide: !showColumns.is_target,
+            renderCell: (params) => (
+                <Chip
+                    label={params.value ? '是' : '否'}
+                    color={params.value ? 'primary' : 'default'}
+                    size="small"
+                    variant="outlined"
+                />
+            )
+        },
         { field: 'imageName', headerName: '镜像', flex: 2, hide: !showColumns.imageName },
         { field: 'ports', headerName: '端口', flex: 2, hide: !showColumns.ports },
         { field: 'cpuUsage', headerName: 'CPU', width: 100, hide: !showColumns.cpuUsage },
@@ -161,13 +179,14 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 180,
+            field: 'actions', headerName: '操作', sortable: false, width: 220,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
                 const isStopped = instance.status === 'exited' || instance.status === 'stopped';
                 const isRunning = instance.status === 'running';
                 const isPaused = instance.status === 'paused';
+                const isTarget = instance.is_target; // 检查是否为靶机
                 return (
                     <Box>
                         <Tooltip title={isRunning ? '暂停' : '启动'}>
@@ -191,6 +210,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </IconButton>
                             </span>
                         </Tooltip>
+                        {/* 只有靶机才显示Flag提交按钮 */}
+                        {isTarget && (
+                            <Tooltip title="提交Flag">
+                                <span>
+                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
                 );
@@ -209,19 +238,19 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
     return (
         <Box>
-             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
-                 <Typography variant="h6">容器列表</Typography>
-                 <TextField
-                     variant="outlined"
-                     placeholder="搜索容器名称或镜像..."
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     size="small"
-                     InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-                 />
-                 <Button startIcon={<RefreshIcon />} onClick={fetchInstanceDetails} size="small" variant="outlined" disabled={isLoading}>
-                     {isLoading ? '刷新中...' : '刷新'}
-                 </Button>
-                 <Button startIcon={<ViewColumnIcon />} onClick={(e) => setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+                <Typography variant="h6">容器列表</Typography>
+                <TextField
+                    variant="outlined"
+                    placeholder="搜索容器名称或镜像..."
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    size="small"
+                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
+                />
+                <Button startIcon={<RefreshIcon />} onClick={fetchInstanceDetails} size="small" variant="outlined" disabled={isLoading}>
+                    {isLoading ? '刷新中...' : '刷新'}
+                </Button>
+                <Button startIcon={<ViewColumnIcon />} onClick={(e) => setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
             </Box>
             {isLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 5 }}>
@@ -255,14 +284,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
                             label={
                                 key === 'id' ? '容器 ID' :
-                                key === 'imageName' ? '镜像名' :
-                                key === 'ports' ? '端口' :
-                                key === 'cpuUsage' ? 'CPU' :
-                                key === 'memoryUsage' ? '内存' :
-                                key === 'ipAddress' ? 'IP' :
-                                key === 'scene_instance_id' ? '场景实例ID' :
-                                key === 'scene_name' ? '场景名称' :
-                                '运行时间'
+                                    key === 'imageName' ? '镜像名' :
+                                        key === 'ports' ? '端口' :
+                                            key === 'cpuUsage' ? 'CPU' :
+                                                key === 'memoryUsage' ? '内存' :
+                                                    key === 'ipAddress' ? 'IP' :
+                                                        key === 'scene_instance_id' ? '场景实例ID' :
+                                                            key === 'scene_name' ? '场景名称' :
+                                                                key === 'is_target' ? '是否为靶机' : // Added label for new column
+                                                                    '运行时间'
                             }
                         />
                     </MenuItem>
@@ -296,10 +326,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     }}
                 />
             )}
-            
+
             {logsModalId && <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />}
             {inspectModalId && <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />}
             {bindsModalId && <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />}
+            {flagSubmissionModalId && (
+                <FlagSubmissionModal
+                    open={Boolean(flagSubmissionModalId)}
+                    onClose={() => setFlagSubmissionModalId(null)}
+                    instanceId={flagSubmissionModalId}
+                    instanceType="docker"
+                    sceneInstanceId={instanceId || ''}
+                    instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
+                />
+            )}
         </Box>
     );
 };

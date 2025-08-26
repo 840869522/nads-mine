@@ -107,7 +107,7 @@ class ResourceController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id',
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,mp4,pptx,avi|max:102400',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,mp4,pptx,avi|max:2097152',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -193,11 +193,94 @@ class ResourceController extends Controller
         $modelRes = ResourceModel::deleteResource($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);
     }
-    // 新增 download 方法
+    public function viewResource(Request $request, $c_resource_id)
+    {
+        try {
+            $validator = Validator::make(['c_resource_id' => $c_resource_id], [
+                'c_resource_id' => 'required|string|uuid',
+            ]);
+            if ($validator->fails()) {
+                Log::error('Validation failed in ResourceController::viewResource', [
+                    'errors' => $validator->errors()->toArray(),
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            }
+
+            $modelRes = ResourceModel::getResourceById($c_resource_id);
+            if ($modelRes['code'] != 200) {
+                Log::error('Resource not found in ResourceController::viewResource', [
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json($modelRes, $modelRes['code']);
+            }
+
+            $resource = $modelRes['data'];
+            $downloadUrl = url("/api/study/resources/{$c_resource_id}?disposition=attachment");
+            $viewUrl = url("/api/study/resources/{$c_resource_id}?disposition=inline");
+
+            // 检查文件类型（使用扩展名以保持一致性）
+            $isImage = in_array($resource['c_type'], ['jpg', 'jpeg', 'png']);
+            $isPdf = $resource['c_type'] === 'pdf';
+            $isVideo = in_array($resource['c_type'], ['mp4', 'avi']);
+            $isWord = in_array($resource['c_type'], ['doc', 'docx']);
+            $isPptx = $resource['c_type'] === 'pptx';
+
+            if ($isImage) {
+                $viewerContent = "<img src='{$viewUrl}' style='max-width: 100%; max-height: 100%; object-fit: contain;' alt='{$resource['c_resource_name']}'>";
+            } elseif ($isPdf) {
+                $viewerContent = "<embed src='{$viewUrl}' type='application/pdf' width='100%' height='100%' />";
+            } elseif ($isVideo) {
+                $viewerContent = "<video controls width='100%' height='auto'><source src='{$viewUrl}' type='video/{$resource['c_type']}' />您的浏览器不支持视频播放。</video>";
+            } elseif ($isWord || $isPptx) {
+                // DOCX 和 PPTX 将在前端模态框预览，此处仅提供占位提示
+                $viewerContent = "<p>此文件将在模态框中预览。如果不支持，请下载。</p>";
+            } else {
+                $viewerContent = "<object id='viewer' data='{$viewUrl}' type='application/octet-stream' width='100%' height='100%'>
+                <p>浏览器不支持此文件类型，请下载查看。</p>
+            </object>";
+            }
+
+            $html = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{$resource['c_resource_name']}</title>  <!-- 显示完整文件名 -->
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: Arial, sans-serif; }
+        #viewer { max-width: 100%; max-height: calc(100% - 50px); object-fit: contain; }
+        #download-bar { padding: 10px; background: #f0f0f0; text-align: center; width: 100%; position: fixed; bottom: 0; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #1976d2; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #1565c0; }
+        p { text-align: center; margin: 20px; }
+        img, video, embed, object { max-width: 100%; max-height: calc(100vh - 50px); object-fit: contain; }
+    </style>
+</head>
+<body>
+    {$viewerContent}
+    <div id="download-bar">
+        <button onclick="window.location.href='{$downloadUrl}'">下载文件</button>  <!-- 确保所有类型有下载按钮 -->
+    </div>
+</body>
+</html>
+HTML;
+
+            return response($html)->header('Content-Type', 'text/html');
+        } catch (\Exception $e) {
+            Log::error('[CONTROLLER] ResourceController::viewResource: ' . $e->getMessage(), [
+                'c_resource_id' => $c_resource_id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['code' => 500, 'message' => 'Failed to view resource'], 500);
+        }
+    }
+
+
     public function download(Request $request, $c_resource_id)
     {
         try {
-            // 验证 c_resource_id 是否为有效 UUID
             $validator = Validator::make(['c_resource_id' => $c_resource_id], [
                 'c_resource_id' => 'required|string|uuid',
             ]);
@@ -212,7 +295,6 @@ class ResourceController extends Controller
                 ], 422);
             }
 
-            // 查询资源
             $modelRes = ResourceModel::getResourceById($c_resource_id);
             if ($modelRes['code'] != 200) {
                 Log::error('Resource not found in ResourceController::download', [
@@ -224,7 +306,6 @@ class ResourceController extends Controller
             $resource = $modelRes['data'];
             $path = $resource['c_resource_path'];
 
-            // 检查文件是否存在
             if (!Storage::disk('local_resources')->exists($path)) {
                 Log::error('Resource file not found in ResourceController::download', [
                     'c_resource_id' => $c_resource_id,
@@ -236,14 +317,23 @@ class ResourceController extends Controller
                 ], 404);
             }
 
-            // 返回文件流
-            Log::info('Downloading resource', [
+            $disposition = $request->query('disposition', 'attachment');
+            $contentType = $resource['c_type'] ?: 'application/octet-stream';
+            $downloadFileName = $resource['c_resource_name'];
+            $encodedFileName = rawurlencode($downloadFileName);
+
+            Log::info('Serving resource', [
                 'c_resource_id' => $c_resource_id,
                 'path' => $path,
-                'file_name' => $resource['c_resource_name'],
+                'file_name' => $downloadFileName,
+                'disposition' => $disposition,
+                'content_type' => $contentType,
             ]);
-            return Storage::disk('local_resources')->download($path, $resource['c_resource_name'], [
-                'Content-Type' => $resource['c_type'] ?: 'application/octet-stream',
+
+            // 确保 disposition=inline 时不强制下载
+            return Storage::disk('local_resources')->response($path, $downloadFileName, [
+                'Content-Type' => $contentType,
+                'Content-Disposition' => $disposition === 'inline' ? 'inline' : "attachment; filename*=UTF-8''{$encodedFileName}",
             ]);
         } catch (\Exception $e) {
             Log::error('[CONTROLLER] ResourceController::download: ' . $e->getMessage(), [

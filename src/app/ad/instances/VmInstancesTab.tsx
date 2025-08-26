@@ -1,4 +1,3 @@
-// src/app/scenario/sceneinstances/VmInstancesTab.tsx
 "use client";
 
 import * as React from "react";
@@ -20,6 +19,7 @@ import {
     Switch,
     FormControlLabel,
     Tooltip,
+    Chip, // Added Chip import
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -38,9 +38,11 @@ import {
     KeyboardArrowDown as ArrowDownIcon,
     ViewColumn as ViewColumnIcon,
     Refresh as RefreshIcon,
+    Flag as FlagIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
+import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -55,6 +57,7 @@ interface VmInstance {
     scene_instance_id?: string;
     scene_name?: string;
     uptime?: string;
+    is_target: boolean; // Added is_target field
 }
 
 interface OverviewData {
@@ -141,11 +144,13 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const [actionLoading, setActionLoading] = React.useState(false);
     const [showRunningOnly, setShowRunningOnly] = React.useState(false);
     const [columnAnchor, setColumnAnchor] = React.useState<null | HTMLElement>(null);
+    const [flagSubmissionModalId, setFlagSubmissionModalId] = React.useState<string | null>(null);
     const [showColumns, setShowColumns] = React.useState({
         hostNode: false,
         pool: false,
         osType: true,
         ip: true,
+        is_target: true, // Added for the new column
     });
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
@@ -213,10 +218,25 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }
     };
 
-    const columns = React.useMemo<GridColDef[]>(
+    const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
             { field: 'name', headerName: '名称', flex: 1 },
+            // New column for "Is Target"
+            {
+                field: 'is_target',
+                headerName: '是否为靶机',
+                width: 120,
+                hide: !showColumns.is_target,
+                renderCell: (params) => (
+                    <Chip
+                        label={params.value ? '是' : '否'}
+                        color={params.value ? 'primary' : 'default'}
+                        size="small"
+                        variant="outlined"
+                    />
+                )
+            },
             { field: 'osType', headerName: 'OS 类型', width: 120, hide: !showColumns.osType, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.osType ?? 'N/A'}</VmInfoCell> },
             { field: 'hostNode', headerName: '宿主机', width: 120, hide: !showColumns.hostNode, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.hostNode}</VmInfoCell> },
             { field: 'pool', headerName: '存储池', width: 120, hide: !showColumns.pool, renderCell: (p) => <VmInfoCell id={p.row.id} width={60}>{d => d.pool}</VmInfoCell> },
@@ -227,13 +247,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 160,
+                width: 200,
                 renderCell: (params) => {
-                    const vm = params.row as VmInstance;
+                    const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
                     const state = info?.status || vm.state;
                     const isRunning = state === 'running';
                     const isPaused = state === 'paused';
+                    const isTarget = vm.is_target; // 检查是否为靶机
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
@@ -246,6 +267,16 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                 <Tooltip title={isPaused ? "恢复" : "启动"}><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}><StartIcon fontSize="small" color="success" /></IconButton></Tooltip>
                             )}
                             <Tooltip title="删除"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}><DeleteIcon fontSize="small" color="error" /></IconButton></Tooltip>
+                            {/* 只有靶机才显示Flag提交按钮 */}
+                            {isTarget && (
+                                <Tooltip title="提交Flag">
+                                    <span>
+                                        <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
+                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            )}
                             <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
                         </Box>
                     );
@@ -260,7 +291,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
         return rows;
     }, [data, search, showRunningOnly]);
-    
+
     // 如果没有instanceId，显示提示信息
     if (!instanceId) {
         return (
@@ -286,7 +317,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={() => mutate()} disabled={isValidating}>
                     {isValidating ? '刷新中...' : '刷新'}
                 </Button>
-                 <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+                <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
                 <FormControlLabel
                     control={<Checkbox checked={showRunningOnly} onChange={(e) => setShowRunningOnly(e.target.checked)} />}
                     label="只显示运行中"
@@ -298,7 +329,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     <MenuItem key={key}>
                         <FormControlLabel
                             control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} />}
-                            label={key === 'hostNode' ? '宿主机' : key === 'pool' ? '存储池' : key === 'osType' ? '系统类型' : 'IP地址'}
+                            label={
+                                key === 'hostNode' ? '宿主机' :
+                                    key === 'pool' ? '存储池' :
+                                        key === 'osType' ? '系统类型' :
+                                            key === 'ip' ? 'IP地址' :
+                                                key === 'is_target' ? '是否为靶机' :
+                                                    key // Fallback label
+                            }
                         />
                     </MenuItem>
                 ))}
@@ -332,6 +370,17 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             <Backdrop open={actionLoading} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
                 <CircularProgress color="inherit" />
             </Backdrop>
+
+            {flagSubmissionModalId && (
+                <FlagSubmissionModal
+                    open={Boolean(flagSubmissionModalId)}
+                    onClose={() => setFlagSubmissionModalId(null)}
+                    instanceId={flagSubmissionModalId}
+                    instanceType="vm"
+                    sceneInstanceId={instanceId || ''}
+                    instanceName={data?.find(vm => vm.id === flagSubmissionModalId)?.name}
+                />
+            )}
         </Box>
     );
 };
