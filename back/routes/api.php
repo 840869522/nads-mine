@@ -241,6 +241,10 @@ Route::prefix('study')->group(function () {
         Route::post('/test_del', [TestController::class, 'test_del']);
         Route::get('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
+        Route::get('/getTestUsersByTestId', [TestController::class, 'getTestUsersByTestId']);
+        Route::get('/getAllUsers', [TestController::class, 'getAllUsers']);
+        Route::post('/batchStoreTestUsers', [TestController::class, 'batchStoreTestUsers']);
+        Route::post('/destroy', [TestController::class, 'destroy']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
         Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);

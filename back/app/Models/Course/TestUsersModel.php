@@ -17,6 +17,118 @@ class TestUsersModel extends Model{
     ];
     public $pageSize = 20;
 
+ /**
+     * 根据测试ID获取关联的所有用户信息
+     * @param string $testId 测试ID
+     * @return \Illuminate\Database\Eloquent\Collection|static[]
+     */
+    public function getUsersByTestId($testId)
+    {
+        return $this->where('c_test_id', $testId)->get();
+    }
+
+    /**
+     * 格式化答案字段（将JSON字符串转为数组）
+     * @param $value 数据库中的JSON字符串
+     * @return array|null
+     */
+    public function getCAnswersAttribute($value)
+    {
+        if (empty($value)) {
+            return null;
+        }
+        // 尝试解析JSON，失败则返回原始字符串
+        $decoded = json_decode($value, true);
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
+    }
+
+    /**
+     * 格式化批改状态文字描述
+     * @param $value 数据库中的状态值（0/1/2）
+     * @return string
+     */
+    public function getCCorrectTextAttribute()
+    {
+        switch ($this->c_correct) {
+            case 0:
+                return '未交卷';
+            case 1:
+                return '未完成';
+            case 2:
+                return '已完成';
+            default:
+                return '未知状态';
+        }
+    }
+
+    /**
+     * 批量插入用户数据
+     * @param array $users 包含多个用户信息的数组
+     * @return int 插入成功的记录数
+     */
+    public function batchInsertUsers(array $users)
+    {
+        // 准备插入的数据，可在此处添加默认值或处理
+        $insertData = [];
+        $currentTime = date('Y-m-d H:i:s');
+        
+        foreach ($users as $user) {
+            $insertData[] = [
+                'c_test_id' => $user['c_test_id'],
+                'c_username' => $user['c_username'],
+                'c_paper_id' => $user['c_paper_id'],
+                'c_start' => $currentTime,
+            
+            ];
+        }
+        
+        // 执行批量插入
+        return DB::table('c_test_users')->insert($insertData);
+    }
+
+
+        /**
+     * 单个删除测试用户（根据测试ID+用户名+试卷ID联合删除）
+     * @param array $params 包含c_test_id、c_username、c_paper_id的数组
+     * @return int|bool 成功返回1，记录不存在返回false，业务限制返回-1
+     */
+    // 添加static关键字，将方法声明为静态方法
+    public static function deleteSingleUser(array $params)
+    {
+        // 1. 提取参数（确保参数完整性，与控制器验证一致）
+        $testId = $params['c_test_id'];
+        $username = $params['c_username'];
+        $paperId = $params['c_paper_id'];
+
+        // 2. 先查询记录是否存在（避免删除不存在的数据）
+        $existingRecord = DB::table('c_test_users')
+            ->where('c_test_id', $testId)
+            ->where('c_username', $username)
+            ->where('c_paper_id', $paperId)
+            ->first();
+
+        // 3. 记录不存在：返回false
+        if (!$existingRecord) {
+            return false;
+        }
+
+        // 4. 业务限制：已交卷/已批改的记录不允许删除
+        // c_submit不为null表示已交卷，c_correct=2表示已完成批改
+        if (!empty($existingRecord->c_submit) || $existingRecord->c_correct === 2) {
+            return -1; // 返回-1标识业务限制
+        }
+
+        // 5. 执行删除操作（联合条件删除，确保只删除目标记录）
+        $deleteCount = DB::table('c_test_users')
+            ->where('c_test_id', $testId)
+            ->where('c_username', $username)
+            ->where('c_paper_id', $paperId)
+            ->delete();
+
+        // 6. 返回删除结果（delete()方法返回删除的记录数，1表示成功）
+        return $deleteCount === 1 ? 1 : false;
+    }
+
 
     /**
      * Notes:发卷

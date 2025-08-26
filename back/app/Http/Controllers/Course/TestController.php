@@ -12,6 +12,7 @@ use App\Models\Course\TempUsersModel;
 use App\Models\Course\QuestionsOptionsModel;
 use App\Models\Course\TestsModel;
 use App\Models\Course\TestUsersModel;
+use App\Models\UserModel;
 use Illuminate\Http\Request;
 use App\Models\Course\CategoryModel;
 use Illuminate\Http\JsonResponse;
@@ -609,6 +610,231 @@ class TestController extends Controller
         }
     }
 
+ /**
+ * Notes: 根据测试ID获取关联用户信息
+ * User: zhangnan
+ * DateTime: 2025/8/22 10:00
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function getTestUsersByTestId(Request $request)
+{
+    try {
+        // 1. 接收并验证参数
+        $testId = trim($request->input('test_id'));
+        $validatedData = $request->validate([
+            'test_id' => 'required|string|max:50', // 与表中varchar(50)对应
+        ], [
+            'test_id.required' => '测试ID不能为空',
+            'test_id.string' => '测试ID必须为字符串',
+            'test_id.max' => '测试ID长度不能超过50个字符',
+        ]);
+
+        // 2. 调用模型查询测试关联的用户列表（test_users表）
+        $testUsersModel = new TestUsersModel();
+        $userList = $testUsersModel->getUsersByTestId($testId);
+
+        // 3. 处理返回数据（直接查询c_users表获取真实姓名）
+        $result = [];
+        foreach ($userList as $user) {
+            // 4. 直接查询c_users表获取用户真实姓名
+            // 使用DB facade直接操作数据库，无需UserModel
+            $userInfo = DB::table('c_users')
+                          ->where('c_username', $user->c_username)
+                          ->first(); // 获取用户信息
+            
+            $result[] = [
+                'test_id' => $user->c_test_id,
+                'username' => $user->c_username,
+                'name' => $userInfo ? $userInfo->c_name : $user->c_username, // 优先使用c_users表的c_name
+                'paper_id' => $user->c_paper_id,
+                'answers' => $user->c_answers,
+                'start_time' => $user->c_start ? date('Y-m-d H:i:s', strtotime($user->c_start)) : null,
+                'end_time' => $user->c_end ? date('Y-m-d H:i:s', strtotime($user->c_end)) : null,
+                'submit_time' => $user->c_submit ? date('Y-m-d H:i:s', strtotime($user->c_submit)) : null,
+                'score' => $user->c_score ?? 0,
+                'correct_status' => $user->c_correct,
+                'correct_status_text' => $user->c_correct_text,
+            ];
+        }
+
+        // 5. 返回成功响应
+        return $this->_response(
+            GlobalResponse::$HTTP_STATUS_OK_CODE,
+            GlobalResponse::HTTP_STATUS_OK_MES,
+            $result
+        );
+
+    } catch (ValidationException $e) {
+        return $this->_response(
+            GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+            $e->getMessage()
+        );
+    } catch (\Exception $e) {
+        return $this->_response(
+            GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+            '获取数据失败：' . $e->getMessage()
+        );
+    }
+}
+
+    /**
+     * Notes: 获取所有用户的用户名和姓名
+     * DateTime: 2025/8/25 10:00
+     * @return JsonResponse
+     */
+    public function getAllUsers()
+    {
+        try {
+            // 1. 从c_users表查询所有用户的c_username和c_name字段
+            // 只查询需要的字段，提高效率
+            $users = DB::table('c_users')
+                    ->select('c_username', 'c_name') // 仅获取用户名和姓名
+                    ->whereNotNull('c_username') // 过滤掉用户名为空的记录
+                    ->orderBy('c_name', 'asc') // 按姓名升序排序
+                    ->get();
+
+            // 2. 处理返回格式（转为数组，方便前端使用）
+            $result = $users->map(function ($user) {
+                return [
+                    'username' => $user->c_username,
+                    'name' => $user->c_name ?: $user->c_username, // 姓名为空时用用户名代替
+                ];
+            })->toArray();
+
+            // 3. 返回成功响应
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                GlobalResponse::HTTP_STATUS_OK_MES,
+                $result
+            );
+
+        } catch (\Exception $e) {
+            // 异常处理
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '获取用户列表失败：' . $e->getMessage()
+            );
+        }
+    }       
+    
+    
+    /**
+     * Notes: 批量添加测试用户
+     * User: zhangnan
+     * DateTime: 2025/8/25 10:00
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function batchStoreTestUsers(Request $request)
+    {
+        try {
+            // 1. 接收并验证参数
+            $validatedData = $request->validate([
+                'users' => 'required|array', // 验证用户数组必须存在且为数组
+                'users.*.c_test_id' => 'required|string|max:50', // 每个用户的测试ID验证
+                'users.*.c_username' => 'required|string|max:50', // 每个用户的用户名验证
+                'users.*.c_paper_id' => 'required|string|max:50', // 每个用户的试卷ID验证
+            ], [
+                'users.required' => '用户列表不能为空',
+                'users.array' => '用户列表必须为数组格式',
+                'users.*.c_test_id.required' => '测试ID不能为空',
+                'users.*.c_username.required' => '用户名不能为空',
+                'users.*.c_paper_id.required' => '试卷ID不能为空',
+                // 其他验证提示信息可以根据需要添加
+            ]);
+            
+            $users = $validatedData['users'];
+            
+            // 2. 调用模型批量添加用户
+            $testUsersModel = new TestUsersModel();
+            $insertedCount = $testUsersModel->batchInsertUsers($users);
+            
+            // 3. 返回成功响应
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "成功添加 {$insertedCount} 个用户",
+                ['count' => $insertedCount]
+            );
+
+        } catch (ValidationException $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                $e->getMessage()
+            );
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '批量添加用户失败：' . $e->getMessage()
+            );
+        }
+    }
+
+    /**
+ * Notes: 单个删除测试用户（根据测试ID+用户名+试卷ID联合删除）
+ * DateTime: 2025/8/26 10:00
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function destroy(Request $request)
+{
+    try {
+        // 1. 接收并验证前端参数（三个字段联合唯一标识一条记录）
+        $validatedData = $request->validate([
+            'c_test_id' => 'required|string|max:50|regex:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            'c_username' => 'required|string|max:50',
+            'c_paper_id' => 'required|string|max:50',
+        ], [
+            'c_test_id.required' => '测试ID不能为空',
+            'c_test_id.regex' => '测试ID格式错误（必须为UUID）',
+            'c_username.required' => '用户名不能为空',
+            'c_paper_id.required' => '试卷ID不能为空',
+        ]);
+
+        // 2. 调用模型层执行删除逻辑（静态方法必须用「类名::方法名」调用，而非实例化）
+        // 注意：确保TestUsersModel的引入路径正确（如use App\Models\TestUsersModel;）
+        $deleteResult = TestUsersModel::deleteSingleUser($validatedData);
+
+        // 3. 根据删除结果返回响应
+        if ($deleteResult === false) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                '删除失败：该测试用户关联记录不存在'
+            );
+        }
+
+        if ($deleteResult === -1) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                '删除失败：已交卷/已批改的记录不允许删除'
+            );
+        }
+
+        // 4. 删除成功（返回删除的核心信息，方便前端同步更新列表）
+        return $this->_response(
+            GlobalResponse::$HTTP_STATUS_OK_CODE,
+            '测试用户删除成功',
+            [
+                'c_test_id' => $validatedData['c_test_id'],
+                'c_username' => $validatedData['c_username'],
+                'c_paper_id' => $validatedData['c_paper_id']
+            ]
+        );
+
+    } catch (ValidationException $e) {
+        // 参数验证失败（如字段为空、格式错误）
+        return $this->_response(
+            GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+            $e->getMessage()
+        );
+    } catch (\Exception $e) {
+        // 数据库异常或其他未知异常
+        return $this->_response(
+            GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+            '删除测试用户失败：' . $e->getMessage()
+        );
+    }
+}
 
         /**
          * Notes:获取所有组卷规则
