@@ -51,7 +51,6 @@ const DEFAULT_FORM: UserFormData = {
 const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, initialUser }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const [oldPass, setOldPass] = useState<string>("");
   const [formData, setFormData] = useState<UserFormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isNewUser = !initialUser;
@@ -68,6 +67,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
     if (initialUser) {
       setFormData({
+        pwdedit: false,
         name: initialUser.c_name,
         username: initialUser.c_username,
         role: [...initialUser.role],
@@ -75,7 +75,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
         status: initialUser.c_is_login ? "active" : "disabled",
         password: '',
       });
-      setOldPass(initialUser.c_password);
     } else {
       setFormData(DEFAULT_FORM);
     }
