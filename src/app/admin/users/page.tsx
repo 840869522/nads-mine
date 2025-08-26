@@ -191,7 +191,7 @@ const UserManagementPage: React.FC = () => {
       }));
       if (res.data.code === 200) {
         setUsers(prev => prev.map(u =>
-          u.c_username === editingUser.c_username ? { ...u, c_name: formData.name,c_username: formData.username!, c_role: formData.role!, c_email: formData.email!, c_status: formData.status as 'active' | 'disabled' } : u
+          u.c_username === editingUser.c_username ? { ...u, c_name: formData.name,c_username: formData.username!, c_role: formData.role!, c_email: formData.email!, c_is_login: formData.status === 'active'? 1 : 0 } : u
         ));
         toast.success(`用户 "${formData.username}" 更新成功。`, {
           autoClose: 3000,
