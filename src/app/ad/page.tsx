@@ -39,6 +39,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
+import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 
 // 假设的自定义钩子，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -324,7 +325,8 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
-    const handleOpenView = () => {
+    const handleOpenView = (c_scene_instance_id:string) => {
+        // localStorage.setItem("instance_id", c_scene_instance_id);
         window.open('/visualization', '_blank');
     }    
 
@@ -375,7 +377,9 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}>
-                                                    <Button variant="contained" onClick={() => handleOpenView()}>可视化</Button>
+                                                    <IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id ? adConfig.c_scene_instance_id : '')}>
+                                                        <ScreenShareIcon />
+                                                    </IconButton>
                                                 </TableCell>
                                                 <TableCell align="right">
                                                     {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
