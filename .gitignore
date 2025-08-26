@@ -1,1 +1,3 @@
-*.sql
+c_permissions_back.sql
+c_permissions.sql
+c_roles_permissions.sql
