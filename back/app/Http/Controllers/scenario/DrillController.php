@@ -13,28 +13,9 @@ use App\RunTool\TopologyParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File; // 引入File Facade
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
-//为了完成上述功能，DrillController 依赖于以下几个关键组件：
-
-// CommandLineService: 这是一个服务类，专门负责执行底层的命令行工具（如 docker）。DrillController 通过它来创建容器和获取容器信息，实现了业务逻辑与底层命令执行的分离。
-
-// // TopologyParser: 一个工具类，用于解析前端传来的或数据库中存储的复杂拓扑数据。
-// Eloquent 模型:
-
-// SceneConfig: 读取场景的静态配置。
-
-// SceneInstance: 创建和管理场景的运行时实例。
-
-// SceneContainerInstance: 记录场景实例与容器之间的关联。
-// ovs启动
-// sudo ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock --remote=db:Open_vSwitch,Open_vSwitch,manager_options --pidfile --detach
-
-// sudo ovs-vswitchd --pidfile --detach
-
-// ps aux | grep ovs
-
-//journalctl -f | grep ovs-vswitchd
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -42,11 +23,42 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 class DrillController extends Controller
 {
     private CommandLineService $cliService;
+    private array $vmImageOsMap = []; // 用于存储镜像操作系统映射
 
     public function __construct(CommandLineService $cliService)
     {
         $this->cliService = $cliService;
+        // 在构造函数中加载并解析JSON映射文件
+        $this->loadVmImageOsMap();
     }
+
+    /**
+     * 加载 vmImageOverrides.json 文件内容到类属性
+     */
+    private function loadVmImageOsMap(): void
+    {
+        try {
+            // ★★★ 核心修复：修正文件路径 ★★★
+            // base_path() -> /var/www/nads/back
+            // .. -> /var/www/nads
+            // 最终路径 -> /var/www/nads/src/data/vmImageOverrides.json
+            $path = base_path('../src/data/vmImageOverrides.json');
+            
+            Log::info("正在尝试从以下路径加载虚拟机镜像操作系统映射: {$path}");
+
+            if (File::exists($path)) {
+                $jsonContent = File::get($path);
+                $this->vmImageOsMap = json_decode($jsonContent, true);
+                Log::info('成功加载虚拟机镜像操作系统映射。');
+                Log::debug('加载到的 vmImageOsMap 内容:', $this->vmImageOsMap);
+            } else {
+                Log::warning('虚拟机镜像操作系统映射文件 (vmImageOverrides.json) 不存在。', ['path' => $path]);
+            }
+        } catch (\Exception $e) {
+            Log::error('加载虚拟机镜像操作系统映射失败: ' . $e->getMessage());
+        }
+    }
+
 
     /**
      * 检查系统CPU和内存资源是否在可接受的范围内。
@@ -174,11 +186,9 @@ class DrillController extends Controller
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
                 
-                // ★★★ 修改部分 1: 容器flag处理 ★★★
                 $flagUuid = null;
                 if ($containerData['isTarget']) {
                     $flagUuid = Str::uuid()->toString();
-                    // 直接将UUID作为环境变量值
                     $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
                 }
 
@@ -187,7 +197,7 @@ class DrillController extends Controller
                  SceneContainerInstance::create([
                      'c_container_id' => $containerId,
                      'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
-                     'c_flag' => $flagUuid, // 只存储UUID到数据库
+                     'c_flag' => $flagUuid,
                      'c_ip' => $containerIp,
                      'c_container_name' => $containerName,
                  ]);
@@ -224,10 +234,18 @@ class DrillController extends Controller
                     $correctImageName = 'v_att_tcpScanning'; 
                     Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
                 }
+
+                $imageFileName = Str::endsWith($correctImageName, '.qcow2') ? $correctImageName : $correctImageName . '.qcow2';
+
+                $osData = $this->vmImageOsMap[$imageFileName] ?? null;
+                $osType = strtolower($osData['osType'] ?? 'ubuntu'); // 默认为ubuntu
+                Log::info("正在为镜像 '{$imageFileName}' 查找操作系统类型", [
+                    'found_data' => $osData,
+                    'determined_os_type' => $osType
+                ]);
                 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
                 
-                // ★★★ 修改部分 2: VM flag处理 ★★★
                 $flagUuid = null;
                 if ($parsedVmNode['isTarget'] ?? false) {
                     $flagUuid = Str::uuid()->toString();
@@ -237,24 +255,38 @@ class DrillController extends Controller
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
-                    'c_flag'               => $flagUuid, // 只存储UUID到数据库
+                    'c_flag'               => $flagUuid,
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
 
                 $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
 
-                $this->cliService->createVm([
-                    'id'                  => $vmDbId,
-                    'vm_name'             => $vmName, 
-                    'image'               => $correctImageName,
-                    'ip'                  => $ip,
-                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                    'flag'                => $flagUuid ?? 'NULL', // 直接传递UUID或NULL给脚本
-                    'switch_name'         => $actualSwitchName,
-                    'image_dir'           => $imageDir,
-                    'instance_base_dir'   => $instanceBaseDir,
-                ]);
+                if ($osType === 'win7') {
+                    $this->cliService->createVmWin7([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName, 
+                        'image'               => $correctImageName,
+                        'ip'                  => $ip,
+                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                        'flag'                => $flagUuid ?? 'NULL',
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
+                } else { // 默认为 ubuntu
+                    $this->cliService->createVm([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName, 
+                        'image'               => $correctImageName,
+                        'ip'                  => $ip,
+                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                        'flag'                => $flagUuid ?? 'NULL',
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
+                }
                 
                 $createdItemsInfo[$itemNode['id']] = [
                     'id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'
@@ -266,14 +298,12 @@ class DrillController extends Controller
                 $source = $conn['source'];
                 $target = $conn['target'];
 
-                // a. 交换机-交换机连接
                 if ($source['type'] === 'switch' && $target['type'] === 'switch') {
                     $this->cliService->connectSwitchToSwitch(
                         $createdSwitchesInfo[$source['id']]['actual_name'],
                         $createdSwitchesInfo[$target['id']]['actual_name']
                     );
                 } 
-                // b. 容器-交换机连接 (VM连接已由脚本处理，此处只处理容器)
                 elseif (($source['type'] === 'container' && $target['type'] === 'switch') || ($source['type'] === 'switch' && $target['type'] === 'container')) {
                     $containerNode = $source['type'] === 'container' ? $source : $target;
                     $switchNode = $source['type'] === 'switch' ? $source : $target;
@@ -284,30 +314,21 @@ class DrillController extends Controller
                         $containerNode['ip']
                     );
                 }
-                //新增逻辑：处理 OVS 交换机到 Linux Bridge (br0) 的连接 ★★★
                 elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
                     $switchNode = $source['type'] === 'switch' ? $source : $target;
                     $bridgeNode = $source['type'] === 'nat_bridge' ? $source : $target;
 
-                    // 获取真实的 OVS 交换机名称
                     $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
-                    // 获取网桥名称，通常就是 'br0'
                     $bridgeName = $bridgeNode['label'];
                     
                     Log::info("正在连接 OVS 交换机 '{$actualSwitchName}' 到 Linux Bridge '{$bridgeName}'");
 
-                    // 调用专门的服务方法
-                    // 注意：这个方法在之前的对话中已添加至 CommandLineService.php
-                    // 它会使用 `brctl addif` 而不是 `ovs-vsctl add-port` 来操作 br0
                     $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
                 }
             }
-            // 配置网关IP和所有容器的路由
-            $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
+            $gatewayIp = '10.100.0.254/16';
             $containersToRoute = [];
 
-            // 核心修复：只为连接到 br0 的容器配置路由
-            // 1. 找出所有连接到 nat_bridge (即 br0) 的 OVS 交换机
             $switchesConnectedToBridge = [];
             foreach ($connections as $conn) {
                 if ($conn['source']['type'] === 'nat_bridge' && $conn['target']['type'] === 'switch') {
@@ -317,7 +338,6 @@ class DrillController extends Controller
                 }
             }
 
-            // 2. 找出所有连接到上述交换机的容器
             if (!empty($switchesConnectedToBridge)) {
                 foreach ($connections as $conn) {
                     $containerNode = null;
@@ -331,16 +351,13 @@ class DrillController extends Controller
                         $switchNode = $conn['source'];
                     }
 
-                    // 如果这个连接是一个容器到交换机的连接，并且该交换机已连接到 br0
                     if ($containerNode && isset($switchesConnectedToBridge[$switchNode['id']])) {
-                        // 从之前创建的 items 信息中获取容器的真实名称
                         $actualContainerName = $createdItemsInfo[$containerNode['id']]['actual_name'];
                         $containersToRoute[] = ['name' => $actualContainerName];
                     }
                 }
             }
 
-            // 如果有需要配置路由的容器，则执行配置
             if (!empty($containersToRoute)) {
                 $this->cliService->configureBridgeAndRoutes('br0', $gatewayIp, $containersToRoute);
                 Log::info("================== 网关和路由配置完成 ==================");
@@ -401,7 +418,6 @@ class DrillController extends Controller
         };
 
         foreach ($connections as &$connection) {
-            // ★★★ 新增：为bridge类型的节点跳过IP分配 ★★★
             if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') {
                 continue;
             }

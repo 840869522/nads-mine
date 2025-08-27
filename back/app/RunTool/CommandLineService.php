@@ -485,6 +485,34 @@ XML;
         $output = trim($process->getOutput());
         return empty($output) ? [] : explode("\n", $output);
     }
+    public function createVmWin7(array $options): void
+{
+    // 指向新的 win7 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win7.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['ip'],
+        $options['scene_instance_id'],
+        $options['flag'] ?? 'NULL',
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'], 
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
 }
 
 // // ```json
