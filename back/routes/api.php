@@ -54,7 +54,7 @@ Route::prefix("")->group(function () {
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
 });
 
-
+// scene_vms_instances | 交换机实例 |           | support | /scenario/sceneinstances/all-switches |         1 | 交换机实例 | CubeTransparentIcon |        1 |   11 |
 
 /**
  * 定义基础分系统路由
