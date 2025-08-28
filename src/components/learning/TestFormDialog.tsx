@@ -2,89 +2,164 @@ import React, { useState } from 'react';
 import { 
   Dialog, DialogTitle, DialogContent, DialogActions, 
   Button, TextField, FormControl, InputLabel, 
-  Select, MenuItem, Box, useTheme 
+  Select, MenuItem, Box, useTheme, Alert 
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
 
-const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
+// 定义测试数据接口类型，与后端字段对应
+interface TestData {
+  c_id?: string;
+  c_name: string;
+  c_description: string;
+  c_test_type: string; // 理论测试/实践操作
+  c_type: string; // 考试/练习
+  c_paper_count: number;
+  c_course_id: string;
+  c_start: moment.Moment | null;
+  c_end: moment.Moment | null;
+  c_create_at?: string;
+}
+
+interface FixedSizeFormDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: (testData: TestData) => Promise<boolean>;
+  test: TestData | null;
+}
+
+const FixedSizeFormDialog: React.FC<FixedSizeFormDialogProps> = ({ open, onClose, onSave, test }) => {
   const theme = useTheme();
-  
-  // 增加测试类型和模式状态
-  const [formData, setFormData] = useState({
+  const [error, setError] = useState<string | null>(null);
+
+  // 初始化表单数据，严格匹配TestData接口
+  const [formData, setFormData] = useState<TestData>({
     c_name: test?.c_name || '',
     c_description: test?.c_description || '',
     c_paper_count: test?.c_paper_count || 1,
     c_course_id: test?.c_course_id || '',
-    c_start: test ? moment(test.c_start) : null,
-    c_end: test ? moment(test.c_end) : null,
-    c_type: test?.c_type || '理论测试', // 测试类型：理论测试/实践操作
-    c_test_type: test?.c_test_type || '考试' // 新增：模式类型：考试/练习
+    c_start: test?.c_start || null,
+    c_end: test?.c_end || null,
+    c_test_type: test?.c_test_type || '理论测试', // 理论测试/实践操作
+    c_type: test?.c_type || '考试' // 考试/练习
   });
 
-  const inputStyles = {
-    name: { width: '800px', height: '60px' },
-    description: { width: '800px', height: '200px' },
-    paperCount: { width: '380px', height: '60px' },
-    courseId: { width: '380px', height: '60px' },
-    datePicker: { width: '380px', height: '60px' },
-    testType: { width: '800px', height: '60px' }, // 测试类型样式
-    testMode: { width: '800px', height: '60px' } // 新增：模式类型样式
-  };
-
-  const handleChange = (e) => {
+  // 处理输入字段变化
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    if (name) {
+      setFormData(prev => ({ ...prev, [name]: value }));
+      setError(null); // 清除错误提示
+    }
   };
 
-  const handlePaperCountChange = (e) => {
-    setFormData({ ...formData, c_paper_count: parseInt(e.target.value, 10) });
+  // 处理试卷数量变化（手动输入处理）
+  const handlePaperCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 只允许输入数字
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setFormData(prev => ({ 
+      ...prev, 
+      c_paper_count: value ? Number(value) : 0 
+    }));
+    setError(null);
   };
 
-  const handleDateChange = (name, date) => {
-    setFormData({ ...formData, [name]: date });
+  // 处理日期变化
+  const handleDateChange = (name: 'c_start' | 'c_end', date: moment.Moment | null) => {
+    setFormData(prev => ({ ...prev, [name]: date }));
+    setError(null);
   };
 
-  // 处理测试类型（理论/实践）变化
-  const handleTypeChange = (e) => {
-    const type = e.target.value;
-    setFormData({ 
-      ...formData, 
-      c_type: type,
-      // 如果是实践操作，重置试卷数量为1
-      ...(type === '实践操作' && { c_paper_count: 1 })
-    });
+  // 处理测试类型变化（理论测试/实践操作）
+  const handleTestTypeChange = (e: React.ChangeEvent<{ name?: string; value: unknown }>) => {
+    const value = e.target.value as string;
+    setFormData(prev => ({ 
+      ...prev, 
+      c_test_type: value,
+      // 实践操作默认1张试卷且不可修改
+      ...(value === '实践操作' && { c_paper_count: 1 })
+    }));
+    setError(null);
   };
 
-  // 新增：处理模式类型（考试/练习）变化
-  const handleTestModeChange = (e) => {
-    setFormData({
-      ...formData,
-      c_test_type: e.target.value
-    });
+  // 处理测试模式变化（考试/练习）
+  const handleTestModeChange = (e: React.ChangeEvent<{ name?: string; value: unknown }>) => {
+    const value = e.target.value as string;
+    setFormData(prev => ({ ...prev, c_type: value }));
+    setError(null);
   };
 
-  const handleSubmit = () => {
-    if (!formData.c_name || !formData.c_description || 
-        !formData.c_course_id || !formData.c_start || !formData.c_end ||
-        !formData.c_test_type) { // 新增验证：必选模式类型
-      alert('请填写所有必填字段');
+  // 表单验证
+  const validateForm = (): boolean => {
+    // 清除之前的错误
+    setError(null);
+
+    // 验证必填字段
+    if (!formData.c_name.trim()) {
+      setError('请输入测试名称');
+      return false;
+    }
+
+    if (!formData.c_description.trim()) {
+      setError('请输入测试描述');
+      return false;
+    }
+
+    if (!formData.c_course_id.trim()) {
+      setError('请输入课程ID');
+      return false;
+    }
+
+    if (!formData.c_start) {
+      setError('请选择开始时间');
+      return false;
+    }
+
+    if (!formData.c_end) {
+      setError('请选择结束时间');
+      return false;
+    }
+
+    // 验证时间逻辑
+    const now = moment();
+    if (formData.c_start.isBefore(now, 'minute')) {
+      setError('开始时间不能早于当前时间');
+      return false;
+    }
+
+    if (formData.c_end.isBefore(formData.c_start, 'minute')) {
+      setError('结束时间不能早于开始时间');
+      return false;
+    }
+
+    // 理论测试验证试卷数量（手动输入验证）
+    if (formData.c_test_type === '理论测试') {
+      if (formData.c_paper_count < 1) {
+        setError('试卷数量必须至少为1');
+        return false;
+      }
+      if (formData.c_paper_count > 100) { // 增加上限限制，可根据需求调整
+        setError('试卷数量不能超过100');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // 提交表单
+  const handleSubmit = async () => {
+    if (!validateForm()) {
       return;
     }
-    
-    // 如果是理论测试，需要验证试卷数量
-    if (formData.c_type === '理论测试' && !formData.c_paper_count) {
-      alert('请填写试卷数量');
-      return;
+
+    // 调用父组件的保存方法
+    const success = await onSave(formData);
+    if (success) {
+      onClose();
     }
-    
-    onSave({
-      ...formData,
-      c_start: formData.c_start.toDate(),
-      c_end: formData.c_end.toDate(),
-    });
   };
 
   return (
@@ -119,7 +194,15 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
         py: 4, 
         px: 4,
         backgroundColor: theme.palette.background.default,
+        maxHeight: '70vh',
+        overflowY: 'auto'
       }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        
         <Box sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -149,7 +232,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
               name="c_name"
               value={formData.c_name}
               onChange={handleChange}
-              required
               sx={{ 
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -172,7 +254,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                   color: theme.palette.text.primary
                 } 
               }}
-              style={inputStyles.name}
             />
           </Box>
 
@@ -189,10 +270,9 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
             </InputLabel>
             <FormControl fullWidth>
               <Select
-                name="c_type"
-                value={formData.c_type}
-                onChange={handleTypeChange}
-                required
+                name="c_test_type"
+                value={formData.c_test_type}
+                onChange={handleTestTypeChange}
                 sx={{ 
                   borderRadius: '8px',
                   border: `2px solid ${theme.palette.divider}`,
@@ -206,7 +286,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                   },
                   color: theme.palette.text.primary
                 }}
-                style={inputStyles.testType}
               >
                 <MenuItem value="理论测试" sx={{ fontSize: '1.1rem' }}>理论测试</MenuItem>
                 <MenuItem value="实践操作" sx={{ fontSize: '1.1rem' }}>实践操作</MenuItem>
@@ -214,7 +293,7 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
             </FormControl>
           </Box>
 
-          {/* 新增：类型选择（考试/练习） */}
+          {/* 测试模式选择（考试/练习） */}
           <Box sx={{ width: '100%' }}>
             <InputLabel sx={{ 
               color: theme.palette.text.secondary,
@@ -223,14 +302,13 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
               mb: 1,
               pl: 1
             }}>
-              类型 *
+              测试模式 *
             </InputLabel>
             <FormControl fullWidth>
               <Select
-                name="c_test_type"
-                value={formData.c_test_type}
+                name="c_type"
+                value={formData.c_type}
                 onChange={handleTestModeChange}
-                required
                 sx={{ 
                   borderRadius: '8px',
                   border: `2px solid ${theme.palette.divider}`,
@@ -244,7 +322,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                   },
                   color: theme.palette.text.primary
                 }}
-                style={inputStyles.testMode}
               >
                 <MenuItem value="考试" sx={{ fontSize: '1.1rem' }}>考试</MenuItem>
                 <MenuItem value="练习" sx={{ fontSize: '1.1rem' }}>练习</MenuItem>
@@ -271,7 +348,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
               onChange={handleChange}
               multiline
               rows={6}
-              required
               sx={{ 
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -293,20 +369,20 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                   color: theme.palette.text.primary
                 } 
               }}
-              style={inputStyles.description}
             />
           </Box>
 
-          {/* 试卷数量和课程ID - 条件渲染试卷数量 */}
+          {/* 试卷数量和课程ID */}
           <Box sx={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
             width: '100%',
-            gap: '40px'
+            gap: '40px',
+            flexWrap: 'wrap'
           }}>
-            {/* 试卷数量 - 仅当选择理论测试时显示 */}
-            {formData.c_type === '理论测试' && (
-              <Box sx={{ flex: 1 }}>
+            {/* 试卷数量 - 手动输入框 */}
+            {formData.c_test_type === '理论测试' && (
+              <Box sx={{ flex: 1, minWidth: '250px' }}>
                 <InputLabel sx={{ 
                   color: theme.palette.text.secondary,
                   fontSize: '1.1rem',
@@ -315,14 +391,29 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                   pl: 1
                 }}>
                   试卷数量 *
+                  <span sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                    （1-100之间的整数）
+                  </span>
                 </InputLabel>
-                <FormControl fullWidth>
-                  <Select
-                    name="c_paper_count"
-                    value={formData.c_paper_count}
-                    onChange={handlePaperCountChange}
-                    required
-                    sx={{ 
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  name="c_paper_count"
+                  type="text" // 使用text类型配合输入过滤
+                  value={formData.c_paper_count || ''}
+                  onChange={handlePaperCountChange}
+                  inputProps={{ 
+                    style: { 
+                      fontSize: '1.1rem',
+                      padding: '16px 20px',
+                      height: '20px',
+                      color: theme.palette.text.primary
+                    },
+                    inputMode: 'numeric', // 移动端显示数字键盘
+                    pattern: '[0-9]*' // HTML5数字验证
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
                       borderRadius: '8px',
                       border: `2px solid ${theme.palette.divider}`,
                       transition: 'all 0.3s',
@@ -332,26 +423,16 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                       '&.Mui-focused': {
                         borderColor: theme.palette.primary.main,
                         boxShadow: `0 0 0 3px ${theme.palette.primary.light}`
-                      },
-                      color: theme.palette.text.primary
-                    }}
-                    style={inputStyles.paperCount}
-                  >
-                    {[1, 2, 3, 4, 5].map(num => (
-                      <MenuItem key={num} value={num} sx={{ 
-                        fontSize: '1.1rem',
-                        color: theme.palette.text.primary
-                      }}>
-                        {num}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      }
+                    }
+                  }}
+                  placeholder="请输入试卷数量"
+                />
               </Box>
             )}
             
-            {/* 课程ID - 始终显示 */}
-            <Box sx={{ flex: 1 }}>
+            {/* 课程ID */}
+            <Box sx={{ flex: 1, minWidth: '250px' }}>
               <InputLabel sx={{ 
                 color: theme.palette.text.secondary,
                 fontSize: '1.1rem',
@@ -367,7 +448,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                 name="c_course_id"
                 value={formData.c_course_id}
                 onChange={handleChange}
-                required
                 sx={{ 
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',
@@ -390,7 +470,6 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                     color: theme.palette.text.primary
                   } 
                 }}
-                style={inputStyles.courseId}
               />
             </Box>
           </Box>
@@ -400,11 +479,12 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
             display: 'flex', 
             justifyContent: 'space-between', 
             width: '100%',
-            gap: '40px'
+            gap: '40px',
+            flexWrap: 'wrap'
           }}>
             <LocalizationProvider dateAdapter={AdapterMoment}>
               {/* 开始时间 */}
-              <Box sx={{ flex: 1 }}>
+              <Box sx={{ flex: 1, minWidth: '250px' }}>
                 <InputLabel sx={{ 
                   color: theme.palette.text.secondary,
                   fontSize: '1.1rem',
@@ -444,15 +524,15 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                           color: theme.palette.text.primary
                         } 
                       }}
-                      style={inputStyles.datePicker}
                     />
                   )}
                   inputFormat="YYYY/MM/DD HH:mm"
+                  minDate={moment().add(1, 'minute')} // 至少从当前时间1分钟后开始
                 />
               </Box>
               
               {/* 结束时间 */}
-              <Box sx={{ flex: 1 }}>
+              <Box sx={{ flex: 1, minWidth: '250px' }}>
                 <InputLabel sx={{ 
                   color: theme.palette.text.secondary,
                   fontSize: '1.1rem',
@@ -492,10 +572,10 @@ const FixedSizeFormDialog = ({ open, onClose, onSave, test }) => {
                           color: theme.palette.text.primary
                         } 
                       }}
-                      style={inputStyles.datePicker}
                     />
                   )}
                   inputFormat="YYYY/MM/DD HH:mm"
+                  minDate={formData.c_start ? formData.c_start.add(1, 'minute') : moment().add(2, 'minutes')}
                 />
               </Box>
             </LocalizationProvider>

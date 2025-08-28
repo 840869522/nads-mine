@@ -15,30 +15,33 @@ import {
   People as PeopleIcon,
   Code as CodeIcon,
   MenuBook as MenuBookIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Visibility as VisibilityIcon,
+  Check as CheckIcon,
+  ContentCopy as ContentCopyIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
-import TestFormDialog from './TestFormDialog';
+import FixedSizeFormDialog from './TestFormDialog'; 
 import TestUserDrawer from './TestUserDrawer';
 import { apiClientWithToken } from "@/utils/axios";
 
 // 应用中文本地化
 moment.locale('zh-cn');
 
-// 定义接口类型（与后端字段严格匹配）
+// 定义接口类型（与后端数据库字段严格匹配）
 interface TestData {
   c_id?: string;
   c_name: string;
   c_description: string;
-  c_type: string; // 后端存储为"理论测试"或"实践操作"
-  c_test_type: string; // 后端存储为"考试"或"练习"
+  c_test_type: string; // 后端存储："理论测试"或"实践操作"
+  c_type: string; // 后端存储："考试"或"练习"
   c_paper_count: number;
   c_course_id: string;
-  c_start: string; // 格式：YYYY-MM-DD H:i:s
-  c_end: string; // 格式：YYYY-MM-DD H:i:s
+  c_start: moment.Moment | null; // moment类型，便于格式化
+  c_end: moment.Moment | null;   // moment类型，便于格式化
   c_create_at?: string;
 }
 
@@ -103,10 +106,16 @@ const TestManagement = () => {
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [loadingPapers, setLoadingPapers] = useState<boolean>(false);
   
-  // 新增：删除相关状态
-  const [deletingKey, setDeletingKey] = useState<string | null>(null); // 正在删除的用户标识（避免重复点击）
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false); // 删除确认弹窗
-  const [userToDelete, setUserToDelete] = useState<TestUser | null>(null); // 待删除的用户信息
+  // 删除相关状态
+  const [deletingTestId, setDeletingTestId] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<TestUser | null>(null);
+  const [testToDelete, setTestToDelete] = useState<string | null>(null);
+
+  // 新增：查看测试ID弹窗状态
+  const [viewTestIdOpen, setViewTestIdOpen] = useState<boolean>(false);
+  const [currentTestId, setCurrentTestId] = useState<string | null>(null); // 存储当前要显示的测试ID
 
   // 显示提示消息
   const showSnackbar = (message: string, severity: SnackbarState['severity'] = 'success') => {
@@ -121,11 +130,7 @@ const TestManagement = () => {
   // 切换标签页
   const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
     setActiveTab(newValue);
-    if (newValue === 'practice') {
-      setPagePractice(1);
-    } else {
-      setPageTheory(1);
-    }
+    newValue === 'practice' ? setPagePractice(1) : setPageTheory(1);
   };
 
   // 获取测试列表
@@ -138,18 +143,19 @@ const TestManagement = () => {
       if (response.data.code === 200) {
         const responseData = response.data.data || [];
         const rawTests = responseData.data || [];
-        const filteredTests = rawTests.map((item: any) => ({
-          c_id: item.c_id,
+        // 后端返回的rawTests已包含c_id，直接赋值（核心：确保测试ID从后端正确获取）
+        const formattedTests = rawTests.map((item: any) => ({
+          c_id: item.c_id, // 关键：保留后端返回的测试ID
           c_name: item.c_name,
           c_description: item.c_description,
           c_type: item.c_type,
           c_test_type: item.c_test_type,
           c_course_id: item.c_course_id,
-          c_start: item.c_start,
-          c_end: item.c_end
+          c_start: item.c_start ? moment(item.c_start) : null,
+          c_end: item.c_end ? moment(item.c_end) : null
         }));
         
-        setTests(filteredTests);
+        setTests(formattedTests);
         setTotalCount(responseData.count || 0);
       } else {
         showSnackbar('获取测试列表失败: ' + response.data.message, 'error');
@@ -242,9 +248,7 @@ const TestManagement = () => {
       }
     } catch (error: any) {
       console.error('获取用户数据失败:', error);
-      const errorMsg = error.response?.data?.message || 
-                      error.message || 
-                      '网络请求失败，请稍后重试';
+      const errorMsg = error.response?.data?.message || error.message || '网络请求失败，请稍后重试';
       showSnackbar(`获取用户数据失败: ${errorMsg}`, 'error');
       return [];
     } finally {
@@ -274,18 +278,16 @@ const TestManagement = () => {
     }
   };
 
-  // 新增：单个删除测试用户（对接后端destroy接口）
+  // 单个删除测试用户
   const deleteTestUser = async () => {
     if (!userToDelete || !currentTest?.c_id) return false;
     
     try {
-      // 生成唯一删除标识（避免重复点击）
       const deleteKey = `${userToDelete.c_test_id}-${userToDelete.username}-${userToDelete.c_paper_id}`;
       setDeletingKey(deleteKey);
       
-      // 调用后端删除接口
       const response = await apiClientWithToken.post<ApiResponse>(
-        '/back/api/study/test/destroy', // 与后端路由一致
+        '/back/api/study/test/destroy',
         {
           c_test_id: userToDelete.c_test_id,
           c_username: userToDelete.username,
@@ -295,33 +297,40 @@ const TestManagement = () => {
       
       if (response.data.code === 200) {
         showSnackbar('用户删除成功');
-        // 重新获取用户列表，同步更新界面
         const updatedUsers = await fetchTestUsers(currentTest.c_id);
         setTestUsers(updatedUsers);
         setDeleteConfirmOpen(false);
         setUserToDelete(null);
         return true;
       } else {
-        // 处理后端返回的业务错误（如已交卷不允许删除）
         showSnackbar(`删除失败: ${response.data.message}`, 'error');
         return false;
       }
     } catch (error: any) {
       console.error('删除测试用户失败:', error);
-      const errorMsg = error.response?.data?.message || 
-                      error.message || 
-                      '网络请求失败，请稍后重试';
+      const errorMsg = error.response?.data?.message || error.message || '网络请求失败，请稍后重试';
       showSnackbar(`删除用户失败: ${errorMsg}`, 'error');
       return false;
     } finally {
-      setDeletingKey(null); // 重置删除状态
+      setDeletingKey(null);
     }
   };
 
   // 添加测试
   const handleAddTest = async (testData: TestData) => {
     try {
-      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_add', testData);
+      const formattedTestData = {
+        name: testData.c_name,
+        test_type: testData.c_test_type,
+        type: testData.c_type,
+        description: testData.c_description,
+        paper_count: testData.c_paper_count,
+        course_id: testData.c_course_id,
+        start: testData.c_start ? testData.c_start.format('YYYY-MM-DD HH:mm:ss') : '',
+        end: testData.c_end ? testData.c_end.format('YYYY-MM-DD HH:mm:ss') : ''
+      };
+
+      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_add', formattedTestData);
       
       if (response.data.code === 200) {
         showSnackbar('测试添加成功');
@@ -341,7 +350,19 @@ const TestManagement = () => {
   // 更新测试
   const handleUpdateTest = async (testData: TestData & { id: string }) => {
     try {
-      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_update', testData);
+      const formattedTestData = {
+        id: testData.id,
+        name: testData.c_name,
+        test_type: testData.c_test_type,
+        type: testData.c_type,
+        description: testData.c_description,
+        paper_count: testData.c_paper_count,
+        course_id: testData.c_course_id,
+        start: testData.c_start ? testData.c_start.format('YYYY-MM-DD HH:mm:ss') : '',
+        end: testData.c_end ? testData.c_end.format('YYYY-MM-DD HH:mm:ss') : ''
+      };
+
+      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_update', formattedTestData);
       
       if (response.data.code === 200) {
         showSnackbar('测试更新成功');
@@ -359,27 +380,44 @@ const TestManagement = () => {
   };
 
   // 删除测试
-  const handleDeleteTest = async (testId: string) => {
-    if (!window.confirm('确定要删除这个测试吗？此操作不可撤销。')) {
-      return;
-    }
+  const handleDeleteTest = async () => {
+    if (!testToDelete) return;
     
     try {
-      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_del', { id: testId });
+      setDeletingTestId(testToDelete);
+      
+      // 先查询该测试是否有关联用户
+      const testUsers = await fetchTestUsers(testToDelete);
+      if (testUsers.length > 0) {
+        showSnackbar(`该测试关联了 ${testUsers.length} 个用户，请先删除用户关联再删除测试`, 'warning');
+        setDeletingTestId(null);
+        setDeleteConfirmOpen(false);
+        setTestToDelete(null);
+        return;
+      }
+
+      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_del', { id: testToDelete });
       
       if (response.data.code === 200) {
         showSnackbar('测试删除成功');
         fetchTests();
       } else {
-        showSnackbar('测试删除失败: ' + response.data.message, 'error');
+        showSnackbar(`测试删除失败: ${response.data.message}（可能存在关联数据未清理）`, 'error');
       }
     } catch (error: any) {
       console.error('删除测试失败:', error);
-      showSnackbar('测试删除失败: ' + (error.response?.data?.message || error.message), 'error');
+      const errorMsg = error.response?.data?.message 
+        ? `测试删除失败: ${error.response.data.message}（请联系管理员清理关联数据）`
+        : '测试删除失败: 网络异常，请稍后重试';
+      showSnackbar(errorMsg, 'error');
+    } finally {
+      setDeletingTestId(null);
+      setDeleteConfirmOpen(false);
+      setTestToDelete(null);
     }
   };
 
-  // 获取测试详情
+  // 获取测试详情（核心：确保返回c_id）
   const fetchTestInfo = async (testId: string) => {
     try {
       const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_info', {
@@ -387,7 +425,12 @@ const TestManagement = () => {
       });
       
       if (response.data.code === 200) {
-        return response.data.data;
+        // 后端返回的data已包含c_id，直接返回（关键：保留测试ID）
+        return {
+          ...response.data.data,
+          c_start: response.data.data.c_start ? moment(response.data.data.c_start) : null,
+          c_end: response.data.data.c_end ? moment(response.data.data.c_end) : null
+        };
       } else {
         showSnackbar('获取测试详情失败: ' + response.data.message, 'error');
         return null;
@@ -397,6 +440,23 @@ const TestManagement = () => {
       showSnackbar('获取测试详情失败: ' + (error.response?.data?.message || error.message), 'error');
       return null;
     }
+  };
+
+  // 新增：打开查看测试ID弹窗
+  const handleOpenViewTestId = (test: TestData, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止事件冒泡（避免触发表格行点击）
+    if (test.c_id) {
+      setCurrentTestId(test.c_id); // 存储当前测试的ID
+      setViewTestIdOpen(true);     // 打开弹窗
+    } else {
+      showSnackbar('测试ID不存在，无法查看', 'error');
+    }
+  };
+
+  // 新增：关闭查看测试ID弹窗
+  const handleCloseViewTestId = () => {
+    setViewTestIdOpen(false);
+    setCurrentTestId(null);
   };
 
   // 初始化数据
@@ -453,7 +513,7 @@ const TestManagement = () => {
     }
   };
 
-  // 保存测试
+  // 保存测试（分发添加/更新）
   const handleSaveTest = async (testData: TestData) => {
     const isSuccess = currentTest 
       ? await handleUpdateTest({ ...testData, id: currentTest.c_id || '' })
@@ -488,10 +548,9 @@ const TestManagement = () => {
     }
   };
 
-  // 新增：打开删除确认弹窗
+  // 打开删除用户确认弹窗
   const handleOpenDeleteConfirm = (user: TestUser, e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止事件冒泡（避免触发用户详情）
-    // 提前判断是否已交卷（前端预校验，减少后端请求）
+    e.stopPropagation();
     if (user.submit_time || user.correct_status === 2) {
       showSnackbar('已交卷/已批改的用户不允许删除', 'warning');
       return;
@@ -500,17 +559,25 @@ const TestManagement = () => {
     setDeleteConfirmOpen(true);
   };
 
-  // 新增：关闭删除确认弹窗
-  const handleCloseDeleteConfirm = () => {
+  // 打开删除测试确认弹窗
+  const handleOpenTestDeleteConfirm = (testId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTestToDelete(testId);
+    setDeleteConfirmOpen(true);
+  };
+
+  // 关闭确认弹窗（统一处理用户和测试删除的弹窗关闭）
+  const handleCloseConfirm = () => {
     setDeleteConfirmOpen(false);
     setUserToDelete(null);
+    setTestToDelete(null);
   };
 
   // 获取测试状态
   const getTestStatus = (test: TestData) => {
     const now = moment();
-    const start = moment(test.c_start);
-    const end = moment(test.c_end);
+    const start = test.c_start || moment();
+    const end = test.c_end || moment();
     
     if (now.isBefore(start)) {
       return { label: '未开始', color: 'primary' as const };
@@ -527,8 +594,8 @@ const TestManagement = () => {
                           test.c_description.toLowerCase().includes(searchText.toLowerCase()) ||
                           test.c_course_id.toLowerCase().includes(searchText.toLowerCase());
     
-    const matchesStartDate = !startDate || moment(test.c_start).isSameOrAfter(startDate, 'day');
-    const matchesEndDate = !endDate || moment(test.c_end).isSameOrBefore(endDate, 'day');
+    const matchesStartDate = !startDate || (test.c_start && test.c_start.isSameOrAfter(startDate, 'day'));
+    const matchesEndDate = !endDate || (test.c_end && test.c_end.isSameOrBefore(endDate, 'day'));
     
     return matchesSearch && matchesStartDate && matchesEndDate;
   });
@@ -550,7 +617,7 @@ const TestManagement = () => {
     pageTheory * rowsPerPage
   );
 
-  // 渲染测试表格
+  // 渲染测试表格（核心：在操作栏添加眼睛按钮）
   const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatch<React.SetStateAction<number>>, pageCount: number) => {
     if (loading) {
       return (
@@ -575,17 +642,20 @@ const TestManagement = () => {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>测试名称</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>类型</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>模式</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>课程ID</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>时间范围</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>状态</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>操作</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: 220 }}>操作</TableCell> {/* 调整宽度以容纳新按钮 */}
               </TableRow>
             </TableHead>
             <TableBody>
               {tests.map((test) => {
                 const status = getTestStatus(test);
+                const startStr = test.c_start ? test.c_start.format('YYYY-MM-DD') : '未设置';
+                const endStr = test.c_end ? test.c_end.format('YYYY-MM-DD') : '未设置';
+                const isDeleting = deletingTestId === test.c_id;
                 
                 return (
                   <TableRow key={test.c_id} hover>
@@ -602,8 +672,8 @@ const TestManagement = () => {
                     <TableCell align="center">{test.c_course_id}</TableCell>
                     <TableCell>
                       <Box fontSize="0.875rem">
-                        <div>开始: {moment(test.c_start).format('YYYY-MM-DD')}</div>
-                        <div>结束: {moment(test.c_end).format('YYYY-MM-DD')}</div>
+                        <div>开始: {startStr}</div>
+                        <div>结束: {endStr}</div>
                       </Box>
                     </TableCell>
                     <TableCell align="center">
@@ -614,14 +684,29 @@ const TestManagement = () => {
                         sx={{ borderRadius: 1, fontWeight: 500 }}
                       />
                     </TableCell>
-                    <TableCell align="center" sx={{ width: 180 }}>
+                    <TableCell align="center" sx={{ width: 220 }}>
+                      {/* 新增：查看测试ID按钮（眼睛图标） */}
+                      <Tooltip title="查看测试ID">
+                        <IconButton 
+                          onClick={(e) => handleOpenViewTestId(test, e)} 
+                          color="info" 
+                          disabled={isDeleting}
+                          sx={{ mr: 0.5 }} // 调整间距
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+
+                      {/* 编辑按钮 */}
                       <Tooltip title="编辑测试">
-                        <IconButton onClick={() => handleEditTest(test)} color="primary">
+                        <IconButton onClick={() => handleEditTest(test)} color="primary" disabled={isDeleting} sx={{ mr: 0.5 }}>
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+
+                      {/* 管理用户按钮 */}
                       <Tooltip title="管理用户">
-                        <IconButton onClick={() => handleManageUsers(test)} color="secondary">
+                        <IconButton onClick={() => handleManageUsers(test)} color="secondary" disabled={isDeleting} sx={{ mr: 0.5 }}>
                           {loadingUsers && currentTest?.c_id === test.c_id ? (
                             <CircularProgress size={16} />
                           ) : (
@@ -629,9 +714,19 @@ const TestManagement = () => {
                           )}
                         </IconButton>
                       </Tooltip>
+
+                      {/* 删除测试按钮 */}
                       <Tooltip title="删除测试">
-                        <IconButton onClick={() => handleDeleteTest(test.c_id || '')} color="error">
-                          <DeleteIcon fontSize="small" />
+                        <IconButton 
+                          onClick={(e) => handleOpenTestDeleteConfirm(test.c_id || '', e)} 
+                          color="error" 
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? (
+                            <CircularProgress size={16} sx={{ color: 'white' }} />
+                          ) : (
+                            <DeleteIcon fontSize="small" />
+                          )}
                         </IconButton>
                       </Tooltip>
                     </TableCell>
@@ -642,6 +737,7 @@ const TestManagement = () => {
           </Table>
         </TableContainer>
         
+        {/* 分页控件 */}
         {pageCount > 1 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
             <Pagination 
@@ -657,8 +753,263 @@ const TestManagement = () => {
     );
   };
 
+  // 渲染确认弹窗（区分用户删除和测试删除）
+  const renderConfirmDialog = () => {
+    // 测试删除确认弹窗
+    if (testToDelete) {
+      return (
+        <Dialog
+          open={deleteConfirmOpen}
+          onClose={handleCloseConfirm}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ style: { borderRadius: 8 } }}
+        >
+          <DialogTitle sx={{ 
+            backgroundColor: '#f5f5f5', 
+            borderRadius: '8px 8px 0 0',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <WarningIcon color="warning" sx={{ mr: 2 }} />
+            确认删除测试
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              确定要删除该测试吗？此操作会同时删除关联的试卷、规则和用户关联，<b style={{ color: '#d32f2f' }}>不可撤销</b>。
+              <br />
+              <span style={{ color: '#d32f2f', fontSize: '0.875rem', marginTop: '8px', display: 'block' }}>
+                提示：建议先备份测试数据再执行删除操作。
+              </span>
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
+            <Button 
+              onClick={handleCloseConfirm}
+              variant="outlined"
+              sx={{ mr: 1 }}
+              disabled={!!deletingTestId}
+            >
+              取消
+            </Button>
+            <Button 
+              onClick={handleDeleteTest}
+              variant="contained"
+              color="error"
+              disabled={!!deletingTestId}
+            >
+              {deletingTestId ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '确认删除'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      );
+    }
+
+    // 用户删除确认弹窗
+    if (userToDelete) {
+      return (
+        <Dialog
+          open={deleteConfirmOpen}
+          onClose={handleCloseConfirm}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ style: { borderRadius: 8 } }}
+        >
+          <DialogTitle sx={{ 
+            backgroundColor: '#f5f5f5', 
+            borderRadius: '8px 8px 0 0',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <WarningIcon color="warning" sx={{ mr: 2 }} />
+            确认删除
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              确定要删除用户 <b>{userToDelete?.name}（{userToDelete?.username}）</b> 与该测试的关联关系吗？
+              <br />
+              <span style={{ color: '#d32f2f', fontSize: '0.875rem', marginTop: '8px', display: 'block' }}>
+                提示：此操作仅解除用户与测试的关联，不会删除用户本身。
+              </span>
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
+            <Button 
+              onClick={handleCloseConfirm}
+              variant="outlined"
+              sx={{ mr: 1 }}
+              disabled={!!deletingKey}
+            >
+              取消
+            </Button>
+            <Button 
+              onClick={deleteTestUser}
+              variant="contained"
+              color="error"
+              disabled={!!deletingKey}
+            >
+              {deletingKey ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '确认删除'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      );
+    }
+
+    return null;
+  };
+
+  // 新增：渲染查看测试ID弹窗
+// 新增：复制测试ID到剪贴板的函数
+const copyTestIdToClipboard = () => {
+  if (currentTestId) {
+    navigator.clipboard.writeText(currentTestId)
+      .then(() => {
+        showSnackbar('测试ID已成功复制到剪贴板', 'success');
+      })
+      .catch((err) => {
+        console.error('复制失败:', err);
+        showSnackbar('复制失败，请手动复制', 'error');
+      });
+  }
+};
+
+
+const renderViewTestIdDialog = () => {
+  return (
+    <Dialog
+      open={viewTestIdOpen}
+      onClose={handleCloseViewTestId}
+      maxWidth="xs" // 更紧凑的宽度
+      PaperProps={{ 
+        style: { 
+          borderRadius: 12,
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1)',
+          overflow: 'hidden'
+        } 
+      }}
+    >
+      {/* 顶部装饰条 - 替代原来的标题背景 */}
+      <Box sx={{ 
+        height: 6, 
+        width: '100%', 
+        backgroundColor: theme => theme.palette.info.main 
+      }} />
+      
+      {/* 内容区域 - ID展示在中间 */}
+      <DialogContent sx={{ 
+        p: 5, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', // 水平居中
+        justifyContent: 'center', // 垂直居中
+        textAlign: 'center'
+      }}>
+        {/* 眼睛图标 */}
+        <Box sx={{ 
+          backgroundColor: theme => theme.palette.info.light,
+          borderRadius: '50%',
+          p: 2,
+          mb: 4,
+          color: theme => theme.palette.info.contrastText
+        }}>
+          <VisibilityIcon sx={{ fontSize: 32 }} />
+        </Box>
+        
+         {/* 标题文本 */}
+        <Typography variant="h6" sx={{ 
+          mb: 3, 
+          fontWeight: 600,
+          // 关键修改：使用主题的文本主色，自动适配明暗模式
+          color: theme => theme.palette.text.primary
+        }}>
+          测试ID信息
+        </Typography>
+
+        {/* ID展示区域 */}
+        <Box sx={{ 
+          width: '100%',
+          mb: 4,
+          position: 'relative'
+        }}>
+          <Typography 
+            component="div" 
+            sx={{ 
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e9ecef',
+              borderRadius: 8,
+              p: 3,
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+              fontSize: '1rem',
+              color: '#2d3748',
+              minHeight: 60,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {currentTestId || '未获取到测试ID'}
+          </Typography>
+        </Box>
+        
+        {/* 提示文本 */}
+        <Typography sx={{ 
+          color: '#6c757d', 
+          fontSize: '0.875rem',
+          mb: 1,
+          maxWidth: '90%'
+        }}>
+          测试ID用于系统内部标识，可复制用于数据查询和调试
+        </Typography>
+      </DialogContent>
+      
+      {/* 底部按钮区域 */}
+      <DialogActions sx={{ 
+        p: 3, 
+        justifyContent: 'center', 
+        gap: 2,
+       borderTop: theme => `1px solid ${theme.palette.divider}`
+      }}>
+        <Button 
+          onClick={copyTestIdToClipboard}
+          variant="outlined"
+          startIcon={<ContentCopyIcon />}
+          sx={{ 
+            textTransform: 'none',
+            borderRadius: 20,
+            px: 4,
+            borderColor: '#dee2e6',
+            '&:hover': {
+              borderColor: theme => theme.palette.info.main,
+              backgroundColor: 'rgba(22, 163, 74, 0.04)'
+            }
+          }}
+        >
+          复制ID
+        </Button>
+        <Button 
+          onClick={handleCloseViewTestId}
+          variant="contained"
+          sx={{ 
+            textTransform: 'none',
+            borderRadius: 20,
+            px: 4,
+            backgroundColor: theme => theme.palette.info.main,
+            '&:hover': {
+              backgroundColor: theme => theme.palette.info.dark
+            }
+          }}
+        >
+          关闭
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
   return (
     <Paper sx={{ p: 3, borderRadius: 4, position: 'relative' }}>
+      {/* 头部标题和添加按钮 */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" fontWeight="bold">
           测试管理
@@ -673,6 +1024,7 @@ const TestManagement = () => {
         </Button>
       </Box>
       
+      {/* 搜索和日期筛选 */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} md={4}>
           <TextField
@@ -712,7 +1064,7 @@ const TestManagement = () => {
         </Grid>
       </Grid>
       
-      {/* 标签页切换组件 */}
+      {/* 标签页切换 */}
       <Box sx={{ mb: 3 }}>
         <Tabs 
           value={activeTab} 
@@ -763,7 +1115,7 @@ const TestManagement = () => {
       )}
       
       {/* 测试表单对话框 */}
-      <TestFormDialog
+      <FixedSizeFormDialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         onSave={handleSaveTest}
@@ -780,56 +1132,15 @@ const TestManagement = () => {
         papers={papers}
         onSave={handleSaveTestUsers}
         loading={loadingUsers || loadingPapers}
-        onDeleteUser={handleOpenDeleteConfirm} // 传递删除触发函数
-        deletingKey={deletingKey} // 传递删除加载状态
+        onDeleteUser={handleOpenDeleteConfirm}
+        deletingKey={deletingKey}
       />
 
-      {/* 删除确认弹窗 */}
-      <Dialog
-        open={deleteConfirmOpen}
-        onClose={handleCloseDeleteConfirm}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          style: { borderRadius: 8 }
-        }}
-      >
-        <DialogTitle sx={{ 
-          backgroundColor: '#f5f5f5', 
-          borderRadius: '8px 8px 0 0',
-          display: 'flex',
-          alignItems: 'center'
-        }}>
-          <WarningIcon color="warning" sx={{ mr: 2 }} />
-          确认删除
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            确定要删除用户 <b>{userToDelete?.name}（{userToDelete?.username}）</b> 与该测试的关联关系吗？
-            <br />
-            <span style={{ color: '#d32f2f', fontSize: '0.875rem', marginTop: '8px', display: 'block' }}>
-              提示：此操作仅解除用户与测试的关联，不会删除用户本身。
-            </span>
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
-          <Button 
-            onClick={handleCloseDeleteConfirm}
-            variant="outlined"
-            sx={{ mr: 1 }}
-          >
-            取消
-          </Button>
-          <Button 
-            onClick={deleteTestUser}
-            variant="contained"
-            color="error"
-            disabled={!!deletingKey}
-          >
-            {deletingKey ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '确认删除'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* 确认弹窗（用户删除或测试删除） */}
+      {renderConfirmDialog()}
+
+      {/* 新增：查看测试ID弹窗 */}
+      {renderViewTestIdDialog()}
 
       {/* 提示消息 */}
       <Snackbar
@@ -847,4 +1158,3 @@ const TestManagement = () => {
 };
 
 export default TestManagement;
-    

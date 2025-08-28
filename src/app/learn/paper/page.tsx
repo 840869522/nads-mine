@@ -5,7 +5,7 @@ import {
   Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, 
   TextField, Box, Card, CardContent, Typography, Chip, 
   CircularProgress, IconButton, Grid, FormControl, InputAdornment,
-  useTheme, MenuItem, Select, FormHelperText, Alert
+  useTheme, MenuItem, Select, Alert
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -15,15 +15,14 @@ import {
   Search as SearchIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon,
-  SearchOff as SearchOffIcon
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { apiClientWithToken } from "@/utils/axios";
 
 type QuestionType = '单选题' | '多选题' | '判断题' | '主观题';
 
 interface RuleItem {
-  key: string;
+  key: string; // 规则唯一标识（对应后端的c_id）
   tag: string;
   count: number;
   score: number;
@@ -32,7 +31,7 @@ interface RuleItem {
 
 interface Rule {
   testId: string;
-  testName: string; // 新增：测试名称
+  testName: string;
   items: RuleItem[];
 }
 
@@ -41,7 +40,7 @@ interface Question {
   type: QuestionType;
   content: string;
   score: number;
-  answer: string; // 答案字段
+  answer: string;
   options?: {content: string}[];
 }
 
@@ -50,7 +49,7 @@ interface Paper {
   testId: string;
   totalScore: number;
   questions: Question[];
-  questionCount?: number; // 新增：题目数量字段
+  questionCount?: number;
 }
 
 const PaperManagementSystem: React.FC = () => {
@@ -69,7 +68,6 @@ const PaperManagementSystem: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState('');
   
-  const [isGeneratePaperModalOpen, setIsGeneratePaperModalOpen] = useState(false);
   const [inputTestId, setInputTestId] = useState('');
   const [fetchedPapers, setFetchedPapers] = useState<Paper[]>([]);
   const [isPaperListModalOpen, setIsPaperListModalOpen] = useState(false);
@@ -95,41 +93,48 @@ const PaperManagementSystem: React.FC = () => {
     fetchRules();
   }, []);
 
-  // 获取所有规则（包含测试名称）
-const fetchRules = async () => {
-  setLoading(true);
-  try {
-    const response = await apiClientWithToken.get('/back/api/study/test/get_all_paper_rules');
-    
-    // 确保数据是数组格式
-    const rawRules = Array.isArray(response.data?.data) ? response.data.data : [];
-    
-    // 转换数据结构为前端需要的格式
-    const transformedRules = rawRules.map((rule: any) => {
-      // 确保items是数组
-      const items = Array.isArray(rule.items) ? rule.items : [];
+  // 获取所有规则（修复字段映射问题）
+  const fetchRules = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = '/back/api/study/test/get_all_paper_rules';
+      console.log('请求规则列表接口:', apiUrl);
       
-      return {
-        testId: rule.testId,
-        testName: rule.testName || '未知名称', // 测试名称
-        items: items.map((item: any) => ({
-          key: item.key || '',
-          tag: item.tag || '',
-          type: item.type || 1,
-          count: item.count || 0,
-          score: item.score || 0
+      const response = await apiClientWithToken.get(apiUrl);
+      console.log('接口返回原始数据:', response.data);
+      
+      // 正确提取后端返回的数据（后端数据在data字段中）
+      const rawData = response.data || {};
+      const rawRules = Array.isArray(rawData.data) ? rawData.data : [];
+      
+      console.log('提取的原始规则数据:', rawRules);
+      
+      // 转换数据结构为前端需要的格式（关键修复：使用后端返回的实际字段名）
+      const transformedRules = rawRules.map((rule: any) => ({
+        testId: rule.testId || rule.c_test_id || '未知ID',
+        testName: rule.testName || '未知名称',
+        // 修复：使用后端返回的items数组，字段名无需c_前缀
+        items: (Array.isArray(rule.items) ? rule.items : []).map((item: any) => ({
+          key: item.key || '',         // 规则唯一标识（对应后端c_id）
+          tag: item.tag || '',         // 修复：使用tag而非c_tag
+          type: Number(item.type) || 1, // 修复：转换为数字类型
+          count: Number(item.count) || 0, // 修复：转换为数字类型
+          score: Number(item.score) || 0  // 修复：转换为数字类型
         }))
-      };
-    });
-    
-    setRules(transformedRules);
-  } catch (error) {
-    console.error('获取规则失败:', error);
-    setRules([]);
-  } finally {
-    setLoading(false);
-  }
-};
+      }));
+      
+      setRules(transformedRules);
+    } catch (error: any) {
+      console.error('获取规则失败详情:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      setRules([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 从已加载的规则中直接获取数据
   const handleEdit = (testId: string) => {
@@ -145,140 +150,128 @@ const fetchRules = async () => {
     }
   };
 
-  // 从API获取规则
-const fetchRuleFromApi = async (testId: string) => {
-  setEditLoading(true);
-  try {
+  // 从API获取规则（修复字段映射）
+  const fetchRuleFromApi = async (testId: string) => {
+    setEditLoading(true);
+    try {
+      const response = await apiClientWithToken.post(`/back/api/study/test/get_paper_rules_info?test_id=${testId}`);
+      const ruleData = response.data?.data || {};
+      const items: RuleItem[] = [];
 
-    const response = await apiClientWithToken.get(`/back/api/study/test/get_paper_rules_info?test_id=${testId}`);
-    const ruleData = response.data?.data || {};
-    const items: RuleItem[] = [];
+      // 后端返回的题型键映射
+      const typeMap = {
+        single_choice: 1,
+        multiple_choice: 2,
+        true_or_false: 3,
+        subjective: 4
+      };
 
-    // 后端返回的题型键是single_choice、multiple_choice等，对应前端type 1-4
-    const typeMap = {
-      single_choice: 1,
-      multiple_choice: 2,
-      true_or_false: 3,
-      subjective: 4
-    };
+      // 解析后端数据
+      Object.entries(ruleData).forEach(([typeKey, itemData]: [string, any]) => {
+        if (itemData && typeMap[typeKey as keyof typeof typeMap]) {
+          items.push({
+            key: itemData.key || '',
+            tag: itemData.tag || '',
+            count: Number(itemData.count) || 1,
+            score: Number(itemData.score) || 1,
+            type: typeMap[typeKey as keyof typeof typeMap] || 1
+          });
+        }
+      });
 
-    // 解析后端数据，绑定到前端item的key、tag、count、score
-    Object.entries(ruleData).forEach(([typeKey, itemData]: [string, any]) => {
-      if (itemData && typeMap[typeKey as keyof typeof typeMap]) {
-        items.push({
-          key: itemData.key || '',
-          tag: itemData.tag || '',
-          count: itemData.count || 0,
-          score: itemData.score || 0,
-          type: typeMap[typeKey as keyof typeof typeMap] || 1
-        });
-      }
-    });
-
-    // 设置编辑状态（testId对应后端的test_id）
-    setEditingRule({ 
-      testId, 
-      testName: '', // 暂时为空，编辑时不需要显示名称
-      items 
-    });
-    setIsModalOpen(true);
-  } catch (error) {
-    console.error('加载规则失败:', error);
-  } finally {
-    setEditLoading(false);
-  }
-};
+      setEditingRule({ 
+        testId, 
+        testName: '',
+        items 
+      });
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error('加载规则失败:', error);
+      alert(`加载规则失败: ${(error as any)?.response?.data?.message || (error as Error).message}`);
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   // 表单验证
-const validateRule = (rule: Rule): boolean => {
-  const errors: Record<string, string> = {};
-  const keys = new Set<string>(); // 用于检查key重复
+  const validateRule = (rule: Rule): boolean => {
+    const errors: Record<string, string> = {};
 
-  // 验证test_id
-  if (!rule.testId.trim()) {
-    errors.testId = '测试ID不能为空';
-  } else if (rule.testId.length > 50) {
-    errors.testId = '测试ID不能超过50个字符';
-  }
+    // 验证test_id
+    if (!rule.testId.trim()) {
+      errors.testId = '测试ID不能为空';
+    } else if (rule.testId.length > 50) {
+      errors.testId = '测试ID不能超过50个字符';
+    }
 
-  // 验证至少有一个规则项
-  if (rule.items.length === 0) {
-    errors.emptyItems = '至少需要添加一个规则项';
-    setFormErrors(errors);
-    return false;
-  }
+    // 验证至少有一个规则项
+    if (rule.items.length === 0) {
+      errors.emptyItems = '至少需要添加一个规则项';
+      setFormErrors(errors);
+      return false;
+    }
 
-  // 验证每个规则项
-  rule.items.forEach((item, index) => {
-    // 检查key重复
-    if (item.key.trim()) {
-      if (keys.has(item.key.trim())) {
-        errors[`item_${index}_key`] = '规则ID不能重复';
-      } else {
-        keys.add(item.key.trim());
+    // 验证每个规则项
+    rule.items.forEach((item, index) => {
+      const typeName = questionTypeMap[item.type];
+
+      // 验证tag
+      if (!item.tag.trim()) {
+        errors[`item_${index}_tag`] = `${typeName}标签不能为空`;
+      } else if (item.tag.length > 50) {
+        errors[`item_${index}_tag`] = `${typeName}标签不能超过50个字符`;
       }
+
+      // 验证count
+      if (!Number.isInteger(item.count) || item.count <= 0) {
+        errors[`item_${index}_count`] = `${typeName}题数必须是大于0的整数`;
+      }
+
+      // 验证score
+      if (!Number.isInteger(item.score) || item.score <= 0) {
+        errors[`item_${index}_score`] = `${typeName}分数必须是大于0的整数`;
+      }
+    });
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // 删除规则处理函数
+  const handleDeleteRule = async (testId: string) => {
+    if (!testId || testId.trim() === '') {
+      alert('测试ID不能为空，无法执行删除操作');
+      return;
     }
-
-    // 验证key
-    if (!item.key.trim()) {
-      errors[`item_${index}_key`] = '规则ID不能为空';
-    } else if (item.key.length > 10) {
-      errors[`item_${index}_key`] = '规则ID不能超过10个字符';
-    }
-
-    // 验证tag
-    if (!item.tag.trim()) {
-      errors[`item_${index}_tag`] = '标签不能为空';
-    } else if (item.tag.length > 50) {
-      errors[`item_${index}_tag`] = '标签不能超过50个字符';
-    }
-
-    // 验证count（必须是正整数）
-    if (!Number.isInteger(item.count) || item.count <= 0) {
-      errors[`item_${index}_count`] = '题数必须是大于0的整数';
-    }
-
-    // 验证score（必须是正整数）
-    if (!Number.isInteger(item.score) || item.score <= 0) {
-      errors[`item_${index}_score`] = '分数必须是大于0的整数';
-    }
-  });
-
-  setFormErrors(errors);
-  return Object.keys(errors).length === 0;
-};
-
-// 删除规则处理函数
-const handleDeleteRule = async (testId: string) => {
-  if (!window.confirm(`确定要删除测试ID为 ${testId} 的所有规则吗？此操作不可撤销。`)) {
-    return;
-  }
-  
-  try {
-    setLoading(true);
     
-    const response = await apiClientWithToken.delete(`/back/api/study/test/paper_rules_del?test_id=${testId}`);
-    
-    if (response.data?.success !== false) {
-      alert('删除成功');
-      fetchRules();
-    } else {
-      alert(`删除失败: ${response.data?.message || '未知错误'}`);
+    if (!window.confirm(`确定要删除测试ID为 ${testId} 的所有组卷规则吗？此操作不可撤销，且会删除关联试卷！`)) {
+      return;
     }
-  } catch (error) {
-    console.error('删除规则失败:', error);
-    alert(`删除失败: ${(error as any)?.response?.data?.message || (error as Error).message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+    
+    try {
+      setLoading(true);
+      
+      const response = await apiClientWithToken.post(
+        '/back/api/study/test/paper_rules_del', 
+        { params: { test_id: testId.trim() } }
+      );
+      
+      if (response.data?.code === 200) {
+        alert('删除成功！');
+        fetchRules(); // 重新加载规则列表
+      } else {
+        alert(`删除失败: ${response.data?.message || '服务器未知错误'}`);
+      }
+    } catch (error: any) {
+      console.error('删除规则失败:', error);
+      const errorMsg = error.response?.data?.message || error.message || '网络错误';
+      alert(`删除失败: ${errorMsg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-// 查询试卷处理函数（新增）
-const handleQueryPapers = async (testId: string) => {
-  setInputTestId(testId);
-  await fetchPapersByTestId(testId);
-};
-
+ // 修复准备提交给后端的规则数据函数
 const prepareRuleData = (rule: Rule) => {
   const requestData: any = { 
     test_id: rule.testId.trim()
@@ -292,13 +285,16 @@ const prepareRuleData = (rule: Rule) => {
     4: 'subjective'
   };
   
-  // 只添加有数据的题型（避免传递空对象）
+  // 只添加有数据的题型
   rule.items.forEach(item => {
     const typeKey = typeMap[item.type as keyof typeof typeMap];
     if (typeKey) {
+      // 确保key是字符串类型，避免trim()错误
+      const keyValue = typeof item.key === 'string' ? item.key : String(item.key || '');
+      
       requestData[typeKey] = {
-        key: item.key.trim(),
-        tag: item.tag.trim(),
+        key: keyValue.trim(), // 现在可以安全调用trim()
+        tag: (item.tag || '').trim(), // 同样处理tag
         count: Number.isInteger(item.count) ? item.count : Math.floor(item.count),
         score: Number.isInteger(item.score) ? item.score : Math.floor(item.score)
       };
@@ -308,55 +304,52 @@ const prepareRuleData = (rule: Rule) => {
   return requestData;
 };
 
-// 添加规则
-const addRule = async (rule: Rule) => {
-  if (!validateRule(rule)) return false;
-  
-  try {
-    const requestData = prepareRuleData(rule);
+  // 添加规则
+  const addRule = async (rule: Rule) => {
+    if (!validateRule(rule)) return false;
     
-    const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_add', requestData);
-    
-    if (response.data?.code === 200) {
-      fetchRules();
-      return true;
-    } else {
-      const errorMsg = response.data?.message || '未知错误';
+    try {
+      const requestData = prepareRuleData(rule);
+      const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_add', requestData);
+      
+      if (response.data?.code === 200) {
+        fetchRules();
+        return true;
+      } else {
+        const errorMsg = response.data?.message || '未知错误';
+        setSaveError(`添加失败: ${errorMsg}`);
+        return false;
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message;
       setSaveError(`添加失败: ${errorMsg}`);
       return false;
     }
-  } catch (error: any) {
-    const errorMsg = error.response?.data?.message || error.message;
-    setSaveError(`添加失败: ${errorMsg}`);
-    return false;
-  }
-};
+  };
 
-// 更新规则
-const updateRule = async (rule: Rule) => {
-  if (!validateRule(rule)) return false;
-  
-  try {
-    const requestData = prepareRuleData(rule);
+  // 更新规则
+  const updateRule = async (rule: Rule) => {
+    if (!validateRule(rule)) return false;
     
-    const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_update', requestData);
-    
-    if (response.data?.code === 200) {
-      fetchRules();
-      return true;
-    } else {
-      setSaveError(`更新失败 [${response.data?.code}]: ${response.data?.message || '未知错误'}`);
+    try {
+      const requestData = prepareRuleData(rule);
+      const response = await apiClientWithToken.post('/back/api/study/test/paper_rules_update', requestData);
+      
+      if (response.data?.code === 200) {
+        fetchRules();
+        return true;
+      } else {
+        setSaveError(`更新失败 [${response.data?.code}]: ${response.data?.message || '未知错误'}`);
+        return false;
+      }
+    } catch (error: any) {
+      const errorDetails = error.response?.data ? 
+        `[${error.response.data.code}]: ${error.response.data.message}` : 
+        error.message;
+      setSaveError(`更新失败: ${errorDetails}`);
       return false;
     }
-  } catch (error: any) {
-    const errorDetails = error.response?.data ? 
-      `[${error.response.data.code}]: ${error.response.data.message}` : 
-      error.message;
-    setSaveError(`更新失败: ${errorDetails}`);
-    return false;
-  }
-};
-
+  };
 
   // 处理规则提交
   const handleSubmit = async () => {
@@ -364,6 +357,7 @@ const updateRule = async (rule: Rule) => {
     
     setEditLoading(true);
     setSaveError('');
+    
     const success = rules.some(r => r.testId === editingRule.testId)
       ? await updateRule(editingRule)
       : await addRule(editingRule);
@@ -376,52 +370,49 @@ const updateRule = async (rule: Rule) => {
     setEditLoading(false);
   };
 
- // 生成规则ID
-const generateRuleId = () => {
-  return `rule_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 5)}`;
-};
-
-// 初始化规则项
-const [newRuleItem, setNewRuleItem] = useState<RuleItem>({
-  key: '',
-  tag: '',
-  count: 1,
-  score: 1,
-  type: 1
-});
-
-// 添加规则项
-const handleAddRuleItem = () => {
-  if (!editingRule) return;
-  
-  // 验证新规则项基础字段
-  const tempErrors: Record<string, string> = {};
-  if (!newRuleItem.tag.trim()) tempErrors.tag = '标签不能为空';
-  if (newRuleItem.count <= 0) tempErrors.count = '题数必须大于0';
-  if (newRuleItem.score <= 0) tempErrors.score = '分数必须大于0';
-  
-  if (Object.keys(tempErrors).length > 0) {
-    setFormErrors(tempErrors);
-    return;
-  }
-  
-  // 添加新规则项
-  setEditingRule({
-    ...editingRule,
-    items: [...editingRule.items, newRuleItem]
-  });
-  
-  // 重置新规则项表单
-  setNewRuleItem({
-    key: generateRuleId(),
+  // 初始化新规则项
+  const [newRuleItem, setNewRuleItem] = useState<RuleItem>({
+    key: '',
     tag: '',
     count: 1,
     score: 1,
-    type: newRuleItem.type
+    type: 1
   });
-  
-  setFormErrors({});
-};
+
+  // 添加规则项
+  const handleAddRuleItem = () => {
+    if (!editingRule) return;
+    
+    // 基础验证
+    const tempErrors: Record<string, string> = {};
+    const typeName = questionTypeMap[newRuleItem.type];
+    
+    if (!newRuleItem.tag.trim()) tempErrors.tag = `${typeName}标签不能为空`;
+    if (newRuleItem.count <= 0) tempErrors.count = `${typeName}题数必须大于0`;
+    if (newRuleItem.score <= 0) tempErrors.score = `${typeName}分数必须大于0`;
+    
+    if (Object.keys(tempErrors).length > 0) {
+      setFormErrors(tempErrors);
+      return;
+    }
+    
+    // 添加新规则项
+    setEditingRule({
+      ...editingRule,
+      items: [...editingRule.items, newRuleItem]
+    });
+    
+    // 重置新规则项表单
+    setNewRuleItem({
+      key: '',
+      tag: '',
+      count: 1,
+      score: 1,
+      type: newRuleItem.type
+    });
+    
+    setFormErrors({});
+  };
 
   // 删除规则项
   const handleRemoveRuleItem = (index: number) => {
@@ -441,14 +432,18 @@ const handleAddRuleItem = () => {
     });
   };
 
-  // 更新规则项的值
+// 修改规则项更新函数，确保key始终为字符串
 const handleRuleItemChange = (index: number, field: string, value: string | number) => {
   if (!editingRule) return;
   const updatedItems = [...editingRule.items];
   
-  // 处理count和score：转换为整数，最小为1
+  // 处理key字段，确保为字符串
   let processedValue = value;
-  if (field === 'count' || field === 'score') {
+  if (field === 'key') {
+    processedValue = typeof value === 'string' ? value : String(value || '');
+  }
+  // 处理count和score：转换为整数，最小为1
+  else if (field === 'count' || field === 'score') {
     processedValue = Math.max(1, parseInt(value.toString(), 10) || 1);
   }
   
@@ -463,33 +458,13 @@ const handleRuleItemChange = (index: number, field: string, value: string | numb
   setFormErrors(newErrors);
 };
 
-// 更新新规则项的值
-const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
-  let processedValue = value;
-  if (field === 'count' || field === 'score') {
-    processedValue = Math.max(1, parseInt(value.toString(), 10) || 1);
-  }
-  
-  setNewRuleItem({
-   ...newRuleItem,
-    [field]: processedValue
-  });
-  
-  if (formErrors[field as string]) {
-    const newErrors = {...formErrors};
-    delete newErrors[field as string];
-    setFormErrors(newErrors);
-  }
-};
-
   // 过滤规则
   const filteredRules = Array.isArray(rules) 
     ? rules.filter(rule => {
         if (!searchTerm) return true;
         if (rule.testId?.toLowerCase().includes(searchTerm.toLowerCase())) return true;
-        if (rule.testName?.toLowerCase().includes(searchTerm.toLowerCase())) return true; // 搜索测试名称
+        if (rule.testName?.toLowerCase().includes(searchTerm.toLowerCase())) return true;
         return rule.items?.some(item => 
-          item.key?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.tag?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       })
@@ -503,35 +478,21 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
       ? (index % 2 === 0 ? '#252525' : '#1e1e1e') 
       : (index % 2 === 0 ? '#fafafa' : '#ffffff');
 
-  // 试卷相关方法 - 重点修复题目数量显示问题
-  const fetchPapersByTestId = async (testId: string) => {
+  // 获取试卷列表
+  const handleQueryPapers = async (testId: string) => {
+    setInputTestId(testId);
     setLoading(true);
     try {
-
       const response = await apiClientWithToken.get(`/back/api/study/test/get_papers?test_id=${testId}`);
       
-      // 处理原始数据，确保正确计算题目数量
       let papers = Array.isArray(response.data?.data) ? response.data.data : [];
       
-      // 为每个试卷计算并添加题目数量
-      papers = papers.map((paper: any) => {
-        // 安全获取题目数量
-        let questionCount = 0;
-        if (paper.questionCount) {
-          // 如果后端提供了题目数量字段，直接使用
-          questionCount = parseInt(paper.questionCount, 10) || 0;
-        } else if (Array.isArray(paper.questions)) {
-          // 否则从questions数组长度计算
-          questionCount = paper.questions.length;
-        }
-        
-        return {
-          ...paper,
-          questionCount: questionCount,
-          // 确保questions是数组
-          questions: Array.isArray(paper.questions) ? paper.questions : []
-        };
-      });
+      papers = papers.map((paper: any) => ({
+        ...paper,
+        questionCount: paper.questionCount ? parseInt(paper.questionCount, 10) || 0 : 
+                      (Array.isArray(paper.questions) ? paper.questions.length : 0),
+        questions: Array.isArray(paper.questions) ? paper.questions : []
+      }));
       
       setFetchedPapers(papers);
       setIsPaperListModalOpen(true);
@@ -544,6 +505,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
     }
   };
 
+  // 获取试卷详情
   const fetchPaperDetails = async (paperId: string) => {
     setLoadingPaperDetails(true);
     try {
@@ -555,20 +517,18 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
       const paperData = response.data?.data || null;
       if (!paperData) return null;
 
-      // 确保questions是数组
       const questions = Array.isArray(paperData.questions) ? paperData.questions : [];
       
-      // 处理问题和答案
       const questionsWithAnswers = questions.map((q: any) => ({
         ...q,
-        answer: q.answer || '', // 确保答案字段存在
+        answer: q.answer || '',
         options: Array.isArray(q.options) ? q.options : []
       }));
 
       return {
         ...paperData,
         questions: questionsWithAnswers,
-        questionCount: questions.length // 明确设置题目数量
+        questionCount: questions.length
       };
     } catch (error) {
       console.error('获取试卷详情失败:', error);
@@ -578,6 +538,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
     }
   };
 
+  // 选择试卷查看详情
   const handlePaperSelect = async (paperId: string) => {
     const paperDetails = await fetchPaperDetails(paperId);
     if (paperDetails) {
@@ -587,6 +548,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
     }
   };
 
+  // 导出试卷到Word
   const exportToWord = async () => {
     if (!generatedPaper) return;
     
@@ -642,7 +604,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
               
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <TextField
-                  label="搜索测试ID、名称或规则ID"
+                  label="搜索测试ID、名称或标签"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   InputProps={{
@@ -668,8 +630,8 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                       items: [{
                         key: '',
                         tag: '',
-                        count: 0,
-                        score: 0,
+                        count: 1,
+                        score: 1,
                         type: 1
                       }]
                     });
@@ -684,157 +646,164 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
             </Box>
             
             <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
-             <Table>
-              
-          <TableHead>
-            <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试ID</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试名称</TableCell> {/* 新增列 */}
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>规则ID</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题型</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>标签</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题数</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>每题分数</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>总分</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>试卷总分</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>操作</TableCell>
-            </TableRow>
-          </TableHead>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试ID</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>测试名称</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题型</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>标签</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题数</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>每题分数</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>题型总分</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>试卷总分</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>操作</TableCell>
+                  </TableRow>
+                </TableHead>
 
-    
-                      <TableBody>
-            {filteredRules.length > 0 ? (
-              filteredRules.map((rule) => {
-                // 计算当前测试ID的总分
-                const testTotal = rule.items.reduce(
-                  (sum, item) => sum + item.count * item.score, 
-                  0
-                );
-                
-                return (
-                  <React.Fragment key={rule.testId}>
-                    {rule.items.map((item, itemIndex) => (
-                      <TableRow 
-                        key={`${rule.testId}-${item.key}-${itemIndex}`}
-                        sx={{ backgroundColor: getTableRowBgColor(itemIndex) }}
-                      >
-                        {itemIndex === 0 && (
-                          <TableCell 
-                            rowSpan={rule.items.length} 
-                            sx={{ 
-                              color: isDarkMode ? '#fff' : '#000',
-                              verticalAlign: 'middle',
-                              textAlign: 'center',
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            {rule.testId}
-                          </TableCell>
-                        )}
-                        {/* 新增测试名称列 */}
-                        {itemIndex === 0 && (
-                          <TableCell 
-                            rowSpan={rule.items.length} 
-                            sx={{ 
-                              color: isDarkMode ? '#fff' : '#000',
-                              verticalAlign: 'middle',
-                              textAlign: 'center'
-                            }}
-                          >
-                            {rule.testName}
-                          </TableCell>
-                        )}
-                        <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
-                          {item.key}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={questionTypeMap[item.type]} 
-                            color={typeColorMap[item.type]} 
-                            size="small" 
-                            sx={{ color: '#fff' }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
-                          {item.tag}
-                        </TableCell>
-                        <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
-                          {item.count}
-                        </TableCell>
-                        <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
-                          {item.score}
-                        </TableCell>
-                        <TableCell sx={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 'bold' }}>
-                          {item.count * item.score}
-                        </TableCell>
-                        
-                        {itemIndex === 0 && (
-                          <TableCell 
-                            rowSpan={rule.items.length} 
-                            sx={{ 
-                              color: isDarkMode ? '#fff' : '#000',
-                              verticalAlign: 'middle',
-                              textAlign: 'center',
-                              fontWeight: 'bold',
-                              backgroundColor: isDarkMode ? '#2a3c5a' : '#e3f2fd'
-                            }}
-                          >
-                            {testTotal}
-                          </TableCell>
-                        )}
-                        
-                        {/* 操作栏 - 按钮上下排布 */}
-                        {itemIndex === 0 && (
-                          <TableCell 
-                            rowSpan={rule.items.length} 
-                            sx={{ 
-                              verticalAlign: 'middle',
-                              textAlign: 'center'
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                              <IconButton 
-                                onClick={() => handleEdit(rule.testId)}
-                                sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
-                                aria-label="编辑规则"
-                              >
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton 
-                                onClick={() => handleDeleteRule(rule.testId)}
-                                sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
-                                aria-label="删除规则"
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                              <IconButton 
-                                onClick={() => handleQueryPapers(rule.testId)}
-                                sx={{ color: isDarkMode ? '#a5d6a7' : '#43a047' }}
-                                aria-label="查询试卷"
-                              >
-                                <PdfIcon />
-                              </IconButton>
-                            </Box>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </React.Fragment>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
-                  {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      加载中...
-                    </Box>
-                  ) : '未找到匹配的规则'}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+                <TableBody>
+                  {filteredRules.length > 0 ? (
+                    filteredRules.map((rule) => {
+                      // 计算当前测试ID的总分
+                      const testTotal = rule.items.reduce(
+                        (sum, item) => sum + item.count * item.score, 
+                        0
+                      );
+                      
+                      return (
+                        <React.Fragment key={rule.testId}>
+                          {rule.items.map((item, itemIndex) => (
+                            <TableRow 
+                              key={`${rule.testId}-${itemIndex}`}
+                              sx={{ backgroundColor: getTableRowBgColor(itemIndex) }}
+                            >
+                              {/* 测试ID：合并行 */}
+                              {itemIndex === 0 && (
+                                <TableCell 
+                                  rowSpan={rule.items.length} 
+                                  sx={{ 
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    verticalAlign: 'middle',
+                                    textAlign: 'center',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  {rule.testId}
+                                </TableCell>
+                              )}
+                              
+                              {/* 测试名称：合并行 */}
+                              {itemIndex === 0 && (
+                                <TableCell 
+                                  rowSpan={rule.items.length} 
+                                  sx={{ 
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    verticalAlign: 'middle',
+                                    textAlign: 'center'
+                                  }}
+                                >
+                                  {rule.testName}
+                                </TableCell>
+                              )}
+                              
+                              {/* 题型 */}
+                              <TableCell>
+                                <Chip 
+                                  label={questionTypeMap[item.type]} 
+                                  color={typeColorMap[item.type]} 
+                                  size="small" 
+                                  sx={{ color: '#fff' }}
+                                />
+                              </TableCell>
+                              
+                              {/* 标签 */}
+                              <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
+                                {item.tag || '无标签'}  {/* 显示标签，默认无标签 */}
+                              </TableCell>
+                              
+                              {/* 题数 */}
+                              <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
+                                {item.count}
+                              </TableCell>
+                              
+                              {/* 每题分数 */}
+                              <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
+                                {item.score}
+                              </TableCell>
+                              
+                              {/* 题型总分 */}
+                              <TableCell sx={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 'bold' }}>
+                                {item.count * item.score}
+                              </TableCell>
+                              
+                              {/* 试卷总分：合并行 */}
+                              {itemIndex === 0 && (
+                                <TableCell 
+                                  rowSpan={rule.items.length} 
+                                  sx={{ 
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    verticalAlign: 'middle',
+                                    textAlign: 'center',
+                                    fontWeight: 'bold',
+                                    backgroundColor: isDarkMode ? '#2a3c5a' : '#e3f2fd'
+                                  }}
+                                >
+                                  {testTotal}
+                                </TableCell>
+                              )}
+                              
+                              {/* 操作：合并行 */}
+                              {itemIndex === 0 && (
+                                <TableCell 
+                                  rowSpan={rule.items.length} 
+                                  sx={{ 
+                                    verticalAlign: 'middle',
+                                    textAlign: 'center'
+                                  }}
+                                >
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                                    <IconButton 
+                                      onClick={() => handleEdit(rule.testId)}
+                                      sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
+                                      aria-label="编辑规则"
+                                    >
+                                      <EditIcon />
+                                    </IconButton>
+                                    <IconButton 
+                                      onClick={() => handleDeleteRule(rule.testId)}
+                                      sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
+                                      aria-label="删除规则"
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                    <IconButton 
+                                      onClick={() => handleQueryPapers(rule.testId)}
+                                      sx={{ color: isDarkMode ? '#a5d6a7' : '#43a047' }}
+                                      aria-label="查询试卷"
+                                    >
+                                      <PdfIcon />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
+                        {loading ? (
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <CircularProgress size={20} sx={{ mr: 1 }} />
+                            加载中...
+                          </Box>
+                        ) : '未找到匹配的规则'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
               </Table>
             </TableContainer>
           </CardContent>
@@ -921,83 +890,72 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                   {/* 规则项标题行 */}
                   <Grid container spacing={2} sx={{ mb: 1 }}>
                     <Grid item xs={2}>题型</Grid>
-                    <Grid item xs={2}>规则ID</Grid>
-                    <Grid item xs={2}>标签</Grid>
+                    <Grid item xs={3}>标签</Grid>
                     <Grid item xs={2}>题数</Grid>
                     <Grid item xs={2}>每题分数</Grid>
-                    <Grid item xs={2}>操作</Grid>
+                    <Grid item xs={3}>操作</Grid>
                   </Grid>
                   
                   {/* 显示所有规则项 */}                          
-              {editingRule.items.map((item, index) => (
-                <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 1, p: 1, borderRadius: 1, backgroundColor: isDarkMode ? '#252525' : '#f5f5f5' }}>
-                  <Grid item xs={2}>
-                    <FormControl fullWidth>
-                      <Select
-                        value={item.type}
-                        onChange={(e) => handleRuleItemChange(index, 'type', e.target.value)}
-                        sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
-                      >
-                        <MenuItem value={1}>单选题</MenuItem>
-                        <MenuItem value={2}>多选题</MenuItem>
-                        <MenuItem value={3}>判断题</MenuItem>
-                        <MenuItem value={4}>主观题</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={2}>
-                    <TextField
-                      value={item.key}
-                      onChange={(e) => handleRuleItemChange(index, 'key', e.target.value.trim())}
-                      label="规则ID（key）"
-                      error={!!formErrors[`item_${index}_key`]}
-                      helperText={formErrors[`item_${index}_key`]}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={2}>
-                    <TextField
-                      value={item.tag}
-                      onChange={(e) => handleRuleItemChange(index, 'tag', e.target.value.trim())}
-                      label="标签"
-                      error={!!formErrors[`item_${index}_tag`]}
-                      helperText={formErrors[`item_${index}_tag`]}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={2}>
-                    <TextField
-                      type="number"
-                      value={item.count}
-                      onChange={(e) => handleRuleItemChange(index, 'count', e.target.value)}
-                      label="题数"
-                      error={!!formErrors[`item_${index}_count`]}
-                      helperText={formErrors[`item_${index}_count`]}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={2}>
-                    <TextField
-                      type="number"
-                      value={item.score}
-                      onChange={(e) => handleRuleItemChange(index, 'score', e.target.value)}
-                      label="每题分数"
-                      error={!!formErrors[`item_${index}_score`]}
-                      helperText={formErrors[`item_${index}_score`]}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={2}>
-                    <IconButton 
-                      onClick={() => handleRemoveRuleItem(index)}
-                      sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Grid>
-                </Grid>
-              ))}
+                  {editingRule.items.map((item, index) => (
+                    <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 1, p: 1, borderRadius: 1, backgroundColor: isDarkMode ? '#252525' : '#f5f5f5' }}>
+                      <Grid item xs={2}>
+                        <FormControl fullWidth>
+                          <Select
+                            value={item.type}
+                            onChange={(e) => handleRuleItemChange(index, 'type', e.target.value)}
+                            sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
+                          >
+                            <MenuItem value={1}>单选题</MenuItem>
+                            <MenuItem value={2}>多选题</MenuItem>
+                            <MenuItem value={3}>判断题</MenuItem>
+                            <MenuItem value={4}>主观题</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={3}>
+                        <TextField
+                          value={item.tag}
+                          onChange={(e) => handleRuleItemChange(index, 'tag', e.target.value.trim())}
+                          label="标签"
+                          error={!!formErrors[`item_${index}_tag`]}
+                          helperText={formErrors[`item_${index}_tag`]}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={2}>
+                        <TextField
+                          type="number"
+                          value={item.count}
+                          onChange={(e) => handleRuleItemChange(index, 'count', e.target.value)}
+                          label="题数"
+                          error={!!formErrors[`item_${index}_count`]}
+                          helperText={formErrors[`item_${index}_count`]}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={2}>
+                        <TextField
+                          type="number"
+                          value={item.score}
+                          onChange={(e) => handleRuleItemChange(index, 'score', e.target.value)}
+                          label="每题分数"
+                          error={!!formErrors[`item_${index}_score`]}
+                          helperText={formErrors[`item_${index}_score`]}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={3}>
+                        <IconButton 
+                          onClick={() => handleRemoveRuleItem(index)}
+                          sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Grid>
+                    </Grid>
+                  ))}
                   
                   {/* 添加新规则项区域 */}
                   <Box sx={{ mt: 3, pt: 2, borderTop: `1px dashed ${isDarkMode ? '#444' : '#ccc'}` }}>
@@ -1018,22 +976,16 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                           </Select>
                         </FormControl>
                       </Grid>
-                      <Grid item xs={2}>
-                        <TextField
-                          label="规则ID"
-                          value={newRuleItem.key}
-                          onChange={(e) => handleNewRuleItemChange('key', e.target.value)}
-                          fullWidth
-                          size="small"
-                        />
-                      </Grid>
-                      <Grid item xs={2}>
+                      
+                      <Grid item xs={3}>
                         <TextField
                           label="标签"
                           value={newRuleItem.tag}
                           onChange={(e) => handleNewRuleItemChange('tag', e.target.value)}
                           fullWidth
                           size="small"
+                          error={!!formErrors.tag}
+                          helperText={formErrors.tag}
                         />
                       </Grid>
                       <Grid item xs={2}>
@@ -1045,6 +997,8 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                           fullWidth
                           size="small"
                           inputProps={{ min: 0 }}
+                          error={!!formErrors.count}
+                          helperText={formErrors.count}
                         />
                       </Grid>
                       <Grid item xs={2}>
@@ -1056,9 +1010,11 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                           fullWidth
                           size="small"
                           inputProps={{ min: 0 }}
+                          error={!!formErrors.score}
+                          helperText={formErrors.score}
                         />
                       </Grid>
-                      <Grid item xs={2}>
+                      <Grid item xs={3}>
                         <IconButton 
                           onClick={handleAddRuleItem}
                           sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
@@ -1107,7 +1063,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
           </DialogActions>
         </Dialog>
         
-        {/* 试卷列表模态框 - 重点修复题目数量显示 */}
+        {/* 试卷列表模态框 */}
         <Dialog
           open={isPaperListModalOpen}
           onClose={() => setIsPaperListModalOpen(false)}
@@ -1125,8 +1081,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                 <Typography sx={{ mb: 2 }}>共找到 {fetchedPapers.length} 份试卷</Typography>
                 <Box sx={{ maxHeight: '50vh', overflow: 'auto' }}>
                   {fetchedPapers.map((paper, index) => {
-                    // 优先使用paper对象中计算好的questionCount
-                    // 作为最后的保障，使用空值合并运算符提供默认值
                     const questionCount = paper.questionCount ?? 0;
                     
                     return (
@@ -1159,7 +1113,7 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
           </DialogActions>
         </Dialog>
         
-         {/* 试卷预览模态框 */}
+        {/* 试卷预览模态框 */}
         <Dialog
           open={isPaperModalOpen}
           onClose={() => setIsPaperModalOpen(false)}
@@ -1210,7 +1164,6 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
                     <Typography variant="body1" sx={{ color: isDarkMode ? '#bbb' : '#666' }}>
                       总分: <strong style={{ color: isDarkMode ? '#fff' : '#000' }}>{generatedPaper.totalScore}分</strong>
                     </Typography>
-                    {/* 显示题目数量 */}
                     <Typography variant="body1" sx={{ color: isDarkMode ? '#bbb' : '#666' }}>
                       题数: <strong style={{ color: isDarkMode ? '#fff' : '#000' }}>
                         {generatedPaper.questionCount || 0}题
@@ -1407,3 +1360,5 @@ const handleNewRuleItemChange = (field: keyof RuleItem, value: any) => {
 };
 
 export default PaperManagementSystem;
+
+

@@ -17,162 +17,174 @@ class PaperRulesModel extends Model{
     ];
     public $pageSize = 20;
 
-    /**
-     * 获取所有组卷规则（关联测试名称）
-     * 
-     * @return \Illuminate\Support\Collection
-     */
-    public function get_all_paper_rules()
-    {
+  /**
+ * 获取所有组卷规则（关联测试名称）
+ * 
+ * @return \Illuminate\Support\Collection
+ */
+public function get_all_paper_rules()
+{
+    try {
         // 1. 关联查询c_paper_rules和c_tests表，获取测试名称
         $rules = DB::table('c_paper_rules')
             // 关联c_tests表（通过c_test_id匹配）
             ->leftJoin('c_tests', 'c_paper_rules.c_test_id', '=', 'c_tests.c_id')
             ->select([
-                'c_paper_rules.c_test_id',
-                'c_tests.c_name as testName', // 获取测试名称
-                'c_paper_rules.c_id as key',
-                'c_paper_rules.c_type',
-                'c_paper_rules.c_tag',
-                'c_paper_rules.c_count',
-                'c_paper_rules.c_score'
+                'c_paper_rules.c_id',          // 规则ID（数据库实际字段，非key）
+                'c_paper_rules.c_test_id',     // 测试ID
+                'c_tests.c_name as testName',  // 测试名称（别名）
+                'c_paper_rules.c_type',        // 题型（带c_前缀）
+                'c_paper_rules.c_tag',         // 标签（带c_前缀）
+                'c_paper_rules.c_count',       // 题数（带c_前缀）
+                'c_paper_rules.c_score'        // 分数（带c_前缀）
             ])
             ->get();
 
-        // 2. 按c_test_id分组，包含测试名称
+        // 2. 按c_test_id分组，确保不引用不存在的$key属性
         return $rules->groupBy('c_test_id')->map(function ($group, $testId) {
             return (object)[
                 'testId' => $testId,
-                'testName' => $group[0]->testName, // 测试名称（同组内名称相同）
-                'items' => $group
+                'testName' => $group[0]->testName ?? '未知名称', // 兼容测试名称为空
+                'items' => $group->map(function ($item) {
+                    // 只返回实际存在的字段，不包含$key
+                    return (object)[
+                        'c_id' => $item->c_id,        // 规则ID（数据库字段）
+                        'c_type' => $item->c_type,    // 题型
+                        'c_tag' => $item->c_tag,      // 标签
+                        'c_count' => $item->c_count,  // 题数
+                        'c_score' => $item->c_score   // 分数
+                    ];
+                })->values() // 转换为数组格式
             ];
         })->values();
-    }
 
-    /**
-     * Notes:添加组卷规则
-     * User: zhangnan
-     * DateTime: 2025/7/15 16:33
-     * @param $data
+    } catch (\Exception $e) {
+        // 记录错误日志，便于排查
+        DLOG("[get_all_paper_rules错误]{$e->getMessage()}", 'error', 'paper_rules_log');
+        return collect([]); // 异常时返回空集合，避免前端崩溃
+    }
+}
+
+/**
+     * 添加组卷规则
+     * @param string $c_test_id 测试ID
+     * @param array $data 规则数据
+     * @param array $question_list 题目列表
      * @return bool
      */
-     public function create_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
+    public function create_paper_rules_info($c_test_id = "", $data = [], $question_list = [])
     {
+        // 验证必填参数
+        if (empty($c_test_id) || empty($data)) {
+            return false;
+        }
+        
         DB::beginTransaction();
-        try{
-            foreach($data as $k=>$v){
+        try {
+            foreach ($data as $item) {
+                // 验证单条规则数据
+                if (empty($item['tag']) || !isset($item['type']) || !isset($item['count']) || !isset($item['score'])) {
+                    DB::rollback();
+                    return false;
+                }
+                
                 $mod = new PaperRulesModel();
-                $mod->c_id= $v['key'];
-                $mod->c_test_id= $c_test_id;
-                $mod->c_tag= $v['tag'];
-                $mod->c_type= $v['type'];
-                $mod->c_count= $v['count'];;
-                $mod->c_score= $v['score'];
-                $res = $mod->save();
-                if(!$res){
+                // 不再手动设置c_id，数据库会自动生成
+                $mod->c_test_id = $c_test_id;
+                $mod->c_tag = $item['tag'];
+                $mod->c_type = $item['type'];
+                $mod->c_count = $item['count'];
+                $mod->c_score = $item['score'];
+                
+                if (!$mod->save()) {
                     DB::rollback();
                     return false;
                 }
             }
 
+            // 创建试卷信息
             $paper_mod = new PapersModel();
-            $paper_res = $paper_mod->create_paper_info($c_test_id,$qusetion_list);
-            if(!$paper_res){
+            $paper_res = $paper_mod->create_paper_info($c_test_id, $question_list);
+            if (!$paper_res) {
                 DB::rollback();
                 return false;
             }
+            
             DB::commit();
             return true;
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','paper_rules_log');
+            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
             return false;
         }
-
     }
-
-
+    
     /**
-     * 修改组卷规则
-     * Notes:
-     * User: zhangnan
-     * DateTime: 2025/7/15 16:38
-     * @param $c_test_id
-     * @param $data
+     * 更新组卷规则
+     * @param string $c_test_id 测试ID
+     * @param array $data 新的规则数据
      * @return bool
      */
-    public function update_paper_rules_info($c_test_id="",$data=[],$qusetion_list=[])
+    public function update_paper_rules_info($c_test_id = "", $data = [])
     {
+        if (empty($c_test_id) || empty($data)) {
+            return false;
+        }
+        
         DB::beginTransaction();
-        try{
-            $del = $this->del_paper_rules_by_test_id($c_test_id);
-            if(!$del){
-                DB::rollback();
-                return false;
-            }
-            foreach($data as $k=>$v){
+        try {
+            // 先删除该测试ID下的所有旧规则
+            PaperRulesModel::where('c_test_id', $c_test_id)->delete();
+            
+            // 插入新规则（使用自增ID）
+            foreach ($data as $item) {
+                if (empty($item['tag']) || !isset($item['type']) || !isset($item['count']) || !isset($item['score'])) {
+                    DB::rollback();
+                    return false;
+                }
+                
                 $mod = new PaperRulesModel();
-                $mod->c_id= $v['key'];
-                $mod->c_test_id= $c_test_id;
-                $mod->c_tag= $v['tag'];
-                $mod->c_type= $v['type'];
-                $mod->c_count= $v['count'];;
-                $mod->c_score= $v['score'];
-                $res = $mod->save();
-                if(!$res){
+                $mod->c_test_id = $c_test_id;
+                $mod->c_tag = $item['tag'];
+                $mod->c_type = $item['type'];
+                $mod->c_count = $item['count'];
+                $mod->c_score = $item['score'];
+                
+                if (!$mod->save()) {
                     DB::rollback();
                     return false;
                 }
             }
-            $paper_mod = new PapersModel();
-            $paper_res = $paper_mod->update_paper_info($c_test_id,$qusetion_list);
-            if(!$paper_res){
-                DB::rollback();
-                return false;
-            }
+            
             DB::commit();
             return true;
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','paper_rules_log');
+            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
             return false;
         }
     }
-
-
+    
     /**
-     * Notes:通过测试id删除组卷规则
-     * User: zhangnan
-     * DateTime: 2025/7/15 16:35
-     * @param $c_test_id
+     * 删除测试ID对应的规则
+     * @param string $c_test_id 测试ID
      * @return bool
      */
-    public function del_paper_rules_by_test_id($c_test_id="")
+    public function delete_paper_rules($c_test_id = "")
     {
-        DB::beginTransaction();
-        try{
-            $mod = new PaperRulesModel();
-            $res = $mod->where("c_test_id",$c_test_id)->delete();
-            if(!$res){
-                DB::rollback();
-                return false;
-            }
-            $paper_mod = new PapersModel();
-            $paper_del = $paper_mod->del_paper_by_test_id($c_test_id);
-            if(!$paper_del){
-                DB::rollback();
-                return false;
-            }
-            DB::commit();
-            return true;
-        }catch(\Exception $e){
-            DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','paper_rules_log');
+        if (empty($c_test_id)) {
             return false;
         }
-
+        
+        try {
+            // 删除该测试ID下的所有规则
+            PaperRulesModel::where('c_test_id', $c_test_id)->delete();
+            return true;
+        } catch (\Exception $e) {
+            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
+            return false;
+        }
     }
-
 
     /**
      * Notes:通过c_test_id查询组卷规则

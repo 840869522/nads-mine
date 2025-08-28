@@ -529,7 +529,7 @@ class TestController extends Controller
     }
 
 
-    /**
+            /**
      * Notes:测试删除
      * User: zhangnan
      * DateTime: 2025/7/11 16:34
@@ -552,13 +552,24 @@ class TestController extends Controller
 
             $mod = new TestsModel();
             $res = $mod->del_test_info($c_id);
+            
             if(!$res){
-                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试删除失败");
+                // 修复：通过PDO连接获取错误信息（正确方式）
+                $pdo = DB::connection()->getPdo(); // 获取底层PDO连接
+                $errorInfo = $pdo->errorInfo(); // 使用PDO的errorInfo方法
+                $errorMsg = "测试删除失败，可能存在未清理的关联数据。错误信息: " . (isset($errorInfo[2]) ? $errorInfo[2] : '未知错误');
+                DLOG($errorMsg . " test_id={$c_id}",'error','test_log');
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, $errorMsg);
             }
-            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+            
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        } catch (\Exception $e) {
+            // 新增：捕获所有异常，避免崩溃
+            DLOG("测试删除异常: [{$e->getLine()}]{$e->getMessage()} test_id={$c_id}",'error','test_log');
+            return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
         }
     }
 
@@ -610,73 +621,73 @@ class TestController extends Controller
         }
     }
 
- /**
- * Notes: 根据测试ID获取关联用户信息
- * User: zhangnan
- * DateTime: 2025/8/22 10:00
- * @param Request $request
- * @return JsonResponse
- */
-public function getTestUsersByTestId(Request $request)
-{
-    try {
-        // 1. 接收并验证参数
-        $testId = trim($request->input('test_id'));
-        $validatedData = $request->validate([
-            'test_id' => 'required|string|max:50', // 与表中varchar(50)对应
-        ], [
-            'test_id.required' => '测试ID不能为空',
-            'test_id.string' => '测试ID必须为字符串',
-            'test_id.max' => '测试ID长度不能超过50个字符',
-        ]);
+    /**
+     * Notes: 根据测试ID获取关联用户信息
+     * User: zhangnan
+     * DateTime: 2025/8/22 10:00
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getTestUsersByTestId(Request $request)
+    {
+        try {
+            // 1. 接收并验证参数
+            $testId = trim($request->input('test_id'));
+            $validatedData = $request->validate([
+                'test_id' => 'required|string|max:50', // 与表中varchar(50)对应
+            ], [
+                'test_id.required' => '测试ID不能为空',
+                'test_id.string' => '测试ID必须为字符串',
+                'test_id.max' => '测试ID长度不能超过50个字符',
+            ]);
 
-        // 2. 调用模型查询测试关联的用户列表（test_users表）
-        $testUsersModel = new TestUsersModel();
-        $userList = $testUsersModel->getUsersByTestId($testId);
+            // 2. 调用模型查询测试关联的用户列表（test_users表）
+            $testUsersModel = new TestUsersModel();
+            $userList = $testUsersModel->getUsersByTestId($testId);
 
-        // 3. 处理返回数据（直接查询c_users表获取真实姓名）
-        $result = [];
-        foreach ($userList as $user) {
-            // 4. 直接查询c_users表获取用户真实姓名
-            // 使用DB facade直接操作数据库，无需UserModel
-            $userInfo = DB::table('c_users')
-                          ->where('c_username', $user->c_username)
-                          ->first(); // 获取用户信息
-            
-            $result[] = [
-                'test_id' => $user->c_test_id,
-                'username' => $user->c_username,
-                'name' => $userInfo ? $userInfo->c_name : $user->c_username, // 优先使用c_users表的c_name
-                'paper_id' => $user->c_paper_id,
-                'answers' => $user->c_answers,
-                'start_time' => $user->c_start ? date('Y-m-d H:i:s', strtotime($user->c_start)) : null,
-                'end_time' => $user->c_end ? date('Y-m-d H:i:s', strtotime($user->c_end)) : null,
-                'submit_time' => $user->c_submit ? date('Y-m-d H:i:s', strtotime($user->c_submit)) : null,
-                'score' => $user->c_score ?? 0,
-                'correct_status' => $user->c_correct,
-                'correct_status_text' => $user->c_correct_text,
-            ];
+            // 3. 处理返回数据（直接查询c_users表获取真实姓名）
+            $result = [];
+            foreach ($userList as $user) {
+                // 4. 直接查询c_users表获取用户真实姓名
+                // 使用DB facade直接操作数据库，无需UserModel
+                $userInfo = DB::table('c_users')
+                            ->where('c_username', $user->c_username)
+                            ->first(); // 获取用户信息
+                
+                $result[] = [
+                    'test_id' => $user->c_test_id,
+                    'username' => $user->c_username,
+                    'name' => $userInfo ? $userInfo->c_name : $user->c_username, // 优先使用c_users表的c_name
+                    'paper_id' => $user->c_paper_id,
+                    'answers' => $user->c_answers,
+                    'start_time' => $user->c_start ? date('Y-m-d H:i:s', strtotime($user->c_start)) : null,
+                    'end_time' => $user->c_end ? date('Y-m-d H:i:s', strtotime($user->c_end)) : null,
+                    'submit_time' => $user->c_submit ? date('Y-m-d H:i:s', strtotime($user->c_submit)) : null,
+                    'score' => $user->c_score ?? 0,
+                    'correct_status' => $user->c_correct,
+                    'correct_status_text' => $user->c_correct_text,
+                ];
+            }
+
+            // 5. 返回成功响应
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_OK_CODE,
+                GlobalResponse::HTTP_STATUS_OK_MES,
+                $result
+            );
+
+        } catch (ValidationException $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                $e->getMessage()
+            );
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '获取数据失败：' . $e->getMessage()
+            );
         }
-
-        // 5. 返回成功响应
-        return $this->_response(
-            GlobalResponse::$HTTP_STATUS_OK_CODE,
-            GlobalResponse::HTTP_STATUS_OK_MES,
-            $result
-        );
-
-    } catch (ValidationException $e) {
-        return $this->_response(
-            GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-            $e->getMessage()
-        );
-    } catch (\Exception $e) {
-        return $this->_response(
-            GlobalResponse::$HTTP_SERVER_ERROR_CODE,
-            '获取数据失败：' . $e->getMessage()
-        );
     }
-}
 
     /**
      * Notes: 获取所有用户的用户名和姓名
@@ -837,65 +848,69 @@ public function destroy(Request $request)
 }
 
         /**
-         * Notes:获取所有组卷规则
-         * User: zhangnan
-         * DateTime: 2025/7/11 17:01
-         * @param Request $request
-         * @return JsonResponse
-         */
-        public function get_all_paper_rules(Request $request)
-        {
-            try {
-                $mod = new PaperRulesModel();
-                $allRules = $mod->get_all_paper_rules();
-                
-                $typeDict = [
-                    '1' => 'single_choice',
-                    '2' => 'multiple_choice',
-                    '3' => 'true_or_false',
-                    '4' => 'subjective',
+ * Notes:获取所有组卷规则
+ * User: zhangnan
+ * DateTime: 2025/7/11 17:01
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function get_all_paper_rules(Request $request)
+{
+    try {
+        $mod = new PaperRulesModel();
+        $allRules = $mod->get_all_paper_rules();
+        
+        $typeDict = [
+            '1' => 'single_choice',
+            '2' => 'multiple_choice',
+            '3' => 'true_or_false',
+            '4' => 'subjective',
+        ];
+        
+        $groupedRules = [];
+        foreach ($allRules as $rule) {
+            $testId = $rule->testId;
+            
+            if (!isset($groupedRules[$testId])) {
+                $groupedRules[$testId] = [
+                    'testId' => $testId,
+                    'testName' => $rule->testName ?? '未知测试', // 兼容空名称
+                    'items' => []
                 ];
-                
-                $groupedRules = [];
-                foreach ($allRules as $rule) {
-                    $testId = $rule->testId;
-                    
-                    if (!isset($groupedRules[$testId])) {
-                        $groupedRules[$testId] = [
-                            'testId' => $testId,
-                            'testName' => $rule->testName, // 新增：测试名称
-                            'items' => []
-                        ];
-                    }
-                    
-                    foreach ($rule->items as $item) { 
-                        if (isset($typeDict[(string)$item->c_type])) { 
-                            $groupedRules[$testId]['items'][] = [
-                                'key' => $item->key,
-                                'tag' => $item->c_tag,
-                                'type' => (int)$item->c_type,
-                                'count' => (int)$item->c_count,
-                                'score' => (int)$item->c_score
-                            ];
-                        }
-                    }
+            }
+            
+            foreach ($rule->items as $item) { 
+                if (isset($typeDict[(string)$item->c_type])) { 
+                    $groupedRules[$testId]['items'][] = [
+                        // 修复：用实际存在的c_id替换不存在的key
+                        'key' => $item->c_id,  // 关键修复：使用数据库中的c_id字段
+                        'tag' => $item->c_tag ?? '', // 兼容空标签
+                        'type' => (int)$item->c_type,
+                        'count' => (int)$item->c_count,
+                        'score' => (int)$item->c_score
+                    ];
                 }
-                
-                $result = array_values($groupedRules);
-                
-                return $this->_response(
-                    GlobalResponse::$HTTP_STATUS_OK_CODE,
-                    GlobalResponse::HTTP_STATUS_OK_MES,
-                    $result
-                );
-                
-            } catch (\Exception $e) {
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    $e->getMessage()
-                );
             }
         }
+        
+        $result = array_values($groupedRules);
+        
+        return $this->_response(
+            GlobalResponse::$HTTP_STATUS_OK_CODE,
+            GlobalResponse::HTTP_STATUS_OK_MES,
+            $result
+        );
+        
+    } catch (\Exception $e) {
+        // 记录详细错误信息（包含行号）
+        DLOG("[get_all_paper_rules错误] Line: {$e->getLine()}, Msg: {$e->getMessage()}", 'error', 'paper_rules_log');
+        return $this->_response(
+            GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+            "获取规则失败：{$e->getMessage()}"
+        );
+    }
+}
+
 
     /**
      * Notes:添加组题规则

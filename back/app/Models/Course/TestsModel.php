@@ -110,44 +110,57 @@ public function update_test_info($info="",$c_name="",$c_test_type="",$c_type="",
     }
 
 
-    /**
-     * 删除测试
-     * Notes:
-     * User: zhangnan
-     * DateTime: 2025/7/11 13:45
-     * @param $c_id
-     * @return bool
-     */
-    public function del_test_info($c_id="")
-    {
-        DB::beginTransaction();
-        try{
-            $mod = new TestsModel();
-            $res = $mod->where("c_id",$c_id)->delete();
-            if(!$res){
-                DB::rollback();
-                return false;
+        /**
+ * 删除测试（精简版：只处理实际存在的三个关联表）
+ * Notes: 分数和作答信息包含在c_test_users表中
+ * @param $c_id
+ * @return bool
+ */
+public function del_test_info($c_id="")
+{
+    DB::beginTransaction();
+    try{
+        // 定义实际存在的关联表
+        $relationTables = [
+            'c_test_users' => 'c_test_id',    // 包含用户关联、分数和作答信息
+            'c_paper_rules' => 'c_test_id',   // 试卷规则表
+            'c_papers' => 'c_test_id'         // 试卷表
+        ];
+
+        // 检查并删除每个关联表的数据
+        foreach ($relationTables as $table => $field) {
+            $hasData = DB::table($table)->where($field, $c_id)->exists();
+            if ($hasData) {
+                $deleteRes = DB::table($table)->where($field, $c_id)->delete();
+                if ($deleteRes === false) {
+                    DB::rollback();
+                    DLOG("删除关联表[{$table}]数据失败: test_id={$c_id}",'error','test_log');
+                    return false;
+                }
+                DLOG("删除关联表[{$table}]数据成功: 共删除" . $deleteRes . "条 test_id={$c_id}",'info','test_log');
             }
-            $papers_rule_mod = new PaperRulesModel();
-            $del_papers_rule = $papers_rule_mod->del_paper_rules_by_test_id($c_id);
-            if(!$del_papers_rule){
-                DB::rollback();
-                return false;
-            }
-            $paper_mod = new PapersModel();
-            $paper_del = $paper_mod->del_paper_by_test_id($c_id);
-            if(!$paper_del){
-                DB::rollback();
-                return false;
-            }
-            DB::commit();
-            return true;
-        }catch(\Exception $e){
+        }
+
+        // 删除测试主表数据
+        $res = DB::table('c_tests')->where('c_id', $c_id)->delete();
+        if ($res === false || $res === 0) {
             DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+            DLOG("删除测试主表数据失败（无数据或删除错误）: test_id={$c_id}",'error','test_log');
             return false;
         }
+
+        DB::commit();
+        DLOG("测试删除成功: test_id={$c_id}",'info','test_log');
+        return true;
+    }catch(\Exception $e){
+        DB::rollback();
+        $pdo = DB::connection()->getPdo();
+        $errorInfo = $pdo->errorInfo();
+        $pdoError = isset($errorInfo[2]) ? $errorInfo[2] : '未知PDO错误';
+        DLOG("[{$e->getLine()}]{$e->getMessage()} | PDO错误: {$pdoError} | test_id={$c_id}",'error','test_log');
+        return false;
     }
+}
 
     /**
      * Notes:获取测试列表
