@@ -96,11 +96,11 @@
     "description": "SMB远程溢出植入病毒攻击镜像"
   },
   "v_tar_fingerprint_win.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "主机指纹探测靶机镜像"
   },
   "v_tar_smbPasswd.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "SMB口令探测靶机镜像"
   },
   "v_att_oracleCommandAttack.qcow2": {
@@ -116,7 +116,7 @@
     "description": "UDP泛洪攻击攻击镜像"
   },
   "v_tar_RDPblueScreen.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "RDP远程溢出蓝屏攻击靶机镜像"
   },
   "v_tar_oracleRemote.qcow2": {
@@ -144,11 +144,11 @@
     "description": "TCP泛洪攻击攻击镜像"
   },
   "v_tar_windowsRemote.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "Windows远程溢出漏洞探测靶机镜像"
   },
   "v_tar_windowsControl.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "Windows系统账号控制靶机镜像"
   },
   "ICMP泛洪攻击.qcow2": {
