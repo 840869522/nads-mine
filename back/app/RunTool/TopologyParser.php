@@ -5,10 +5,10 @@ namespace App\RunTool;
 class TopologyParser
 {
     /**
-     * 解析拓扑数据数组.
+     * Parse topology data array.
      *
-     * @param array $topology 包含 'nodes' 和 'edges' 键的拓扑数据数组。
-     * @return array 返回一个包含四个键的关联数组: 'containers', 'vms', 'switches', 'connections'。
+     * @param array $topology The topology data array with 'nodes' and 'edges'.
+     * @return array Returns an associative array with 'containers', 'vms', 'switches', 'connections', and 'iptablesRules'.
      */
     public static function parse(array $topology): array
     {
@@ -21,11 +21,12 @@ class TopologyParser
         $vmsToCreate = [];
         $switchesToCreate = [];
         $connectionsToMake = [];
+        $iptablesRules = []; // New array for iptables rules
 
-        // 第一次遍历：分离出所有需要创建的节点
+        // First pass: separate all nodes to be created and find iptables rules
         foreach ($topology['nodes'] ?? [] as $node) {
             $config = $node['config'] ?? [];
-            
+
             $ports = [];
             if (!empty($config['portMappings'])) {
                 $portPairs = explode(',', $config['portMappings']);
@@ -47,8 +48,7 @@ class TopologyParser
                     }
                 }
             }
-            
-            // 【关键逻辑】优先使用 'Image' 键，如果不存在则使用 'dockerImage' 作为备用
+
             $imageName = $config['Image'] ?? $config['dockerImage'] ?? null;
 
             switch ($node['type']) {
@@ -56,7 +56,7 @@ class TopologyParser
                     $containersToCreate[] = [
                         'id'           => $node['id'],
                         'label'        => $node['label'],
-                        'image'        => $imageName, // 使用修正后的镜像名
+                        'image'        => $imageName,
                         'portMappings' => $ports,
                         'env'          => $envs,
                         'isTarget'     => $config['isTarget'] ?? false,
@@ -67,22 +67,28 @@ class TopologyParser
                     $vmsToCreate[] = [
                         'id'           => $node['id'],
                         'label'        => $node['label'],
-                        'image'        => $imageName, // 使用修正后的镜像名
+                        'image'        => $imageName,
                         'portMappings' => $ports,
                         'isTarget'     => $config['isTarget'] ?? false,
                     ];
                     break;
-                
+
                 case 'switch':
                     $switchesToCreate[] = [
                         'id' => $node['id'],
                         'label' => $node['label'],
                     ];
                     break;
+                
+                case 'nat_bridge':
+                    if (!empty($config['iptablesRules']) && is_array($config['iptablesRules'])) {
+                        $iptablesRules = $config['iptablesRules'];
+                    }
+                    break;
             }
         }
 
-        // 第二次遍历：解析所有连接关系（保持不变）
+        // Second pass: parse all connections
         foreach ($topology['edges'] ?? [] as $edge) {
             $sourceNode = $nodesById[$edge['source']] ?? null;
             $targetNode = $nodesById[$edge['target']] ?? null;
@@ -103,10 +109,11 @@ class TopologyParser
         }
 
         return [
-            'containers' => $containersToCreate,
-            'vms'        => $vmsToCreate,
-            'switches'   => $switchesToCreate,
-            'connections'=> $connectionsToMake,
+            'containers'    => $containersToCreate,
+            'vms'           => $vmsToCreate,
+            'switches'      => $switchesToCreate,
+            'connections'   => $connectionsToMake,
+            'iptablesRules' => $iptablesRules, // Add parsed rules to the result
         ];
     }
 }

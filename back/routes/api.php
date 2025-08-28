@@ -54,7 +54,7 @@ Route::prefix("")->group(function () {
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
 });
 
-
+// scene_vms_instances | 交换机实例 |           | support | /scenario/sceneinstances/all-switches |         1 | 交换机实例 | CubeTransparentIcon |        1 |   11 |
 
 /**
  * 定义基础分系统路由
@@ -296,12 +296,13 @@ Route::prefix('ad')->group(function () {
     // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
 // Flag 相关接口路由组，统一添加 JWT 认证
-Route::prefix('flag')->middleware('jwt.auth')->group(function () {
+Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
     
     // 历史记录查询接口
     Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    
     
     // 获取场景实例列表接口
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);

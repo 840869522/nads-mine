@@ -13,6 +13,45 @@ use Illuminate\Support\Facades\Log;
  */
 class CommandLineService
 {   
+       /**
+     * Applies DNAT rules for port forwarding using iptables.
+     *
+     * @param array $rules Array of iptables rules to apply.
+     * @param array $createdItemsInfo Mapping of node labels to their actual IP addresses.
+     * @param array $connections Array of network connections.
+     * @return void
+     */
+    public function applyIptablesRules(array $rules, array $createdItemsInfo, array $connections): void
+    {
+        $instanceIps = [];
+        foreach ($connections as $conn) {
+            if (!empty($conn['source']['ip'])) {
+                $instanceIps[$conn['source']['label']] = explode('/', $conn['source']['ip'])[0];
+            }
+            if (!empty($conn['target']['ip'])) {
+                $instanceIps[$conn['target']['label']] = explode('/', $conn['target']['ip'])[0];
+            }
+        }
+
+        foreach ($rules as $rule) {
+            $hostPort = $rule['hostPort'] ?? null;
+            $instanceName = $rule['instanceName'] ?? null;
+            $instancePort = $rule['instancePort'] ?? null;
+            $instanceIp = $instanceIps[$instanceName] ?? null;
+
+            if ($hostPort && $instanceName && $instancePort && $instanceIp) {
+                $command = [
+                    'sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING',
+                    '-p', 'tcp', '--dport', $hostPort,
+                    '-j', 'DNAT', '--to-destination', "{$instanceIp}:{$instancePort}"
+                ];
+                Log::info('Executing [iptables]: ' . implode(' ', $command));
+                (new Process($command))->mustRun();
+            } else {
+                Log::warning('[iptables] Skipping invalid rule', ['rule' => $rule, 'found_ip' => $instanceIp]);
+            }
+        }
+    }
      /**
      * 为网桥配置IP地址，并为容器设置默认路由。
      *

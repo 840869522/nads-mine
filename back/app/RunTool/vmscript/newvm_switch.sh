@@ -87,8 +87,8 @@ echo "FOREGROUND: Starting virt-install..."
 virt-install --virt-type kvm \
   --network network=$6,model=virtio \
   --name "$7" \
-  --ram=2048 \
-  --vcpus=2 \
+  --ram=4096 \
+  --vcpus=4 \
   --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
   --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
   --os-variant=ubuntu20.04 \

@@ -33,8 +33,9 @@ class FlagSubmissionController extends Controller
      */
     public function submitFlag(Request $request)
     {
-        // 1. 获取 JWT 用户信息
-        $username = $request->attributes->get('token_data')['id'] ?? null;
+        // 1. 获取 JWT 用户信息（适配 JWTCheckMiddleware）
+        $tokenData = $request->input('token_data');
+        $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
             return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
         }
@@ -220,8 +221,9 @@ class FlagSubmissionController extends Controller
      */
     public function getSubmissionHistory(Request $request)
     {
-        // 1. 获取 JWT 用户信息
-        $username = $request->attributes->get('token_data')['id'] ?? null;
+        // 1. 获取 JWT 用户信息（适配 JWTCheckMiddleware）
+        $tokenData = $request->input('token_data');
+        $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
             return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
         }
@@ -329,8 +331,9 @@ class FlagSubmissionController extends Controller
      */
     public function getSceneInstances(Request $request)
     {
-        // 1. 获取 JWT 用户信息
-        $username = $request->attributes->get('token_data')['id'] ?? null;
+        // 1. 获取 JWT 用户信息（适配 JWTCheckMiddleware）
+        $tokenData = $request->input('token_data');
+        $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
             return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
         }
@@ -361,8 +364,9 @@ class FlagSubmissionController extends Controller
      */
     public function getTargetInstances(Request $request)
     {
-        // 1. 获取 JWT 用户信息
-        $username = $request->attributes->get('token_data')['id'] ?? null;
+        // 1. 获取 JWT 用户信息（适配 JWTCheckMiddleware）
+        $tokenData = $request->input('token_data');
+        $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
             return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
         }

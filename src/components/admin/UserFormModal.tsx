@@ -24,7 +24,7 @@ import { apiClientWithToken } from '@/utils/axios';
 // ---------- Types ----------
 export interface UserFormData extends Partial<User> {
   name: string,
-  pwdedit?: boolean,
+  pwdedit? : boolean,
   username?: string;
   email?: string;
   status?: 'active' | 'disabled';
@@ -107,7 +107,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (name === "password")
-      setFormData(prev => ({ ...prev, [name]: value, ["pwdedit"]: true }));
+      setFormData(prev => ({ ...prev, [name]: value, "pwdedit": true }));
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
@@ -164,7 +164,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
       next.password = '新用户必须设置密码';
     } else if (formData.password && formData.password.length < 6) {
       next.password = '密码至少 6 位';
-    } else if (formData.password?.trim()) {
+    } else if (!formData.password?.trim()) {
       formData.pwdedit = false;
     }
 
@@ -174,7 +174,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ open, onClose, onSave, in
 
   const handleSubmit = () => {
     if (!validate()) return;
-    onSave(formData, isNewUser);
+    onSave({...formData}, isNewUser);
     onClose();
   };
 

@@ -129,6 +129,13 @@ function shootLaser(
 }
 
 export default function Battlefield () {
+    // let id = localStorage.getItem('instance_id');
+    // if (id !== null) {
+    //     sessionStorage.setItem('instance_id', id); // 存到每个标签页独立的 sessionStorage
+    //     localStorage.removeItem('instance_id');
+    // }
+    // id = sessionStorage.getItem('instance_id');
+    // console.log(id);
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
 

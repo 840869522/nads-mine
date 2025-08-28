@@ -302,6 +302,11 @@ class DrillController extends Controller
                     $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
                 }
             }
+            //添加iptables转发
+            if (!empty($parsedTopology['iptablesRules'])) {
+                Log::info("================== Applying iptables rules ==================");
+                $this->cliService->applyIptablesRules($parsedTopology['iptablesRules'], $createdItemsInfo, $connections);
+            }
             // 配置网关IP和所有容器的路由
             $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
             $containersToRoute = [];

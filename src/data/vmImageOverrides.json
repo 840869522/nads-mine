@@ -65,7 +65,7 @@
   },
   "v_att_smbRemote.qcow2": {
     "osType": "Linux",
-    "description": "SMB远程溢出拒绝攻击攻击镜像"
+    "description": "SMB远程溢出植入远控攻击镜像"
   },
   "v_att_udpScanning.qcow2": {
     "osType": "Linux",
@@ -93,19 +93,19 @@
   },
   "v_att_smbImplant.qcow2": {
     "osType": "Linux",
-    "description": "SMB远程溢出植入远控攻击镜像"
+    "description": "SMB远程溢出植入病毒攻击镜像"
   },
   "v_tar_fingerprint_win.qcow2": {
     "osType": "Windows",
-    "description": "主机指紋探测靶机镜像"
+    "description": "主机指纹探测靶机镜像"
   },
   "v_tar_smbPasswd.qcow2": {
-    "osType": "Linux",
+    "osType": "Windows",
     "description": "SMB口令探测靶机镜像"
   },
   "v_att_oracleCommandAttack.qcow2": {
     "osType": "Linux",
-    "description": "Oracle远程命令执行攻击攻击镜像"
+    "description": "Oracle命令执行攻击攻击镜像"
   },
   "v_tar_serviceVersion.qcow2": {
     "osType": "Linux",
@@ -116,12 +116,12 @@
     "description": "UDP泛洪攻击攻击镜像"
   },
   "v_tar_RDPblueScreen.qcow2": {
-    "osType": "Linux",
+    "osType": "Windows",
     "description": "RDP远程溢出蓝屏攻击靶机镜像"
   },
   "v_tar_oracleRemote.qcow2": {
     "osType": "Linux",
-    "description": ""
+    "description": "oracle远程溢出攻击探测靶机镜像"
   },
   "v_tar_fingerprint.qcow2": {
     "osType": "Linux",
@@ -173,7 +173,7 @@
   },
   "v_tar_oracleCommandAttack.qcow2": {
     "osType": "Linux",
-    "description": "Oracle远程命令执行攻击靶机镜像"
+    "description": "Oracle命令执行攻击靶机镜像"
   },
   "v_tar_oracleRemoteControl.qcow2": {
     "osType": "Linux",
@@ -193,11 +193,11 @@
   },
   "v_att_oracleRemote.qcow2": {
     "osType": "Linux",
-    "description": ""
+    "description": "oracle远程命令执行漏洞探测攻击镜像"
   },
   "v_att_oracleRemoteControl.qcow2": {
     "osType": "Linux",
-    "description": "Oracle数据库控制攻击镜像"
+    "description": "Oracle命令执行植入远控镜像"
   },
   "v_tar_UDPflooding.qcow2": {
     "osType": "Linux",
@@ -209,11 +209,11 @@
   },
   "v_tar_smbRemote.qcow2": {
     "osType": "Linux",
-    "description": "SMB远程溢出拒绝攻击靶机镜像"
+    "description": "SMB远程溢出植入远控靶机镜像"
   },
   "v_tar_smbImplant.qcow2": {
     "osType": "Linux",
-    "description": "SMB远程溢出植入远控靶机镜像"
+    "description": "SMB远程溢出植入病毒靶机镜像"
   },
   "v_tar_udpScanning.qcow2": {
     "osType": "Linux",
@@ -237,6 +237,6 @@
   },
   "v_att_oracleImplant.qcow2": {
     "osType": "Linux",
-    "description": "Oracle命令执行植入远控攻击镜像"
+    "description": "Oracle命令执行植入病毒攻击镜像"
   }
 }
