@@ -6,35 +6,39 @@ namespace App\Http\Controllers\ad;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdConfigResource;
 use App\Models\ad\AdConfig;
+use App\Models\ad\SceneInstances;
 use App\Models\ad\SceneUsersModel;
+use App\Models\ad\TeamUsers;
 use App\Rules\NoTeamMemberConflict;
 use App\Rules\NotInTeams;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
-// 【★★★ 核心修复 ★★★】在行尾添加分号
 use Illuminate\Support\Str;
-use App\Models\ad\TeamUsers;
-use App\Models\ad\SceneInstances;
+use Illuminate\Validation\Rule;
 
 class AdConfigController extends Controller
 {
     /**
-     * 获取演练列表 (支持搜索)
+     * 获取演练列表 (已修改为支持灵活分页)
      */
     public function index(Request $request)
     {
+        // 从请求中获取每页数量，默认为 10
+        $perPage = $request->query('per_page', 10);
+
         $query = AdConfig::query()->with(['redTeam', 'blueTeam', 'referees', 'sceneConfig']);
 
         if ($request->has('search') && !empty($request->search)) {
             $query->where('c_drill_name', 'like', '%' . $request->search . '%');
         }
 
-        $adConfigs = $query->latest('c_create_at')->paginate(15);
+        // 使用可配置的 $perPage 进行分页
+        $adConfigs = $query->latest('c_create_at')->paginate($perPage);
 
+        // 这部分动态注入逻辑依然有效，但它只会处理当前页的数据
         $sceneInstancesModel = new SceneInstances();
-        $adConfigs->each(function($item) use ($sceneInstancesModel) {
+        $adConfigs->getCollection()->transform(function($item) use ($sceneInstancesModel) {
             if ($item->c_scene_config_id) {
                 $instance_id = $sceneInstancesModel->get_c_scene_instances_id($item->c_scene_config_id);
                 if ($instance_id) {
@@ -43,15 +47,10 @@ class AdConfigController extends Controller
                     $item->c_status = 'running'; // 强制将状态更新为 'running'
                 }
             }
+            return $item; // 确保返回 item
         });
 
-//        $adConfigs->each(function($item){
-//            $SceneInstances_mod = new SceneInstances();
-//            $SceneInstances_id = $SceneInstances_mod->get_c_scene_instances_id($item->c_scene_config_id);
-//            if($SceneInstances_id){
-//                $item->c_scene_instance_id = $SceneInstances_id;
-//            }
-//        });
+        // AdConfigResource 会正确处理分页对象
         return AdConfigResource::collection($adConfigs);
     }
 
@@ -67,7 +66,6 @@ class AdConfigController extends Controller
                 'required',
                 'integer',
                 'exists:c_teams,c_id',
-                // 创建规则实例，并将蓝队的ID作为参数传给它的构造函数。
                 new NoTeamMemberConflict((int)$request->input('c_blue_team_id', 0))
             ],
             'c_blue_team_id'    => 'required|integer|exists:c_teams,c_id|different:c_red_team_id',
@@ -99,7 +97,6 @@ class AdConfigController extends Controller
                 $c_scene_instance_id = $SceneInstances_id;
             }
             $adConfig = AdConfig::create([
-                // 现在 Str::uuid() 会被正确识别
                 'c_id'                => (string) Str::uuid(),
                 'c_drill_name'        => $validated['c_drill_name'],
                 'c_description'       => $validated['c_description'] ?? null,
@@ -125,11 +122,6 @@ class AdConfigController extends Controller
                 }
             }
 
-
-
-
-
-
             $refereesData = collect($validated['referees'])->keyBy('c_user_id')->map(function ($referee) {
                 return ['c_level' => $referee['c_level']];
             });
@@ -154,9 +146,6 @@ class AdConfigController extends Controller
     /**
      * 更新演练
      */
-    /**
-     * 更新演练
-     */
     public function update(Request $request, AdConfig $adConfig)
     {
         $validated = $request->validate([
@@ -176,7 +165,6 @@ class AdConfigController extends Controller
                 'required',
                 'array',
                 'min:1',
-                // 创建 NotInTeams 规则实例，传入红队和蓝队的ID
                 new NotInTeams((int)$request->input('c_red_team_id', 0), (int)$request->input('c_blue_team_id', 0))
             ],
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
@@ -184,37 +172,27 @@ class AdConfigController extends Controller
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
-
-            // --- 步骤 1: 获取并保存所有需要的旧状态 (在任何更新操作之前) ---
             $oldSceneId = $adConfig->c_scene_config_id;
-            $oldRedTeamId = $adConfig->c_red_team_id; // <-- 【修复】保存旧的红队ID
-            $oldBlueTeamId = $adConfig->c_blue_team_id; // <-- 【修复】保存旧的蓝队ID
+            $oldRedTeamId = $adConfig->c_red_team_id;
+            $oldBlueTeamId = $adConfig->c_blue_team_id;
 
             $teamUserMod = new TeamUsers();
             $oldUserList = [];
-            // 只有当旧场景存在时，才需要获取旧用户列表以进行清理
             if ($oldSceneId) {
-                // 使用保存好的旧ID来获取真正的旧用户列表
                 $oldUserList = $teamUserMod->get_teams_users($oldRedTeamId, $oldBlueTeamId);
             }
 
-            // --- 步骤 2: 更新演练核心信息和裁判 ---
-            // 现在可以安全地更新 $adConfig 对象了
             $adConfig->update($validated);
 
             $refereesData = collect($validated['referees'])->keyBy('c_user_id')->map(fn($r) => ['c_level' => $r['c_level']]);
             $adConfig->referees()->sync($refereesData);
 
-            // --- 步骤 3: 同步场景权限 ---
-
             $newSceneId = $validated['c_scene_config_id'] ?? null;
 
-            // 3.1 清理旧的权限 (现在 $oldUserList 是正确的了)
             if ($oldSceneId && !empty($oldUserList)) {
                 SceneUsersModel::revokePermissions($oldSceneId, $oldUserList);
             }
 
-            // 3.2 授予新的权限
             if ($newSceneId) {
                 $newUserList = $teamUserMod->get_teams_users($validated['c_red_team_id'], $validated['c_blue_team_id']);
 
@@ -225,44 +203,40 @@ class AdConfigController extends Controller
                     }
                 }
             }
-            // 至此，所有数据库操作都在事务内完成
-        }); // <--- 正确的事务闭包位置
+        });
 
-        // 在事务之外加载最新的关联关系并返回
         $adConfig->load(['redTeam', 'blueTeam', 'referees', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
 
+    /**
+     * 删除演练
+     */
     public function destroy(AdConfig $adConfig)
     {
         DB::transaction(function () use ($adConfig) {
-
-            // 步骤 1: 从即将被删除的演练对象中，获取清理权限所需的信息
             $sceneId = $adConfig->c_scene_config_id;
             $redTeamId = $adConfig->c_red_team_id;
             $blueTeamId = $adConfig->c_blue_team_id;
 
-            // 步骤 2: 如果演练关联了场景，则清理相关权限
             if ($sceneId) {
                 $teamUserMod = new TeamUsers();
                 $userList = $teamUserMod->get_teams_users($redTeamId, $blueTeamId);
 
-                // 只有当用户列表不为空时，才执行删除操作
                 if (!empty($userList)) {
                     SceneUsersModel::revokePermissions($sceneId, $userList);
                 }
             }
 
-            // 步骤 3: 清理完所有依赖数据后，删除演练本身
-            // 注意: Eloquent 的 delete() 也会自动处理通过标准 hasMany/belongsToMany
-            // 并且在数据库层面设置了 ON DELETE CASCADE 的关联关系（比如裁判的中间表记录）
             $adConfig->delete();
-
-        }); // 事务结束
+        });
 
         return response()->json(['message' => '演练删除成功，并已清理相关权限。']);
     }
 
+    /**
+     * 启动演练
+     */
     public function start(AdConfig $adConfig)
     {
         if ($adConfig->c_status === 'running') {
@@ -273,6 +247,9 @@ class AdConfigController extends Controller
         return response()->json(['message' => '演练已启动']);
     }
 
+    /**
+     * 停止演练
+     */
     public function stop(AdConfig $adConfig)
     {
         if ($adConfig->c_status !== 'running') {

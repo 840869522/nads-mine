@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, FormEvent } from 'react';
+import React, { useState, useEffect, useCallback, FormEvent, MouseEvent } from 'react';
 // MUI 组件导入
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -19,16 +19,12 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import TablePagination from '@mui/material/TablePagination';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
-import FormControl from '@mui/material/FormControl';
-import FormLabel from '@mui/material/FormLabel';
-import RadioGroup from '@mui/material/RadioGroup';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Radio from '@mui/material/Radio';
 import Autocomplete from '@mui/material/Autocomplete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -40,27 +36,22 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useDebounce } from '@/app/hooks/useDebounce';
 
 // === 自定义类型 ===
-enum TeamColor {
-    RED = 'red',
-    BLUE = 'blue',
-}
-
 interface User {
     u_id: string;
-    u_name: string;
+    u_name?: string;
 }
 
+// 1. 简化 Team 接口，移除所有颜色属性
 interface Team {
     c_id: number;
     c_name: string;
-    c_color: TeamColor;
     c_description?: string;
     score?: number;
     members?: User[];
 }
 
 const Page: React.FC = () => {
-    // === 状态管理 (保持不变) ===
+    // === 状态管理 ===
     const [teams, setTeams] = useState<Team[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,67 +65,63 @@ const Page: React.FC = () => {
     const [isUsersLoading, setIsUsersLoading] = useState(false);
     const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
-
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalTeams, setTotalTeams] = useState(0);
     const API_BASE_URL = '/back/api';
 
     const fetchTeams = useCallback(async () => {
         setIsLoading(true);
+        setStatusMessage(null);
         try {
-            //const url = new URL(`${API_BASE_URL}/ad/team`);
-            //if (debouncedSearchQuery) {
-            //    url.searchParams.append('search', debouncedSearchQuery);
-            //}
-            const response = await fetch(`${API_BASE_URL}/ad/team`);
+            const params = new URLSearchParams();
+            params.append('page', String(page + 1));
+            params.append('per_page', String(rowsPerPage));
+            if (debouncedSearchQuery) {
+                params.append('search', debouncedSearchQuery);
+            }
+            const urlString = `${API_BASE_URL}/ad/team?${params.toString()}`;
+            const response = await fetch(urlString);
             if (!response.ok) throw new Error('从服务器获取队伍列表失败');
+
             const result = await response.json();
             const rawTeams = result.data ?? [];
+            setTotalTeams(result.total ?? 0);
 
+            // 2. 简化数据映射
             const formattedTeams: Team[] = rawTeams.map((team: any) => ({
                 c_id: team.c_id,
                 c_name: team.c_name,
-                c_color: team.c_color,
                 c_description: team.c_description,
                 score: team.score,
                 members: team.users?.map((user: any) => ({
                     u_id: user.c_username,
-                    u_name: user.c_username
-                })) || []
+                    u_name: user.c_name
+                })) || [],
             }));
             setTeams(formattedTeams);
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
             setTeams([]);
+            setTotalTeams(0);
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchQuery]);
+    }, [debouncedSearchQuery, page, rowsPerPage]);
 
-    // ======================================================================
-    //               <<<<< 核心修复：修正 fetchUsers 函数 >>>>>
-    // ======================================================================
     const fetchUsers = useCallback(async () => {
         if (allUsers.length > 0) return;
         setIsUsersLoading(true);
         try {
             const response = await fetch(`${API_BASE_URL}/ad/users`);
             if (!response.ok) throw new Error('获取用户列表失败');
-
             const result = await response.json();
-
-            // 检查 API 返回的数据结构是否正确
             if (result && result.status === 'success' && Array.isArray(result.data)) {
-                // 后端返回的是: { c_username: '...', c_email: '...' }
-                // 我们需要将其转换为前端的 User 类型: { u_id: '...', u_name: '...' }
                 const rawUsers = result.data;
-                const formattedUsers: User[] = rawUsers.map((user: any) => ({
-                    u_id: user.c_username,
-                    u_name: user.c_username,
-                }));
+                const formattedUsers: User[] = rawUsers.map((user: any) => ({ u_id: user.c_username, u_name: user.c_name }));
                 setAllUsers(formattedUsers);
             } else {
-                // 如果 API 返回的格式不是我们期望的 { status: 'success', data: [...] }
-                console.error("从API获取的用户数据格式不正确:", result);
-                setAllUsers([]); // 设置为空数组以避免错误
+                setAllUsers([]);
             }
         } catch (err) {
             setStatusMessage({ type: 'error', message: `无法加载用户列表: ${(err as Error).message}` });
@@ -142,14 +129,11 @@ const Page: React.FC = () => {
         } finally {
             setIsUsersLoading(false);
         }
-    }, [allUsers.length]);
+    }, []);
 
+    useEffect(() => { fetchTeams(); }, [fetchTeams]);
+    useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
 
-    useEffect(() => {
-        fetchTeams();
-    }, [fetchTeams]);
-
-    // === 事件处理器 (无需修改) ===
     const handleOpenForm = (team?: Team) => {
         fetchUsers();
         setEditingTeam(team || null);
@@ -157,49 +141,30 @@ const Page: React.FC = () => {
         setIsFormOpen(true);
         setStatusMessage(null);
     };
+    const handleCloseForm = () => { setIsFormOpen(false); setEditingTeam(null); setSelectedMemberIds([]); };
 
-    const handleCloseForm = () => {
-        setIsFormOpen(false);
-        setEditingTeam(null);
-        setSelectedMemberIds([]);
-    };
-
-    // handleFormSubmit, handleDeleteTeam 等其他处理器保持不变
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
 
-        // ★★★ 核心修复：修改要发送到后端的数据结构 ★★★
+        // 3. 简化提交的数据
         const teamData = {
             c_name: formData.get('name') as string,
-            c_color: formData.get('color') as TeamColor,
             c_description: formData.get('description') as string,
-            // 将键名从 'members' 修改为 'users'，以匹配后端控制器的期望
             users: selectedMemberIds,
         };
 
         setIsSubmitting(true);
         setStatusMessage(null);
-
         try {
-            const url = editingTeam
-                ? `${API_BASE_URL}/ad/team/${editingTeam.c_id}`
-                : `${API_BASE_URL}/ad/team`;
+            const url = editingTeam ? `${API_BASE_URL}/ad/team/${editingTeam.c_id}` : `${API_BASE_URL}/ad/team`;
             const method = editingTeam ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(teamData), // 现在发送的是包含 'users' 键的数据
-            });
-
+            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(teamData) });
             const result = await response.json();
-
             if (!response.ok) {
                 if (response.status === 422 && result.errors) throw new Error(JSON.stringify(result.errors));
-                throw new Error(result.message || '操作失败，请重试');
+                throw new Error(result.message || '操作失败');
             }
-
             setStatusMessage({ type: 'success', message: result.message || '操作成功！' });
             handleCloseForm();
             await fetchTeams();
@@ -216,30 +181,15 @@ const Page: React.FC = () => {
         if (typeof message === 'string') return message;
         return <ul style={{ paddingLeft: '20px', margin: 0 }}>{Object.values(message).flat().map((msg, index) => <li key={index}>{msg}</li>)}</ul>;
     };
-
-    const handleOpenConfirmDialog = (team: Team) => {
-        setTeamToDelete(team);
-        setIsConfirmOpen(true);
-    };
-
-    const handleCloseConfirmDialog = () => {
-        setTeamToDelete(null);
-        setIsConfirmOpen(false);
-    };
-
+    const handleOpenConfirmDialog = (team: Team) => { setTeamToDelete(team); setIsConfirmOpen(true); };
+    const handleCloseConfirmDialog = () => { setTeamToDelete(null); setIsConfirmOpen(false); };
     const handleDeleteTeam = async () => {
         if (!teamToDelete) return;
         setIsSubmitting(true);
         setStatusMessage(null);
         try {
-            const response = await fetch(`${API_BASE_URL}/ad/team/${teamToDelete.c_id}`, {
-                method: 'DELETE',
-                headers: { 'Accept': 'application/json' },
-            });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || '删除队伍失败');
-            }
+            const response = await fetch(`${API_BASE_URL}/ad/team/${teamToDelete.c_id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+            if (!response.ok) { const result = await response.json(); throw new Error(result.message || '删除队伍失败'); }
             setStatusMessage({ type: 'success', message: '删除成功！' });
             await fetchTeams();
         } catch (error) {
@@ -249,12 +199,11 @@ const Page: React.FC = () => {
             handleCloseConfirmDialog();
         }
     };
+    const handleChangePage = (event: MouseEvent<HTMLButtonElement> | null, newPage: number) => { setPage(newPage); };
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
-
-    // === 渲染逻辑 (无需修改) ===
     return (
         <Box sx={{ p: 3, maxWidth: '1200px', margin: 'auto' }}>
-            {/* 页面标题和搜索框 */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <Typography variant="h4" component="h1" fontWeight="bold">队伍管理</Typography>
@@ -262,17 +211,16 @@ const Page: React.FC = () => {
                 </Box>
                 <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()}>创建新队伍</Button>
             </Box>
-            {/* 状态消息 */}
+
             {statusMessage && <Alert severity={statusMessage.type} onClose={() => setStatusMessage(null)} sx={{ mb: 3, wordBreak: 'break-word' }}>{renderErrorMessage(statusMessage.message)}</Alert>}
 
-            {/* 队伍列表表格 */}
             <Paper sx={{ width: '100%', overflow: 'hidden' }} elevation={2}>
                 <TableContainer>
                     <Table stickyHeader>
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 'bold' }}>队伍名称</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>队伍颜色</TableCell>
+                                {/* 4. 移除“队伍颜色”表头 */}
                                 <TableCell sx={{ fontWeight: 'bold', minWidth: '200px' }}>成员列表</TableCell>
                                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>当前得分</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>描述</TableCell>
@@ -281,24 +229,22 @@ const Page: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 1 }}>正在加载队伍数据...</Typography></TableCell></TableRow>
+                                // 5. 调整 colSpan
+                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 1 }}>正在加载队伍数据...</Typography></TableCell></TableRow>
                             ) : teams.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{debouncedSearchQuery ? '未找到匹配的队伍。' : '当前没有队伍，请创建新队伍。'}</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{debouncedSearchQuery ? '未找到匹配的队伍。' : '当前没有队伍，请创建新队伍。'}</Typography></TableCell></TableRow>
                             ) : (
                                 teams.map((team) => (
                                     <TableRow hover key={team.c_id}>
                                         <TableCell>{team.c_name}</TableCell>
-                                        <TableCell><Chip label={team.c_color === TeamColor.RED ? '红队 - 攻击方' : '蓝队 - 防御方'} color={team.c_color === TeamColor.RED ? 'error' : 'primary'} size="small" /></TableCell>
+                                        {/* 6. 移除渲染颜色的 TableCell */}
                                         <TableCell>
                                             {team.members && team.members.length > 0 ? (
-                                                <Tooltip title={team.members.map(m => m.u_name).join(', ')}>
+                                                <Tooltip title={team.members.map(m => m.u_name ? `${m.u_id}(${m.u_name})` : m.u_id).join(', ')}>
                                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-                                                        {team.members.slice(0, 3).map(member => (
-                                                            <Chip key={member.u_id} label={member.u_name} size="small" variant="outlined" />
+                                                        {team.members.map(member => (
+                                                            <Chip key={member.u_id} label={member.u_name ? `${member.u_id}(${member.u_name})` : member.u_id} size="small" variant="outlined" />
                                                         ))}
-                                                        {team.members.length > 3 && (
-                                                            <Typography variant="body2" sx={{ ml: 0.5, color: 'text.secondary' }}>+{team.members.length - 3}</Typography>
-                                                        )}
                                                     </Box>
                                                 </Tooltip>
                                             ) : (
@@ -317,32 +263,36 @@ const Page: React.FC = () => {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                <TablePagination
+                    component="div"
+                    count={totalTeams}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    labelRowsPerPage="每页行数:"
+                    labelDisplayedRows={({ from, to, count }) => `第 ${from} 到 ${to} 条，共 ${count} 条`}
+                />
             </Paper>
 
-            {/* 创建/编辑队伍对话框 */}
             <Dialog key={editingTeam?.c_id || 'new-team-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="sm">
                 <DialogTitle>{editingTeam ? '编辑队伍' : '创建新队伍'}</DialogTitle>
                 <form onSubmit={handleFormSubmit}>
                     <DialogContent>
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" id="name" name="name" label="队伍名称" type="text" fullWidth variant="outlined" defaultValue={editingTeam?.c_name || ''} required />
-                        <FormControl component="fieldset" margin="normal" required>
-                            <FormLabel component="legend">队伍颜色</FormLabel>
-                            <RadioGroup row aria-label="color" name="color" defaultValue={editingTeam?.c_color || TeamColor.BLUE}>
-                                <FormControlLabel value={TeamColor.BLUE} control={<Radio />} label="蓝队 (防御方)" />
-                                <FormControlLabel value={TeamColor.RED} control={<Radio />} label="红队 (攻击方)" />
-                            </RadioGroup>
-                        </FormControl>
+
+                        {/* 7. 移除选择颜色的表单控件 */}
+
                         <Autocomplete
-                            multiple
-                            id="team-members"
-                            options={allUsers}
-                            getOptionLabel={(option) => option.u_name}
+                            multiple id="team-members" options={allUsers}
+                            getOptionLabel={(option) => option.u_name ? `${option.u_id}(${option.u_name})` : option.u_id}
                             value={allUsers.filter(user => selectedMemberIds.includes(user.u_id))}
                             onChange={(_, newValue) => { setSelectedMemberIds(newValue.map(user => user.u_id)); }}
                             isOptionEqualToValue={(option, value) => option.u_id === value.u_id}
-                            loading={isUsersLoading}
-                            noOptionsText="没有可用选项"
+                            loading={isUsersLoading} noOptionsText="没有可用选项"
                             renderInput={(params) => (
                                 <TextField {...params} variant="outlined" label="添加队员 (可选)" placeholder="搜索并选择用户..."
                                            InputProps={{ ...params.InputProps, endAdornment: (<>{isUsersLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps.endAdornment}</>), }}
@@ -361,7 +311,6 @@ const Page: React.FC = () => {
                 </form>
             </Dialog>
 
-            {/* 删除确认对话框 */}
             <Dialog open={isConfirmOpen} onClose={handleCloseConfirmDialog}>
                 <DialogTitle>确认删除</DialogTitle>
                 <DialogContent><Typography>您确定要删除队伍 "{teamToDelete?.c_name}" 吗？此操作无法撤销。</Typography></DialogContent>

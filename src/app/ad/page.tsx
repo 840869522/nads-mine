@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useState, useEffect, useCallback, FormEvent, useMemo} from 'react';
+import React, {useState, useEffect, useCallback, FormEvent, useMemo, MouseEvent} from 'react';
 // MUI 组件导入
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -17,6 +17,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import TablePagination from '@mui/material/TablePagination';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -41,11 +42,10 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 
-// 假设的自定义钩子，请确保路径正确
+// 假设的自定义钩子和类型，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
-import {TopologyData} from "@/types.ts";
-import {useAuth} from "@/hooks/useAuth.ts";
-
+import {TopologyData} from "@/types";
+import {useAuth} from "@/hooks/useAuth";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 
 // --- 类型定义 ---
@@ -53,19 +53,16 @@ interface User {
     c_username: string;
     c_email?: string;
 }
-
 interface Team {
     c_id: number;
     c_name: string;
     users: { c_username: string }[];
 }
-
 interface AdReferee {
     c_user_id: string;
     c_level: string;
     user?: User;
 }
-
 interface AdConfig {
     c_id: string;
     c_drill_name: string;
@@ -83,7 +80,6 @@ interface AdConfig {
     redTeam?: Team;
     blueTeam?: Team;
 }
-
 export interface Ad {
     id: string;
     name: string;
@@ -93,7 +89,6 @@ export interface Ad {
     c_scene_config_id: number;
     topology_json: TopologyData;
 }
-
 interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
@@ -119,9 +114,11 @@ const AdManagementPage: React.FC = () => {
     const [selectedRedTeamId, setSelectedRedTeamId] = useState<number | ''>('');
     const [selectedBlueTeamId, setSelectedBlueTeamId] = useState<number | ''>('');
     const [teamConflictError, setTeamConflictError] = useState<string | null>(null);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalAdConfigs, setTotalAdConfigs] = useState(0);
     const API_BASE_URL = '/back/api';
 
-    // === 所有 Hooks 和辅助函数 (无变化) ===
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
         const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
@@ -132,30 +129,63 @@ const AdManagementPage: React.FC = () => {
         return members;
     }, [selectedRedTeamId, selectedBlueTeamId, teams]);
 
+    // ★★★ 核心修复：调整 fetchData 函数内部逻辑 ★★★
     const fetchData = useCallback(async () => {
         setIsLoading(true);
+        setStatusMessage(null); // 开始获取时清除旧消息
         try {
+            const params = new URLSearchParams();
+            params.append('search', debouncedSearchQuery);
+            params.append('page', String(page + 1));
+            params.append('per_page', String(rowsPerPage));
+
+            // 修复了 URL 路径中的占位符
+            const adConfigsUrl = `${API_BASE_URL}/ad-configs?${params.toString()}`;
+            const teamsUrl = `${API_BASE_URL}/ad/team`;
+            const usersUrl = `${API_BASE_URL}/ad/users`;
+            const scenesUrl = `${API_BASE_URL}/scenarios`;
+
             const [adConfigsRes, teamsRes, usersRes, scenesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/ad-configs?search=${debouncedSearchQuery}`),
-                fetch(`${API_BASE_URL}/ad/team`),
-                fetch(`${API_BASE_URL}/ad/users`),
-                fetch(`${API_BASE_URL}/scenarios`),
+                fetch(adConfigsUrl),
+                fetch(teamsUrl),
+                fetch(usersUrl),
+                fetch(scenesUrl),
             ]);
+
             if (!adConfigsRes.ok || !teamsRes.ok || !usersRes.ok || !scenesRes.ok) throw new Error('获取基础数据失败');
-            const [adConfigsData, teamsData, usersData, scenesData] = await Promise.all([adConfigsRes.json(), teamsRes.json(), usersRes.json(), scenesRes.json()]);
+
+            // 按顺序解析 JSON 并赋值，避免初始化错误
+            const adConfigsData = await adConfigsRes.json();
+            const teamsData = await teamsRes.json();
+            const usersData = await usersRes.json();
+            const scenesData = await scenesRes.json(); // <-- 在这里正确地获取 scenesData
+
             setAdConfigs(adConfigsData.data || []);
+            setTotalAdConfigs(adConfigsData.meta?.total || 0);
+
             setTeams(teamsData.data || []);
             setUsers(usersData.data || []);
-            const formattedScenes = (Array.isArray(scenesData) ? scenesData : scenesData.data || []).map((scene: any) => ({ c_config_id: scene.id, c_name: scene.name }));
+
+            // 现在可以安全地使用 scenesData
+            const formattedScenes = (Array.isArray(scenesData) ? scenesData : scenesData.data || []).map((scene: any) => ({
+                c_config_id: scene.id,
+                c_name: scene.name,
+            }));
             setSceneConfigs(formattedScenes);
+
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchQuery]);
+    }, [debouncedSearchQuery, page, rowsPerPage]);
+
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    useEffect(() => {
+        setPage(0);
+    }, [debouncedSearchQuery]);
 
     useEffect(() => {
         if (!selectedRedTeamId || !selectedBlueTeamId) { setTeamConflictError(null); return; }
@@ -198,7 +228,7 @@ const AdManagementPage: React.FC = () => {
             setSelectedScenarioName(adConfig.c_drill_name);
             setIsDetailsModalOpen(true);
         } else {
-            alert('此演练尚未启动，无法查看实例详情。');
+            setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看实例详情。' });
         }
     };
 
@@ -262,12 +292,11 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
-    // 启动场景
     const handleAdAction = async (ad: AdConfig) => {
         const cj_name = findSceneNameById(ad.c_scene_config_id);
         const username = (user as any)?.user?.c_username;
         if (!username) {
-            alert('无法获取当前用户名，请确保您已登录。');
+            setStatusMessage({ type: 'error', message: '无法获取当前用户名，请确保您已登录。' });
             return;
         }
         if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
@@ -275,13 +304,12 @@ const AdManagementPage: React.FC = () => {
         }
 
         try {
-            // ★★★ 核心修改：在请求体中附加上 ad_config_id ★★★
             const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
                     username: username,
-                    ad_config_id: ad.c_id // 使用 AdConfig 的 c_id
+                    ad_config_id: ad.c_id
                 }),
             });
 
@@ -290,17 +318,13 @@ const AdManagementPage: React.FC = () => {
                 throw new Error(result.message || '启动失败');
             }
 
-            // ★★★ 逻辑简化：不再需要前端乐观更新 ★★★
-            // 后端已经修复，我们只需要简单地重新获取数据即可
             setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
             await fetchData();
-
         } catch (err: any) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         }
     };
 
-    // === 其他辅助函数 (无变化) ===
     const handleRefereeLevelChange = (user_id: string, newLevel: string) => {
         setSelectedReferees(prev => prev.map(ref => ref.c_user_id === user_id ? { ...ref, c_level: newLevel } : ref));
     };
@@ -325,12 +349,24 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
-    const handleOpenView = (c_scene_instance_id:string) => {
-        // localStorage.setItem("instance_id", c_scene_instance_id);
+    const handleOpenView = (c_scene_instance_id:string | null) => {
+        if (!c_scene_instance_id) {
+            setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' });
+            return;
+        }
         window.open('/visualization', '_blank');
-    }    
+    }
 
-    // === 渲染逻辑 (无变化) ===
+    const handleChangePage = (event: MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
+
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -377,7 +413,7 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}>
-                                                    <IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id ? adConfig.c_scene_instance_id : '')}>
+                                                    <IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id)}>
                                                         <ScreenShareIcon />
                                                     </IconButton>
                                                 </TableCell>
@@ -385,12 +421,7 @@ const AdManagementPage: React.FC = () => {
                                                     {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
                                                         <Tooltip title="开始/重新开始演练">
                                                             <span>
-                                                                <IconButton
-                                                                    color="success"
-                                                                    // ★★★ 类型清理：直接传递adConfig，并修改函数签名 ★★★
-                                                                    onClick={() => handleAdAction(adConfig)}
-                                                                    disabled={!adConfig.c_scene_config_id}
-                                                                >
+                                                                <IconButton color="success" onClick={() => handleAdAction(adConfig)} disabled={!adConfig.c_scene_config_id}>
                                                                     <PlayArrowIcon />
                                                                 </IconButton>
                                                             </span>
@@ -398,11 +429,7 @@ const AdManagementPage: React.FC = () => {
                                                     )}
                                                     <Tooltip title="查看详情/报告">
                                                         <span>
-                                                            <IconButton
-                                                                color="info"
-                                                                onClick={() => handleViewDetails(adConfig)}
-                                                                disabled={!adConfig.c_scene_instance_id}
-                                                            >
+                                                            <IconButton color="info" onClick={() => handleViewDetails(adConfig)} disabled={!adConfig.c_scene_instance_id}>
                                                                 <VisibilityIcon />
                                                             </IconButton>
                                                         </span>
@@ -416,6 +443,18 @@ const AdManagementPage: React.FC = () => {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                <TablePagination
+                    component="div"
+                    count={totalAdConfigs}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    labelRowsPerPage="每页行数:"
+                    labelDisplayedRows={({ from, to, count }) => `第 ${from} 到 ${to} 条，共 ${count} 条`}
+                />
             </Paper>
 
             <Dialog key={editingAdConfig?.c_id || 'new-ad-config-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
@@ -461,8 +500,8 @@ const AdManagementPage: React.FC = () => {
                             )}
                         </Box>
                         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                            <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_start_time ? new Date(editingAdConfig.c_start_time).toISOString().slice(0, 16) : ''} />
-                            <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_end_time ? new Date(editingAdConfig.c_end_time).toISOString().slice(0, 16) : ''} />
+                            <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_start_time ? new Date(new Date(editingAdConfig.c_start_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} />
+                            <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_end_time ? new Date(new Date(editingAdConfig.c_end_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} />
                         </Stack>
                     </DialogContent>
                     <DialogActions>
