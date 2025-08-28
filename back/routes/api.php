@@ -247,8 +247,8 @@ Route::prefix('study')->group(function () {
         Route::post('/destroy', [TestController::class, 'destroy']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
-        Route::post('/paper_rules_del', [TestController::class, 'paper_rules_del']);
-        Route::post('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
+        Route::delete('/paper_rules_del', [TestController::class, 'paper_rules_del']);
+        Route::get('/get_paper_rules_info', [TestController::class, 'get_paper_rules_info']);
         Route::get('get_papers', [TestController::class, 'get_papers']);
         Route::post('/send_papers', [TestController::class, 'send_papers']);
         Route::post('/submit_papers', [TestController::class, 'submit_papers']);

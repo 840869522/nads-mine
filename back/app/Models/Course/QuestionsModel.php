@@ -103,6 +103,64 @@ class QuestionsModel extends Model{
 
     }
 
+       
+    /**
+     * 根据题型和标签查询题目
+     * @param int $type 题型
+     * @param string $tag 标签
+     * @return array 题目列表（确保返回数组）
+     */
+  // QuestionsModel.php
+public function get_questions_by_type_and_tag($type, $tag)
+{
+    try {
+        // 关键：使用数据库实际字段名（c_id、c_question、c_answer等）
+        // 并通过AS语法映射为代码中需要的键名（id、content、answer）
+        $questions = DB::table('c_questions')
+            ->select(
+                'c_id as id',          // 数据库c_id → 代码id
+                'c_question as content',// 数据库c_question → 代码content（核心修复）
+                'c_answer as answer',  // 数据库c_answer → 代码answer
+                'c_type as type',      // 数据库c_type → 代码type
+                'c_tag as tag'         // 数据库c_tag → 代码tag
+                // 注意：数据库中没有c_options字段，移除该字段的查询
+            )
+            ->where('c_type', $type)  // 匹配题型（数据库字段c_type）
+            ->where('c_tag', $tag)    // 匹配标签（数据库字段c_tag）
+            ->get()
+            // 转换为数组，确保后续可用[]访问
+            ->map(function ($item) {
+                return (array)$item;
+            })
+            ->toArray();
+        
+        // 过滤无效数据（必须包含id和题目内容）
+        return array_filter($questions, function($q) {
+            // 检查id和content（即数据库的c_id和c_question）是否存在且非空
+            return !empty($q['id']) && !empty($q['content']);
+        });
+    } catch (\Exception $e) {
+        Log::error('查询题目失败', [
+            'type' => $type,
+            'tag' => $tag,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return [];
+    }
+}
+
+// 修复题目数量查询（使用正确的数据库字段）
+public function get_question_cnt($type, $tag)
+{
+    return DB::table('c_questions')
+        ->where('c_type', $type)       // 正确字段：c_type
+        ->where('c_tag', $tag)         // 正确字段：c_tag
+        ->whereNotNull('c_id')         // 排除无ID的无效数据
+        ->whereNotNull('c_question')   // 排除无题目内容的无效数据
+        ->count();
+}
+
 
     /**
      * Notes:验证主键唯一性
@@ -255,19 +313,7 @@ class QuestionsModel extends Model{
         return $res;
     }
 
-    /**
-     * Notes:获取题目种类个数
-     * User: zhangnan
-     * DateTime: 2025/7/16 15:16
-     * @param $c_type
-     * @return mixed
-     */
-    public function get_question_cnt($c_type=0,$tag="")
-    {
-        $mod = new QuestionsModel();
-        $cnt = $mod->where('c_type',$c_type)->where('c_tag',$tag)->count();
-        return $cnt;
-    }
+ 
 
 
     /**

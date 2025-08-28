@@ -65,123 +65,122 @@ public function get_all_paper_rules()
     }
 }
 
+// PaperRulesModel.php
 /**
-     * 添加组卷规则
-     * @param string $c_test_id 测试ID
-     * @param array $data 规则数据
-     * @param array $question_list 题目列表
-     * @return bool
-     */
-    public function create_paper_rules_info($c_test_id = "", $data = [], $question_list = [])
-    {
-        // 验证必填参数
-        if (empty($c_test_id) || empty($data)) {
-            return false;
-        }
-        
-        DB::beginTransaction();
-        try {
-            foreach ($data as $item) {
-                // 验证单条规则数据
-                if (empty($item['tag']) || !isset($item['type']) || !isset($item['count']) || !isset($item['score'])) {
-                    DB::rollback();
-                    return false;
-                }
-                
-                $mod = new PaperRulesModel();
-                // 不再手动设置c_id，数据库会自动生成
-                $mod->c_test_id = $c_test_id;
-                $mod->c_tag = $item['tag'];
-                $mod->c_type = $item['type'];
-                $mod->c_count = $item['count'];
-                $mod->c_score = $item['score'];
-                
-                if (!$mod->save()) {
-                    DB::rollback();
-                    return false;
-                }
-            }
-
-            // 创建试卷信息
-            $paper_mod = new PapersModel();
-            $paper_res = $paper_mod->create_paper_info($c_test_id, $question_list);
-            if (!$paper_res) {
+ * 添加组卷规则（支持同题型多规则项）
+ * @param string $c_test_id 测试ID
+ * @param array $allRules 所有独立规则项
+ * @param array $question_list 题目列表
+ * @return bool
+ */
+public function create_paper_rules_info($c_test_id = "", $allRules = [], $question_list = [])
+{
+    if (empty($c_test_id) || empty($allRules)) {
+        return false;
+    }
+    
+    DB::beginTransaction();
+    try {
+        // 循环保存每个规则项（核心：不合并，每个规则项单独保存）
+        foreach ($allRules as $item) {
+            $mod = new self();
+            $mod->c_test_id = $c_test_id;
+            $mod->c_tag = $item['tag'];
+            $mod->c_type = $item['type'];
+            $mod->c_count = $item['count'];
+            $mod->c_score = $item['score'];
+            
+            if (!$mod->save()) {
                 DB::rollback();
                 return false;
             }
-            
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
-            return false;
         }
-    }
-    
-    /**
-     * 更新组卷规则
-     * @param string $c_test_id 测试ID
-     * @param array $data 新的规则数据
-     * @return bool
-     */
-    public function update_paper_rules_info($c_test_id = "", $data = [])
-    {
-        if (empty($c_test_id) || empty($data)) {
+
+        // 创建试卷
+        $paper_mod = new PapersModel();
+        $paper_res = $paper_mod->create_paper_info($c_test_id, $question_list);
+        if (!$paper_res) {
+            DB::rollback();
             return false;
         }
         
-        DB::beginTransaction();
-        try {
-            // 先删除该测试ID下的所有旧规则
-            PaperRulesModel::where('c_test_id', $c_test_id)->delete();
-            
-            // 插入新规则（使用自增ID）
-            foreach ($data as $item) {
-                if (empty($item['tag']) || !isset($item['type']) || !isset($item['count']) || !isset($item['score'])) {
-                    DB::rollback();
-                    return false;
-                }
-                
-                $mod = new PaperRulesModel();
-                $mod->c_test_id = $c_test_id;
-                $mod->c_tag = $item['tag'];
-                $mod->c_type = $item['type'];
-                $mod->c_count = $item['count'];
-                $mod->c_score = $item['score'];
-                
-                if (!$mod->save()) {
-                    DB::rollback();
-                    return false;
-                }
+        DB::commit();
+        return true;
+    } catch (\Exception $e) {
+        DB::rollback();
+        Log::error("添加规则异常: {$e->getMessage()}", ['trace' => $e->getTraceAsString()]);
+        return false;
+    }
+}
+
+/**
+ * 更新组卷规则（支持同题型多规则项）
+ * @param string $c_test_id 测试ID
+ * @param array $allRules 所有独立规则项
+ * @param array $question_list 题目列表
+ * @return bool
+ */
+public function update_paper_rules_info($c_test_id, $allRules, $question_list)
+{
+    return DB::transaction(function () use ($c_test_id, $allRules, $question_list) {
+        // 1. 删除旧规则
+        $deleteOld = DB::table('c_paper_rules')
+            ->where('c_test_id', $c_test_id)
+            ->delete();
+        if ($deleteOld === false) {
+            throw new \Exception("删除旧规则失败");
+        }
+
+        // 2. 保存新规则（每个规则项单独保存）
+        foreach ($allRules as $item) {
+            $newRule = new self();
+            $newRule->c_test_id = $c_test_id;
+            $newRule->c_tag = $item['tag'];
+            $newRule->c_type = $item['type'];
+            $newRule->c_count = $item['count'];
+            $newRule->c_score = $item['score'];
+            if (!$newRule->save()) {
+                throw new \Exception("保存规则项失败（标签：{$item['tag']}）");
             }
-            
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
-            return false;
         }
-    }
+
+        // 3. 更新试卷
+        $paperModel = new PapersModel();
+        $updatePapers = $paperModel->update_paper_info($c_test_id, $question_list);
+        if (!$updatePapers) {
+            throw new \Exception("更新试卷失败");
+        }
+
+        return true;
+    });
+}
     
+    
+
+
     /**
-     * 删除测试ID对应的规则
-     * @param string $c_test_id 测试ID
-     * @return bool
+     *  通过测试ID删除组卷规则（解决del_paper_rules_by_test_id未定义问题）
      */
-    public function delete_paper_rules($c_test_id = "")
+    public function del_paper_rules_by_test_id($c_test_id = "")
     {
-        if (empty($c_test_id)) {
+        if (empty($c_test_id) || !is_string($c_test_id)) {
+            Log::error('删除组卷规则失败：测试ID无效', ['c_test_id' => $c_test_id]);
             return false;
         }
-        
+
         try {
-            // 删除该测试ID下的所有规则
-            PaperRulesModel::where('c_test_id', $c_test_id)->delete();
+            $deleteCount = self::where('c_test_id', $c_test_id)->delete();
+            Log::info('组卷规则删除成功', [
+                'c_test_id' => $c_test_id,
+                '删除数量' => $deleteCount
+            ]);
             return true;
         } catch (\Exception $e) {
-            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'paper_rules_log');
+            Log::error('删除组卷规则异常', [
+                'c_test_id' => $c_test_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return false;
         }
     }

@@ -69,7 +69,6 @@ interface Paper {
   paperName: string;
 }
 
-// 新增：接收删除相关 props
 interface TestUserDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -79,8 +78,8 @@ interface TestUserDrawerProps {
   papers: Paper[];
   onSave: (users: TestUser[]) => Promise<void>;
   loading: boolean;
-  onDeleteUser: (user: TestUser, e: React.MouseEvent) => void; // 删除触发函数
-  deletingKey: string | null; // 删除加载状态标识
+  onDeleteUser: (user: TestUser, e: React.MouseEvent) => void;
+  deletingKey: string | null;
 }
 
 const TestUserDrawer: React.FC<TestUserDrawerProps> = ({ 
@@ -90,13 +89,15 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
   
-  // 状态定义
+  // 状态定义 - 分离两个搜索框的状态
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [isSelectAll, setIsSelectAll] = useState<boolean>(false);
   const [selectedPaperId, setSelectedPaperId] = useState<string>('');
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<TestUser | null>(null);
   const [userDetailOpen, setUserDetailOpen] = useState(false);
-  const [searchUserText, setSearchUserText] = useState('');
+  const [addUserSearchText, setAddUserSearchText] = useState(''); // 添加用户区域搜索
+  const [associatedUserSearchText, setAssociatedUserSearchText] = useState(''); // 已关联用户区域搜索
   const [tempTestUsers, setTempTestUsers] = useState<TestUser[]>([]);
 
   // 动态颜色函数
@@ -108,6 +109,12 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const getBorderColor = () => isDarkMode ? '#444' : '#ddd';
   const getSearchBgColor = () => isDarkMode ? '#2d2d2d' : '#f5f5f5';
 
+  // 过滤可用用户（使用添加用户区域的搜索词）
+  const filteredAvailableUsers = availableUsers.filter(user => 
+    user.username.toLowerCase().includes(addUserSearchText.toLowerCase()) ||
+    user.name.toLowerCase().includes(addUserSearchText.toLowerCase())
+  );
+
   // 计算可用用户
   useEffect(() => {
     if (open && test) {
@@ -117,22 +124,33 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
       );
       setAvailableUsers(filteredUsers);
       setSelectedUsers([]);
+      setIsSelectAll(false);
       
-      // 默认选择第一个试卷
       if (papers.length > 0) {
         setSelectedPaperId(papers[0].paperId);
       }
     }
-    setSearchUserText('');
+    setAddUserSearchText('');
+    setAssociatedUserSearchText('');
     setTempTestUsers([]);
   }, [open, test, testUsers, allUsers, papers]);
 
-  // 搜索已关联用户
+  // 全选状态管理
+  useEffect(() => {
+    const filtered = filteredAvailableUsers;
+    if (filtered.length === 0 || selectedUsers.length !== filtered.length) {
+      setIsSelectAll(false);
+    } else {
+      setIsSelectAll(true);
+    }
+  }, [selectedUsers, filteredAvailableUsers]);
+
+  // 搜索已关联用户（使用已关联用户区域的搜索词）
   const getFilteredTestUsers = () => {
-    if (!searchUserText.trim()) {
+    if (!associatedUserSearchText.trim()) {
       return testUsers;
     }
-    const lowerSearchText = searchUserText.toLowerCase();
+    const lowerSearchText = associatedUserSearchText.toLowerCase();
     return testUsers.filter(user => 
       user.username.toLowerCase().includes(lowerSearchText) || 
       user.name.toLowerCase().includes(lowerSearchText)
@@ -146,6 +164,16 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
         ? prev.filter(u => u !== username)
         : [...prev, username]
     );
+  };
+
+  // 全选/取消全选逻辑
+  const handleSelectAllChange = () => {
+    const filtered = filteredAvailableUsers;
+    if (isSelectAll) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filtered.map(user => user.username));
+    }
   };
 
   // 批量添加用户到测试
@@ -174,6 +202,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
     
     setTempTestUsers([...tempTestUsers, ...newUsers]);
     setSelectedUsers([]);
+    setIsSelectAll(false);
   };
 
   // 确认添加临时用户
@@ -226,18 +255,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
     );
   };
 
-  // 处理搜索输入变化
-  const handleSearchUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchUserText(e.target.value);
-  };
-
-  // 过滤可用用户
-  const filteredAvailableUsers = availableUsers.filter(user => 
-    user.username.toLowerCase().includes(searchUserText.toLowerCase()) ||
-    user.name.toLowerCase().includes(searchUserText.toLowerCase())
-  );
-
-  // 生成当前用户的删除标识（与父组件一致）
+  // 生成当前用户的删除标识
   const getUserDeleteKey = (user: TestUser) => {
     return `${user.c_test_id}-${user.username}-${user.c_paper_id}`;
   };
@@ -299,12 +317,15 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             </Select>
           </FormControl>
           
-          {/* 搜索可用用户 */}
+          {/* 搜索可用用户（添加用户区域专用） */}
           <TextField
             size="small"
             placeholder="搜索用户..."
-            value={searchUserText}
-            onChange={handleSearchUserChange}
+            value={addUserSearchText}
+            onChange={(e) => {
+              setAddUserSearchText(e.target.value);
+              setIsSelectAll(false);
+            }}
             sx={{ 
               width: '100%', 
               mb: 2,
@@ -327,7 +348,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             }}
           />
           
-          {/* 可用用户列表 - 支持多选 */}
+          {/* 可用用户列表 - 支持多选 + 全选Checkbox */}
           <Box sx={{ 
             maxHeight: 200, 
             overflow: 'auto', 
@@ -352,6 +373,31 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
               </Box>
             ) : (
               <FormGroup>
+                {/* 全选Checkbox行 */}
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={isSelectAll}
+                      onChange={handleSelectAllChange}
+                      color="primary"
+                      disabled={filteredAvailableUsers.length === 0}
+                    />
+                  }
+                  label={
+                    <Typography sx={{ color: getTextColor(), fontWeight: 500 }}>
+                      全选（{selectedUsers.length}/{filteredAvailableUsers.length}）
+                    </Typography>
+                  }
+                  sx={{
+                    '& .MuiFormControlLabel-label': { color: getTextColor() },
+                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+                    borderBottom: `1px dashed ${getBorderColor()}`,
+                    pb: 1,
+                    mb: 1
+                  }}
+                />
+                
+                {/* 可用用户列表 */}
                 {filteredAvailableUsers.map(user => (
                   <FormControlLabel
                     key={user.username}
@@ -360,6 +406,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                         checked={selectedUsers.includes(user.username)}
                         onChange={() => handleUserSelectionChange(user.username)}
                         color="primary"
+                        disabled={isSelectAll}
                       />
                     }
                     label={`${user.name} (${user.username})`}
@@ -441,12 +488,12 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
               已关联用户 ({getFilteredTestUsers().length}/{testUsers.length})
             </Typography>
             
-            {/* 搜索已关联用户 */}
+            {/* 搜索已关联用户（已关联用户区域专用） */}
             <TextField
               size="small"
               placeholder="搜索姓名/用户名..."
-              value={searchUserText}
-              onChange={handleSearchUserChange}
+              value={associatedUserSearchText}
+              onChange={(e) => setAssociatedUserSearchText(e.target.value)}
               sx={{ 
                 width: { xs: '100%', sm: 220 }, 
                 mt: { xs: 1, sm: 0 },
@@ -491,10 +538,10 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             }}>
               <PersonIcon sx={{ fontSize: 48, mb: 1, color: getSecondaryTextColor() }} />
               <Typography variant="body1">
-                {searchUserText.trim() ? '未找到匹配的用户' : '暂无关联用户'}
+                {associatedUserSearchText.trim() ? '未找到匹配的用户' : '暂无关联用户'}
               </Typography>
               <Typography variant="body2" sx={{ mt: 1 }}>
-                {searchUserText.trim() 
+                {associatedUserSearchText.trim() 
                   ? '请调整搜索词后重试' 
                   : '请使用上方表单添加用户到此测试'}
               </Typography>
@@ -504,11 +551,11 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
               {getFilteredTestUsers().map(user => {
                 const paper = papers.find(p => p.paperId === user.c_paper_id);
                 const currentDeleteKey = getUserDeleteKey(user);
-                const isDeleting = deletingKey === currentDeleteKey; // 判断当前用户是否正在删除
+                const isDeleting = deletingKey === currentDeleteKey;
                 
                 return (
                   <ListItem 
-                    key={currentDeleteKey} // 使用删除标识作为key，确保删除时UI更新
+                    key={currentDeleteKey}
                     sx={{
                       borderBottom: `1px solid ${getBorderColor()}`,
                       '&:last-child': {
@@ -554,17 +601,16 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                         edge="end" 
                         onClick={(e) => handleOpenDetail(user, e)}
                         sx={{ mr: 1 }}
-                        disabled={isDeleting} // 删除时禁用详情按钮
+                        disabled={isDeleting}
                       >
                         <InfoIcon color="info" />
                       </IconButton>
                       
-                      {/* 删除按钮 - 对接父组件的删除函数 */}
                       <IconButton 
                         edge="end" 
                         onClick={(e) => onDeleteUser(user, e)}
                         sx={{ color: isDarkMode ? '#f44336' : '#d32f2f' }}
-                        disabled={isDeleting || !!user.submit_time || user.correct_status === 2} // 已交卷/删除中禁用
+                        disabled={isDeleting || !!user.submit_time || user.correct_status === 2}
                       >
                         {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
                       </IconButton>
@@ -595,7 +641,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
         </Box>
       </Drawer>
 
-      {/* 用户详细信息弹窗 */}
+      {/* 用户详细详细信息弹窗 */}
       <Dialog
         open={userDetailOpen}
         onClose={() => setUserDetailOpen(false)}
@@ -735,5 +781,6 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
 };
 
 export default TestUserDrawer;
+
     
     
