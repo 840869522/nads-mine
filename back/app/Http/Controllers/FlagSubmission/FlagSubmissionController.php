@@ -13,16 +13,33 @@ use App\Models\scenario\SceneInstanceModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
 use App\Services\WorkermanService; // 确保这个use语句正确
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Cache; // 添加 Cache facade 用于 Redis
 
-class FlagSubmissionController extends Controller
+class FlagSubmissionController extends BaseController
 {
     protected $workermanService;
 
     public function __construct(WorkermanService $workermanService)
     {
         $this->workermanService = $workermanService;
+    }
+
+    /**
+     * 统一返回值方法（从基础Controller复制）
+     * @param $code int 响应编码
+     * @param $message string 返回信息
+     * @param $data array 返回数据
+     */
+    public function _response($code = '', $message = '', $data = [])
+    {
+        $res = [
+            'code' => $code,
+            'message' => $message,
+            'data' => $data
+        ];
+
+        return response()->json($res);
     }
 
     /**
@@ -37,7 +54,7 @@ class FlagSubmissionController extends Controller
         $tokenData = $request->input('token_data');
         $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
+            return $this->_response(GlobalResponse::$HTTP_STATUS_RE_CODE, '用户身份验证失败');
         }
 
         // 2. 参数校验
@@ -53,7 +70,7 @@ class FlagSubmissionController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_BAD_REQUEST_CODE, $validator->errors()->first());
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, $validator->errors()->first());
         }
 
         $c_scene_instances_id = $request->input('c_scene_instances_id');
@@ -81,7 +98,7 @@ class FlagSubmissionController extends Controller
         }
 
         if (!$instance) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE, '提交的靶机实例与场景不匹配或不存在');
+            return $this->_response(GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE, '提交的靶机实例与场景不匹配或不存在');
         }
 
         // 4. Flag比对、得分计算与数据保存
@@ -183,7 +200,7 @@ class FlagSubmissionController extends Controller
                 'message' => $message
             ]);
 
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_OK_CODE, $message, ['points' => $points_earned, 'is_correct' => $is_correct]);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message, ['points' => $points_earned, 'is_correct' => $is_correct]);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -209,7 +226,7 @@ class FlagSubmissionController extends Controller
                 Log::error("Redis消息发送失败: " . $redisException->getMessage());
             }
             
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误，提交失败');
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误，提交失败');
         }
     }
 
@@ -225,7 +242,7 @@ class FlagSubmissionController extends Controller
         $tokenData = $request->input('token_data');
         $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
+            return $this->_response(GlobalResponse::$HTTP_STATUS_RE_CODE, '用户身份验证失败');
         }
 
         // 2. 参数校验
@@ -241,7 +258,7 @@ class FlagSubmissionController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_BAD_REQUEST_CODE, $validator->errors()->first());
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, $validator->errors()->first());
         }
 
         $scope = $request->input('scope');
@@ -315,11 +332,11 @@ class FlagSubmissionController extends Controller
                 ];
             });
 
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_OK_CODE, '历史记录获取成功', $formattedHistory);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '历史记录获取成功', $formattedHistory);
 
         } catch (\Exception $e) {
             Log::error("获取历史记录失败: " . $e->getMessage());
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '查询历史记录失败');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '查询历史记录失败');
         }
     }
 
@@ -335,7 +352,7 @@ class FlagSubmissionController extends Controller
         $tokenData = $request->input('token_data');
         $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
+            return $this->_response(GlobalResponse::$HTTP_STATUS_RE_CODE, '用户身份验证失败');
         }
 
         try {
@@ -344,7 +361,7 @@ class FlagSubmissionController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            return GlobalResponse::apiResponse(
+            return $this->_response(
                 GlobalResponse::$HTTP_STATUS_OK_CODE,
                 '场景实例获取成功',
                 $sceneInstances
@@ -352,7 +369,7 @@ class FlagSubmissionController extends Controller
 
         } catch (\Exception $e) {
             Log::error("获取场景实例失败: " . $e->getMessage());
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '获取场景实例失败');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '获取场景实例失败');
         }
     }
 
@@ -368,7 +385,7 @@ class FlagSubmissionController extends Controller
         $tokenData = $request->input('token_data');
         $username = $tokenData['id'] ?? null;
         if (is_null($username)) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_FORBIDDEN_CODE, '用户身份验证失败');
+            return $this->_response(GlobalResponse::$HTTP_STATUS_RE_CODE, '用户身份验证失败');
         }
 
         // 2. 参数校验
@@ -379,7 +396,7 @@ class FlagSubmissionController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_STATUS_BAD_REQUEST_CODE, $validator->errors()->first());
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, $validator->errors()->first());
         }
 
         $sceneId = $request->input('scene_id');
@@ -410,7 +427,7 @@ class FlagSubmissionController extends Controller
             // 5. 合并结果
             $targetInstances = $containerInstances->merge($vmInstances);
 
-            return GlobalResponse::apiResponse(
+            return $this->_response(
                 GlobalResponse::$HTTP_STATUS_OK_CODE,
                 '靶机实例获取成功',
                 $targetInstances
@@ -418,7 +435,7 @@ class FlagSubmissionController extends Controller
 
         } catch (\Exception $e) {
             Log::error("获取靶机实例失败: " . $e->getMessage());
-            return GlobalResponse::apiResponse(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '获取靶机实例失败');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '获取靶机实例失败');
         }
     }
 
