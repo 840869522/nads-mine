@@ -12,11 +12,14 @@ use Illuminate\Support\Facades\DB;
 class TeamController extends Controller
 {
     /**
-     * 获取队伍列表
+     * 获取队伍列表 (已简化，移除颜色联动逻辑)
      */
     public function index(Request $request)
     {
+        // 回归到最简单的查询逻辑
         $searchQuery = $request->query('search');
+        $perPage = $request->query('per_page', 10);
+
         $query = Team::query()->with('users');
 
         if ($searchQuery) {
@@ -25,22 +28,21 @@ class TeamController extends Controller
                     ->orWhere('c_description', 'LIKE', '%' . $searchQuery . '%');
             });
         }
-        $teams = $query->latest('c_id')->get();
 
-        return response()->json(['status' => 'success', 'data' => $teams]);
+        $teams = $query->latest('c_id')->paginate($perPage);
+
+        return response()->json($teams);
     }
 
     /**
-     * 创建一个新队伍，并关联成员。
+     * 创建一个新队伍 (已移除颜色字段)
      */
     public function store(Request $request)
     {
-        // ★★★ 核心修复：将验证规则中的 'members' 修改为 'users' ★★★
         $validatedData = $request->validate([
             'c_name'        => 'required|string|max:255|unique:c_teams,c_name',
-            'c_color'       => ['required', 'string', Rule::in(['red', 'blue'])],
             'c_description' => 'nullable|string|max:1000',
-            'users'         => 'nullable|array', // 期望接收 'users' 键
+            'users'         => 'nullable|array',
             'users.*'       => 'string|exists:c_users,c_username',
         ]);
 
@@ -48,11 +50,9 @@ class TeamController extends Controller
         try {
             $team = Team::create([
                 'c_name'        => $validatedData['c_name'],
-                'c_color'       => $validatedData['c_color'],
-                'c_description' => $validatedData['c_description'],
+                'c_description' => $validatedData['c_description'] ?? null,
             ]);
 
-            // ★★★ 核心修复：检查 'users' 键并同步 ★★★
             if (isset($validatedData['users'])) {
                 $team->users()->sync($validatedData['users']);
             }
@@ -85,19 +85,17 @@ class TeamController extends Controller
     }
 
     /**
-     * 更新指定的队伍信息，并同步成员关系。
+     * 更新指定的队伍信息 (已移除颜色字段)
      */
     public function update(Request $request, Team $team)
     {
-        // ★★★ 核心修复：将验证规则中的 'members' 修改为 'users' ★★★
         $validatedData = $request->validate([
             'c_name' => [
                 'required', 'string', 'max:255',
                 Rule::unique('c_teams', 'c_name')->ignore($team->c_id, 'c_id'),
             ],
-            'c_color'       => ['required', 'string', Rule::in(['red', 'blue'])],
             'c_description' => 'nullable|string|max:1000',
-            'users'         => 'nullable|array', // 期望接收 'users' 键
+            'users'         => 'nullable|array',
             'users.*'       => 'string|exists:c_users,c_username',
         ]);
 
@@ -105,11 +103,9 @@ class TeamController extends Controller
         try {
             $team->update([
                 'c_name'        => $validatedData['c_name'],
-                'c_color'       => $validatedData['c_color'],
-                'c_description' => $validatedData['c_description'],
+                'c_description' => $validatedData['c_description'] ?? null,
             ]);
 
-            // ★★★ 核心修复：检查 'users' 键并同步 ★★★
             $team->users()->sync($validatedData['users'] ?? []);
 
             DB::commit();

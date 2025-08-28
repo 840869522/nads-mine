@@ -1,4 +1,5 @@
 <?php
+// file: app/Http/Controllers/ad/RefereeController.php
 
 namespace App\Http\Controllers\ad;
 
@@ -13,33 +14,55 @@ use Exception;
 
 class RefereeController extends Controller
 {
-    public function index(): JsonResponse
+    /**
+     * 获取裁判总览列表 (已支持搜索和分页)
+     */
+    public function index(Request $request): JsonResponse
     {
         try {
-            $referees = Referee::with(['user:c_username', 'adConfig'])
-                ->latest('c_create_at')
-                ->get();
+            $perPage = $request->query('per_page', 10);
+            $searchQuery = $request->query('search');
 
+            $query = Referee::query()
+                ->with(['user:c_username,c_name', 'adConfig']) // 建议同时获取 c_name 以便未来显示
+                ->latest('c_create_at');
+
+            // --- 新增搜索逻辑 ---
+            if ($searchQuery) {
+                $query->where(function ($q) use ($searchQuery) {
+                    // 搜索关联的用户名
+                    $q->whereHas('user', function ($userQuery) use ($searchQuery) {
+                        $userQuery->where('c_username', 'LIKE', '%' . $searchQuery . '%')
+                            ->orWhere('c_name', 'LIKE', '%' . $searchQuery . '%'); // 如果有真实姓名，也加入搜索
+                    })
+                        // 或者搜索关联的演练名称
+                        ->orWhereHas('adConfig', function ($adConfigQuery) use ($searchQuery) {
+                            $adConfigQuery->where('c_drill_name', 'LIKE', '%' . $searchQuery . '%');
+                        });
+                });
+            }
+            // --- 搜索逻辑结束 ---
+
+            // 使用 paginate()
+            $referees = $query->paginate($perPage);
+
+            // 动态注入实例ID的逻辑保持不变，它将作用于当前页的数据
             $sceneInstancesModel = new SceneInstances();
-
-            $referees->each(function($referee) use ($sceneInstancesModel) {
+            $referees->getCollection()->transform(function($referee) use ($sceneInstancesModel) {
                 if ($referee->adConfig && $referee->adConfig->c_scene_config_id) {
-
                     $instance_id = $sceneInstancesModel->get_c_scene_instances_id(
                         $referee->adConfig->c_scene_config_id
                     );
-
                     if ($instance_id) {
                         $referee->adConfig->c_scene_instance_id = $instance_id;
                         $referee->adConfig->c_status = 'running';
                     }
                 }
+                return $referee;
             });
 
-            return response()->json([
-                'status' => 'success',
-                'data'   => $referees
-            ]);
+            // Laravel 的 paginate() 结果可以直接返回，Resource 会自动处理
+            return response()->json($referees);
 
         } catch (Exception $e) {
             Log::error('获取裁判总览列表失败: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
@@ -56,18 +79,13 @@ class RefereeController extends Controller
     public function availableUsers(Request $request): JsonResponse
     {
         try {
-            // 【★★★ 核心修改 开始 ★★★】
-            // 不再查询不存在的 c_real_name 字段，只查询 c_username
             if ($request->has('ad_config_id')) {
                 $adConfigId = $request->query('ad_config_id');
                 $assignedUsernames = Referee::where('c_ad_config_id', $adConfigId)->pluck('c_user_id');
-                // 只 select 'c_username'
                 $users = UserModel::whereNotIn('c_username', $assignedUsernames)->select('c_username')->get();
             } else {
-                // 只 select 'c_username'
                 $users = UserModel::select('c_username')->get();
             }
-            // 【★★★ 核心修改 结束 ★★★】
 
             return response()->json([
                 'status' => 'success',
