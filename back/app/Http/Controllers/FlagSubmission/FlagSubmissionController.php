@@ -80,25 +80,105 @@ class FlagSubmissionController extends BaseController
         $correctFlag = null;
         $instance = null; // 确保实例变量在任何情况下都已定义
 
-        // 3. 多层级关联校验
+        // 3. 多层级关联校验（增强版）
+        $instance = null;
+        $correctFlag = null;
+
+        Log::info("开始验证靶机实例", [
+            'instance_type' => $instance_type,
+            'instance_id' => $instance_id,
+            'scene_id' => $c_scene_instances_id
+        ]);
+
         if ($instance_type === 'docker') {
             $instance = SceneContainerInstanceModel::where('c_container_id', $instance_id)
                                                     ->where('c_scene_instances_id', $c_scene_instances_id)
                                                     ->first();
             if ($instance) {
                 $correctFlag = $instance->c_flag;
+                Log::info("找到容器实例", ['container_name' => $instance->c_container_name, 'has_flag' => !empty($correctFlag)]);
+            } else {
+                // 调试信息：查找是否存在该容器但场景不匹配
+                $anyContainer = SceneContainerInstanceModel::where('c_container_id', $instance_id)->first();
+                if ($anyContainer) {
+                    Log::warning("容器存在但场景不匹配", [
+                        'expected_scene' => $c_scene_instances_id,
+                        'actual_scene' => $anyContainer->c_scene_instances_id
+                    ]);
+                } else {
+                    Log::warning("容器实例不存在", ['container_id' => $instance_id]);
+                }
             }
         } elseif ($instance_type === 'vm') {
-            $instance = SceneVmInstanceModel::where('c_vm_id', $instance_id)
+            // VM ID是自增整数，确保转换为整数类型
+            if (!is_numeric($instance_id)) {
+                Log::error("VM ID格式错误", ['instance_id' => $instance_id, 'type' => gettype($instance_id)]);
+                return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, 'VM实例ID必须是数字');
+            }
+            
+            $vmId = (int)$instance_id;
+            
+            Log::info("查询VM实例", [
+                'original_id' => $instance_id,
+                'converted_id' => $vmId,
+                'scene_id' => $c_scene_instances_id
+            ]);
+            
+            $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
                                             ->where('c_scene_instances_id', $c_scene_instances_id)
                                             ->first();
             if ($instance) {
                 $correctFlag = $instance->c_flag;
+                Log::info("找到VM实例", [
+                    'vm_id' => $instance->c_vm_id,
+                    'vm_name' => $instance->c_vm_name, 
+                    'has_flag' => !empty($correctFlag),
+                    'scene_id' => $instance->c_scene_instances_id
+                ]);
+            } else {
+                // 详细调试信息：分别检查VM存在性和场景匹配
+                $anyVm = SceneVmInstanceModel::where('c_vm_id', $vmId)->first();
+                if ($anyVm) {
+                    Log::warning("VM存在但场景不匹配", [
+                        'vm_id' => $vmId,
+                        'vm_name' => $anyVm->c_vm_name,
+                        'expected_scene' => $c_scene_instances_id,
+                        'actual_scene' => $anyVm->c_scene_instances_id
+                    ]);
+                } else {
+                    Log::warning("VM实例不存在", [
+                        'vm_id' => $vmId,
+                        'available_vms' => SceneVmInstanceModel::select('c_vm_id', 'c_vm_name', 'c_scene_instances_id')
+                            ->limit(5)->get()->toArray()
+                    ]);
+                }
             }
         }
 
+        // 额外检查：验证场景实例是否存在
+        $sceneInstance = SceneInstanceModel::where('c_scene_instances_id', $c_scene_instances_id)->first();
+        if (!$sceneInstance) {
+            Log::error("场景实例不存在", ['scene_id' => $c_scene_instances_id]);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE, '指定的场景实例不存在');
+        }
+
         if (!$instance) {
+            Log::error("靶机实例验证失败", [
+                'instance_type' => $instance_type,
+                'instance_id' => $instance_id,
+                'scene_id' => $c_scene_instances_id,
+                'scene_status' => $sceneInstance->c_status ?? 'unknown'
+            ]);
             return $this->_response(GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE, '提交的靶机实例与场景不匹配或不存在');
+        }
+
+        // 检查靶机是否为目标靶机（有flag）
+        if (empty($correctFlag)) {
+            Log::warning("靶机实例不是目标靶机", [
+                'instance_type' => $instance_type,
+                'instance_id' => $instance_id
+            ]);
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, '该靶机不是目标靶机，无法提交Flag');
         }
 
         // 4. Flag比对、得分计算与数据保存
@@ -402,30 +482,43 @@ class FlagSubmissionController extends BaseController
         $sceneId = $request->input('scene_id');
 
         try {
-            // 3. 获取Docker容器实例
+            // 3. 获取Docker容器实例（只返回有flag的目标靶机）
             $containerInstances = SceneContainerInstanceModel::where('c_scene_instances_id', $sceneId)
-                ->select('c_container_id as id')
+                ->whereNotNull('c_flag') // 只返回有flag的目标靶机
+                ->select('c_container_id as id', 'c_container_name as name', 'c_flag')
                 ->get()
                 ->map(function ($instance) {
                     return [
                         'id' => $instance->id,
-                        'type' => 'docker'
+                        'name' => $instance->name,
+                        'type' => 'docker',
+                        'has_flag' => !empty($instance->c_flag)
                     ];
                 });
 
-            // 4. 获取VM实例
+            // 4. 获取VM实例（只返回有flag的目标靶机）
             $vmInstances = SceneVmInstanceModel::where('c_scene_instances_id', $sceneId)
-                ->select('c_vm_id as id')
+                ->whereNotNull('c_flag') // 只返回有flag的目标靶机
+                ->select('c_vm_id as id', 'c_vm_name as name', 'c_flag')
                 ->get()
                 ->map(function ($instance) {
                     return [
                         'id' => (string)$instance->id,
-                        'type' => 'vm'
+                        'name' => $instance->name,
+                        'type' => 'vm',
+                        'has_flag' => !empty($instance->c_flag)
                     ];
                 });
 
             // 5. 合并结果
             $targetInstances = $containerInstances->merge($vmInstances);
+            
+            Log::info("获取到的目标靶机实例", [
+                'scene_id' => $sceneId,
+                'container_count' => $containerInstances->count(),
+                'vm_count' => $vmInstances->count(),
+                'total_count' => $targetInstances->count()
+            ]);
 
             return $this->_response(
                 GlobalResponse::$HTTP_STATUS_OK_CODE,
@@ -434,8 +527,51 @@ class FlagSubmissionController extends BaseController
             );
 
         } catch (\Exception $e) {
-            Log::error("获取靶机实例失败: " . $e->getMessage());
+            Log::error("获取靶机实例失败: " . $e->getMessage(), [
+                'scene_id' => $sceneId,
+                'trace' => $e->getTraceAsString()
+            ]);
             return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '获取靶机实例失败');
+        }
+    }
+
+    /**
+     * 临时调试接口 - 检查场景和靶机数据完整性
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function debugSceneData(Request $request)
+    {
+        $sceneId = $request->input('scene_id');
+        
+        try {
+            $result = [
+                'scene_instance' => SceneInstanceModel::where('c_scene_instances_id', $sceneId)
+                    ->select('c_scene_instances_id', 'c_status', 'c_username', 'created_at')
+                    ->first(),
+                'containers' => SceneContainerInstanceModel::where('c_scene_instances_id', $sceneId)
+                    ->select('c_container_id', 'c_scene_instances_id', 'c_flag', 'c_container_name')
+                    ->get(),
+                'vms' => SceneVmInstanceModel::where('c_scene_instances_id', $sceneId)
+                    ->select('c_vm_id', 'c_scene_instances_id', 'c_flag', 'c_vm_name')
+                    ->get(),
+                'all_scenes' => SceneInstanceModel::select('c_scene_instances_id', 'c_status', 'c_username', 'created_at')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(10)
+                    ->get(),
+                'target_containers' => SceneContainerInstanceModel::where('c_scene_instances_id', $sceneId)
+                    ->whereNotNull('c_flag')
+                    ->count(),
+                'target_vms' => SceneVmInstanceModel::where('c_scene_instances_id', $sceneId)
+                    ->whereNotNull('c_flag')
+                    ->count(),
+            ];
+            
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error("调试数据获取失败: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 

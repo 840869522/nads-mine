@@ -299,16 +299,19 @@ Route::prefix('ad')->group(function () {
 Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
-    
+
     // 历史记录查询接口
     Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
-    
-    
+
+
     // 获取场景实例列表接口
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
-    
-    // 获取靶机实例列表接口  
+
+    // 获取靶机实例列表接口
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
+
+    // 临时调试接口
+    //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
 /**
  * 定义安全实验分系统路由
