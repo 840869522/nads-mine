@@ -335,9 +335,23 @@ class FlagSubmissionController extends BaseController
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Flag提交事务失败: " . $e->getMessage());
+            Log::error("Flag提交事务失败: " . $e->getMessage(), [
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+                'exception_file' => $e->getFile(),
+                'exception_line' => $e->getLine(),
+                'stack_trace' => $e->getTraceAsString(),
+                'input_data' => [
+                    'instance_id' => $instance_id ?? 'null',
+                    'instance_type' => $instance_type ?? 'null',
+                    'scene_id' => $c_scene_instances_id ?? 'null',
+                    'actualDbId' => $actualDbId ?? 'null',
+                    'username' => $username ?? 'null'
+                ]
+            ]);
             
-            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误，提交失败');
+            // 返回更详细的错误信息用于调试
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误: ' . $e->getMessage());
         }
     }
 
