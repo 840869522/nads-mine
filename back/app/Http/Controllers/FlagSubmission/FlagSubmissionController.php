@@ -337,26 +337,6 @@ class FlagSubmissionController extends BaseController
             DB::rollBack();
             Log::error("Flag提交事务失败: " . $e->getMessage());
             
-            // 发送失败的 Redis 消息（临时禁用）
-            // try {
-            //     $this->sendRedisMessage([
-            //         'event' => 'flag_submission_error',
-            //         'user_id' => $username,
-            //         'username' => $username,
-            //         'timestamp' => now()->toDateTimeString(),
-            //         'success' => false,
-            //         'points_earned' => 0,
-            //         'instance_type' => $instance_type ?? 'unknown',
-            //         'instance_id' => $instance_id ?? 'unknown',
-            //         'instance_name' => 'Error',
-            //         'scene_instance_id' => $c_scene_instances_id ?? 'unknown',
-            //         'error_message' => '系统错误，提交失败',
-            //         'exception' => $e->getMessage()
-            //     ]);
-            // } catch (\Exception $redisException) {
-            //     Log::error("Redis消息发送失败: " . $redisException->getMessage());
-            // }
-            
             return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误，提交失败');
         }
     }

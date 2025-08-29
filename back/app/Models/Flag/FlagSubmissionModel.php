@@ -13,7 +13,7 @@ class FlagSubmissionModel extends Model
      *
      * @var string
      */
-    protected $table = 'c_flag_submissions';
+    protected $table = 'c_flag_submission';
 
     /**
      * 与表关联的主键。
