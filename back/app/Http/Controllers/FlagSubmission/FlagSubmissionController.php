@@ -233,6 +233,20 @@ class FlagSubmissionController extends BaseController
         }
 
         // 4. Flag比对、得分计算与数据保存
+        // 添加详细的flag比对调试信息
+        Log::info("Flag比对详情", [
+            'submitted_flag' => $submittedFlag,
+            'submitted_flag_length' => strlen($submittedFlag),
+            'submitted_flag_trimmed' => trim($submittedFlag),
+            'correct_flag' => $correctFlag,
+            'correct_flag_length' => strlen($correctFlag ?? ''),
+            'correct_flag_trimmed' => trim($correctFlag ?? ''),
+            'flags_match_exact' => ($submittedFlag === $correctFlag),
+            'flags_match_trimmed' => (trim($submittedFlag) === trim($correctFlag)),
+            'submitted_flag_hex' => bin2hex($submittedFlag),
+            'correct_flag_hex' => bin2hex($correctFlag ?? '')
+        ]);
+        
         $is_correct = (trim($submittedFlag) === trim($correctFlag));
         $points_earned = 0;
         $message = 'Flag提交失败，请重试';
