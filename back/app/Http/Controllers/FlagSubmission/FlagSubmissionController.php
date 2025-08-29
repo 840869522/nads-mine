@@ -312,24 +312,24 @@ class FlagSubmissionController extends BaseController
             ];
             $this->workermanService->send($broadcastData);
 
-            // 发送 Redis 消息
-            $this->sendRedisMessage([
-                'event' => 'flag_submission',
-                'user_id' => $username,
-                'username' => $username,
-                'timestamp' => now()->toDateTimeString(),
-                'success' => $is_correct,
-                'points_earned' => $points_earned,
-                'instance_type' => $instance_type,
-                'instance_id' => $instance_id,
-                'instance_name' => $instance_type === 'docker' 
-                    ? ($instance->c_container_name ?? 'Unknown Container') 
-                    : ($instance->c_vm_name ?? 'Unknown VM'),
-                'scene_instance_id' => $c_scene_instances_id,
-                'attempt_count' => $submission->c_attempt_count,
-                'submission_id' => $submission->c_submission_id,
-                'message' => $message
-            ]);
+            // 发送 Redis 消息（临时禁用）
+            // $this->sendRedisMessage([
+            //     'event' => 'flag_submission',
+            //     'user_id' => $username,
+            //     'username' => $username,
+            //     'timestamp' => now()->toDateTimeString(),
+            //     'success' => $is_correct,
+            //     'points_earned' => $points_earned,
+            //     'instance_type' => $instance_type,
+            //     'instance_id' => $instance_id,
+            //     'instance_name' => $instance_type === 'docker' 
+            //         ? ($instance->c_container_name ?? 'Unknown Container') 
+            //         : ($instance->c_vm_name ?? 'Unknown VM'),
+            //     'scene_instance_id' => $c_scene_instances_id,
+            //     'attempt_count' => $submission->c_attempt_count,
+            //     'submission_id' => $submission->c_submission_id,
+            //     'message' => $message
+            // ]);
 
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message, ['points' => $points_earned, 'is_correct' => $is_correct]);
 
@@ -337,25 +337,25 @@ class FlagSubmissionController extends BaseController
             DB::rollBack();
             Log::error("Flag提交事务失败: " . $e->getMessage());
             
-            // 发送失败的 Redis 消息
-            try {
-                $this->sendRedisMessage([
-                    'event' => 'flag_submission_error',
-                    'user_id' => $username,
-                    'username' => $username,
-                    'timestamp' => now()->toDateTimeString(),
-                    'success' => false,
-                    'points_earned' => 0,
-                    'instance_type' => $instance_type ?? 'unknown',
-                    'instance_id' => $instance_id ?? 'unknown',
-                    'instance_name' => 'Error',
-                    'scene_instance_id' => $c_scene_instances_id ?? 'unknown',
-                    'error_message' => '系统错误，提交失败',
-                    'exception' => $e->getMessage()
-                ]);
-            } catch (\Exception $redisException) {
-                Log::error("Redis消息发送失败: " . $redisException->getMessage());
-            }
+            // 发送失败的 Redis 消息（临时禁用）
+            // try {
+            //     $this->sendRedisMessage([
+            //         'event' => 'flag_submission_error',
+            //         'user_id' => $username,
+            //         'username' => $username,
+            //         'timestamp' => now()->toDateTimeString(),
+            //         'success' => false,
+            //         'points_earned' => 0,
+            //         'instance_type' => $instance_type ?? 'unknown',
+            //         'instance_id' => $instance_id ?? 'unknown',
+            //         'instance_name' => 'Error',
+            //         'scene_instance_id' => $c_scene_instances_id ?? 'unknown',
+            //         'error_message' => '系统错误，提交失败',
+            //         'exception' => $e->getMessage()
+            //     ]);
+            // } catch (\Exception $redisException) {
+            //     Log::error("Redis消息发送失败: " . $redisException->getMessage());
+            // }
             
             return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误，提交失败');
         }
@@ -635,19 +635,20 @@ class FlagSubmissionController extends BaseController
     private function sendRedisMessage(array $messageData)
     {
         try {
-            $redis = Cache::store('redis');
+            // 使用 Laravel Redis facade（兼容 predis）
+            $redis = \Illuminate\Support\Facades\Redis::connection('cache');
             
             // 发送到 Redis 列表（可以用作消息队列）
             $listKey = 'flag_submissions_queue';
-            $redis->getRedis()->lpush($listKey, json_encode($messageData));
+            $redis->lpush($listKey, json_encode($messageData));
             
             // 设置一个带过期时间的键值对（用于监控最新提交）
             $latestKey = 'latest_flag_submission:' . $messageData['user_id'];
-            $redis->put($latestKey, json_encode($messageData), 3600); // 1小时过期
+            $redis->setex($latestKey, 3600, json_encode($messageData)); // 1小时过期
             
             // 发送到 Redis 频道（用于实时通知）
             $channelName = 'flag_submissions_channel';
-            $redis->getRedis()->publish($channelName, json_encode($messageData));
+            $redis->publish($channelName, json_encode($messageData));
             
             Log::info("Redis 消息发送成功", ['user' => $messageData['username'], 'event' => $messageData['event']]);
             
