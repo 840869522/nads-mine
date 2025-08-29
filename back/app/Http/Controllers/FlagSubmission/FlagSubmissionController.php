@@ -79,6 +79,19 @@ class FlagSubmissionController extends BaseController
         $submittedFlag = $request->input('flag');
         $correctFlag = null;
         $instance = null; // 确保实例变量在任何情况下都已定义
+        $actualDbId = null; // 存储实际的数据库ID
+        
+        // 添加详细的参数调试信息
+        Log::info("Flag提交请求参数详情", [
+            'all_inputs' => $request->all(),
+            'c_scene_instances_id' => $c_scene_instances_id,
+            'instance_id' => $instance_id,
+            'instance_id_type' => gettype($instance_id),
+            'instance_id_length' => strlen($instance_id),
+            'instance_type' => $instance_type,
+            'flag' => substr($submittedFlag, 0, 20) . '...',
+            'username' => $username
+        ]);
 
         // 3. 多层级关联校验（增强版）
         $instance = null;
@@ -96,7 +109,11 @@ class FlagSubmissionController extends BaseController
                                                     ->first();
             if ($instance) {
                 $correctFlag = $instance->c_flag;
-                Log::info("找到容器实例", ['container_name' => $instance->c_container_name, 'has_flag' => !empty($correctFlag)]);
+                $actualDbId = $instance->c_container_id; // 容器ID就是数据库ID
+                Log::info("找到容器实例", [
+                    'container_name' => $instance->c_container_name, 
+                    'has_flag' => !empty($correctFlag)
+                ]);
             } else {
                 // 调试信息：查找是否存在该容器但场景不匹配
                 $anyContainer = SceneContainerInstanceModel::where('c_container_id', $instance_id)->first();
@@ -110,48 +127,82 @@ class FlagSubmissionController extends BaseController
                 }
             }
         } elseif ($instance_type === 'vm') {
-            // VM ID是自增整数，确保转换为整数类型
-            if (!is_numeric($instance_id)) {
-                Log::error("VM ID格式错误", ['instance_id' => $instance_id, 'type' => gettype($instance_id)]);
-                return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, 'VM实例ID必须是数字');
-            }
-            
-            $vmId = (int)$instance_id;
-            
-            Log::info("查询VM实例", [
-                'original_id' => $instance_id,
-                'converted_id' => $vmId,
-                'scene_id' => $c_scene_instances_id
+            Log::info("VM实例查找开始", [
+                'instance_id' => $instance_id,
+                'is_numeric' => is_numeric($instance_id),
+                'is_uuid' => preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $instance_id)
             ]);
             
-            $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
-                                            ->where('c_scene_instances_id', $c_scene_instances_id)
-                                            ->first();
-            if ($instance) {
-                $correctFlag = $instance->c_flag;
-                Log::info("找到VM实例", [
-                    'vm_id' => $instance->c_vm_id,
-                    'vm_name' => $instance->c_vm_name, 
-                    'has_flag' => !empty($correctFlag),
-                    'scene_id' => $instance->c_scene_instances_id
-                ]);
-            } else {
-                // 详细调试信息：分别检查VM存在性和场景匹配
-                $anyVm = SceneVmInstanceModel::where('c_vm_id', $vmId)->first();
-                if ($anyVm) {
-                    Log::warning("VM存在但场景不匹配", [
-                        'vm_id' => $vmId,
-                        'vm_name' => $anyVm->c_vm_name,
-                        'expected_scene' => $c_scene_instances_id,
-                        'actual_scene' => $anyVm->c_scene_instances_id
-                    ]);
-                } else {
-                    Log::warning("VM实例不存在", [
-                        'vm_id' => $vmId,
-                        'available_vms' => SceneVmInstanceModel::select('c_vm_id', 'c_vm_name', 'c_scene_instances_id')
-                            ->limit(5)->get()->toArray()
+            $actualDbId = null; // 存储实际的数据库ID
+            
+            // 方法1：尝试作为数字ID查找（数据库c_vm_id）
+            if (is_numeric($instance_id)) {
+                $vmId = (int)$instance_id;
+                Log::info("尝试按数字ID查找", ['vm_id' => $vmId]);
+                
+                $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
+                                                ->where('c_scene_instances_id', $c_scene_instances_id)
+                                                ->first();
+                if ($instance) {
+                    $correctFlag = $instance->c_flag;
+                    $actualDbId = $instance->c_vm_id;
+                    Log::info("按数字ID找到VM实例", [
+                        'vm_id' => $instance->c_vm_id,
+                        'vm_name' => $instance->c_vm_name, 
+                        'has_flag' => !empty($correctFlag)
                     ]);
                 }
+            }
+            
+            // 方法2：如果按数字ID没找到，尝试作为UUID查找
+            if (!$instance && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $instance_id)) {
+                Log::info("数字ID没找到，尝试作为UUID查找", ['uuid' => $instance_id]);
+                
+                try {
+                    // 通过virsh获取VM名称
+                    $vmName = trim(shell_exec("virsh -c qemu:///system domname '{$instance_id}' 2>/dev/null") ?? '');
+                    
+                    if (!empty($vmName)) {
+                        Log::info("通过UUID找到VM名称", ['uuid' => $instance_id, 'vm_name' => $vmName]);
+                        
+                        // 通过VM名称在数据库中查找
+                        $instance = SceneVmInstanceModel::where('c_vm_name', $vmName)
+                                                        ->where('c_scene_instances_id', $c_scene_instances_id)
+                                                        ->first();
+                        if ($instance) {
+                            $correctFlag = $instance->c_flag;
+                            $actualDbId = $instance->c_vm_id;
+                            Log::info("通过UUID找到VM实例", [
+                                'vm_id' => $instance->c_vm_id,
+                                'vm_name' => $instance->c_vm_name,
+                                'uuid' => $instance_id,
+                                'has_flag' => !empty($correctFlag)
+                            ]);
+                        } else {
+                            Log::warning("通过VM名称没找到数据库记录", [
+                                'vm_name' => $vmName,
+                                'scene_id' => $c_scene_instances_id
+                            ]);
+                        }
+                    } else {
+                        Log::warning("UUID无效，无法获取VM名称", ['uuid' => $instance_id]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error("UUID查找失败", ['uuid' => $instance_id, 'error' => $e->getMessage()]);
+                }
+            }
+            
+            // 如果前两种都没找到，记录错误信息
+            if (!$instance) {
+                Log::error("VM实例查找完全失败", [
+                    'instance_id' => $instance_id,
+                    'scene_id' => $c_scene_instances_id,
+                    'is_numeric' => is_numeric($instance_id),
+                    'is_uuid' => preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $instance_id),
+                    'available_vms_in_scene' => SceneVmInstanceModel::where('c_scene_instances_id', $c_scene_instances_id)
+                        ->select('c_vm_id', 'c_vm_name', 'c_flag')
+                        ->get()->toArray()
+                ]);
             }
         }
 
@@ -190,22 +241,22 @@ class FlagSubmissionController extends BaseController
         try {
             if ($is_correct) {
                 $existing_correct_submission = FlagSubmissionModel::where('c_username', $username)
-                    ->where(function ($query) use ($instance_type, $instance_id) {
+                    ->where(function ($query) use ($instance_type, $actualDbId) {
                         if ($instance_type === 'docker') {
-                            $query->where('c_container_instance_id', $instance_id);
+                            $query->where('c_container_instance_id', $actualDbId);
                         } else {
-                            $query->where('c_vm_instance_id', $instance_id);
+                            $query->where('c_vm_instance_id', $actualDbId);
                         }
                     })
                     ->where('c_is_correct', 1)
                     ->first();
 
                 if (!$existing_correct_submission) {
-                    $correct_submissions_count = FlagSubmissionModel::where(function ($query) use ($instance_type, $instance_id) {
+                    $correct_submissions_count = FlagSubmissionModel::where(function ($query) use ($instance_type, $actualDbId) {
                         if ($instance_type === 'docker') {
-                            $query->where('c_container_instance_id', $instance_id);
+                            $query->where('c_container_instance_id', $actualDbId);
                         } else {
-                            $query->where('c_vm_instance_id', $instance_id);
+                            $query->where('c_vm_instance_id', $actualDbId);
                         }
                     })
                     ->where('c_is_correct', 1)
@@ -224,19 +275,19 @@ class FlagSubmissionController extends BaseController
             $submission->c_submission_id = (string) Str::uuid();
             $submission->c_username = $username;
             $submission->c_scene_instances_id = $c_scene_instances_id;
-            $submission->c_container_instance_id = ($instance_type === 'docker') ? $instance_id : null;
-            $submission->c_vm_instance_id = ($instance_type === 'vm') ? $instance_id : null;
+            $submission->c_container_instance_id = ($instance_type === 'docker') ? $actualDbId : null;
+            $submission->c_vm_instance_id = ($instance_type === 'vm') ? $actualDbId : null;
             $submission->c_submitted_flag = $submittedFlag;
             $submission->c_is_correct = $is_correct;
             $submission->c_points_earned = $points_earned;
             $submission->c_submitted_at = now();
 
             $attempt_count = FlagSubmissionModel::where('c_username', $username)
-                ->where(function ($query) use ($instance_type, $instance_id) {
+                ->where(function ($query) use ($instance_type, $actualDbId) {
                     if ($instance_type === 'docker') {
-                        $query->where('c_container_instance_id', $instance_id);
+                        $query->where('c_container_instance_id', $actualDbId);
                     } else {
-                        $query->where('c_vm_instance_id', $instance_id);
+                        $query->where('c_vm_instance_id', $actualDbId);
                     }
                 })
                 ->count();
