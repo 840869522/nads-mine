@@ -214,9 +214,10 @@ const VmImageManagementPage: React.FC = () => {
         img.osType?.toLowerCase().includes(search.toLowerCase())
     )
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (image: VmImage) => {
         if (confirm("确定要删除这个虚拟机镜像吗？")) {
-            setImages((prev) => prev.filter((img) => img.id !== id))
+            await fetch(`/api/vms/images?name=${encodeURIComponent(image.name)}`, { method: 'DELETE' }).catch(() => {})
+            fetchImages()
         }
     }
 
@@ -298,7 +299,7 @@ const VmImageManagementPage: React.FC = () => {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="删除">
-                        <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+                        <IconButton size="small" onClick={() => handleDelete(params.row)}>
                             <DeleteIcon />
                         </IconButton>
                     </Tooltip>
