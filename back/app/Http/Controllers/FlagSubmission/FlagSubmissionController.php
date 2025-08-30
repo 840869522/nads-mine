@@ -233,7 +233,29 @@ class FlagSubmissionController extends BaseController
         }
 
         // 4. Flag比对、得分计算与数据保存
-        $is_correct = (trim($submittedFlag) === trim($correctFlag));
+        // 处理数据库中flag格式问题：如果数据库中只存储UUID，需要加上flag{}包装
+        $normalizedCorrectFlag = $correctFlag;
+        if (!empty($correctFlag) && !str_starts_with($correctFlag, 'flag{')) {
+            // 如果数据库中只存储UUID，加上flag{}包装
+            $normalizedCorrectFlag = 'flag{' . $correctFlag . '}';
+        }
+        
+        // 添加详细的flag比对调试信息
+        Log::info("Flag比对详情", [
+            'submitted_flag' => $submittedFlag,
+            'submitted_flag_length' => strlen($submittedFlag),
+            'submitted_flag_trimmed' => trim($submittedFlag),
+            'correct_flag_original' => $correctFlag,
+            'correct_flag_normalized' => $normalizedCorrectFlag,
+            'correct_flag_length' => strlen($normalizedCorrectFlag ?? ''),
+            'correct_flag_trimmed' => trim($normalizedCorrectFlag ?? ''),
+            'flags_match_exact' => ($submittedFlag === $normalizedCorrectFlag),
+            'flags_match_trimmed' => (trim($submittedFlag) === trim($normalizedCorrectFlag)),
+            'submitted_flag_hex' => bin2hex($submittedFlag),
+            'correct_flag_hex' => bin2hex($normalizedCorrectFlag ?? '')
+        ]);
+        
+        $is_correct = (trim($submittedFlag) === trim($normalizedCorrectFlag));
         $points_earned = 0;
         $message = 'Flag提交失败，请重试';
 
