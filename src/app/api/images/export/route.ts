@@ -24,12 +24,19 @@ export async function GET(req: NextRequest) {
       : { socketPath: '/var/run/docker.sock' }
   );
   const image = docker.getImage(name);
+  let size: number | undefined;
+  try {
+    const info = await image.inspect();
+    size = info.Size;
+  } catch {
+    size = undefined;
+  }
   const stream = await image.get();
   const webStream = toWebStream(stream);
-  return new NextResponse(webStream, {
-    headers: {
-      'Content-Type': 'application/x-tar',
-      'Content-Disposition': `attachment; filename="${name.replace(/[\\/:]/g, '_')}.tar"`
-    }
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-tar',
+    'Content-Disposition': `attachment; filename="${name.replace(/[\\/:]/g, '_')}.tar"`
+  };
+  if (typeof size === 'number') headers['Content-Length'] = String(size);
+  return new NextResponse(webStream, { headers });
 }

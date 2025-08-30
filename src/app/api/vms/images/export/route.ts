@@ -29,12 +29,14 @@ export async function GET(req: NextRequest) {
   }
 
   const filePath = path.join(imageDir, name);
+  const stat = await fs.promises.stat(filePath);
   const stream = fs.createReadStream(filePath);
   const webStream = toWebStream(stream);
   return new NextResponse(webStream, {
     headers: {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${name}"`
+      'Content-Disposition': `attachment; filename="${name}"`,
+      'Content-Length': String(stat.size)
     }
   });
 }

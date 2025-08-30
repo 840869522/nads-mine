@@ -29,12 +29,14 @@ import {
     Search as SearchIcon,
     Download as DownloadIcon,
     CloudUpload as CloudUploadIcon,
+    Close as CloseIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
 import dayjs from "dayjs"
 import CreateVmModal from "@/components/vm/CreateVmModal"
 import { customFetch } from "@/utils/fetch"
 import axios from 'axios'
+import { v4 as uuidv4 } from 'uuid'
 
 interface VmImage {
     id: string
@@ -64,8 +66,14 @@ const VmImageManagementPage: React.FC = () => {
     const [customOs, setCustomOs] = useState("")
     const presetOs = ["ubuntu", "win7", "win10", "win7sp1", "win2003"]
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const [uploadProgress, setUploadProgress] = useState<number | null>(null)
-    const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
+    interface TransferTask {
+        id: string
+        name: string
+        progress: number
+        controller: AbortController
+    }
+    const [uploadTasks, setUploadTasks] = useState<TransferTask[]>([])
+    const [downloadTasks, setDownloadTasks] = useState<TransferTask[]>([])
 
     const fetchImages = async () => {
         const [imgData, overrideData] = await Promise.all([
@@ -132,29 +140,46 @@ const VmImageManagementPage: React.FC = () => {
     }
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-        const formData = new FormData()
-        formData.append('file', file)
-        setUploadProgress(0)
-        axios.post('/api/vms/images/import', formData, {
-            onUploadProgress: ev => {
-                if (ev.total) setUploadProgress(Math.round((ev.loaded * 100) / ev.total))
-            }
-        }).then(() => {
-            fetchImages()
-        }).finally(() => {
-            setUploadProgress(null)
-            if (fileInputRef.current) fileInputRef.current.value = ''
+        const files = Array.from(e.target.files || [])
+        files.forEach(file => {
+            const formData = new FormData()
+            formData.append('file', file)
+            const controller = new AbortController()
+            const id = uuidv4()
+            setUploadTasks(prev => [...prev, { id, name: file.name, progress: 0, controller }])
+            axios.post('/api/vms/images/import', formData, {
+                signal: controller.signal,
+                onUploadProgress: ev => {
+                    if (ev.total) setUploadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t))
+                }
+            }).then(() => {
+                fetchImages()
+            }).catch(() => {
+                /* ignore errors */
+            }).finally(() => {
+                setUploadTasks(prev => prev.filter(t => t.id !== id))
+            })
+        })
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    const cancelUpload = (id: string) => {
+        setUploadTasks(prev => {
+            const task = prev.find(t => t.id === id)
+            if (task) task.controller.abort()
+            return prev.filter(t => t.id !== id)
         })
     }
 
     const handleExport = (image: VmImage) => {
-        setDownloadProgress(0)
+        const controller = new AbortController()
+        const id = uuidv4()
+        setDownloadTasks(prev => [...prev, { id, name: image.name, progress: 0, controller }])
         axios.get(`/api/vms/images/export?name=${image.name}`, {
             responseType: 'blob',
+            signal: controller.signal,
             onDownloadProgress: ev => {
-                if (ev.total) setDownloadProgress(Math.round((ev.loaded * 100) / ev.total))
+                if (ev.total) setDownloadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t))
             }
         }).then(res => {
             const url = window.URL.createObjectURL(new Blob([res.data]))
@@ -164,8 +189,18 @@ const VmImageManagementPage: React.FC = () => {
             document.body.appendChild(link)
             link.click()
             link.remove()
+        }).catch(() => {
+            /* ignore errors */
         }).finally(() => {
-            setDownloadProgress(null)
+            setDownloadTasks(prev => prev.filter(t => t.id !== id))
+        })
+    }
+
+    const cancelDownload = (id: string) => {
+        setDownloadTasks(prev => {
+            const task = prev.find(t => t.id === id)
+            if (task) task.controller.abort()
+            return prev.filter(t => t.id !== id)
         })
     }
 
@@ -179,9 +214,10 @@ const VmImageManagementPage: React.FC = () => {
         img.osType?.toLowerCase().includes(search.toLowerCase())
     )
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (image: VmImage) => {
         if (confirm("确定要删除这个虚拟机镜像吗？")) {
-            setImages((prev) => prev.filter((img) => img.id !== id))
+            await fetch(`/api/vms/images?name=${encodeURIComponent(image.name)}`, { method: 'DELETE' }).catch(() => {})
+            fetchImages()
         }
     }
 
@@ -217,7 +253,7 @@ const VmImageManagementPage: React.FC = () => {
             field: 'osType',
             headerName: '操作系统',
             width: 120,
-            valueFormatter: (params) => params || '',
+            valueFormatter: (params) => params.value || '',
         },
         { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
@@ -263,7 +299,7 @@ const VmImageManagementPage: React.FC = () => {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="删除">
-                        <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+                        <IconButton size="small" onClick={() => handleDelete(params.row)}>
                             <DeleteIcon />
                         </IconButton>
                     </Tooltip>
@@ -283,32 +319,42 @@ const VmImageManagementPage: React.FC = () => {
                         onChange={(e)=>setSearch(e.target.value)}
                         size="small"
                         InputProps={{ startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        )}}
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            )}}
                         sx={{ width: { xs: '100%', sm: 260 } }}
                     />
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <input type="file" hidden ref={fileInputRef} onChange={handleImport} />
+                    <input type="file" hidden multiple ref={fileInputRef} onChange={handleImport} />
                     <Button variant="outlined" startIcon={<CloudUploadIcon />} onClick={() => fileInputRef.current?.click()}>
                         导入
                     </Button>
                 </Box>
             </Box>
-            {uploadProgress !== null && (
-                <Box sx={{ my: 2 }}>
-                    <Typography variant="body2">上传进度 {uploadProgress}%</Typography>
-                    <LinearProgress variant="determinate" value={uploadProgress} />
+            {uploadTasks.map(task => (
+                <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <LinearProgress variant="determinate" value={task.progress} />
+                    </Box>
+                    <IconButton size="small" onClick={() => cancelUpload(task.id)}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
                 </Box>
-            )}
-            {downloadProgress !== null && (
-                <Box sx={{ my: 2 }}>
-                    <Typography variant="body2">下载进度 {downloadProgress}%</Typography>
-                    <LinearProgress variant="determinate" value={downloadProgress} />
+            ))}
+            {downloadTasks.map(task => (
+                <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <LinearProgress variant="determinate" value={task.progress} />
+                    </Box>
+                    <IconButton size="small" onClick={() => cancelDownload(task.id)}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
                 </Box>
-            )}
+            ))}
 
             <Box component={Paper} sx={{ boxShadow: 3 }}>
                 <DataGrid
