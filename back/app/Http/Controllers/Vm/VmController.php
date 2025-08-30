@@ -488,6 +488,52 @@ public function listVmsBySceneInstance(string $instance_id)
         return response()->json($data, 200);
     }
 
+    // POST /vms/images/import
+    public function importVmImage(Request $request)
+    {
+        $file = $request->file('file');
+        if (!$file) {
+            return response()->json(['error' => 'no file'], 400);
+        }
+        try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+            $poolRoot = new \SimpleXMLElement($poolXml);
+            $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+            if (!$poolPath) {
+                return response()->json(['error' => 'pool path not found'], 500);
+            }
+            $name = $file->getClientOriginalName();
+            $file->move($poolPath, $name);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'import failed'], 500);
+        }
+        return response()->json(['ok' => true]);
+    }
+
+    // GET /vms/images/export
+    public function exportVmImage(Request $request)
+    {
+        $name = $request->query('name');
+        if (!$name) {
+            return response()->json(['error' => 'missing name'], 400);
+        }
+        try {
+            $poolXml = $this->runVirsh('pool-dumpxml', 'default');
+            $poolRoot = new \SimpleXMLElement($poolXml);
+            $poolPath = (string)($poolRoot->xpath('.//target/path')[0] ?? '');
+            if (!$poolPath) {
+                return response()->json(['error' => 'pool path not found'], 500);
+            }
+            $filePath = rtrim($poolPath, '/') . '/' . $name;
+            if (!is_file($filePath)) {
+                return response()->json(['error' => 'file not found'], 404);
+            }
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'export failed'], 500);
+        }
+        return response()->download($filePath, $name);
+    }
+
     // POST /vms/create
     public function createVm(Request $request)
     {

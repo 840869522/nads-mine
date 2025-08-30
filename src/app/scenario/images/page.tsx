@@ -30,6 +30,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import SearchIcon from '@mui/icons-material/Search';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
@@ -120,6 +122,29 @@ const ImageManagementPage: React.FC = () => {
     setCreateModalImage(`${image.name}:${image.version}`);
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    await fetch(`${API_BASE}/images/import`, { method: 'POST', body: form });
+    e.target.value = '';
+    fetchImages();
+  };
+
+  const handleExport = async (image: ManagedImage) => {
+    const res = await fetch(`${API_BASE}/images/export?id=${image.id}`);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${image.name}-${image.version}.tar`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleRefresh = () => {
     setIsLoading(true);
     fetchImages().finally(() => setIsLoading(false));
@@ -156,16 +181,21 @@ const ImageManagementPage: React.FC = () => {
               width: '90%',
               height: '100%',             // 撑满单元格
             }}>
-              <Tooltip title="启动">
-                <IconButton onClick={() => handleStart(image)} size="small">
-                  <PlayArrowIcon fontSize="small" color="success" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="删除镜像">
-                <IconButton onClick={() => handleOpenConfirmDialog(image)} color="error" size="small">
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+          <Tooltip title="启动">
+            <IconButton onClick={() => handleStart(image)} size="small">
+              <PlayArrowIcon fontSize="small" color="success" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="导出镜像">
+            <IconButton onClick={() => handleExport(image)} size="small">
+              <FileDownloadIcon fontSize="small" color="primary" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="删除镜像">
+            <IconButton onClick={() => handleOpenConfirmDialog(image)} color="error" size="small">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
             </Box>
         );
       }
@@ -200,6 +230,15 @@ const ImageManagementPage: React.FC = () => {
             <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+                variant="contained"
+                component="label"
+                startIcon={<CloudUploadIcon />}
+                size="small"
+            >
+              导入
+              <input type="file" hidden onChange={handleImport} />
+            </Button>
             <Button
                 variant="outlined"
                 startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}

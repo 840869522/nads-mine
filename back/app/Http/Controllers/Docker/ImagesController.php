@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Services\DockerService;
 use App\Models\Docker\Image;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ImagesController extends Controller
 {
@@ -73,5 +74,35 @@ class ImagesController extends Controller
             Image::where('id', $id)->delete();
         }
         return response()->json(['ok' => true]);
+    }
+
+    public function import(Request $request)
+    {
+        $file = $request->file('file');
+        if (!$file) {
+            return response()->json(['error' => 'no file'], 400);
+        }
+        $stream = fopen($file->getRealPath(), 'r');
+        $this->docker->importImage($stream);
+        fclose($stream);
+        return response()->json(['ok' => true]);
+    }
+
+    public function export(Request $request)
+    {
+        $id = $request->query('id');
+        if (!$id) {
+            return response()->json(['error' => 'missing id'], 400);
+        }
+        $name = $request->query('name', $id);
+        $stream = $this->docker->exportImage($id);
+        return new StreamedResponse(function () use ($stream) {
+            while (!$stream->eof()) {
+                echo $stream->read(1024);
+            }
+        }, 200, [
+            'Content-Type' => 'application/x-tar',
+            'Content-Disposition' => 'attachment; filename="' . $name . '.tar"',
+        ]);
     }
 }

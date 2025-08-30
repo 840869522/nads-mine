@@ -187,6 +187,8 @@ Route::prefix('images')->group(function () {
     Route::post('/', [ImagesController::class, 'store']);
     Route::put('/', [ImagesController::class, 'update']);
     Route::delete('/', [ImagesController::class, 'destroy']);
+    Route::post('/import', [ImagesController::class, 'import']);
+    Route::get('/export', [ImagesController::class, 'export']);
 });
 
 Route::prefix('instances')->group(function () {
@@ -212,6 +214,8 @@ Route::prefix('vms')->group(function () {
     $c = \App\Http\Controllers\Vm\VmController::class;
     Route::get('/', [$c, 'listVms']);
     Route::get('/images', [$c, 'listVmImages']);
+    Route::post('/images/import', [$c, 'importVmImage']);
+    Route::get('/images/export', [$c, 'exportVmImage']);
     Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);

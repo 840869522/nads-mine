@@ -11,6 +11,7 @@ use Docker\API\Model\ContainerConfigExposedPortsItem;
 use App\Models\Docker\DockerInstanceModel;
 use App\Models\scenario\SceneContainerInstance;
 use Illuminate\Support\Facades\Log;
+use Psr\Http\Message\StreamInterface;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
@@ -154,6 +155,16 @@ class DockerService
     public function removeImage(string $id)
     {
         $this->docker->imageDelete($id, ['force' => true]);
+    }
+
+    public function importImage($stream): void
+    {
+        $this->docker->imageLoad($stream, ['quiet' => false]);
+    }
+
+    public function exportImage(string $id): StreamInterface
+    {
+        return $this->docker->imageGet($id);
     }
 
     public function containerStats(string $id)
