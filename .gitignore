@@ -37,5 +37,11 @@ libvirt
 src/.venv
 images
 
+# Allow API image routes
+!src/app/api/images/
+!src/app/api/images/**
+!src/app/api/vms/images/
+!src/app/api/vms/images/**
+
 mima.md
 *.sql

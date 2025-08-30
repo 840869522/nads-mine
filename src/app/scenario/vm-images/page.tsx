@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo, useRef } from "react"
 import {
     Box,
     Typography,
@@ -20,22 +20,26 @@ import {
     Button,
     Tooltip,
     useTheme,
+    LinearProgress,
 } from "@mui/material"
 import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     PlayArrow as StartIcon,
     Search as SearchIcon,
+    Download as DownloadIcon,
+    CloudUpload as CloudUploadIcon,
 } from "@mui/icons-material"
 import { DataGrid, GridColDef } from "@mui/x-data-grid"
 import dayjs from "dayjs"
 import CreateVmModal from "@/components/vm/CreateVmModal"
 import { customFetch } from "@/utils/fetch"
+import axios from 'axios'
 
 interface VmImage {
     id: string
     name: string
-    osType?: "Windows" | "Linux" | "Other"
+    osType?: string
     size: string
     description?: string
     modifiedDate?: string
@@ -44,47 +48,56 @@ interface VmImage {
 
 const VmImageManagementPage: React.FC = () => {
     const [images, setImages] = useState<VmImage[]>([])
-    const [overrides, setOverrides] = useState<Record<string, { osType?: VmImage["osType"]; description?: string }>>({})
+    const [overrides, setOverrides] = useState<Record<string, { osType?: string; description?: string }>>({})
     const [openDialog, setOpenDialog] = useState(false)
     const [editingImage, setEditingImage] = useState<VmImage | null>(null)
     const [createModalImage, setCreateModalImage] = useState<string | null>(null)
     const [formData, setFormData] = useState<{
         name: string
-        osType: VmImage["osType"] | ""
+        osType: string
         description: string
     }>({
         name: "",
         osType: "",
         description: "",
     })
+    const [customOs, setCustomOs] = useState("")
+    const presetOs = ["ubuntu", "win7", "win10", "win7sp1", "win2003"]
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+    const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
 
-    useEffect(() => {
-        Promise.all([
+    const fetchImages = async () => {
+        const [imgData, overrideData] = await Promise.all([
             customFetch('/back/api/vms/images').then(res => res.json()).catch(() => []),
             fetch('/api/vm-image-overrides').then(res => res.json()).catch(() => ({})),
-        ]).then(([imgData, overrideData]) => {
-            setOverrides(overrideData)
-            const merged = (imgData as VmImage[]).map(img => {
-                const o = overrideData?.[img.name]
-                return o ? { ...img, osType: o.osType, description: o.description } : img
-            })
-            setImages(merged)
+        ])
+        setOverrides(overrideData)
+        const merged = (imgData as VmImage[]).map(img => {
+            const o = overrideData?.[img.name]
+            return o ? { ...img, osType: o.osType, description: o.description } : img
         })
-    }, [])
+        setImages(merged)
+    }
+
+    useEffect(() => { fetchImages() }, [])
 
     const handleOpenDialog = (image: VmImage) => {
         setEditingImage(image)
+        const isPreset = presetOs.includes(image.osType || "")
         setFormData({
             name: image.name,
-            osType: image.osType ?? "",
+            osType: isPreset ? image.osType || "" : "__custom",
             description: image.description || '',
         })
+        setCustomOs(isPreset ? "" : image.osType || "")
         setOpenDialog(true)
     }
 
     const handleCloseDialog = () => {
         setOpenDialog(false)
         setEditingImage(null)
+        setCustomOs("")
     }
 
     const handleStart = (image: VmImage) => {
@@ -92,29 +105,68 @@ const VmImageManagementPage: React.FC = () => {
     }
 
     const handleSave = async () => {
+        const osType = formData.osType === "__custom" ? customOs : formData.osType
         if (editingImage) {
             await fetch('/api/vm-image-overrides', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: editingImage.name,
-                    osType: formData.osType || undefined,
+                    osType: osType || undefined,
                     description: formData.description || undefined,
                 }),
             })
             setOverrides(prev => ({
                 ...prev,
-                [editingImage.name]: { osType: formData.osType || undefined, description: formData.description || undefined },
+                [editingImage.name]: { osType: osType || undefined, description: formData.description || undefined },
             }))
             setImages(prev =>
                 prev.map(img =>
                     img.id === editingImage.id
-                        ? { ...img, osType: formData.osType || undefined, description: formData.description || undefined }
+                        ? { ...img, osType: osType || undefined, description: formData.description || undefined }
                         : img
                 )
             )
         }
         handleCloseDialog()
+    }
+
+    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const formData = new FormData()
+        formData.append('file', file)
+        setUploadProgress(0)
+        axios.post('/api/vms/images/import', formData, {
+            onUploadProgress: ev => {
+                if (ev.total) setUploadProgress(Math.round((ev.loaded * 100) / ev.total))
+            }
+        }).then(() => {
+            fetchImages()
+        }).finally(() => {
+            setUploadProgress(null)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        })
+    }
+
+    const handleExport = (image: VmImage) => {
+        setDownloadProgress(0)
+        axios.get(`/api/vms/images/export?name=${image.name}`, {
+            responseType: 'blob',
+            onDownloadProgress: ev => {
+                if (ev.total) setDownloadProgress(Math.round((ev.loaded * 100) / ev.total))
+            }
+        }).then(res => {
+            const url = window.URL.createObjectURL(new Blob([res.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', image.name)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+        }).finally(() => {
+            setDownloadProgress(null)
+        })
     }
 
     const theme = useTheme()
@@ -165,18 +217,7 @@ const VmImageManagementPage: React.FC = () => {
             field: 'osType',
             headerName: '操作系统',
             width: 120,
-            valueFormatter: params => {
-                switch (params) {
-                    case 'Linux':
-                        return 'Linux'
-                    case 'Windows':
-                        return 'Windows'
-                    case 'Other':
-                        return '其他'
-                    default:
-                        return params || ''
-                }
-            },
+            valueFormatter: (params) => params.value || '',
         },
         { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
@@ -209,6 +250,11 @@ const VmImageManagementPage: React.FC = () => {
                     <Tooltip title="启动">
                         <IconButton size="small" onClick={() => handleStart(params.row)}>
                             <StartIcon color="success" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="导出">
+                        <IconButton size="small" onClick={() => handleExport(params.row)}>
+                            <DownloadIcon />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="编辑">
@@ -244,7 +290,25 @@ const VmImageManagementPage: React.FC = () => {
                         sx={{ width: { xs: '100%', sm: 260 } }}
                     />
                 </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <input type="file" hidden ref={fileInputRef} onChange={handleImport} />
+                    <Button variant="outlined" startIcon={<CloudUploadIcon />} onClick={() => fileInputRef.current?.click()}>
+                        导入
+                    </Button>
+                </Box>
             </Box>
+            {uploadProgress !== null && (
+                <Box sx={{ my: 2 }}>
+                    <Typography variant="body2">上传进度 {uploadProgress}%</Typography>
+                    <LinearProgress variant="determinate" value={uploadProgress} />
+                </Box>
+            )}
+            {downloadProgress !== null && (
+                <Box sx={{ my: 2 }}>
+                    <Typography variant="body2">下载进度 {downloadProgress}%</Typography>
+                    <LinearProgress variant="determinate" value={downloadProgress} />
+                </Box>
+            )}
 
             <Box component={Paper} sx={{ boxShadow: 3 }}>
                 <DataGrid
@@ -270,25 +334,31 @@ const VmImageManagementPage: React.FC = () => {
                             disabled
                         />
                         <FormControl fullWidth>
-                            <InputLabel>操作系统类型</InputLabel>
+                            <InputLabel>类别</InputLabel>
                             <Select
                                 value={formData.osType}
-                                label="操作系统类型"
+                                label="类别"
                                 onChange={(e) =>
                                     setFormData((prev) => ({
                                         ...prev,
-                                        osType: e.target.value as VmImage["osType"] | "",
+                                        osType: e.target.value as string,
                                     }))
                                 }
                             >
-                                <MenuItem value="">
-                                    <em>未指定</em>
-                                </MenuItem>
-                                <MenuItem value="Linux">Linux</MenuItem>
-                                <MenuItem value="Windows">Windows</MenuItem>
-                                <MenuItem value="Other">其他</MenuItem>
+                                {presetOs.map(os => (
+                                    <MenuItem key={os} value={os}>{os}</MenuItem>
+                                ))}
+                                <MenuItem value="__custom">自定义</MenuItem>
                             </Select>
                         </FormControl>
+                        {formData.osType === "__custom" && (
+                            <TextField
+                                label="自定义类别"
+                                value={customOs}
+                                onChange={(e) => setCustomOs(e.target.value)}
+                                fullWidth
+                            />
+                        )}
                         <TextField
                             label="描述"
                             value={formData.description}

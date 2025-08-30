@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -23,6 +23,7 @@ import {
   Menu,
   MenuItem,
   CircularProgress,
+  LinearProgress,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -30,12 +31,15 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import SearchIcon from '@mui/icons-material/Search';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import DownloadIcon from '@mui/icons-material/Download';
 import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
 import { customFetch } from '@/utils/fetch';
+import axios from 'axios';
 
 const API_BASE = '/back/api';
 
@@ -56,6 +60,10 @@ const ImageManagementPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumns, setShowColumns] = useState({ size: true, uploadDate: true });
   const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
 
   const fetchImages = async () => {
     if (!user) return;
@@ -130,6 +138,48 @@ const ImageManagementPage: React.FC = () => {
     setPage(0);
   };
 
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadProgress(0);
+    axios.post('/api/images/import', formData, {
+      onUploadProgress: ev => {
+        if (ev.total) {
+          setUploadProgress(Math.round((ev.loaded * 100) / ev.total));
+        }
+      }
+    }).then(() => {
+      fetchImages();
+    }).finally(() => {
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    });
+  };
+
+  const handleExport = (image: ManagedImage) => {
+    setDownloadProgress(0);
+    axios.get(`/api/images/export?name=${image.name}:${image.version}`, {
+      responseType: 'blob',
+      onDownloadProgress: ev => {
+        if (ev.total) {
+          setDownloadProgress(Math.round((ev.loaded * 100) / ev.total));
+        }
+      }
+    }).then(res => {
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${image.name}-${image.version}.tar`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }).finally(() => {
+      setDownloadProgress(null);
+    });
+  };
+
   const columns: GridColDef[] = React.useMemo(() => [
     { field: 'name', headerName: '名称', flex: 1 },
     { field: 'type', headerName: '类型', flex: 1, renderCell: (params) => params.row.type === 'docker' ? 'Docker' : '虚拟机 (VM)' },
@@ -159,6 +209,11 @@ const ImageManagementPage: React.FC = () => {
               <Tooltip title="启动">
                 <IconButton onClick={() => handleStart(image)} size="small">
                   <PlayArrowIcon fontSize="small" color="success" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="导出镜像">
+                <IconButton onClick={() => handleExport(image)} size="small">
+                  <DownloadIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="删除镜像">
@@ -200,6 +255,14 @@ const ImageManagementPage: React.FC = () => {
             <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <input type="file" hidden ref={fileInputRef} onChange={handleImport} />
+            <Button
+                variant="outlined"
+                startIcon={<CloudUploadIcon />}
+                onClick={() => fileInputRef.current?.click()}
+            >
+              导入
+            </Button>
             <Button
                 variant="outlined"
                 startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
@@ -210,6 +273,19 @@ const ImageManagementPage: React.FC = () => {
             </Button>
           </Box>
         </Box>
+
+        {uploadProgress !== null && (
+          <Box sx={{ my: 2 }}>
+            <Typography variant="body2">上传进度 {uploadProgress}%</Typography>
+            <LinearProgress variant="determinate" value={uploadProgress} />
+          </Box>
+        )}
+        {downloadProgress !== null && (
+          <Box sx={{ my: 2 }}>
+            <Typography variant="body2">下载进度 {downloadProgress}%</Typography>
+            <LinearProgress variant="determinate" value={downloadProgress} />
+          </Box>
+        )}
 
         {fetchError ? (
             <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
