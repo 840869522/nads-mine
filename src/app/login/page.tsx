@@ -10,6 +10,7 @@ import {
   Alert
 } from '@mui/material';
 import CryptoJS from "crypto-js";
+import AiIcon from '@/components/icon/AiAnswer';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -18,11 +19,11 @@ const LoginPage: React.FC = () => {
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { login,logout } = useAuth();
+  const { login, logout } = useAuth();
 
-  useEffect(()=>{
+  useEffect(() => {
     logout();
-  },[]);
+  }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

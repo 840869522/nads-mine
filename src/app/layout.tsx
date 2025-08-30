@@ -8,6 +8,7 @@ export const metadata = {
   title: '无人机网络安全实验平台'
 };
 
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">

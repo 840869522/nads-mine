@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
@@ -8,7 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
 import { getCookie } from '@/utils/cookie';
-import path from 'path';
+import { AffixedFabWrapper } from '@/components/layout/AffixedFab';
+import ChatPage from "@/components/chat/page";
 
 const DRAWER_WIDTH = 250;
 
@@ -28,13 +29,14 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/scenario/instances', key: 'support_instances_manage' },
   { prefix: '/scenario/vm-images', key: 'support_scenario_images_manage' },
   { prefix: '/scenario/vm-instances', key: 'support_scenario_instances_manage' },
-   { prefix: '/visualization', key: 'visualization' },
+  { prefix: '/visualization', key: 'visualization' },
 ];
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [chatOpen, setChatOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const permissionsData = user?.permission || [];
@@ -48,7 +50,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     } else {
       const match = ROUTE_PERMISSIONS.find(r => pathname === r.prefix);
       if (match) {
-        if (!roleData.includes(UserRole.ADMIN) )
+        if (!roleData.includes(UserRole.ADMIN))
           if (!permissionsData.includes(match.key) && !pathname.startsWith('/visualization')) {
             router.replace('/');
             return;
@@ -57,6 +59,21 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     }
   }, [user, pathname, router]);
 
+  const aiChat = useMemo(() => {
+    if (user)
+      return (
+        <Box>
+          <AffixedFabWrapper onClick={() => { setChatOpen(true); console.log(chatOpen) }} />
+          {
+            chatOpen &&
+            <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} />
+          }
+        </Box>
+      )
+    else {
+      return null;
+    }
+  }, [user,chatOpen]);
 
   const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac') && !pathname.startsWith('/visualization');
 
@@ -76,6 +93,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       >
         {showSidebar ? <PageWrapper>{children}</PageWrapper> : children}
       </Box>
+      {aiChat}
     </Box>
   );
 }

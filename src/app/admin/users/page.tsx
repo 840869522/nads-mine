@@ -31,6 +31,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
 import { toast } from 'react-toastify';
+import { DownloadOutlined } from '@mui/icons-material';
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type UserDisplayItem = { c_username: string; c_name: string, c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
@@ -58,7 +59,7 @@ const UserManagementPage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    if (searchTerm.data.trim()) getUserDataSearch(page,rowsPerPage);
+    if (searchTerm.data.trim()) getUserDataSearch(page, rowsPerPage);
     else getUserData(page, rowsPerPage)
   }, [page, rowsPerPage]);
 
@@ -78,7 +79,7 @@ const UserManagementPage: React.FC = () => {
   };
 
 
-  const getUserDataSearch = async (page: number,pagesize:number)=>{
+  const getUserDataSearch = async (page: number, pagesize: number) => {
     setTableLoading(true);
     try {
       const res = await apiClientWithToken.post(`/back/api/support/user/search`, JSON.stringify({
@@ -111,7 +112,7 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleSearchSubmit = async () => {
-    await getUserDataSearch(1,rowsPerPage);
+    await getUserDataSearch(1, rowsPerPage);
     setPage(1);
   };
 
@@ -298,6 +299,13 @@ const UserManagementPage: React.FC = () => {
           </Button>
         </Box>
         <Button
+          variant='contained'
+          startIcon={<DownloadOutlined />}
+          onClick={() => console.log("导出")}
+        >
+          导出数据
+        </Button>
+        <Button
           variant="contained"
           startIcon={<AddCircleOutlineIcon />}
           onClick={handleAddUserClick}
@@ -346,7 +354,7 @@ const UserManagementPage: React.FC = () => {
                 filteredAndSortedUsers.map((user) => (
                   <TableRow key={user.c_username} hover>
                     <TableCell sx={{ fontWeight: 'medium' }}>{user.c_username}</TableCell>
-                    <TableCell sx={{fontWeight: "medium"}}>{user.c_name}</TableCell>
+                    <TableCell sx={{ fontWeight: "medium" }}>{user.c_name}</TableCell>
                     <TableCell>{user.c_email}</TableCell>
                     <TableCell>
                       <Chip
