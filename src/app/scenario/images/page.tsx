@@ -33,6 +33,7 @@ import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import SearchIcon from '@mui/icons-material/Search';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
+import CloseIcon from '@mui/icons-material/Close';
 import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
@@ -40,6 +41,7 @@ import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
 import { customFetch } from '@/utils/fetch';
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = '/back/api';
 
@@ -62,8 +64,14 @@ const ImageManagementPage: React.FC = () => {
   const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  interface TransferTask {
+    id: string;
+    name: string;
+    progress: number;
+    controller: AbortController;
+  }
+  const [uploadTasks, setUploadTasks] = useState<TransferTask[]>([]);
+  const [downloadTasks, setDownloadTasks] = useState<TransferTask[]>([]);
 
   const fetchImages = async () => {
     if (!user) return;
@@ -139,44 +147,72 @@ const ImageManagementPage: React.FC = () => {
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    setUploadProgress(0);
-    axios.post('/api/images/import', formData, {
-      onUploadProgress: ev => {
-        if (ev.total) {
-          setUploadProgress(Math.round((ev.loaded * 100) / ev.total));
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const controller = new AbortController();
+      const id = uuidv4();
+      setUploadTasks(prev => [...prev, { id, name: file.name, progress: 0, controller }]);
+      axios.post('/api/images/import', formData, {
+        signal: controller.signal,
+        onUploadProgress: ev => {
+          if (ev.total) {
+            setUploadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t));
+          }
         }
-      }
-    }).then(() => {
-      fetchImages();
-    }).finally(() => {
-      setUploadProgress(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      }).then(() => {
+        fetchImages();
+      }).catch(() => {
+        /* ignore errors */
+      }).finally(() => {
+        setUploadTasks(prev => prev.filter(t => t.id !== id));
+      });
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const cancelUpload = (id: string) => {
+    setUploadTasks(prev => {
+      const task = prev.find(t => t.id === id);
+      if (task) task.controller.abort();
+      return prev.filter(t => t.id !== id);
     });
   };
 
   const handleExport = (image: ManagedImage) => {
-    setDownloadProgress(0);
+    const controller = new AbortController();
+    const id = uuidv4();
+    const filename = `${image.name}-${image.version}.tar`;
+    setDownloadTasks(prev => [...prev, { id, name: filename, progress: 0, controller }]);
     axios.get(`/api/images/export?name=${image.name}:${image.version}`, {
       responseType: 'blob',
+      signal: controller.signal,
       onDownloadProgress: ev => {
         if (ev.total) {
-          setDownloadProgress(Math.round((ev.loaded * 100) / ev.total));
+          setDownloadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t));
         }
       }
     }).then(res => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${image.name}-${image.version}.tar`);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
+    }).catch(() => {
+      /* ignore errors */
     }).finally(() => {
-      setDownloadProgress(null);
+      setDownloadTasks(prev => prev.filter(t => t.id !== id));
+    });
+  };
+
+  const cancelDownload = (id: string) => {
+    setDownloadTasks(prev => {
+      const task = prev.find(t => t.id === id);
+      if (task) task.controller.abort();
+      return prev.filter(t => t.id !== id);
     });
   };
 
@@ -255,7 +291,7 @@ const ImageManagementPage: React.FC = () => {
             <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <input type="file" hidden ref={fileInputRef} onChange={handleImport} />
+            <input type="file" hidden multiple ref={fileInputRef} onChange={handleImport} />
             <Button
                 variant="outlined"
                 startIcon={<CloudUploadIcon />}
@@ -274,18 +310,28 @@ const ImageManagementPage: React.FC = () => {
           </Box>
         </Box>
 
-        {uploadProgress !== null && (
-          <Box sx={{ my: 2 }}>
-            <Typography variant="body2">上传进度 {uploadProgress}%</Typography>
-            <LinearProgress variant="determinate" value={uploadProgress} />
+        {uploadTasks.map(task => (
+          <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
+            <Box sx={{ flexGrow: 1 }}>
+              <LinearProgress variant="determinate" value={task.progress} />
+            </Box>
+            <IconButton size="small" onClick={() => cancelUpload(task.id)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
-        )}
-        {downloadProgress !== null && (
-          <Box sx={{ my: 2 }}>
-            <Typography variant="body2">下载进度 {downloadProgress}%</Typography>
-            <LinearProgress variant="determinate" value={downloadProgress} />
+        ))}
+        {downloadTasks.map(task => (
+          <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
+            <Box sx={{ flexGrow: 1 }}>
+              <LinearProgress variant="determinate" value={task.progress} />
+            </Box>
+            <IconButton size="small" onClick={() => cancelDownload(task.id)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
-        )}
+        ))}
 
         {fetchError ? (
             <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>
