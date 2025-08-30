@@ -253,7 +253,7 @@ const VmImageManagementPage: React.FC = () => {
             field: 'osType',
             headerName: '操作系统',
             width: 120,
-            valueFormatter: (params) => params.value || '',
+            valueFormatter: (params) => params || '',
         },
         { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
         { field: 'size', headerName: '大小', width: 120 },
