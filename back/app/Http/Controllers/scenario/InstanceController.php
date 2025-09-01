@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File; 
+use Illuminate\Support\Facades\File;
 
-// 步骤 1: 引入 Process 组件和相关异常类 
+// 步骤 1: 引入 Process 组件和相关异常类
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -47,16 +47,27 @@ class InstanceController extends Controller
         }
     }
 
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
+     */
     public function show(SceneInstance $instance)
     {
         try {
-            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
+            // ★ 核心改动：使用带有权限作用域的查询替代直接的 load('containers')
+            $containersFromDb = $instance->containers()
+                ->forCurrentUser($instance->c_scene_instances_id)
+                ->get();
+
             $runningInstances = [];
-            foreach ($instance->containers as $containerInstance) {
+
+            $instance->loadMissing('sceneConfig');
+
+            foreach ($containersFromDb as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
                 try {
                     $details = $this->docker->containerInspect($containerId);
                     $stats = $this->docker->containerStats($containerId);
+
                     $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
                     $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
                     $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
@@ -65,30 +76,48 @@ class InstanceController extends Controller
                     $memLimit = $stats->memory_stats->limit ?? 0;
 
                     $ports = [];
-                    foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
-                        foreach ($bindingList ?? [] as $b) {
-                            $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
+                    if ($details->getHostConfig()) {
+                        foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
+                            foreach ($bindingList ?? [] as $b) {
+                                $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
+                            }
                         }
                     }
 
                     $runningInstances[] = [
-                    'id' => $details->getId(),
-                    'name' => ltrim($details->getName() ?? '', '/'),
-                    'type' => 'container',
-                    'ipAddress' => $containerInstance->c_ip,
-                    'scene_instance_id' => $containerInstance->c_scene_instances_id,
-                    'scene_name' => $instance->sceneConfig->c_name ?? null,
-                    'status' => $this->mapStatus($details->getState()->getStatus()),
-                    'ports' => implode(', ', $ports),
-                    'imageName' => $details->getConfig()->getImage(),
-                    'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
-                    'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
-                    'uptime' => $details->getState()->getStartedAt(),
-                    'createdAt' => $details->getCreated(),
-                    'is_target' => !empty($containerInstance->c_flag),
-                ];
+                        'id' => $details->getId(),
+                        'name' => ltrim($details->getName() ?? '', '/'),
+                        'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
+                        'status' => $this->mapStatus($details->getState()->getStatus()),
+                        'ports' => implode(', ', $ports),
+                        'imageName' => $details->getConfig()->getImage(),
+                        'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
+                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
+                        'uptime' => $details->getState()->getStartedAt(),
+                        'createdAt' => $details->getCreated(),
+                        'is_target' => !empty($containerInstance->c_flag),
+                    ];
                 } catch (\Exception $e) {
-                    Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
+                    Log::warning("无法 inspect 容器 {$containerId} (可能已被删除): " . $e->getMessage());
+                    $runningInstances[] = [
+                        'id' => $containerId,
+                        'name' => $containerInstance->c_container_name ?? "未知 (ID: " . substr($containerId, 0, 12) . ")",
+                        'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
+                        'status' => 'error',
+                        'ports' => 'N/A',
+                        'imageName' => 'N/A',
+                        'cpuUsage' => 'N/A',
+                        'memoryUsage' => 'N/A',
+                        'uptime' => 'N/A',
+                        'createdAt' => 'N/A',
+                        'is_target' => !empty($containerInstance->c_flag),
+                    ];
                 }
             }
             return response()->json($runningInstances);
@@ -100,7 +129,7 @@ class InstanceController extends Controller
 
 
     /**
-     *  核心修复：添加了对关联表记录和虚拟机实例文件夹的删除 
+     *  核心修复：添加了对关联表记录和虚拟机实例文件夹的删除
      */
     public function destroy(SceneInstance $instance)
     {
@@ -141,7 +170,7 @@ class InstanceController extends Controller
                     Log::error($errors[count($errors) - 1]);
                 }
             }
-            
+
             // ★★★ 新增：删除虚拟机实例文件夹 ★★★
             $baseDir = $this->_get_global_directory();
             $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;
@@ -168,7 +197,7 @@ class InstanceController extends Controller
 
             $instance->switches()->delete();
             Log::info("已删除实例 {$instanceId} 的所有交换机数据库记录。");
-            
+
             // 步骤 3: 最后删除场景实例自身的主记录
             $instance->delete();
             Log::info("已从数据库中删除场景实例主记录: {$instanceId}");
@@ -202,7 +231,7 @@ class InstanceController extends Controller
     private function deleteVmAndStorage(string $vmName): void
     {
         Log::info("开始处理虚拟机删除: {$vmName}");
-        
+
         // 步骤1: 强制关机 (destroy)
         try {
             $this->runCommand(['virsh', 'destroy', $vmName]);
@@ -303,7 +332,7 @@ class InstanceController extends Controller
                 Log::error($errors[count($errors) - 1]);
             }
         }
-        
+
         // 步骤 2: 删除虚拟机实例文件夹
         $baseDir = $this->_get_global_directory();
         $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;

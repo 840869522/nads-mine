@@ -42,22 +42,20 @@ public function listVmsBySceneInstance(string $instance_id)
         return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
     }
 
-    // 2. 从数据库查询与该场景实例ID关联的虚拟机的详细信息
+    // 步骤 2: ★ 核心改动：使用带有权限作用域的模型来查询数据库
     try {
-        $vmDetailsFromDb = DB::table('c_scene_vm_instances as v')
-            ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
+        $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
+            ->forCurrentUser($instance_id) // 调用权限作用域
+            ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
             ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
             ->select(
-                'v.c_vm_name',
-                'v.c_scene_instances_id',
-                'v.c_ip',
-                'v.c_flag', // ★★★ 1. 查询 c_flag 字段 ★★★
+                'c_scene_vm_instances.c_vm_name',
+                'c_scene_vm_instances.c_scene_instances_id',
+                'c_scene_vm_instances.c_ip',
+                'c_scene_vm_instances.c_flag', // 查询 c_flag
                 'sc.c_name as scene_name'
             )
-            // 核心筛选条件：只选择属于特定场景实例的VM
-            ->where('v.c_scene_instances_id', $instance_id)
             ->get()
-            // 使用VM名称作为Key，方便后续快速查找
             ->keyBy('c_vm_name');
 
     } catch (\Throwable $e) {
@@ -65,25 +63,19 @@ public function listVmsBySceneInstance(string $instance_id)
         return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
     }
 
-    // 3. 过滤并合并数据
+    // 步骤 3: 过滤并合并数据
     $resultVms = [];
-    // 遍历从虚拟化平台获取的所有VM
     foreach ($allVmsFromHypervisor as $vm) {
-        // 检查这个VM是否存在于我们从数据库查出的该场景的VM列表中
         if (isset($vmDetailsFromDb[$vm['name']])) {
             $dbInfo = $vmDetailsFromDb[$vm['name']];
-
-            // 合并数据库信息到VM实时状态数据中
             $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
             $vm['scene_name']        = $dbInfo->scene_name;
             $vm['ip']                = $dbInfo->c_ip;
-            // ★★★ 2. 根据 c_flag 是否为空来设置 is_target ★★★
+            // ★ 核心改动：动态生成 is_target 字段
             $vm['is_target']         = !empty($dbInfo->c_flag);
-
             $resultVms[] = $vm;
         }
     }
-
     return response()->json($resultVms);
 }
     /**
