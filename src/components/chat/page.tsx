@@ -13,12 +13,13 @@ import {
     useTheme,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import { useAuth } from "@/hooks/useAuth";
+import { apiClientWithToken } from "@/utils/axios";
 
 interface Message {
     id: string;
     text: string;
-    sender: 'user' | 'other';
-    timestamp: Date;
+    role: 'user' | 'assistant';
 }
 
 const ChatDialog = () => {
@@ -26,23 +27,32 @@ const ChatDialog = () => {
         {
             id: '1',
             text: '你好！有什么可以帮助你的吗？',
-            sender: 'other',
-            timestamp: new Date()
+            role: 'assistant'
         },
         {
             id: "2",
-            text:"adasd",
-            sender: "user",
-            timestamp: new Date()
+            text: "adasd",
+            role: "user"
         }
     ]);
     const [inputValue, setInputValue] = useState('');
+    const [isLoading, setIsLoading] = useState<boolean>(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const eventSourceRef = useRef<EventSource>(null);
     const theme = useTheme();
+    // const {user} = useAuth();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
+
+    useEffect(() => {
+        return () => {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+        };
+    }, [])
 
     useEffect(() => {
         scrollToBottom();
@@ -53,32 +63,53 @@ const ChatDialog = () => {
             const newMessage: Message = {
                 id: Date.now().toString(),
                 text: inputValue,
-                sender: 'user',
-                timestamp: new Date()
+                role: 'user'
             };
 
             setMessages(prev => [...prev, newMessage]);
             setInputValue('');
+            const eventUrl = "/chat/chat"
+            apiClientWithToken.post(eventUrl, JSON.stringify({ message: newMessage.text })).then(() => {
+                // 连接 SSE 端点
+                eventSourceRef.current = new EventSource(eventUrl);
 
-            // 模拟回复
-            setTimeout(() => {
-                setMessages(prev => [...prev, {
-                    id: (Date.now() + 1).toString(),
-                    text: '这是自动回复示例',
-                    sender: 'other',
-                    timestamp: new Date()
-                }]);
-            }, 1000);
+                let currentMessage = '';
+                eventSourceRef.current.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.chunk) {
+                        currentMessage += data.chunk;
+                        setMessages((prev) => {
+                            const newMessages = [...prev];
+                            if (newMessages[newMessages.length - 1]?.role === 'assistant') {
+                                newMessages[newMessages.length - 1].text = currentMessage;
+                            } else {
+                                newMessages.push({ id: (Date.now() + 1).toString(), role: 'assistant', text: currentMessage });
+                            }
+                            return newMessages;
+                        });
+                    }
+                    if (data.done) {
+                        eventSourceRef.current?.close();
+                        eventSourceRef.current = null;
+                    }
+                };
+
+                eventSourceRef.current.onerror = () => {
+                    setMessages((prev) => [
+                        ...prev,
+                        { id: (Date.now() + 1).toString(), role: 'assistant', text: '连接错误，请重试。' },
+                    ]);
+                    eventSourceRef.current?.close();
+                    eventSourceRef.current = null;
+                };
+            })
+
         }
     };
 
-    useEffect(()=>{
+    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    },[messages]);
-
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+    }, [messages]);
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -100,9 +131,9 @@ const ChatDialog = () => {
                         key={message.id}
                         sx={{
                             display: 'flex',
-                            flexDirection: message.sender === 'user' ? 'row-reverse' : 'row',
-                            justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
-                            px: 1, 
+                            flexDirection: message.role === 'user' ? 'row-reverse' : 'row',
+                            justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
+                            px: 1,
                             py: 1,
                         }}
                     >
@@ -110,25 +141,25 @@ const ChatDialog = () => {
                             elevation={1}
                             sx={{
                                 p: 1.5,
-                                bgcolor: message.sender === 'user'
+                                bgcolor: message.role === 'user'
                                     ? theme.palette.primary.main
                                     : theme.palette.mode === 'dark'
                                         ? 'grey.800'
                                         : 'background.paper',
-                                color: message.sender === 'user'
+                                color: message.role === 'user'
                                     ? theme.palette.primary.contrastText
                                     : theme.palette.text.primary,
-                                borderRadius: message.sender === 'user'
+                                borderRadius: message.role === 'user'
                                     ? '16px 4px 4px 16px'
                                     : '4px 16px 16px 4px',
-                                boxShadow: message.sender === 'user'
+                                boxShadow: message.role === 'user'
                                     ? `0 2px 5px ${theme.palette.mode === 'dark' ? 'rgba(0,0,150,0.5)' : 'rgba(0,0,150,0.3)'}`
                                     : `0 2px 5px ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                ...(message.sender === 'user' && {
+                                ...(message.role === 'user' && {
                                     mr: 0,
                                     ml: 'auto',
                                 }),
-                                ...(message.sender !== 'user' && {
+                                ...(message.role !== 'user' && {
                                     ml: 0,
                                     mr: 'auto',
                                 }),
@@ -142,22 +173,62 @@ const ChatDialog = () => {
                             <Typography variant="body2" sx={{ mb: 0.5 }}>
                                 {message.text}
                             </Typography>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    display: 'block',
-                                    textAlign: 'right',
-                                    mt: 0.5,
-                                    color: message.sender === 'user'
-                                        ? theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.7)'
-                                        : theme.palette.text.secondary
-                                }}
-                            >
-                                {formatTime(message.timestamp)}
-                            </Typography>
                         </Paper>
                     </ListItem>
                 ))}
+                {isLoading && (
+                    <ListItem
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'flex-start',
+                            px: 1,
+                            py: 1,
+                        }}
+                    >
+                        <Paper
+                            elevation={1}
+                            sx={{
+                                p: 1.5,
+                                bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'background.paper',
+                                borderRadius: '4px 16px 16px 4px',
+                                boxShadow: `0 2px 5px ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                ml: 0,
+                                mr: 'auto',
+                                animation: 'fadeIn 0.3s ease-in'
+                            }}
+                        >
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Box sx={{
+                                    width: 4,
+                                    height: 4,
+                                    bgcolor: 'text.secondary',
+                                    borderRadius: '50%',
+                                    animation: 'dot 1.4s infinite ease-in-out both'
+                                }}
+                                    style={{ animationDelay: '0s' }}
+                                />
+                                <Box sx={{
+                                    width: 4,
+                                    height: 4,
+                                    bgcolor: 'text.secondary',
+                                    borderRadius: '50%',
+                                    animation: 'dot 1.4s infinite ease-in-out both'
+                                }}
+                                    style={{ animationDelay: '0.2s' }}
+                                />
+                                <Box sx={{
+                                    width: 4,
+                                    height: 4,
+                                    bgcolor: 'text.secondary',
+                                    borderRadius: '50%',
+                                    animation: 'dot 1.4s infinite ease-in-out both'
+                                }}
+                                    style={{ animationDelay: '0.4s' }}
+                                />
+                            </Box>
+                        </Paper>
+                    </ListItem>
+                )}
                 <div ref={messagesEndRef} />
             </List>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Typography,
   Box,
@@ -32,6 +32,7 @@ import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
 import { toast } from 'react-toastify';
 import { DownloadOutlined } from '@mui/icons-material';
+import * as XLSX from "xlsx";
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 type UserDisplayItem = { c_username: string; c_name: string, c_email: string; c_is_login: 1 | 0; c_create_at: string, c_update_at: string, c_last_login: string };
@@ -56,7 +57,7 @@ const UserManagementPage: React.FC = () => {
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserDisplayItem | null>(null);
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (searchTerm.data.trim()) getUserDataSearch(page, rowsPerPage);
@@ -159,7 +160,7 @@ const UserManagementPage: React.FC = () => {
       password: "",
       is_login: formData.status == "active" ? 1 : 0,
       role: [...formData.role],
-      name : formData.name
+      name: formData.name
     }
     if (isNew) {
       userData.password = CryptoJS.SHA256(formData.password).toString()
@@ -192,7 +193,7 @@ const UserManagementPage: React.FC = () => {
       }));
       if (res.data.code === 200) {
         setUsers(prev => prev.map(u =>
-          u.c_username === editingUser.c_username ? { ...u, c_name: formData.name,c_username: formData.username!, c_role: formData.role!, c_email: formData.email!, c_is_login: formData.status === 'active'? 1 : 0 } : u
+          u.c_username === editingUser.c_username ? { ...u, c_name: formData.name, c_username: formData.username!, c_role: formData.role!, c_email: formData.email!, c_is_login: formData.status === 'active' ? 1 : 0 } : u
         ));
         toast.success(`用户 "${formData.username}" 更新成功。`, {
           autoClose: 3000,
@@ -239,6 +240,123 @@ const UserManagementPage: React.FC = () => {
     }
     setIsConfirmDeleteOpen(false);
     setUserToDelete(null);
+  };
+
+
+  const handleInputExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // 1. 文件类型验证
+      if (!file.name.match(/\.(xlsx|xls)$/)) {
+        throw new Error("仅支持 .xlsx 或 .xls 格式");
+      }
+
+      // 2. 读取文件内容
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = event.target?.result;
+        if (!data) throw new Error("文件读取失败");
+
+        // 3. 解析 Excel 数据
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+
+        // 4. 转换为 JSON 数组（跳过空行）
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).filter(
+          row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
+        );
+
+        // 5. 验证表头是否匹配
+        const expectedHeaders = [
+          '用户名', '姓名', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+        ];
+        const fileHeaders = jsonData[0] as string[];
+        if (!expectedHeaders.every((h, i) => h === fileHeaders[i])) {
+          throw new Error("Excel 表头格式不正确，请使用标准模板");
+        }
+
+        // 6. 转换数据格式
+        const usersToImport = jsonData.slice(1).map(row => ({
+          username: row[0],
+          name: row[1],
+          email: row[2],
+          status: row[3] === '已激活' ? 1 : 0,
+          password: CryptoJS.SHA256("123456").toString() // 默认密码
+        }));
+
+        // 7. 调用 API 批量导入
+        apiClientWithToken.post(`/back/api/support/user/batch`, {
+          users: usersToImport
+        }).then(res => {
+          if (res.data.code === 200) {
+            toast.success(`成功导入 ${usersToImport.length} 个用户`, {
+              autoClose: 3000,
+              type: "success"
+            });
+            getUserData(1, rowsPerPage); // 刷新数据
+          } else {
+            throw new Error(res.data.message || "导入失败");
+          }
+        }).catch(error => {
+          toast.error(`导入失败: ${error.message}`, {
+            autoClose: 5000,
+            type: "error"
+          });
+        });
+      };
+
+      reader.readAsBinaryString(file);
+    } catch (error) {
+      toast.error(`导入失败: ${error.message}`, {
+        autoClose: 5000,
+        type: "error"
+      });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''; // 重置文件输入
+    }
+  };
+
+  const handleOutputExcel = () => {
+    // 1. 定义表头和数据映射
+    const headers = [
+      '用户名', '姓名', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+    ];
+
+    // 2. 转换数据格式
+    const worksheetData = [
+      headers, // 表头行
+      ...users.map(user => [
+        user.c_username,
+        user.c_name,
+        user.c_email,
+        user.c_is_login ? '已激活' : '已禁用',
+        user.c_create_at,
+        user.c_update_at,
+        user.c_last_login
+      ])
+    ];
+
+    // 3. 创建工作表和工作簿
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // 4. 自动调整列宽
+    const columnWidths = worksheetData[0].map((_, colIndex) => {
+      const maxLen = Math.max(
+        ...worksheetData.map(row => row[colIndex]?.toString().length || 0)
+      );
+      return { wch: maxLen + 2 }; // 添加2个字符的边距
+    });
+    worksheet['!cols'] = columnWidths;
+
+    // 5. 创建工作簿并导出
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "用户列表");
+
+    // 6. 生成并下载文件
+    XLSX.writeFile(workbook, `用户列表-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
 
@@ -298,20 +416,39 @@ const UserManagementPage: React.FC = () => {
             搜索
           </Button>
         </Box>
-        <Button
-          variant='contained'
-          startIcon={<DownloadOutlined />}
-          onClick={() => console.log("导出")}
-        >
-          导出数据
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={handleAddUserClick}
-        >
-          添加用户
-        </Button>
+
+        <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+          <Box>
+            <Button
+              variant="contained"
+              startIcon={<AddCircleOutlineIcon />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              导入数据
+            </Button>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleInputExcel}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+            />
+          </Box>
+          <Button
+            variant='contained'
+            startIcon={<DownloadOutlined />}
+            onClick={handleOutputExcel}
+          >
+            导出数据
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={handleAddUserClick}
+          >
+            添加用户
+          </Button>
+        </Box>
       </Box>
       <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
         <Table aria-label="用户列表">
