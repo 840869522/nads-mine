@@ -26,61 +26,13 @@ import { customFetch } from '@/utils/fetch';
 import scene1Data from './scene/1.json';
 import scene2Data from './scene/2.json';
 
-// 2. 将导入的JSON数据构造成模板数组
-//    每个模板需要有 id, name, description, 和 topology_json 字段
+// 2. 直接使用文件名作为模板
 const sceneTemplates = [
     {
-        id: 'scene-1',
-        name: '预设场景 1',
-        description: '基础网络环境，包含两个容器和一个交换机。',
-        // topology_json 直接使用导入的JSON文件内容，但需要处理null值
-        topology_json: {
-            ...scene1Data,
-            edges: scene1Data.edges.map(edge => ({
-                ...edge,
-                config: {
-                    ...edge.config,
-                    sourceInterface: edge.config.sourceInterface || '',
-                    targetInterface: edge.config.targetInterface || '',
-                    sourceIp: edge.config.sourceIp || '',
-                    targetIp: edge.config.targetIp || ''
-                }
-            })),
-            nodes: scene1Data.nodes.map(node => ({
-                ...node,
-                config: {
-                    ...node.config,
-                    portMappings: node.config.portMappings || '',
-                    env: node.config.env || undefined
-                }
-            }))
-        } as unknown as TopologyData,
+        topology_json: scene1Data as TopologyData,
     },
     {
-        id: 'scene-2',
-        name: '预设场景 2',
-        description: '基础网络环境，包含两个虚拟机和一个交换机。',
-        topology_json: {
-            ...scene2Data,
-            edges: scene2Data.edges.map(edge => ({
-                ...edge,
-                config: {
-                    ...edge.config,
-                    sourceInterface: edge.config.sourceInterface || '',
-                    targetInterface: edge.config.targetInterface || '',
-                    sourceIp: edge.config.sourceIp || '',
-                    targetIp: edge.config.targetIp || ''
-                }
-            })),
-            nodes: scene2Data.nodes.map(node => ({
-                ...node,
-                config: {
-                    ...node.config,
-                    portMappings: node.config.portMappings || '',
-                    env: node.config.env || undefined
-                }
-            }))
-        } as unknown as TopologyData,
+        topology_json: scene2Data as TopologyData,
     },
 ];
 
@@ -105,7 +57,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
     // 当弹窗打开时，默认选择第一个模板，并重置拓扑编辑器状态
     useEffect(() => {
         if (open && sceneTemplates.length > 0) {
-            setSelectedTemplateId(sceneTemplates[0].id);
+            setSelectedTemplateId('0');
             setShowTopologyEditor(false); // 重置为选择界面
         } else if (!open) {
             // 关闭时重置状态
@@ -116,8 +68,8 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
         }
     }, [open]);
 
-    // 根据ID查找当前选中的模板对象
-    const selectedTemplate = sceneTemplates.find(t => t.id === selectedTemplateId);
+    // 根据索引查找当前选中的模板对象
+    const selectedTemplate = sceneTemplates[parseInt(selectedTemplateId) || 0];
 
     // 处理场景选择确认
     const handleConfirmSelection = () => {
@@ -141,19 +93,20 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
         setError(null);
 
         try {
-            // 将选中的模板数据（名称、描述、拓扑JSON）发送到后端创建新场景
+            // 将选中的模板数据发送到后端创建新场景
             const response = await customFetch('/back/api/scenarios', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: selectedTemplate.name,
-                    description: selectedTemplate.description,
-                    topology_json: selectedTemplate.topology_json,
+                    name: selectedTemplateId === '0' ? '1.json' : '2.json',
+                    description: '快速创建的预设场景',
+                    topology: selectedTemplate.topology_json,
                 }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('创建场景失败:', errorData);
                 throw new Error(errorData.message || '创建失败');
             }
             onSaveSuccess();
@@ -180,7 +133,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
             <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FlashOn color="secondary" />
-                    {showTopologyEditor ? `预览场景：${selectedTemplate?.name}` : '快速创建场景'}
+                    {showTopologyEditor ? `预览场景：${selectedTemplateId === '0' ? '1.json' : '2.json'}` : '快速创建场景'}
                 </Box>
                 <IconButton aria-label="close" onClick={onClose} disabled={isSaving}>
                     <CloseIcon />
@@ -205,14 +158,11 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                                 disabled={sceneTemplates.length === 0}
                                 sx={{ mb: 2 }}
                             >
-                                {sceneTemplates.map((template) => (
-                                    <MenuItem key={template.id} value={template.id}>
-                                        <Box>
-                                            <Typography variant="subtitle1">{template.name}</Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {template.description}
-                                            </Typography>
-                                        </Box>
+                                {sceneTemplates.map((template, index) => (
+                                    <MenuItem key={index} value={index}>
+                                        <Typography variant="subtitle1">
+                                            {index === 0 ? '1.json' : '2.json'}
+                                        </Typography>
                                     </MenuItem>
                                 ))}
                             </TextField>
@@ -221,10 +171,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                             
                             <Box sx={{ textAlign: 'center', py: 2 }}>
                                 <Typography variant="h6" gutterBottom>
-                                    {selectedTemplate?.name}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    {selectedTemplate?.description}
+                                    {selectedTemplateId === '0' ? '1.json' : '2.json'}
                                 </Typography>
                             </Box>
                         </Box>
@@ -247,11 +194,11 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                         <Box sx={{ flexGrow: 1, position: 'relative' }}>
                             {selectedTemplate ? (
                                 <TopologyEditor
-                                    // 需要包装成符合Scenario接口的对象
+                                    // 包装成符合Scenario接口的对象
                                     initialData={{
-                                        id: selectedTemplate.id,
-                                        name: selectedTemplate.name,
-                                        description: selectedTemplate.description,
+                                        id: selectedTemplateId,
+                                        name: selectedTemplateId === '0' ? '1.json' : '2.json',
+                                        description: '快速创建的预设场景',
                                         topology_json: selectedTemplate.topology_json
                                     }}
                                     // 模板在快速创建时是只读的，不可编辑
