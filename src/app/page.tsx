@@ -19,13 +19,13 @@ const DashboardPage: React.FC = () => {
   const { user } = useAuth();
 
   const features = [
-    {
-      name: '人员测试分系统',
-      description: '进行互动测验，获取AI反馈，并管理相关题库。',
-      path: '/learn/quiz',
-      icon: AcademicCapIcon,
-      color: 'text-blue-500',
-    },
+      {
+          name: '基础支撑分系统',
+          description: '管理用户角色、权限分配、系统级镜像和全局配置。',
+          path: '/admin/users',
+          icon: ServerStackIcon,
+          color: 'text-yellow-500',
+      },
     {
       name: '环境构建分系统',
       description: '配置网络拓扑，管理无人机节点和虚拟容器等基础设施。',
@@ -34,19 +34,19 @@ const DashboardPage: React.FC = () => {
       color: 'text-green-500',
     },
     {
-      name: '安全使用分系统',
+      name: '安全实验分系统',
       description: '模拟网络攻防场景，进行红蓝对抗演练，检验安全防护能力。',
       path: '/drill',
       icon: ShieldCheckIcon,
       color: 'text-red-500',
     },
-    {
-      name: '基础支撑分系统',
-      description: '管理用户角色、权限分配、系统级镜像和全局配置。',
-      path: '/admin/users',
-      icon: ServerStackIcon,
-      color: 'text-yellow-500',
-    },
+      {
+          name: '人员测试分系统',
+          description: '进行互动测验，获取AI反馈，并管理相关题库。',
+          path: '/learn/quiz',
+          icon: AcademicCapIcon,
+          color: 'text-blue-500',
+      },
   ];
 
   const router = useRouter();
