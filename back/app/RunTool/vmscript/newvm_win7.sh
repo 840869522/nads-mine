@@ -87,7 +87,7 @@ echo "[VIRT] 正在执行 virt-install 命令..."
 virt-install --virt-type kvm \
   --name "${VM_NAME}" \
   --ram=4096 \
-  --vcpus=2 \
+  --vcpus=4 \
   --os-variant win7 \
   --disk path="${DESTINATION_IMAGE_PATH}",device=disk,bus=sata,format=qcow2 \
   --disk path="${INSTANCE_DIR}/config.iso",device=cdrom \
