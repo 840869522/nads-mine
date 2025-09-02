@@ -4,39 +4,37 @@
 namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
+use App\Models\ad\AdConfig;
 use App\Models\ad\Team;
+use App\Models\scenario\SceneInstances; // <-- 新增: 引入 SceneInstances 模型
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
-use App\Models\ad\AdConfig; // <-- 新增: 引入 AdConfig 模型
+use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
 {
+    // ... (index, store, show, update, destroy 方法保持不变)
+
     /**
-     * 获取队伍列表 (已简化，移除颜色联动逻辑)
+     * 获取队伍列表
      */
     public function index(Request $request)
     {
-        // 回归到最简单的查询逻辑
         $searchQuery = $request->query('search');
         $perPage = $request->query('per_page', 10);
-
         $query = Team::query()->with('users');
-
         if ($searchQuery) {
             $query->where(function ($q) use ($searchQuery) {
                 $q->where('c_name', 'LIKE', '%' . $searchQuery . '%')
                     ->orWhere('c_description', 'LIKE', '%' . $searchQuery . '%');
             });
         }
-
         $teams = $query->latest('c_id')->paginate($perPage);
-
         return response()->json($teams);
     }
 
     /**
-     * 创建一个新队伍 (已移除颜色字段)
+     * 创建一个新队伍
      */
     public function store(Request $request)
     {
@@ -53,20 +51,16 @@ class TeamController extends Controller
                 'c_name'        => $validatedData['c_name'],
                 'c_description' => $validatedData['c_description'] ?? null,
             ]);
-
             if (isset($validatedData['users'])) {
                 $team->users()->sync($validatedData['users']);
             }
-
             DB::commit();
-
             $team->load('users');
             return response()->json([
                 'status' => 'success',
                 'message' => '队伍 "' . $team->c_name . '" 已成功创建！',
                 'data' => $team
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -86,7 +80,7 @@ class TeamController extends Controller
     }
 
     /**
-     * 更新指定的队伍信息 (已移除颜色字段)
+     * 更新指定的队伍信息
      */
     public function update(Request $request, Team $team)
     {
@@ -99,25 +93,20 @@ class TeamController extends Controller
             'users'         => 'nullable|array',
             'users.*'       => 'string|exists:c_users,c_username',
         ]);
-
         DB::beginTransaction();
         try {
             $team->update([
                 'c_name'        => $validatedData['c_name'],
                 'c_description' => $validatedData['c_description'] ?? null,
             ]);
-
             $team->users()->sync($validatedData['users'] ?? []);
-
             DB::commit();
-
             $team->load('users');
             return response()->json([
                 'status' => 'success',
                 'message' => '队伍 "' . $team->c_name . '" 已成功更新！',
                 'data' => $team
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -138,25 +127,40 @@ class TeamController extends Controller
     }
 
     /**
-     * 新增: 获取指定队伍参与的所有演练。
+     * 获取指定队伍参与的所有演练。
      *
      * @param  \App\Models\ad\Team  $team
      * @return \Illuminate\Http\JsonResponse
      */
     public function getDrills(Team $team)
     {
-        // ★★★ 核心修改点 ★★★
-        // 使用 with() 预加载 sceneConfig 关系
-        // 并且在 with 中只选择我们需要的字段 (c_config_id 和 c_name)
-        // 这样可以提高效率并保持响应数据干净
+        // ★★★ 核心修改点 (1/2) ★★★
+        // 在 select() 语句中添加 'c_scene_instance_id' 字段
         $drills = AdConfig::query()
-            ->with(['sceneConfig:c_config_id,c_name']) // <-- 修改点
-            ->where('c_red_team_id', $team->c_id)
-            ->orWhere('c_blue_team_id', $team->c_id)
-            // 确保查询了关联外键 c_scene_config_id
-            ->select('c_id', 'c_drill_name', 'c_status', 'c_red_team_id', 'c_blue_team_id', 'c_scene_config_id') // <-- 修改点
+            ->with(['sceneConfig:c_config_id,c_name'])
+            ->where(function ($query) use ($team) {
+                $query->where('c_red_team_id', $team->c_id)
+                    ->orWhere('c_blue_team_id', $team->c_id);
+            })
+            ->select('c_id', 'c_drill_name', 'c_status', 'c_red_team_id', 'c_blue_team_id', 'c_scene_config_id', 'c_scene_instance_id') // <-- 修改点
             ->latest('c_create_at')
             ->get();
+
+        // ★★★ 核心修改点 (2/2) ★★★
+        // 添加与 AdConfigController@index 相同的动态注入逻辑，以保证状态一致性
+        $sceneInstancesModel = new SceneInstances();
+        $drills->transform(function($drill) use ($sceneInstancesModel) {
+            // 如果数据库中 instance_id 为空，但场景已配置，则尝试查找实时实例
+            if (empty($drill->c_scene_instance_id) && $drill->c_scene_config_id) {
+                $instance_id = $sceneInstancesModel->get_c_scene_instances_id($drill->c_scene_config_id);
+                if ($instance_id) {
+                    // 动态注入实例ID和修正状态
+                    $drill->c_scene_instance_id = $instance_id;
+                    $drill->c_status = 'running';
+                }
+            }
+            return $drill;
+        });
 
         // 返回 JSON 响应
         return response()->json([
