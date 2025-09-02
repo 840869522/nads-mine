@@ -1,5 +1,3 @@
-// file: app/ad/team/page.tsx
-
 "use client";
 
 import React, { useState, useEffect, useCallback, FormEvent, MouseEvent } from 'react';
@@ -29,8 +27,13 @@ import Autocomplete from '@mui/material/Autocomplete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import FindInPageIcon from '@mui/icons-material/FindInPage';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import InputAdornment from '@mui/material/InputAdornment';
 import SearchIcon from '@mui/icons-material/Search';
+
+// 导入新创建的组件
+import InstanceDetailsDialog from './InstanceDetailsDialog';
 
 // 假设 useDebounce.ts 路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -41,7 +44,6 @@ interface User {
     u_name?: string;
 }
 
-// 1. 简化 Team 接口，移除所有颜色属性
 interface Team {
     c_id: number;
     c_name: string;
@@ -49,6 +51,30 @@ interface Team {
     score?: number;
     members?: User[];
 }
+
+interface TeamDrill {
+    c_id: string;
+    c_drill_name: string;
+    c_status: 'pending' | 'running' | 'finished' | 'archived';
+    c_red_team_id: number;
+    c_blue_team_id: number;
+    c_scene_instance_id: string | null;
+    scene_config: {
+        c_name: string;
+    } | null;
+}
+
+interface InstanceDetails {
+    instance_id: string;
+    scenario_name: string;
+    status: string;
+    resources: {
+        vms: any[];
+        containers: any[];
+        switches: any[];
+    };
+}
+
 
 const Page: React.FC = () => {
     // === 状态管理 ===
@@ -70,6 +96,18 @@ const Page: React.FC = () => {
     const [totalTeams, setTotalTeams] = useState(0);
     const API_BASE_URL = '/back/api';
 
+    // 演练弹窗状态
+    const [isDrillsDialogOpen, setIsDrillsDialogOpen] = useState(false);
+    const [selectedTeamForDrills, setSelectedTeamForDrills] = useState<Team | null>(null);
+    const [teamDrills, setTeamDrills] = useState<TeamDrill[]>([]);
+    const [isDrillsLoading, setIsDrillsLoading] = useState(false);
+
+    // 实例资源详情弹窗状态
+    const [isInstanceDetailsOpen, setIsInstanceDetailsOpen] = useState(false);
+    const [isInstanceDetailsLoading, setIsInstanceDetailsLoading] = useState(false);
+    const [selectedInstanceDetails, setSelectedInstanceDetails] = useState<InstanceDetails | null>(null);
+    const [instanceDetailsError, setInstanceDetailsError] = useState<string | null>(null);
+
     const fetchTeams = useCallback(async () => {
         setIsLoading(true);
         setStatusMessage(null);
@@ -88,7 +126,6 @@ const Page: React.FC = () => {
             const rawTeams = result.data ?? [];
             setTotalTeams(result.total ?? 0);
 
-            // 2. 简化数据映射
             const formattedTeams: Team[] = rawTeams.map((team: any) => ({
                 c_id: team.c_id,
                 c_name: team.c_name,
@@ -129,7 +166,7 @@ const Page: React.FC = () => {
         } finally {
             setIsUsersLoading(false);
         }
-    }, []);
+    }, [allUsers.length]);
 
     useEffect(() => { fetchTeams(); }, [fetchTeams]);
     useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
@@ -147,7 +184,6 @@ const Page: React.FC = () => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
 
-        // 3. 简化提交的数据
         const teamData = {
             c_name: formData.get('name') as string,
             c_description: formData.get('description') as string,
@@ -202,6 +238,60 @@ const Page: React.FC = () => {
     const handleChangePage = (event: MouseEvent<HTMLButtonElement> | null, newPage: number) => { setPage(newPage); };
     const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
+    const handleOpenDrillsDialog = async (team: Team) => {
+        setSelectedTeamForDrills(team);
+        setIsDrillsDialogOpen(true);
+        setIsDrillsLoading(true);
+        setTeamDrills([]);
+        try {
+            // 后端需要确保返回 c_scene_instance_id
+            const response = await fetch(`${API_BASE_URL}/ad/team/${team.c_id}/drills`);
+            if (!response.ok) {
+                throw new Error('获取演练列表失败');
+            }
+            const result = await response.json();
+            if (result.status === 'success') {
+                setTeamDrills(result.data);
+            } else {
+                throw new Error(result.message || '未能加载数据');
+            }
+        } catch (err) {
+            setStatusMessage({ type: 'error', message: (err as Error).message });
+        } finally {
+            setIsDrillsLoading(false);
+        }
+    };
+
+    const handleCloseDrillsDialog = () => {
+        setIsDrillsDialogOpen(false);
+        setSelectedTeamForDrills(null);
+        setTeamDrills([]);
+    };
+
+    const handleOpenInstanceDetailsDialog = async (instanceId: string) => {
+        setIsInstanceDetailsOpen(true);
+        setIsInstanceDetailsLoading(true);
+        setInstanceDetailsError(null);
+        setSelectedInstanceDetails(null);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/details`);
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') {
+                throw new Error(result.message || '获取实例资源失败');
+            }
+            setSelectedInstanceDetails(result.data);
+        } catch (err) {
+            setInstanceDetailsError((err as Error).message);
+        } finally {
+            setIsInstanceDetailsLoading(false);
+        }
+    };
+
+    const handleCloseInstanceDetailsDialog = () => {
+        setIsInstanceDetailsOpen(false);
+    };
+
     return (
         <Box sx={{ p: 3, maxWidth: '1200px', margin: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -220,7 +310,6 @@ const Page: React.FC = () => {
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 'bold' }}>队伍名称</TableCell>
-                                {/* 4. 移除“队伍颜色”表头 */}
                                 <TableCell sx={{ fontWeight: 'bold', minWidth: '200px' }}>成员列表</TableCell>
                                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>当前得分</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>描述</TableCell>
@@ -229,7 +318,6 @@ const Page: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading ? (
-                                // 5. 调整 colSpan
                                 <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 1 }}>正在加载队伍数据...</Typography></TableCell></TableRow>
                             ) : teams.length === 0 ? (
                                 <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{debouncedSearchQuery ? '未找到匹配的队伍。' : '当前没有队伍，请创建新队伍。'}</Typography></TableCell></TableRow>
@@ -237,7 +325,6 @@ const Page: React.FC = () => {
                                 teams.map((team) => (
                                     <TableRow hover key={team.c_id}>
                                         <TableCell>{team.c_name}</TableCell>
-                                        {/* 6. 移除渲染颜色的 TableCell */}
                                         <TableCell>
                                             {team.members && team.members.length > 0 ? (
                                                 <Tooltip title={team.members.map(m => m.u_name ? `${m.u_id}(${m.u_name})` : m.u_id).join(', ')}>
@@ -254,6 +341,11 @@ const Page: React.FC = () => {
                                         <TableCell align="center">{team.score ?? 0}</TableCell>
                                         <TableCell><Tooltip title={team.c_description || ''}><Typography noWrap sx={{ maxWidth: '200px', color: team.c_description ? 'inherit' : 'text.disabled' }}>{team.c_description || '暂无描述'}</Typography></Tooltip></TableCell>
                                         <TableCell align="right">
+                                            <Tooltip title="查看参与的演练">
+                                                <IconButton onClick={() => handleOpenDrillsDialog(team)} color="info">
+                                                    <FindInPageIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             <Tooltip title="编辑队伍"><IconButton onClick={() => handleOpenForm(team)} color="primary"><EditIcon /></IconButton></Tooltip>
                                             <Tooltip title="删除队伍"><IconButton onClick={() => handleOpenConfirmDialog(team)} color="error"><DeleteIcon /></IconButton></Tooltip>
                                         </TableCell>
@@ -283,9 +375,6 @@ const Page: React.FC = () => {
                     <DialogContent>
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" id="name" name="name" label="队伍名称" type="text" fullWidth variant="outlined" defaultValue={editingTeam?.c_name || ''} required />
-
-                        {/* 7. 移除选择颜色的表单控件 */}
-
                         <Autocomplete
                             multiple id="team-members" options={allUsers}
                             getOptionLabel={(option) => option.u_name ? `${option.u_id}(${option.u_name})` : option.u_id}
@@ -319,6 +408,82 @@ const Page: React.FC = () => {
                     <Button onClick={handleDeleteTeam} color="error" disabled={isSubmitting}>{isSubmitting ? <CircularProgress size={24} /> : '确认删除'}</Button>
                 </DialogActions>
             </Dialog>
+
+            <Dialog open={isDrillsDialogOpen} onClose={handleCloseDrillsDialog} fullWidth maxWidth="lg">
+                <DialogTitle>队伍 "{selectedTeamForDrills?.c_name}" 参与的演练</DialogTitle>
+                <DialogContent dividers>
+                    {isDrillsLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
+                    ) : teamDrills.length > 0 ? (
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>演练名称</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>状态</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>担任角色</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold' }}>场景模板</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>操作</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {teamDrills.map((drill) => (
+                                    <TableRow hover key={drill.c_id}>
+                                        <TableCell>{drill.c_drill_name}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={drill.c_status === 'running' ? '进行中' : (drill.c_status === 'finished' ? '已结束' : '未开始')}
+                                                color={drill.c_status === 'running' ? 'success' : (drill.c_status === 'finished' ? 'primary' : 'default')}
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={drill.c_red_team_id === selectedTeamForDrills?.c_id ? '红队' : '蓝队'}
+                                                color={drill.c_red_team_id === selectedTeamForDrills?.c_id ? 'error' : 'info'}
+                                                variant="outlined"
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            {drill.scene_config?.c_name || (
+                                                <Typography variant="body2" color="text.disabled">
+                                                    未关联场景
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Tooltip title="查看实例资源">
+                                                <span>
+                                                    <IconButton
+                                                        color="secondary"
+                                                        onClick={() => handleOpenInstanceDetailsDialog(drill.c_scene_instance_id!)}
+                                                        disabled={!drill.c_scene_instance_id}
+                                                    >
+                                                        <VisibilityIcon />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <Typography sx={{ p: 4, textAlign: 'center' }} color="text.secondary">该队伍未参与任何演练。</Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDrillsDialog}>关闭</Button>
+                </DialogActions>
+            </Dialog>
+
+            <InstanceDetailsDialog
+                open={isInstanceDetailsOpen}
+                onClose={handleCloseInstanceDetailsDialog}
+                isLoading={isInstanceDetailsLoading}
+                details={selectedInstanceDetails}
+                error={instanceDetailsError}
+            />
         </Box>
     );
 };

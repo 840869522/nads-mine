@@ -8,6 +8,7 @@ use App\Models\ad\Team;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use App\Models\ad\AdConfig; // <-- 新增: 引入 AdConfig 模型
 
 class TeamController extends Controller
 {
@@ -134,5 +135,33 @@ class TeamController extends Controller
         $teamName = $team->c_name;
         $team->delete();
         return response()->json(['status' => 'success', 'message' => '队伍 "' . $teamName . '" 已成功删除。']);
+    }
+
+    /**
+     * 新增: 获取指定队伍参与的所有演练。
+     *
+     * @param  \App\Models\ad\Team  $team
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDrills(Team $team)
+    {
+        // ★★★ 核心修改点 ★★★
+        // 使用 with() 预加载 sceneConfig 关系
+        // 并且在 with 中只选择我们需要的字段 (c_config_id 和 c_name)
+        // 这样可以提高效率并保持响应数据干净
+        $drills = AdConfig::query()
+            ->with(['sceneConfig:c_config_id,c_name']) // <-- 修改点
+            ->where('c_red_team_id', $team->c_id)
+            ->orWhere('c_blue_team_id', $team->c_id)
+            // 确保查询了关联外键 c_scene_config_id
+            ->select('c_id', 'c_drill_name', 'c_status', 'c_red_team_id', 'c_blue_team_id', 'c_scene_config_id') // <-- 修改点
+            ->latest('c_create_at')
+            ->get();
+
+        // 返回 JSON 响应
+        return response()->json([
+            'status' => 'success',
+            'data' => $drills,
+        ]);
     }
 }

@@ -270,6 +270,7 @@ Route::prefix('study')->group(function () {
         Route::get('/', [TeamController::class, 'index']); // TeamController.index
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{team}', [TeamController::class, 'show']);
+        Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
         Route::put('/{team}', [TeamController::class, 'update']);
         Route::delete('/{team}', [TeamController::class, 'destroy']);
     });
