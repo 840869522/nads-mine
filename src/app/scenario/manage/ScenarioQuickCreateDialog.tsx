@@ -1,0 +1,315 @@
+"use client";
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    IconButton,
+    Box,
+    CircularProgress,
+    Alert,
+    TextField,
+    MenuItem,
+    Typography
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import FlashOn from '@mui/icons-material/FlashOn';
+import ArrowBack from '@mui/icons-material/ArrowBack';
+
+// 导入拓扑编辑器和相关类型
+import TopologyEditor from '@/components/scenario/topology/TopologyEditor';
+import { TopologyData } from '@/types'; // 确保类型路径正确
+import { customFetch } from '@/utils/fetch';
+
+// 1. 直接从 manage/scene 文件夹导入预定义的场景JSON文件
+import scene1Data from './scene/1.json';
+import scene2Data from './scene/2.json';
+
+// 2. 将导入的JSON数据构造成模板数组
+//    每个模板需要有 id, name, description, 和 topology_json 字段
+const sceneTemplates = [
+    {
+        id: 'scene-1',
+        name: '预设场景 1',
+        description: '基础网络环境，包含两个容器和一个交换机。',
+        // topology_json 直接使用导入的JSON文件内容，但需要处理null值
+        topology_json: {
+            ...scene1Data,
+            edges: scene1Data.edges.map(edge => ({
+                ...edge,
+                config: {
+                    ...edge.config,
+                    sourceInterface: edge.config.sourceInterface || '',
+                    targetInterface: edge.config.targetInterface || '',
+                    sourceIp: edge.config.sourceIp || '',
+                    targetIp: edge.config.targetIp || ''
+                }
+            })),
+            nodes: scene1Data.nodes.map(node => ({
+                ...node,
+                config: {
+                    ...node.config,
+                    portMappings: node.config.portMappings || '',
+                    env: node.config.env || undefined
+                }
+            }))
+        } as unknown as TopologyData,
+    },
+    {
+        id: 'scene-2',
+        name: '预设场景 2',
+        description: '基础网络环境，包含两个虚拟机和一个交换机。',
+        topology_json: {
+            ...scene2Data,
+            edges: scene2Data.edges.map(edge => ({
+                ...edge,
+                config: {
+                    ...edge.config,
+                    sourceInterface: edge.config.sourceInterface || '',
+                    targetInterface: edge.config.targetInterface || '',
+                    sourceIp: edge.config.sourceIp || '',
+                    targetIp: edge.config.targetIp || ''
+                }
+            })),
+            nodes: scene2Data.nodes.map(node => ({
+                ...node,
+                config: {
+                    ...node.config,
+                    portMappings: node.config.portMappings || '',
+                    env: node.config.env || undefined
+                }
+            }))
+        } as unknown as TopologyData,
+    },
+];
+
+
+interface ScenarioQuickCreateDialogProps {
+    open: boolean;
+    onClose: () => void;
+    onSaveSuccess: () => void;
+}
+
+const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
+    open,
+    onClose,
+    onSaveSuccess
+}) => {
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    // 新增状态：控制是否显示拓扑编辑器
+    const [showTopologyEditor, setShowTopologyEditor] = useState(false);
+
+    // 当弹窗打开时，默认选择第一个模板，并重置拓扑编辑器状态
+    useEffect(() => {
+        if (open && sceneTemplates.length > 0) {
+            setSelectedTemplateId(sceneTemplates[0].id);
+            setShowTopologyEditor(false); // 重置为选择界面
+        } else if (!open) {
+            // 关闭时重置状态
+            setSelectedTemplateId('');
+            setIsSaving(false);
+            setError(null);
+            setShowTopologyEditor(false);
+        }
+    }, [open]);
+
+    // 根据ID查找当前选中的模板对象
+    const selectedTemplate = sceneTemplates.find(t => t.id === selectedTemplateId);
+
+    // 处理场景选择确认
+    const handleConfirmSelection = () => {
+        if (!selectedTemplate) {
+            setError("请选择一个模板。");
+            return;
+        }
+        setShowTopologyEditor(true);
+        setError(null);
+    };
+
+    // 返回选择界面
+    const handleBackToSelection = () => {
+        setShowTopologyEditor(false);
+        setError(null);
+    };
+
+    // 创建新场景的逻辑 (保持不变)
+    const handleCreate = async () => {
+        if (!selectedTemplate) {
+            setError("请选择一个模板。");
+            return;
+        }
+        setIsSaving(true);
+        setError(null);
+
+        try {
+            // 将选中的模板数据（名称、描述、拓扑JSON）发送到后端创建新场景
+            const response = await customFetch('/back/api/scenarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: selectedTemplate.name,
+                    description: selectedTemplate.description,
+                    topology_json: selectedTemplate.topology_json,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '创建失败');
+            }
+            onSaveSuccess();
+            onClose();
+
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    // 为 TopologyEditor 提供空的回调，因为模板是只读的
+    const doNothing = useCallback(() => {}, []);
+
+    return (
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullWidth
+            maxWidth="xl"
+            PaperProps={{ sx: { height: '90vh' } }}
+        >
+            <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FlashOn color="secondary" />
+                    {showTopologyEditor ? `预览场景：${selectedTemplate?.name}` : '快速创建场景'}
+                </Box>
+                <IconButton aria-label="close" onClick={onClose} disabled={isSaving}>
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ p: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {!showTopologyEditor ? (
+                    // 场景选择界面
+                    <>
+                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                            <Typography variant="h6" gutterBottom>
+                                选择场景模板
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                选择一个预设场景模板，然后点击确认进入拓扑预览
+                            </Typography>
+                            <TextField
+                                select
+                                fullWidth
+                                label="场景模板"
+                                value={selectedTemplateId}
+                                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                variant="outlined"
+                                size="small"
+                                disabled={sceneTemplates.length === 0}
+                            >
+                                {sceneTemplates.map((template) => (
+                                    <MenuItem key={template.id} value={template.id}>
+                                        <Box>
+                                            <Typography variant="subtitle1">{template.name}</Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {template.description}
+                                            </Typography>
+                                        </Box>
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        
+                        {error && <Box sx={{p: 2}}><Alert severity="error">{error}</Alert></Box>}
+
+                        <Box sx={{ flexGrow: 1, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
+                                <Typography variant="h6" gutterBottom>
+                                    {selectedTemplate?.name}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                    {selectedTemplate?.description}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    点击确认按钮进入拓扑预览界面
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </>
+                ) : (
+                    // 拓扑编辑器界面
+                    <>
+                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                            <Button 
+                                onClick={handleBackToSelection}
+                                startIcon={<ArrowBack />}
+                                variant="outlined"
+                                size="small"
+                            >
+                                返回选择
+                            </Button>
+                        </Box>
+                        
+                        {error && <Box sx={{p: 2}}><Alert severity="error">{error}</Alert></Box>}
+
+                        <Box sx={{ flexGrow: 1, position: 'relative' }}>
+                            {selectedTemplate ? (
+                                <TopologyEditor
+                                    // 需要包装成符合Scenario接口的对象
+                                    initialData={{
+                                        id: selectedTemplate.id,
+                                        name: selectedTemplate.name,
+                                        description: selectedTemplate.description,
+                                        topology_json: selectedTemplate.topology_json
+                                    }}
+                                    // 模板在快速创建时是只读的，不可编辑
+                                    onAddNode={doNothing}
+                                    onDeleteNode={doNothing}
+                                    onUpdateNode={doNothing}
+                                    onSaveSuccess={doNothing}
+                                />
+                            ) : (
+                                <Box sx={{display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center'}}>
+                                    <Typography color="text.secondary">
+                                        {sceneTemplates.length > 0 ? '请选择一个模板来预览' : '没有可用的场景模板'}
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    </>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose} disabled={isSaving}>取消</Button>
+                {!showTopologyEditor ? (
+                    // 选择界面的按钮
+                    <Button 
+                        onClick={handleConfirmSelection} 
+                        variant="contained" 
+                        color="primary" 
+                        disabled={!selectedTemplate}
+                    >
+                        确认选择
+                    </Button>
+                ) : (
+                    // 拓扑编辑器界面的按钮
+                    <Button 
+                        onClick={handleCreate} 
+                        variant="contained" 
+                        color="secondary" 
+                        disabled={isSaving || !selectedTemplate}
+                    >
+                        {isSaving ? <CircularProgress size={24} /> : '创建场景'}
+                    </Button>
+                )}
+            </DialogActions>
+        </Dialog>
+    );
+};
+
+export default ScenarioQuickCreateDialog;
