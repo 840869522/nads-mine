@@ -294,7 +294,9 @@ const UserManagementPage: React.FC = () => {
           if (res.data.code === 200) {
             toast.success(`成功导入 ${usersToImport.length} 个用户`, {
               autoClose: 3000,
-              type: "success"
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
             });
             getUserData(1, rowsPerPage); // 刷新数据
           } else {
@@ -302,8 +304,10 @@ const UserManagementPage: React.FC = () => {
           }
         }).catch(error => {
           toast.error(`导入失败: ${error.message}`, {
-            autoClose: 5000,
-            type: "error"
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         });
       };
@@ -311,26 +315,37 @@ const UserManagementPage: React.FC = () => {
       reader.readAsBinaryString(file);
     } catch (error) {
       toast.error(`导入失败: ${error.message}`, {
-        autoClose: 5000,
-        type: "error"
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ''; // 重置文件输入
     }
   };
 
-  const handleOutputExcel = () => {
+  const handleOutputExcel = async () => {
     // 1. 定义表头和数据映射
     const headers = [
-      '用户名', '姓名', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+      '用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
     ];
-
+    const res = await  apiClientWithToken.post("/back/api/support/user/all", JSON.stringify({page:-1,pagesize: 10}));
+    if (res.data.code !== 200) {
+      toast.error(`导出失败 - ${res.data.message}`,{
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      })
+    }
     // 2. 转换数据格式
     const worksheetData = [
       headers, // 表头行
-      ...users.map(user => [
+      ...res.data.data.data.map(user => [
         user.c_username,
         user.c_name,
+        user.c_password,
         user.c_email,
         user.c_is_login ? '已激活' : '已禁用',
         user.c_create_at,

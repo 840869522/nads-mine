@@ -63,10 +63,10 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     if (user)
       return (
         <Box>
-          <AffixedFabWrapper onClick={() => { setChatOpen(true); console.log(chatOpen) }} />
+          <AffixedFabWrapper onClick={() => { setChatOpen(true)}} />
           {
             chatOpen &&
-            <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} />
+            <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} width='25vw' />
           }
         </Box>
       )
@@ -84,14 +84,14 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
         component="main"
         sx={{
           flexGrow: 1,
-          width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
+          width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px -25vw)` : '100%',
           display: 'flex',
           flexDirection: 'column',
           height: '100vh',
           overflow: 'hidden',
         }}
       >
-        {showSidebar ? <PageWrapper>{children}</PageWrapper> : children}
+        {showSidebar ? <PageWrapper sx={{width: chatOpen ? `calc(100% - 25vw)`: "100%"}}>{children}</PageWrapper> : children}
       </Box>
       {aiChat}
     </Box>

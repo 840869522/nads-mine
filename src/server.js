@@ -17,7 +17,7 @@ const handle = app.getRequestHandler();
 const MAIN_PORT = parseInt(process.env.PORT || '3000', 10);
 const GUAC_INTERNAL_PORT = parseInt(process.env.GUAC_PORT || '3001', 10); // Guac 服务的内部端口
 const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
-const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 9000;
+const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 8080;
 
 // --- Target URLs for Proxies ---
 const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
@@ -47,9 +47,13 @@ app.prepare().then(() => {
   const aiChatProxy = createProxyMiddleware({
     target: AI_CHAT_URL,
     changeOrigin: true,
-    pathRewrite : {"^/chat" : "/"},
-    logLevel: dev ? 'debug' : 'info'
-  }); 
+    pathRewrite : {"^/chat/" : "/"},
+    ws: true,
+    logLevel: dev ? 'debug' : 'info',
+    onProxyRes(proxyRes, req, res) {
+      proxyRes.headers['Content-Type'] = 'text/event-stream';
+    }
+  });
 
   // 为 Guacamole 服务创建一个新的代理
   // 这个代理会将发往主服务器 /connect-guac 的请求转发到内部的 Guacamole 服务器
@@ -76,6 +80,9 @@ app.prepare().then(() => {
     }
     if (url.startsWith('/back/')) {
       return phpProxy(req, res);
+    }
+    if (url.startsWith('/chat/')) {
+      return aiChatProxy(req,res);
     }
 
     // 其他所有请求都由 Next.js 处理

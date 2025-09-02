@@ -31,13 +31,13 @@ chat_template = ChatPromptTemplate.from_messages([
 
 chat_llm = ChatOpenAI(
     model=config['chatModel']['model'],
-    base_url=config['chatModel']['base_api'],
+    base_url=config['chatModel']['base_url'],
     api_key=config['chatModel']['api_key'],
 )
 
 embedding_model = OllamaEmbeddings(
     model=config['embeddingModel']['model'],
-    base_url=config['embeddingModel']['base_api']
+    base_url=config['embeddingModel']['base_url']
 )
 
 vector_store = QdrantVectorStore(
@@ -84,12 +84,13 @@ rag_chain = (
 
 rag_chain_memory = RunnableWithMessageHistory(
     rag_chain,
-    get_session_history=lambda session_id: SQLChatMessageHistory(
-        connection_string = config['database']["uri"],
-        table_name= config['database']['table']
-        session_id=session_id,
-        session_id_field_name="session_id"
-    ),
+    get_session_history=lambda session_id: chat_memory.chat_memory,
+    # SQLChatMessageHistory(
+    #     connection_string = config['database']["uri"],
+    #     table_name= config['database']['table']
+    #     session_id=session_id,
+    #     session_id_field_name="session_id"
+    # ),
     input_messages_key="question",
     history_messages_key="history"
 )

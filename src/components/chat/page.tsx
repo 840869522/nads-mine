@@ -1,5 +1,5 @@
 "use client";
-import { Dialog, DialogContent, useMediaQuery } from "@mui/material";
+import { Dialog, DialogContent, Drawer, useMediaQuery } from "@mui/material";
 import React, { useState, useRef, useEffect } from 'react';
 import {
     Box,
@@ -11,10 +11,14 @@ import {
     Typography,
     Divider,
     useTheme,
+    IconButton
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { useAuth } from "@/hooks/useAuth";
-import { apiClientWithToken } from "@/utils/axios";
+import { streamPostRequest } from "@/utils/stream"
+import CloseIcon from '@mui/icons-material/Close';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 
 interface Message {
     id: string;
@@ -26,7 +30,7 @@ const ChatDialog = () => {
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
-            text: '你好！有什么可以帮助你的吗？',
+            text: '# 你好！有什么可以帮助你的吗？',
             role: 'assistant'
         },
         {
@@ -59,52 +63,48 @@ const ChatDialog = () => {
     }, [messages]);
 
     const handleSend = () => {
-        if (inputValue.trim()) {
-            const newMessage: Message = {
-                id: Date.now().toString(),
-                text: inputValue,
-                role: 'user'
-            };
+        if (!inputValue.trim()) return;
 
-            setMessages(prev => [...prev, newMessage]);
-            setInputValue('');
-            const eventUrl = "/chat/chat"
-            apiClientWithToken.post(eventUrl, JSON.stringify({ message: newMessage.text })).then(() => {
-                // 连接 SSE 端点
-                eventSourceRef.current = new EventSource(eventUrl);
+        const newMessage: Message = {
+            id: Date.now().toString(),
+            text: inputValue,
+            role: 'user',
+        };
 
-                let currentMessage = '';
-                eventSourceRef.current.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    if (data.chunk) {
-                        currentMessage += data.chunk;
-                        setMessages((prev) => {
-                            const newMessages = [...prev];
-                            if (newMessages[newMessages.length - 1]?.role === 'assistant') {
-                                newMessages[newMessages.length - 1].text = currentMessage;
-                            } else {
-                                newMessages.push({ id: (Date.now() + 1).toString(), role: 'assistant', text: currentMessage });
-                            }
-                            return newMessages;
+        setMessages((prev) => [...prev, newMessage]);
+        setInputValue('');
+        setIsLoading(true);
+
+        const currentMessage = { current: '' };
+
+        streamPostRequest(
+            '/chat/chat',
+            { message: newMessage.text },
+            (chunk) => {
+                currentMessage.current += chunk;
+                setMessages((prev) => {
+                    const newMessages = [...prev];
+                    const lastMessage = newMessages[newMessages.length - 1];
+                    if (lastMessage?.role === 'assistant') {
+                        lastMessage.text = currentMessage.current;
+                    } else {
+                        newMessages.push({
+                            id: (Date.now() + 1).toString(),
+                            role: 'assistant',
+                            text: currentMessage.current,
                         });
                     }
-                    if (data.done) {
-                        eventSourceRef.current?.close();
-                        eventSourceRef.current = null;
-                    }
-                };
-
-                eventSourceRef.current.onerror = () => {
-                    setMessages((prev) => [
-                        ...prev,
-                        { id: (Date.now() + 1).toString(), role: 'assistant', text: '连接错误，请重试。' },
-                    ]);
-                    eventSourceRef.current?.close();
-                    eventSourceRef.current = null;
-                };
-            })
-
-        }
+                    return newMessages;
+                });
+            },
+            (error) => {
+                setMessages((prev) => [
+                    ...prev,
+                    { id: (Date.now() + 1).toString(), role: 'assistant', text: `错误：${error.message}` },
+                ]);
+                setIsLoading(false);
+            }
+        ).finally(() => setIsLoading(false));
     };
 
     useEffect(() => {
@@ -170,9 +170,17 @@ const ChatDialog = () => {
                                 }
                             }}
                         >
-                            <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                {message.text}
-                            </Typography>
+                            {message.role === 'assistant' ? (
+                                <Box className="markdown-content">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} >
+                                        {typeof message.text === 'string' ? message.text : String(message.text)}
+                                    </ReactMarkdown>
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                    {message.text}
+                                </Typography>
+                            )}
                         </Paper>
                     </ListItem>
                 ))}
@@ -300,28 +308,28 @@ const ChatDialog = () => {
 interface ChatPageProps {
     open: boolean;
     onClose: () => void;
+    width?: string
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ open, onClose }) => {
+const ChatPage: React.FC<ChatPageProps> = ({ open, onClose, width }) => {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
     return (
-        <Dialog
+        <Drawer
             open={open}
             onClose={onClose}
-            fullWidth
-            maxWidth="md"
-            fullScreen={fullScreen}
+            variant="persistent"
+            anchor="right"
             PaperProps={{
                 sx: {
                     borderRadius: { xs: 0, sm: 2 },
-                    width: '100%',
                     maxWidth: 'md',
                     height: { xs: '100vh', sm: '80vh' },
                     display: 'flex',
                     flexDirection: 'column',
-                    minWidth: "40vw",
+                    width: width,
+                    minHeight: "100vh",
                     bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper'
                 }
             }}
@@ -329,13 +337,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ open, onClose }) => {
                 display: "flex",
                 justifyContent: 'center',
                 alignItems: 'center',
-                height: '100%'
+                height: '100vh'
             }}
         >
+            <Box sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                p: 2,
+                borderBottom: 1,
+                borderColor: theme.palette.divider,
+                bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100'
+            }}>
+                <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
+                    聊天窗口
+                </Typography>
+                <IconButton onClick={onClose} size="small">
+                    <CloseIcon />
+                </IconButton>
+            </Box>
             <DialogContent sx={{ p: 0, flexGrow: 1 }}>
                 <ChatDialog />
             </DialogContent>
-        </Dialog>
+        </Drawer>
     );
 };
 
