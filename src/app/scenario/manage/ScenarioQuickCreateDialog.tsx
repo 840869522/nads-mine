@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FlashOn from '@mui/icons-material/FlashOn';
-import ArrowBack from '@mui/icons-material/ArrowBack';
 
 // 导入拓扑编辑器和相关类型
 import TopologyEditor from '@/components/scenario/topology/TopologyEditor';
@@ -130,11 +129,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
         setError(null);
     };
 
-    // 返回选择界面
-    const handleBackToSelection = () => {
-        setShowTopologyEditor(false);
-        setError(null);
-    };
+
 
     // 创建新场景的逻辑 (保持不变)
     const handleCreate = async () => {
@@ -180,7 +175,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
             onClose={onClose}
             fullWidth
             maxWidth="xl"
-            PaperProps={{ sx: { height: '90vh' } }}
+            PaperProps={{ sx: { height: '95vh' } }}
         >
             <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -199,9 +194,6 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                             <Typography variant="h6" gutterBottom>
                                 选择场景模板
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                选择一个预设场景模板，然后点击确认进入拓扑预览
-                            </Typography>
                             <TextField
                                 select
                                 fullWidth
@@ -211,6 +203,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                                 variant="outlined"
                                 size="small"
                                 disabled={sceneTemplates.length === 0}
+                                sx={{ mb: 2 }}
                             >
                                 {sceneTemplates.map((template) => (
                                     <MenuItem key={template.id} value={template.id}>
@@ -223,40 +216,34 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                                     </MenuItem>
                                 ))}
                             </TextField>
-                        </Box>
-                        
-                        {error && <Box sx={{p: 2}}><Alert severity="error">{error}</Alert></Box>}
-
-                        <Box sx={{ flexGrow: 1, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
+                            
+                            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                            
+                            <Box sx={{ textAlign: 'center', py: 2 }}>
                                 <Typography variant="h6" gutterBottom>
                                     {selectedTemplate?.name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                <Typography variant="body2" color="text.secondary">
                                     {selectedTemplate?.description}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    点击确认按钮进入拓扑预览界面
-                                </Typography>
                             </Box>
+                        </Box>
+                        
+                        <Box sx={{ flexGrow: 1, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Typography variant="body2" color="text.secondary">
+                                点击确认按钮进入拓扑预览界面
+                            </Typography>
                         </Box>
                     </>
                 ) : (
                     // 拓扑编辑器界面
                     <>
-                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                            <Button 
-                                onClick={handleBackToSelection}
-                                startIcon={<ArrowBack />}
-                                variant="outlined"
-                                size="small"
-                            >
-                                返回选择
-                            </Button>
-                        </Box>
+                        {error && (
+                            <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
+                                <Alert severity="error" sx={{ py: 0, px: 1 }}>{error}</Alert>
+                            </Box>
+                        )}
                         
-                        {error && <Box sx={{p: 2}}><Alert severity="error">{error}</Alert></Box>}
-
                         <Box sx={{ flexGrow: 1, position: 'relative' }}>
                             {selectedTemplate ? (
                                 <TopologyEditor
