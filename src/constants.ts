@@ -8,10 +8,10 @@ export const APP_NAME = "网络安全实验平台";
 export const BACK_IP_PORT = "http://localhost:8000";
 
 export const APP_PERMISSIONS_CATEGORY = {
-  "support": "基础支撑分系统",
-  "scene": "环境构建分系统",
   "study": "人员测试分系统",
-  "ad": "安全实验分系统",
+  "scene": "环境构建分系统",
+  "support": "基础支撑分系统",
+  "ad": "安全使用分系统",
   "databoard": "仪表盘"
 }
 
@@ -44,10 +44,10 @@ export const APP_PERMISSIONS: AppPermission[] = [
   },
 
 
-  // Security Usage System (安全实验分系统)
+  // Security Usage System (安全使用分系统)
   {
     key: "ad",
-    label: "安全实验分系统",
+    label: "安全使用分系统",
     children: [
       { key: 'ad_test', label: '访问安全演练' },
     ]
@@ -280,7 +280,7 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
     deviceName: '容器',
     dockerImage: 'ubuntu:latest',
     // portMappings: '80:80',
-    env: 'ZEEK_INTERFACE=eth0,ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200'
+    env: 'ZEEK_INTERFACE=eth0,ELASTICSEARCH_HOST=10.100.0.88,ELASTICSEARCH_PORT=9200'
   },
   switch: {
     deviceName: '交换机',

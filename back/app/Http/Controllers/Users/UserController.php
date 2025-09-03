@@ -9,9 +9,10 @@
     use App\Utils\GlobalResponse;
     use App\Utils\JWTControll;
     use Exception;
-    use Illuminate\Support\Facades\Cache;
-    use Illuminate\Support\Facades\Log;
-    use Ramsey\Uuid\Uuid;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+    use Illuminate\Support\Facades\DB;
+use Ramsey\Uuid\Uuid;
 
     class UserController extends Controller{
         

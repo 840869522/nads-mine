@@ -15,14 +15,12 @@ import {
     Edit as EditIcon,
     Add as AddIcon,
     PeopleAlt as PermissionIcon,
-    Visibility as ViewInstancesIcon, // <-- 新增图标
-    FlashOn as QuickCreateIcon // <-- 新增快速创建图标
+    Visibility as ViewInstancesIcon // <-- 新增图标
 } from '@mui/icons-material';
 import Link from 'next/link'; // <-- 新增导入
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
-import ScenarioPermissionDialog  from './ScenarioPermissionDialog';
-import ScenarioQuickCreateDialog from './ScenarioQuickCreateDialog';
+import ScenarioPermissionDialog  from './ScenarioPermissionDialog'
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
@@ -60,7 +58,6 @@ const ScenarioManagementPage: React.FC = () => {
 
 
     const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-    const [isQuickCreateDialogOpen, setQuickCreateDialogOpen] = useState(false); // <-- 新增快速创建弹窗状态
 
     const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
     const fetchScenarios = useCallback(async () => {
@@ -88,10 +85,10 @@ const ScenarioManagementPage: React.FC = () => {
         fetchScenarios();
     }, [fetchScenarios]);
 
+    // 这个函数会作为 prop (属性) 传递给 ScenarioEditorDialog 组件。当弹窗内部完成保存操作后，会调用这个函数，执行两个关键操作：关闭弹窗和刷新数据。
     // 更新 handleSaveSuccess 以便它可以同时处理创建和编辑成功后的逻辑
     const handleSaveSuccess = () => {
         setCreateDialogOpen(false); // 关闭创建弹窗
-        setQuickCreateDialogOpen(false); // <-- 关闭快速创建弹窗
         setEditingScenario(null);   // 关闭编辑弹窗
         setPermissionScenario(null); // 关闭权限弹窗
         fetchScenarios();           // 统一刷新列表
@@ -223,16 +220,6 @@ const ScenarioManagementPage: React.FC = () => {
                         disabled={isLoading}
                     >
                         {isLoading ? '加载中...' : '刷新'}
-                    </Button>
-
-                    {/* 快速创建按钮 */}
-                    <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<QuickCreateIcon />}
-                        onClick={() => setQuickCreateDialogOpen(true)}
-                    >
-                        快速创建
                     </Button>
 
                     {/* 打开弹窗的按钮 (JSX)用户需要一个交互元素（比如按钮）来触发弹窗的显示。*/}
@@ -372,12 +359,6 @@ const ScenarioManagementPage: React.FC = () => {
             <ScenarioCreateDialog
                 open={isCreateDialogOpen}
                 onClose={() => setCreateDialogOpen(false)}
-                onSaveSuccess={handleSaveSuccess}
-            />
-            {/* 快速创建弹窗 */}
-            <ScenarioQuickCreateDialog
-                open={isQuickCreateDialogOpen}
-                onClose={() => setQuickCreateDialogOpen(false)}
                 onSaveSuccess={handleSaveSuccess}
             />
             {/* 4. 在JSX中渲染弹窗: 并将所有需要的 props 传递给它 */}

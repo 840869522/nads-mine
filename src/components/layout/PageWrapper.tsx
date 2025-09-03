@@ -3,14 +3,12 @@ import Box from '@mui/material/Box';
 
 interface PageWrapperProps {
   children: ReactNode;
-  sx? : {}
 }
 
-const PageWrapper: React.FC<PageWrapperProps> = ({ children,sx }) => {
+const PageWrapper: React.FC<PageWrapperProps> = ({ children }) => {
   return (
     <Box
       sx={{
-        ...sx,
         flexGrow: 1,
         p: { xs: 2, sm: 3, lg: 4 }, // Responsive padding
         overflowY: 'auto', // Enable scrolling for page content

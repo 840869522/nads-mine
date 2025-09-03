@@ -4,7 +4,6 @@ import Header from "@/app/visualization/header";
 // import Battlefield from "./battlefield";
 
 import dynamic from 'next/dynamic';
-import ThreeDimensional from "./threeDimensional";
 
 const Battlefield = dynamic(() => import('./battlefield'), { ssr: false });
 
@@ -31,8 +30,7 @@ const ADPage: React.FC = () => {
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
             <Header/>
-            {/* <Battlefield/> */}
-            <ThreeDimensional/>
+            <Battlefield/>
         </div>
     );
 }

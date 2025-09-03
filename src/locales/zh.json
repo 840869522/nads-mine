@@ -11,7 +11,7 @@
     "questionBankManagement": "题库管理",
     "environmentConstructionSystem": "环境构建分系统",
     "environmentConfiguration": "环境配置",
-    "securityUsageSystem": "安全实验分系统",
+    "securityUsageSystem": "安全使用分系统",
     "securityDrill": "安全演练",
     "toggleDarkMode": "切换暗黑模式",
     "logout": "登出"
@@ -34,7 +34,7 @@
     "personnelTestingSystemDesc": "进行互动测验，获取AI反馈，并管理相关题库。",
     "environmentConstructionSystem": "环境构建分系统",
     "environmentConstructionSystemDesc": "配置网络拓扑，管理无人机节点和虚拟容器等基础设施。",
-    "securityUsageSystem": "安全实验分系统",
+    "securityUsageSystem": "安全使用分系统",
     "securityUsageSystemDesc": "模拟网络攻防场景，进行红蓝对抗演练，检验安全防护能力。",
     "goTo": "前往 {featureName} →",
     "adminPanelTitle": "管理员面板 (概念)",

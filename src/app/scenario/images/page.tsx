@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -23,7 +23,6 @@ import {
   Menu,
   MenuItem,
   CircularProgress,
-  LinearProgress,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -31,17 +30,12 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import SearchIcon from '@mui/icons-material/Search';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import DownloadIcon from '@mui/icons-material/Download';
-import CloseIcon from '@mui/icons-material/Close';
 import { ManagedImage } from '@/types';
 import ImageFormModal from '@/components/imagemanagement/ImageFormModal';
 import CreateContainerModal from '@/components/scenario/CreateContainerModal';
 import { useAuth } from '@/hooks/useAuth';
 import dayjs from 'dayjs';
 import { customFetch } from '@/utils/fetch';
-import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = '/back/api';
 
@@ -62,16 +56,6 @@ const ImageManagementPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumns, setShowColumns] = useState({ size: true, uploadDate: true });
   const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  interface TransferTask {
-    id: string;
-    name: string;
-    progress: number;
-    controller: AbortController;
-  }
-  const [uploadTasks, setUploadTasks] = useState<TransferTask[]>([]);
-  const [downloadTasks, setDownloadTasks] = useState<TransferTask[]>([]);
 
   const fetchImages = async () => {
     if (!user) return;
@@ -146,76 +130,6 @@ const ImageManagementPage: React.FC = () => {
     setPage(0);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach(file => {
-      const formData = new FormData();
-      formData.append('file', file);
-      const controller = new AbortController();
-      const id = uuidv4();
-      setUploadTasks(prev => [...prev, { id, name: file.name, progress: 0, controller }]);
-      axios.post('/api/images/import', formData, {
-        signal: controller.signal,
-        onUploadProgress: ev => {
-          if (ev.total) {
-            setUploadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t));
-          }
-        }
-      }).then(() => {
-        fetchImages();
-      }).catch(() => {
-        /* ignore errors */
-      }).finally(() => {
-        setUploadTasks(prev => prev.filter(t => t.id !== id));
-      });
-    });
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const cancelUpload = (id: string) => {
-    setUploadTasks(prev => {
-      const task = prev.find(t => t.id === id);
-      if (task) task.controller.abort();
-      return prev.filter(t => t.id !== id);
-    });
-  };
-
-  const handleExport = (image: ManagedImage) => {
-    const controller = new AbortController();
-    const id = uuidv4();
-    const filename = `${image.name}-${image.version}.tar`;
-    setDownloadTasks(prev => [...prev, { id, name: filename, progress: 0, controller }]);
-    axios.get(`/api/images/export?name=${image.name}:${image.version}`, {
-      responseType: 'blob',
-      signal: controller.signal,
-      onDownloadProgress: ev => {
-        if (ev.total) {
-          setDownloadTasks(prev => prev.map(t => t.id === id ? { ...t, progress: Math.round((ev.loaded * 100) / ev.total) } : t));
-        }
-      }
-    }).then(res => {
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }).catch(() => {
-      /* ignore errors */
-    }).finally(() => {
-      setDownloadTasks(prev => prev.filter(t => t.id !== id));
-    });
-  };
-
-  const cancelDownload = (id: string) => {
-    setDownloadTasks(prev => {
-      const task = prev.find(t => t.id === id);
-      if (task) task.controller.abort();
-      return prev.filter(t => t.id !== id);
-    });
-  };
-
   const columns: GridColDef[] = React.useMemo(() => [
     { field: 'name', headerName: '名称', flex: 1 },
     { field: 'type', headerName: '类型', flex: 1, renderCell: (params) => params.row.type === 'docker' ? 'Docker' : '虚拟机 (VM)' },
@@ -245,11 +159,6 @@ const ImageManagementPage: React.FC = () => {
               <Tooltip title="启动">
                 <IconButton onClick={() => handleStart(image)} size="small">
                   <PlayArrowIcon fontSize="small" color="success" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="导出镜像">
-                <IconButton onClick={() => handleExport(image)} size="small">
-                  <DownloadIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="删除镜像">
@@ -291,14 +200,6 @@ const ImageManagementPage: React.FC = () => {
             <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchorEl(e.currentTarget)} variant="outlined" size="small">显示列</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <input type="file" hidden multiple ref={fileInputRef} onChange={handleImport} />
-            <Button
-                variant="outlined"
-                startIcon={<CloudUploadIcon />}
-                onClick={() => fileInputRef.current?.click()}
-            >
-              导入
-            </Button>
             <Button
                 variant="outlined"
                 startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
@@ -309,29 +210,6 @@ const ImageManagementPage: React.FC = () => {
             </Button>
           </Box>
         </Box>
-
-        {uploadTasks.map(task => (
-          <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
-            <Box sx={{ flexGrow: 1 }}>
-              <LinearProgress variant="determinate" value={task.progress} />
-            </Box>
-            <IconButton size="small" onClick={() => cancelUpload(task.id)}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        ))}
-        {downloadTasks.map(task => (
-          <Box key={task.id} sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ minWidth: 80 }}>{task.name} {task.progress}%</Typography>
-            <Box sx={{ flexGrow: 1 }}>
-              <LinearProgress variant="determinate" value={task.progress} />
-            </Box>
-            <IconButton size="small" onClick={() => cancelDownload(task.id)}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        ))}
 
         {fetchError ? (
             <MuiAlert severity="error" sx={{ mb: 2, fontSize: '1.2rem' }}>

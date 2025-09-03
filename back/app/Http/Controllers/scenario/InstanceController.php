@@ -1,5 +1,4 @@
 <?php
-// file: app/Http/Controllers/scenario/InstanceController.php
 
 namespace App\Http\Controllers\scenario;
 
@@ -10,7 +9,9 @@ use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\File; 
+
+// 步骤 1: 引入 Process 组件和相关异常类 
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -71,21 +72,21 @@ class InstanceController extends Controller
                     }
 
                     $runningInstances[] = [
-                        'id' => $details->getId(),
-                        'name' => ltrim($details->getName() ?? '', '/'),
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
-                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
-                        'scene_name' => $instance->sceneConfig->c_name ?? null,
-                        'status' => $this->mapStatus($details->getState()->getStatus()),
-                        'ports' => implode(', ', $ports),
-                        'imageName' => $details->getConfig()->getImage(),
-                        'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
-                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
-                        'uptime' => $details->getState()->getStartedAt(),
-                        'createdAt' => $details->getCreated(),
-                        'is_target' => !empty($containerInstance->c_flag),
-                    ];
+                    'id' => $details->getId(),
+                    'name' => ltrim($details->getName() ?? '', '/'),
+                    'type' => 'container',
+                    'ipAddress' => $containerInstance->c_ip,
+                    'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                    'scene_name' => $instance->sceneConfig->c_name ?? null,
+                    'status' => $this->mapStatus($details->getState()->getStatus()),
+                    'ports' => implode(', ', $ports),
+                    'imageName' => $details->getConfig()->getImage(),
+                    'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
+                    'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
+                    'uptime' => $details->getState()->getStartedAt(),
+                    'createdAt' => $details->getCreated(),
+                    'is_target' => !empty($containerInstance->c_flag),
+                ];
                 } catch (\Exception $e) {
                     Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
                 }
@@ -99,7 +100,7 @@ class InstanceController extends Controller
 
 
     /**
-     *  核心修复：添加了对关联表记录和虚拟机实例文件夹的删除
+     *  核心修复：添加了对关联表记录和虚拟机实例文件夹的删除 
      */
     public function destroy(SceneInstance $instance)
     {
@@ -140,7 +141,7 @@ class InstanceController extends Controller
                     Log::error($errors[count($errors) - 1]);
                 }
             }
-
+            
             // ★★★ 新增：删除虚拟机实例文件夹 ★★★
             $baseDir = $this->_get_global_directory();
             $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;
@@ -167,7 +168,7 @@ class InstanceController extends Controller
 
             $instance->switches()->delete();
             Log::info("已删除实例 {$instanceId} 的所有交换机数据库记录。");
-
+            
             // 步骤 3: 最后删除场景实例自身的主记录
             $instance->delete();
             Log::info("已从数据库中删除场景实例主记录: {$instanceId}");
@@ -196,68 +197,12 @@ class InstanceController extends Controller
     }
 
     /**
-     * --- 新增方法 ---
-     * 获取单个演练实例及其所有关联的资源详情 (VMs, 容器, 交换机)。
-     * 这是一个专门为前端弹窗设计的、聚合了所有信息的 API 端点。
-     *
-     * @param  \App\Models\scenario\SceneInstance $instance
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getDetails(SceneInstance $instance)
-    {
-        try {
-            // 使用 Eloquent 的预加载功能，一次性查询出所有关联的资源。
-            // 我们只选择前端展示所需要的字段，以保持 API 响应的轻量化。
-            $instance->load([
-                'vms:c_vm_name,c_scene_instances_id,c_ip,c_flag',
-                'containers:c_container_id,c_scene_instances_id,c_ip,c_flag',
-                'switches:c_switch_name,c_scene_instances_id',
-                'sceneConfig:c_config_id,c_name' // 同时加载场景模板信息
-            ]);
-
-            // 将数据格式化为前端友好的结构
-            $data = [
-                'instance_id'   => $instance->c_scene_instances_id,
-                'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
-                'status'        => $instance->c_status,
-                'resources'     => [
-                    'vms' => $instance->vms->map(function ($vm) {
-                        return [
-                            'name'      => $vm->c_vm_name,
-                            'ip'        => $vm->c_ip,
-                            'is_target' => !empty($vm->c_flag),
-                        ];
-                    }),
-                    'containers' => $instance->containers->map(function ($container) {
-                        return [
-                            'id'        => substr($container->c_container_id, 0, 12), // 返回短ID即可
-                            'ip'        => $container->c_ip,
-                            'is_target' => !empty($container->c_flag),
-                        ];
-                    }),
-                    'switches' => $instance->switches->map(function ($switch) {
-                        return [
-                            'name' => $switch->c_switch_name,
-                        ];
-                    }),
-                ]
-            ];
-
-            return response()->json(['status' => 'success', 'data' => $data]);
-
-        } catch (\Exception $e) {
-            Log::error("获取实例聚合详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
-            return response()->json(['message' => '获取实例详情失败。'], 500);
-        }
-    }
-
-    /**
      * 步骤 3: 修改此函数以使用新的 runCommand 方法
      */
     private function deleteVmAndStorage(string $vmName): void
     {
         Log::info("开始处理虚拟机删除: {$vmName}");
-
+        
         // 步骤1: 强制关机 (destroy)
         try {
             $this->runCommand(['virsh', 'destroy', $vmName]);
@@ -312,7 +257,7 @@ class InstanceController extends Controller
         return $dockerStatus;
     }
 
-    /**
+     /**
      * 清理并删除指定场景实例的所有底层资源（VM、容器、交换机），
      * 但保留数据库中的所有相关记录，并将实例状态更新为 'STOPPED'。
      *
@@ -358,7 +303,7 @@ class InstanceController extends Controller
                 Log::error($errors[count($errors) - 1]);
             }
         }
-
+        
         // 步骤 2: 删除虚拟机实例文件夹
         $baseDir = $this->_get_global_directory();
         $instanceDirectory = $baseDir . '/virsh/instances/' . $instanceId;
@@ -380,8 +325,8 @@ class InstanceController extends Controller
             $instance->save();
             Log::info("已将实例 {$instanceId} 的状态更新为 STOPPED。");
         } catch (\Exception $e) {
-            $errors[] = "更新实例 {$instanceId} 的状态失败: " . $e->getMessage();
-            Log::error($errors[count($errors) - 1]);
+             $errors[] = "更新实例 {$instanceId} 的状态失败: " . $e->getMessage();
+             Log::error($errors[count($errors) - 1]);
         }
 
         if (!empty($errors)) {
