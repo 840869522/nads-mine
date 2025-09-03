@@ -18,11 +18,15 @@
         protected $keyType = 'string';        // 3. 告诉 Eloquent 主'c_username'键是字符串类型
 
         public static function getAllUser(int $page = 1, int $pagesize = 10): array{
-            $offset = ($page - 1) * $pagesize;
-            $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
+            if ($page == -1) {
+                $sql = "SELECT * FROM `c_users`";
+            }else {
+                $offset = ($page - 1) * $pagesize;
+                $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT $pagesize OFFSET $offset";
+            }
             $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users`";
             try {
-                $user = db::select($sql, [$pagesize, $offset]);
+                $user = db::select($sql);
                 $count = db::select($sql_count);
                 return [
                     "data" => $user,

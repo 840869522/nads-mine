@@ -180,6 +180,7 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
+    Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
 });
 
 Route::prefix('images')->group(function () {
@@ -270,6 +271,7 @@ Route::prefix('study')->group(function () {
         Route::get('/', [TeamController::class, 'index']); // TeamController.index
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{team}', [TeamController::class, 'show']);
+        Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
         Route::put('/{team}', [TeamController::class, 'update']);
         Route::delete('/{team}', [TeamController::class, 'destroy']);
     });

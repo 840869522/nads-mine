@@ -4,6 +4,10 @@ import { toast } from "react-toastify"
 // 响应拦截处理
 const handleResponse = async (response: Response): Promise<Response> => {
     const responseClone = response.clone();
+    const contentType = response.headers.get('Content-Type') || '';
+    if (contentType.includes('text/event-stream')) {
+        return response;
+    }
     if (response.ok) {
         const data = await responseClone.json();
         if (data?.code === 420) {
@@ -39,7 +43,6 @@ const customFetch = async (
     const token = getCookie("_auth");
     const headers = new Headers(options.headers);
     headers.set('Authorization', `${token}`);
-    console.log(headers);
     const response = await fetch(url, {
         ...options,
         headers,
