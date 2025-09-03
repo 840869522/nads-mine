@@ -312,6 +312,10 @@ Route::prefix('flag')->middleware('jwtcheck')->group(function () {
 
     // 临时调试接口
     //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
+    
+    // 外部消息管理接口
+    Route::get('/external-targets-status', [FlagSubmissionController::class, 'getExternalTargetsStatus']);
+    Route::post('/send-test-message', [FlagSubmissionController::class, 'sendTestMessage']);
 });
 /**
  * 定义安全实验分系统路由
