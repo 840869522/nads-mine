@@ -237,7 +237,20 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
                 <Typography variant="body2"><TreeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Parent:</strong> {snapshots.find(s => s.id === selectedSnapshot.parentId)?.name || 'None (Base)'}</Typography>
                 <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb !== undefined ? `${selectedSnapshot.size_mb} MB` : 'N/A'}</Typography>
                 <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
-                <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                <Box
+                  sx={(theme) => ({
+                    fontSize: '0.75rem',
+                    bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[100],
+                    color: theme.palette.mode === 'dark' ? theme.palette.grey[100] : theme.palette.grey[800],
+                    fontFamily: 'monospace',
+                    p: 1.5,
+                    borderRadius: 1,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                  })}
+                >
                   {selectedSnapshot.xml || 'N/A'}
                 </Box>
               </Stack>
