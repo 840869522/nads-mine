@@ -200,18 +200,6 @@ public function listVmsBySceneInstance(string $instance_id)
         return false;
     }
 
-    private function calculateSnapshotSize(\SimpleXMLElement $tree): float
-    {
-        $total = 0.0;
-        foreach ($tree->xpath('.//disks/disk/source') as $src) {
-            $file = (string)($src['file'] ?? '');
-            if ($file && is_file($file)) {
-                $total += filesize($file);
-            }
-        }
-        return $total > 0 ? round($total / (1024 * 1024), 2) : 0.0;
-    }
-
     private function fetchVmInstances(): array
     {
         $host = trim($this->runCommand(['hostname']));
@@ -751,13 +739,11 @@ public function listVmsBySceneInstance(string $instance_id)
                 $created = $ctime ? date('c', (int)$ctime) : date('c');
                 $desc = (string)($tree->description ?? '');
                 $parent = (string)($tree->parent->name ?? '');
-                $sizeMb = $this->calculateSnapshotSize($tree);
             } catch (\Throwable $e) {
                 $created = date('c');
                 $xml = '';
                 $desc = '';
                 $parent = '';
-                $sizeMb = 0;
             }
             $snaps[] = [
                 'id' => $name,
@@ -765,7 +751,6 @@ public function listVmsBySceneInstance(string $instance_id)
                 'description' => $desc !== '' ? $desc : null,
                 'parentId' => $parent !== '' ? $parent : null,
                 'created' => $created,
-                'size_mb' => $sizeMb,
                 'xml' => $xml,
             ];
         }
@@ -788,7 +773,6 @@ public function listVmsBySceneInstance(string $instance_id)
             $tree = new \SimpleXMLElement($xml);
             $ctime = (string)$tree->creationTime;
             $created = $ctime ? date('c', (int)$ctime) : date('c');
-            $sizeMb = $this->calculateSnapshotSize($tree);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -800,7 +784,6 @@ public function listVmsBySceneInstance(string $instance_id)
             'description' => $desc !== '' ? $desc : null,
             'parentId' => $parent !== '' ? $parent : null,
             'created' => $created,
-            'size_mb' => $sizeMb,
             'xml' => $xml,
         ], 200);
     }

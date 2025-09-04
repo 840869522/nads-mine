@@ -11,7 +11,6 @@ import {
   AccountTreeOutlined as TreeIcon,
   DescriptionOutlined as DescriptionIcon,
   CalendarTodayOutlined as CalendarIcon,
-  SaveAltOutlined as SizeIcon,
   CodeOutlined as XmlIcon,
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
@@ -29,7 +28,6 @@ interface Snapshot {
   description?: string;
   created: string; // Should be ISO string from backend
   parentId?: string | null;
-  size_mb: number; // Changed from string to number
   xml?: string;
 }
 
@@ -235,7 +233,6 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
                 <Typography variant="body2"><CalendarIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Created:</strong> {new Date(selectedSnapshot.created).toLocaleString()}</Typography>
                 <Typography variant="body2"><DescriptionIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Description:</strong> {selectedSnapshot.description || 'N/A'}</Typography>
                 <Typography variant="body2"><TreeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Parent:</strong> {snapshots.find(s => s.id === selectedSnapshot.parentId)?.name || 'None (Base)'}</Typography>
-                <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb !== undefined ? `${selectedSnapshot.size_mb} MB` : 'N/A'}</Typography>
                 <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
                 <Box
                   sx={(theme) => ({
