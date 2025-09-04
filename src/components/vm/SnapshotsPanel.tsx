@@ -55,20 +55,19 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
       }
       const data: Snapshot[] = await response.json();
       setSnapshots(data);
-      if (data.length > 0 && !selectedSnapshotId) {
-         // Select the newest snapshot by default if nothing is selected
+      setSelectedSnapshotId((prev) => {
+        if (data.length === 0) return null;
+        if (prev) return prev;
         const sortedSnaps = [...data].sort((a,b) => new Date(b.created).getTime() - new Date(a.created).getTime());
-        setSelectedSnapshotId(sortedSnaps[0].id);
-      } else if (data.length === 0) {
-        setSelectedSnapshotId(null);
-      }
+        return sortedSnaps[0].id;
+      });
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred while fetching snapshots.');
       setSnapshots([]);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSnapshotId]); // Add selectedSnapshotId to dependencies if it influences initial selection logic
+  }, [vmId]);
 
   useEffect(() => {
     fetchSnapshots();
@@ -237,12 +236,10 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
                 <Typography variant="body2"><DescriptionIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Description:</strong> {selectedSnapshot.description || 'N/A'}</Typography>
                 <Typography variant="body2"><TreeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Parent:</strong> {snapshots.find(s => s.id === selectedSnapshot.parentId)?.name || 'None (Base)'}</Typography>
                 <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb !== undefined ? `${selectedSnapshot.size_mb} MB` : 'N/A'}</Typography>
-                {selectedSnapshot.xml && <>
-                  <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
-                  <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {selectedSnapshot.xml}
-                  </Box>
-                </>}
+                <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
+                <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                  {selectedSnapshot.xml || 'N/A'}
+                </Box>
               </Stack>
             </Paper>
           ) : (
