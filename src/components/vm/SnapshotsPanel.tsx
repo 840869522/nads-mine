@@ -164,7 +164,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
 
   const buildTree = useCallback((parentId: string | null = null): JSX.Element[] => {
     return snapshots
-      .filter(snapshot => snapshot.parentId === parentId)
+      .filter(snapshot => (snapshot.parentId ?? null) === parentId)
       .sort((a,b) => new Date(a.created).getTime() - new Date(b.created).getTime())
       .map(snapshot => (
         <TreeItem
@@ -236,7 +236,7 @@ export default function SnapshotsPanel({ vmId }: SnapshotsPanelProps) {
                 <Typography variant="body2"><CalendarIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Created:</strong> {new Date(selectedSnapshot.created).toLocaleString()}</Typography>
                 <Typography variant="body2"><DescriptionIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Description:</strong> {selectedSnapshot.description || 'N/A'}</Typography>
                 <Typography variant="body2"><TreeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Parent:</strong> {snapshots.find(s => s.id === selectedSnapshot.parentId)?.name || 'None (Base)'}</Typography>
-                <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb} MB</Typography>
+                <Typography variant="body2"><SizeIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/><strong>Size:</strong> {selectedSnapshot.size_mb !== undefined ? `${selectedSnapshot.size_mb} MB` : 'N/A'}</Typography>
                 {selectedSnapshot.xml && <>
                   <Typography variant="subtitle2" sx={{ mt: 2, pt:1, borderTop: '1px solid #eee' }}><XmlIcon fontSize="small" sx={{verticalAlign: 'middle', mr:0.5}}/> XML Configuration:</Typography>
                   <Box sx={{ fontSize: '0.75rem', bgcolor: 'grey.100', p: 1.5, borderRadius: 1, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>

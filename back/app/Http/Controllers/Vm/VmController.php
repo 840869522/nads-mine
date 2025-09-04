@@ -737,14 +737,21 @@ public function listVmsBySceneInstance(string $instance_id)
                 $tree = new \SimpleXMLElement($xml);
                 $ctime = (string)$tree->creationTime;
                 $created = $ctime ? date('c', (int)$ctime) : date('c');
+                $desc = (string)($tree->description ?? '');
+                $parent = (string)($tree->parent->name ?? '');
             } catch (\Throwable $e) {
                 $created = date('c');
                 $xml = '';
+                $desc = '';
+                $parent = '';
             }
             $snaps[] = [
                 'id' => $name,
                 'name' => $name,
+                'description' => $desc !== '' ? $desc : null,
+                'parentId' => $parent !== '' ? $parent : null,
                 'created' => $created,
+                'size_mb' => 0,
                 'xml' => $xml,
             ];
         }
@@ -770,11 +777,15 @@ public function listVmsBySceneInstance(string $instance_id)
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+        $desc = $data['description'] ?? (string)($tree->description ?? '');
+        $parent = (string)($tree->parent->name ?? '');
         return response()->json([
             'id' => $name,
             'name' => $name,
-            'description' => $data['description'] ?? null,
+            'description' => $desc !== '' ? $desc : null,
+            'parentId' => $parent !== '' ? $parent : null,
             'created' => $created,
+            'size_mb' => 0,
             'xml' => $xml,
         ], 200);
     }

@@ -19,6 +19,9 @@ import {
     Checkbox,
     Switch,
     FormControlLabel,
+    Dialog,
+    DialogTitle,
+    DialogContent,
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -45,6 +48,7 @@ import useSWR, { mutate as globalMutate } from "swr";
 // 保留 OverviewPanel 文件，但此页面不再使用
 //import OverviewPanel from "@/components/vm/OverviewPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
+import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -165,6 +169,7 @@ export default function VmPage() {
         persistent: false,
         autostart: false,
     });
+    const [snapshotVmId, setSnapshotVmId] = React.useState<string | null>(null);
 
 
     /* ---- 列定义 ---- */
@@ -290,6 +295,9 @@ export default function VmPage() {
                                     </IconButton>
                                 </>
                             )}
+                            <IconButton size="small" onClick={() => setSnapshotVmId(vm.id)} disabled={actionLoading}>
+                                <SnapshotIcon fontSize="small" />
+                            </IconButton>
                             <IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}>
                                 <DeleteIcon fontSize="small" color="error" />
                             </IconButton>
@@ -511,6 +519,12 @@ export default function VmPage() {
             <Backdrop open={actionLoading} sx={{ zIndex: theme.zIndex.modal + 1 }}>
                 <CircularProgress color="inherit" />
             </Backdrop>
+            <Dialog open={Boolean(snapshotVmId)} onClose={() => setSnapshotVmId(null)} fullWidth maxWidth="md">
+                <DialogTitle>快照管理</DialogTitle>
+                <DialogContent sx={{p:2}}>
+                    {snapshotVmId && <SnapshotsPanel vmId={snapshotVmId} />}
+                </DialogContent>
+            </Dialog>
             <CreateVmModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => mutate()} />
         </Box>
     );
