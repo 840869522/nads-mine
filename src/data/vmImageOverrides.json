@@ -238,5 +238,11 @@
   "v_att_oracleImplant.qcow2": {
     "osType": "Linux",
     "description": "Oracle命令执行植入病毒攻击镜像"
+  },
+  "v_att_oracleEp.qcow2": {
+    "osType": "win7_1"
+  },
+  "v_att_oracleControl.qcow2": {
+    "osType": "win7_1"
   }
 }

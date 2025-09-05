@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# 遇到任何错误则立即退出
+set -e
+
 # 检查参数数量
 if [ $# -ne 6 ]; then
     echo "Usage: $0 num base_image_name network_name vm_name image_dir instance_base_dir"
@@ -17,8 +20,16 @@ INSTANCE_BASE_DIR=$6
 # 虚拟机实例目录
 INSTANCE_DIR="${INSTANCE_BASE_DIR}/${VM_NAME}"
 
-# 基础镜像路径（不含扩展名）
-BASE_IMAGE="${IMAGE_DIR}/${BASE_IMAGE_NAME}"
+# 从传入的参数中提取不带扩展名的基础名称
+IMAGE_BASE_NAME=$(echo "$BASE_IMAGE_NAME" | sed 's/\.[^.]*$//')
+
+# 确定基础镜像的完整路径
+SOURCE_IMAGE_PATH="${IMAGE_DIR}/${IMAGE_BASE_NAME}.qcow2"
+if [ ! -f "$SOURCE_IMAGE_PATH" ]; then
+    echo "[ERROR] 基础镜像未找到: ${SOURCE_IMAGE_PATH}"
+    exit 1
+fi
+echo "[SETUP] 基础镜像路径: ${SOURCE_IMAGE_PATH}"
 
 # 内存大小（单位：MB）
 MEMORY_SIZE=4096
@@ -39,7 +50,7 @@ mkdir -p "${INSTANCE_DIR}"
 # 创建增量磁盘镜像
 echo "[IMAGE] 正在创建差分镜像..."
 qemu-img create -f qcow2 -F qcow2 \
-    -o backing_file="${BASE_IMAGE}.qcow2" \
+    -o backing_file="${SOURCE_IMAGE_PATH}" \
     "${INSTANCE_DIR}/disk.qcow2"
 echo "[IMAGE] 差分镜像创建成功。"
 
