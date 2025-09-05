@@ -452,7 +452,7 @@ XML;
         }
         
         // d. 设置网络模式为 none，这是后续手动连接的关键
-        $command[] = '--network=none';
+        // $command[] = '--network=none';
 
         // e. 添加镜像名称（必须是命令的最后一部分）
         if (empty($options['image'])) {
