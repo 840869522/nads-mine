@@ -63,8 +63,9 @@ cat <<EOF > "${INSTANCE_DIR}/user-data"
 #cloud-config
 hostname: ${VM_NAME}
 runcmd:
-  - netsh interface ip set address name="本地连接" static ${IP_ADDRESS} 255.255.0.0 10.100.0.254 1
-  - echo ${FLAG} > C:\flag.txt
+  - netsh interface ip set address name="Ethernet0" static ${IP_ADDRESS} 255.255.0.0 10.100.0.254 1
+  - echo ${FLAG} > C:\Windows\System32\flag.txt
+  - C:\Windows\System32\create.bat
 EOF
 
 echo "[CONFIG] 正在生成 meta-data..."
