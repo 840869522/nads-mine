@@ -25,6 +25,8 @@
     use App\Http\Controllers\Experiment\ExperimentResourceController;
     use App\Http\Controllers\Course\CoursePermissionController;
     use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
+use App\Http\Controllers\Test1\TestControllerNew;
+
 /*
     |--------------------------------------------------------------------------
     | API Routes
@@ -49,6 +51,7 @@
  * 较为特殊的路由
  */
 Route::prefix("")->group(function () {
+    Route::post("/support/user/test",[UserController::class, "test"]);
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);

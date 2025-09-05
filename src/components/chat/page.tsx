@@ -18,6 +18,7 @@ import { streamPostRequest } from "@/utils/stream"
 import CloseIcon from '@mui/icons-material/Close';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 
 interface Message {
@@ -26,17 +27,25 @@ interface Message {
     role: 'user' | 'assistant';
 }
 
+const ThinkComponent = ({ children }: { children: React.ReactNode }) => {
+    const theme = useTheme();
+    const lighterColor = theme.palette.mode === 'dark'
+        ? theme.palette.grey[600]
+        : theme.palette.grey[500];
+
+    return (
+        <span style={{ color: lighterColor }}>
+            {children}
+        </span>
+    );
+};
+
 const ChatDialog = () => {
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
             text: '# 你好！有什么可以帮助你的吗？',
             role: 'assistant'
-        },
-        {
-            id: "2",
-            text: "adasd",
-            role: "user"
         }
     ]);
     const [inputValue, setInputValue] = useState('');
@@ -172,7 +181,13 @@ const ChatDialog = () => {
                         >
                             {message.role === 'assistant' ? (
                                 <Box className="markdown-content">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]} >
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        rehypePlugins={[rehypeRaw]}
+                                        components={{
+                                            think: ThinkComponent,
+                                        }}
+                                    >
                                         {typeof message.text === 'string' ? message.text : String(message.text)}
                                     </ReactMarkdown>
                                 </Box>

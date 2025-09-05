@@ -12,6 +12,7 @@
     use Illuminate\Support\Facades\Cache;
     use Illuminate\Support\Facades\Log;
     use Ramsey\Uuid\Uuid;
+    use Illuminate\Support\Facades\Redis;
 
     class UserController extends Controller{
         
