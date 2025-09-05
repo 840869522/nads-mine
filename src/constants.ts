@@ -8,10 +8,10 @@ export const APP_NAME = "网络安全实验平台";
 export const BACK_IP_PORT = "http://localhost:8000";
 
 export const APP_PERMISSIONS_CATEGORY = {
-  "study": "人员测试分系统",
-  "scene": "环境构建分系统",
   "support": "基础支撑分系统",
-  "ad": "安全使用分系统",
+  "scene": "环境构建分系统",
+  "study": "人员测试分系统",
+  "ad": "安全实验分系统",
   "databoard": "仪表盘"
 }
 
@@ -44,10 +44,10 @@ export const APP_PERMISSIONS: AppPermission[] = [
   },
 
 
-  // Security Usage System (安全使用分系统)
+  // Security Usage System (安全实验分系统)
   {
     key: "ad",
-    label: "安全使用分系统",
+    label: "安全实验分系统",
     children: [
       { key: 'ad_test', label: '访问安全演练' },
     ]

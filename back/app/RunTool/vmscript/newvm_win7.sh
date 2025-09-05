@@ -63,8 +63,9 @@ cat <<EOF > "${INSTANCE_DIR}/user-data"
 #cloud-config
 hostname: ${VM_NAME}
 runcmd:
-  - netsh interface ip set address name="本地连接" static ${IP_ADDRESS} 255.255.0.0 10.100.0.254 1
-  - echo ${FLAG} > C:\flag.txt
+  - netsh interface ip set address name="Ethernet0" static ${IP_ADDRESS} 255.255.0.0 10.100.0.254 1
+  - echo ${FLAG} > C:\Windows\System32\flag.txt
+  - C:\Windows\System32\create.bat
 EOF
 
 echo "[CONFIG] 正在生成 meta-data..."
@@ -87,7 +88,7 @@ echo "[VIRT] 正在执行 virt-install 命令..."
 virt-install --virt-type kvm \
   --name "${VM_NAME}" \
   --ram=4096 \
-  --vcpus=2 \
+  --vcpus=4 \
   --os-variant win7 \
   --disk path="${DESTINATION_IMAGE_PATH}",device=disk,bus=sata,format=qcow2 \
   --disk path="${INSTANCE_DIR}/config.iso",device=cdrom \
