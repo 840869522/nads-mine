@@ -10,10 +10,11 @@ interface InstanceTopologyDialogProps {
   onClose: () => void;
   title?: string;
   topology: TopologyData | null | undefined;
+  instanceId: string;
 }
 
 // 只做展示：复用 TopologyEditor，与 ScenarioEditDialog 一致的展示方式
-const InstanceTopologyDialog: React.FC<InstanceTopologyDialogProps> = ({ open, onClose, title, topology }) => {
+const InstanceTopologyDialog: React.FC<InstanceTopologyDialogProps> = ({ open, onClose, title, topology, instanceId }) => {
   const initialData = topology
     ? { id: 'instance-topology', name: title || '实例拓扑', description: '', topology_json: topology }
     : null;
@@ -35,6 +36,7 @@ const InstanceTopologyDialog: React.FC<InstanceTopologyDialogProps> = ({ open, o
           onUpdateNode={() => {}}
           onSaveSuccess={() => {}}
           scenarioId={null}
+          sceneInstanceId={instanceId}
         />
       </DialogContent>
     </Dialog>
@@ -42,4 +44,3 @@ const InstanceTopologyDialog: React.FC<InstanceTopologyDialogProps> = ({ open, o
 };
 
 export default InstanceTopologyDialog;
-

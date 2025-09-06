@@ -89,6 +89,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const handleViewTopology = (instance: ScenarioInstance) => {
         setSelectedScenarioName(instance.scenario_name);
         setSelectedTopology(instance.c_scene_config);
+        setSelectedInstanceId(instance.instance_id);
         setIsTopologyOpen(true);
     };
 
@@ -290,6 +291,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     onClose={() => setIsTopologyOpen(false)}
                     title={`实例拓扑：${selectedScenarioName}`}
                     topology={selectedTopology}
+                    instanceId={selectedInstanceId || ''}
                 />
             )}
         </Paper>

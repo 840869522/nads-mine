@@ -395,4 +395,45 @@ class InstanceController extends Controller
 
         return response()->json(['message' => '场景实例的底层资源已成功清理，所有数据库记录已保留。'], 200);
     }
+
+    /**
+     * 新增：更新场景实例表的 c_scene_config JSON 字段
+     * 请求体示例：
+     * {
+     *   "topology": { "nodes": [...], "edges": [...] }
+     * }
+     */
+    public function updateSceneConfig(Request $request, SceneInstance $instance)
+    {
+        try {
+            $validated = \Validator::make($request->all(), [
+                'topology' => 'required|array',
+                'topology.nodes' => 'present|array',
+                'topology.edges' => 'present|array',
+            ])->validate();
+
+            $instance->c_scene_config = $validated['topology'];
+            $instance->save();
+
+            return response()->json([
+                'message' => '场景实例拓扑已更新',
+                'data' => [
+                    'instance_id' => $instance->c_scene_instances_id,
+                    'c_scene_config' => $instance->c_scene_config,
+                ],
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => '数据验证失败',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('更新场景实例拓扑失败: ' . $e->getMessage(), [
+                'instance' => $instance->c_scene_instances_id,
+            ]);
+            return response()->json([
+                'message' => '服务器内部错误，更新失败。'
+            ], 500);
+        }
+    }
 }

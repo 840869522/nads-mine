@@ -65,6 +65,8 @@ interface TopologyEditorProps {
     initialData?: Scenario | null;
     onSaveSuccess: () => void;
     scenarioId?: string | number | null;
+    // 新增：当用于实例拓扑查看/编辑时，传入实例ID，则保存直接更新实例表的 JSON
+    sceneInstanceId?: string | null;
 }
 
 
@@ -74,7 +76,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     onUpdateNode,
     initialData,
     // onSaveSuccess,
-    scenarioId
+    scenarioId,
+    sceneInstanceId
 }) => {
     // 所有节点和边的实时、完整信息，都统一存储在 TopologyEditor 组件的 currentTopologyState
     // 这个状态对象中的 nodes 和 edges 数组里。handleConfirmSave 函数正是从这里读取数据的。
@@ -206,7 +209,12 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 
     // 3. 原来的 handleSave 现在只负责打开弹窗
     const handleSave = () => {
-        setIsSaveModalOpen(true);
+        // 如果是实例模式，直接提交到实例更新接口；否则打开保存场景弹窗
+        if (sceneInstanceId) {
+            handleSaveInstanceTopology();
+        } else {
+            setIsSaveModalOpen(true);
+        }
     };
 
     // 这是一个新函数，专门负责处理真正的保存逻辑。它会在用户在 <SaveScenarioModal> 中填写完信息并点击“确认保存”后被调用。
@@ -271,6 +279,33 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             alert(`保存失败: ${error.message}`);
         } finally {
             setIsSaving(false); // 结束保存，隐藏加载状态
+        }
+    };
+
+    // 新增：实例模式下的直接保存逻辑（不弹窗）
+    const handleSaveInstanceTopology = async () => {
+        try {
+            setIsSaving(true);
+            const topologyData: TopologyData = { nodes, edges };
+            const response = await fetch(`/back/api/scenariosinstances/${sceneInstanceId}/scene-config`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ topology: topologyData }),
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.message || `更新失败，状态码 ${response.status}`);
+            }
+            const result = await response.json().catch(() => ({}));
+            alert(result.message || '实例拓扑已保存');
+        } catch (e: any) {
+            alert(`保存失败: ${e.message || e}`);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -359,19 +394,23 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 targetNode={nodes.find(n => n.id === editingEdge?.target)}
                 onSave={saveEdgeChanges}
             />
-            {/* 5. 在 JSX 中渲染弹窗组件 */}
-            <SaveScenarioModal
-                open={isSaveModalOpen}
-                onClose={() => setIsSaveModalOpen(false)}
-                onSave={handleConfirmSave} isSaving={false}            />
-            <SaveScenarioModal
-                open={isSaveModalOpen}
-                onClose={() => setIsSaveModalOpen(false)}
-                onSave={handleConfirmSave}
-                initialName={initialData?.name}
-                initialDescription={initialData?.description}
-                isSaving={isSaving}
-            />
+            {/* 仅在模板保存模式下渲染保存弹窗；实例模式不使用弹窗 */}
+            {!sceneInstanceId && (
+                <>
+                    <SaveScenarioModal
+                        open={isSaveModalOpen}
+                        onClose={() => setIsSaveModalOpen(false)}
+                        onSave={handleConfirmSave} isSaving={false}            />
+                    <SaveScenarioModal
+                        open={isSaveModalOpen}
+                        onClose={() => setIsSaveModalOpen(false)}
+                        onSave={handleConfirmSave}
+                        initialName={initialData?.name}
+                        initialDescription={initialData?.description}
+                        isSaving={isSaving}
+                    />
+                </>
+            )}
             <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400 italic p-4">
                 说明：从工具栏拖动设备到画布创建节点。单击节点开始连接，再单击另一个节点完成连接。双击节点或连接进行编辑。
             </p>
@@ -380,4 +419,3 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 };
 
 export default TopologyEditor;
-
