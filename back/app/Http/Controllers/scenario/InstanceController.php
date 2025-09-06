@@ -4,9 +4,7 @@
 namespace App\Http\Controllers\scenario;
 
 use App\Http\Controllers\Controller;
-use App\Models\scenario\SceneConfig; // ★ 引入
 use App\Models\scenario\SceneInstance;
-use App\Models\scenario\SceneContainerInstance; // ★ 引入
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
@@ -48,9 +46,6 @@ class InstanceController extends Controller
         }
     }
 
-    /**
-     * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
-     */
     public function show(SceneInstance $instance)
     {
         try {
@@ -72,22 +67,15 @@ class InstanceController extends Controller
                     $memLimit = $stats->memory_stats->limit ?? 0;
                     $ports = [];
                     if ($details->getHostConfig()) {
-                        foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
-                            foreach ($bindingList ?? [] as $b) {
-                                $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
-                            }
-                        }
+                        foreach ($details->getHostConfig()->getPortBindings() ?? [] as $k => $v) { /* ... */ }
                     }
                     $runningInstances[] = [
-                        'id' => $details->getId(),
-                        'name' => ltrim($details->getName() ?? '', '/'),
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
+                        'id' => $details->getId(), 'name' => ltrim($details->getName() ?? '', '/'),
+                        'type' => 'container', 'ipAddress' => $containerInstance->c_ip,
                         'scene_instance_id' => $containerInstance->c_scene_instances_id,
                         'scene_name' => $instance->sceneConfig->c_name ?? null,
                         'status' => $this->mapStatus($details->getState()->getStatus()),
-                        'ports' => implode(', ', $ports),
-                        'imageName' => $details->getConfig()->getImage(),
+                        'ports' => implode(', ', $ports), 'imageName' => $details->getConfig()->getImage(),
                         'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
                         'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage/1048576, $memLimit/1048576),
                         'uptime' => $details->getState()->getStartedAt(),
@@ -95,23 +83,7 @@ class InstanceController extends Controller
                         'is_target' => !empty($containerInstance->c_flag),
                     ];
                 } catch (\Exception $e) {
-                    Log::warning("无法 inspect 容器 {$containerId} (可能已被删除): " . $e->getMessage());
-                    $runningInstances[] = [
-                        'id' => $containerId,
-                        'name' => $containerInstance->c_container_name ?? "未知 (ID: " . substr($containerId, 0, 12) . ")",
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
-                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
-                        'scene_name' => $instance->sceneConfig->c_name ?? null,
-                        'status' => 'error',
-                        'ports' => 'N/A',
-                        'imageName' => 'N/A',
-                        'cpuUsage' => 'N/A',
-                        'memoryUsage' => 'N/A',
-                        'uptime' => 'N/A',
-                        'createdAt' => 'N/A',
-                        'is_target' => !empty($containerInstance->c_flag),
-                    ];
+                    Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
                 }
             }
             return response()->json($runningInstances);

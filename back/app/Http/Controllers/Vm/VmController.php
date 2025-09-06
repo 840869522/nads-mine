@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Log;
 use App\Models\scenario\SceneVmInstance;
 use App\RunTool\CommandLineService;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Str;
 
 class VmController extends Controller
 {
+
     private CommandLineService $cliService;
 
     public function __construct(CommandLineService $cliService)
@@ -20,8 +20,12 @@ class VmController extends Controller
         $this->cliService = $cliService;
     }
 
+
     /**
-     * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
+     * 根据场景实例ID获取其下的所有虚拟机实例。
+     *
+     * @param string $instance_id 场景实例的UUID
+     * @return \Illuminate\Http\JsonResponse
      */
     public function listVmsBySceneInstance(string $instance_id)
     {
@@ -38,7 +42,7 @@ class VmController extends Controller
 
         try {
             $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
-                ->forCurrentUser($instance_id) // 调用权限作用域
+                ->forCurrentUser($instance_id)
                 ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select('c_scene_vm_instances.*', 'sc.c_name as scene_name')
