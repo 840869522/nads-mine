@@ -1,10 +1,12 @@
 <?php
+// file: app/Http/Controllers/scenario/InstanceController.php
+
 namespace App\Http\Controllers\scenario;
 
 use App\Http\Controllers\Controller;
-use App\Models\scenario\SceneConfig;
+use App\Models\scenario\SceneConfig; // ★ 引入
 use App\Models\scenario\SceneInstance;
-use App\Models\scenario\SceneContainerInstance;
+use App\Models\scenario\SceneContainerInstance; // ★ 引入
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
@@ -19,8 +21,32 @@ class InstanceController extends Controller
     protected DockerService $docker;
     protected CommandLineService $cliService;
 
-    public function __construct(DockerService $docker, CommandLineService $cliService) { /* ... */ }
-    public function index() { /* ... */ }
+    public function __construct(DockerService $docker, CommandLineService $cliService)
+    {
+        $this->docker = $docker;
+        $this->cliService = $cliService;
+    }
+
+
+    public function index()
+    {
+        try {
+            $instances = SceneInstance::with('sceneConfig')->latest('c_runtime')->get();
+            $data = $instances->map(function ($instance) {
+                return [
+                    'instance_id'   => $instance->c_scene_instances_id,
+                    'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+                    'username'      => $instance->c_username,
+                    'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
+                    'status'        => $instance->c_status,
+                ];
+            });
+            return response()->json($data);
+        } catch (\Exception $e) {
+            Log::error('获取场景实例列表时发生错误: ' . $e->getMessage());
+            return response()->json(['message' => '服务器内部错误，获取列表失败。'], 500);
+        }
+    }
 
     /**
      * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
@@ -68,10 +94,31 @@ class InstanceController extends Controller
                         'createdAt' => $details->getCreated(),
                         'is_target' => !empty($containerInstance->c_flag),
                     ];
-                } catch (\Exception $e) { /* ... */ }
+                } catch (\Exception $e) {
+                    Log::warning("无法 inspect 容器 {$containerId} (可能已被删除): " . $e->getMessage());
+                    $runningInstances[] = [
+                        'id' => $containerId,
+                        'name' => $containerInstance->c_container_name ?? "未知 (ID: " . substr($containerId, 0, 12) . ")",
+                        'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
+                        'status' => 'error',
+                        'ports' => 'N/A',
+                        'imageName' => 'N/A',
+                        'cpuUsage' => 'N/A',
+                        'memoryUsage' => 'N/A',
+                        'uptime' => 'N/A',
+                        'createdAt' => 'N/A',
+                        'is_target' => !empty($containerInstance->c_flag),
+                    ];
+                }
             }
             return response()->json($runningInstances);
-        } catch (\Exception $e) { /* ... */ }
+        } catch (\Exception $e) {
+            Log::error("获取实例详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
+            return response()->json(['message' => '获取实例详情失败。'], 500);
+        }
     }
 
 

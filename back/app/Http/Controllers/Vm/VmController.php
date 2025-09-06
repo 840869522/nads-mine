@@ -38,7 +38,7 @@ class VmController extends Controller
 
         try {
             $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
-                ->forCurrentUser($instance_id)
+                ->forCurrentUser($instance_id) // 调用权限作用域
                 ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select('c_scene_vm_instances.*', 'sc.c_name as scene_name')

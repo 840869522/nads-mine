@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Models\scenario;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+// ★ 新增：为了解决类型错误和Auth类不存在错误，引入以下必要的类
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\ad\AdConfig;
@@ -13,20 +15,73 @@ class SceneContainerInstance extends Model
 {
     use HasFactory;
 
-    protected $table = 'c_scene_container_instances';
-    protected $primaryKey = 'c_container_id';
-    protected $keyType = 'string';
-    public $incrementing = false;
-    public $timestamps = false;
-    protected $fillable = ['c_container_id', 'c_scene_instances_id', 'c_flag', 'c_ip', 'c_container_name'];
+    // --- 以下是你提供的原始代码，完整保留，不做任何修改 ---
 
+    /**
+     * 手动指定模型关联的数据表名。
+     * @var string
+     */
+    protected $table = 'c_scene_container_instances';
+
+    /**
+     * 手动指定主键。
+     * @var string
+     */
+    protected $primaryKey = 'c_container_id';
+
+    /**
+     * 主键的类型是字符串 (CHAR/VARCHAR)。
+     * @var string
+     */
+    protected $keyType = 'string';
+
+    /**
+     * 主键不是自增整数。
+     * @var bool
+     */
+    public $incrementing = false;
+
+    /**
+     * 指示模型是否自动维护时间戳。
+     * 因为表中没有 created_at 和 updated_at 字段，所以设为 false。
+     * @var bool
+     */
+    public $timestamps = false;
+
+    /**
+     * 可批量赋值的属性。
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'c_container_id',
+        'c_scene_instances_id',
+        'c_flag',
+        'c_ip',
+        'c_container_name', // <-- Added this line
+    ];
+
+    /**
+     * 定义与 SceneInstance 模型的关系 (可选，但推荐)。
+     * 假设 SceneInstance 的主键是 c_scene_instances_id。
+     */
     public function sceneInstance(): BelongsTo
     {
         return $this->belongsTo(SceneInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
 
+    // --- 原始代码结束 ---
+
+
+    // ==============================================================================
+    // ★★★★★★★★★★★★★★★★★★★   开始新增代码   ★★★★★★★★★★★★★★★★★★★★★★★
+    // ==============================================================================
+
     /**
-     * ★ 新增：权限作用域，与 SceneVmInstance 逻辑完全相同
+     * 权限作用域：根据当前登录用户的角色，过滤容器列表 (最终修正版)
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $sceneInstanceId
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     public function scopeForCurrentUser(Builder $query, string $sceneInstanceId): Builder
     {
@@ -47,4 +102,7 @@ class SceneContainerInstance extends Model
         if ($isRedTeamMember && $isBlueTeamMember) { return $query; }
         return $query->whereRaw('1 = 0');
     }
+    // ==============================================================================
+    // ★★★★★★★★★★★★★★★★★★★    结束新增代码   ★★★★★★★★★★★★★★★★★★★★★★★
+    // ==============================================================================
 }
