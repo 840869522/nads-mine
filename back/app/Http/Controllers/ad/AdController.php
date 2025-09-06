@@ -13,24 +13,21 @@ use App\RunTool\CommandLineService;
 use App\RunTool\TopologyParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class AdController extends Controller
 {
-    private CommandLineService $cliService;
-
-    public function __construct(CommandLineService $cliService)
-    {
-        $this->cliService = $cliService;
-    }
+    // ★ 移除：删除了原有的构造函数，以允许父类的构造函数被正确调用
+    // private CommandLineService $cliService;
+    // public function __construct(CommandLineService $cliService) { ... }
 
     /**
      * ★ 修改：此方法被重写以正确处理 c_scene JSON 中的 isTarget 属性
+     * ★ 修改：CommandLineService 通过方法注入传入
      */
-    public function startDrill(Request $request, SceneConfig $scenario)
+    public function startDrill(Request $request, SceneConfig $scenario, CommandLineService $cliService)
     {
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:50',
@@ -42,7 +39,6 @@ class AdController extends Controller
         $userName = $request->input('username');
         $adConfigId = $request->input('ad_config_id');
 
-        // 确保 c_scene 被正确解析为数组
         $topologyJson = $scenario->c_scene;
         if (is_string($topologyJson)) {
             $topologyJson = json_decode($topologyJson, true);
@@ -87,55 +83,42 @@ class AdController extends Controller
 
             foreach ($parsedTopology['switches'] as $switchData) {
                 $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
-                $this->cliService->createSwitch($switchName);
-                $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
+                $cliService->createSwitch($switchName);
+                $cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
                 $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
                 SceneSwitchInstance::create([
                     'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                 ]);
             }
 
-            // ★★★★★★★★★★★★★★★★★★★★★ 开始修改：创建容器部分 ★★★★★★★★★★★★★★★★★★★★★★
             foreach ($parsedTopology['containers'] as $containerData) {
                 $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
-
-                // ★ 核心改动 1：从原始拓扑的节点信息中精确读取 isTarget
                 $nodeInfo = $nodesById->get($containerData['id']);
                 $isTarget = $nodeInfo['config']['isTarget'] ?? false;
-
-                // ★ 核心改动 2：根据 isTarget 的值决定是否生成 Flag
                 $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
-
                 $options = [
                     'image' => $containerData['image'], 'name'  => $containerName,
                     'ports' => $containerData['portMappings'], 'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                 ];
                 if ($flag) { $options['env'][] = ['key' => 'FLAG', 'value' => $flag]; }
-
-                $containerId = $this->cliService->createContainer($options);
+                $containerId = $cliService->createContainer($options);
                 $containerIp = $containerIps[$containerData['id']] ?? null;
-
-                // ★ 核心改动 3：将正确的 flag 值 (UUID 或 null) 存入数据库
                 SceneContainerInstance::create([
                     'c_container_id' => $containerId,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
-                    'c_flag' => $flag, // ★ 这里存入的值直接反映了它是否为靶机
+                    'c_flag' => $flag,
                     'c_ip' => $containerIp,
                     'c_container_name' => $containerName,
                 ]);
-
                 $createdItemsInfo[$containerData['id']] = ['id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'];
             }
-            // ★★★★★★★★★★★★★★★★★★★★★ 结束修改：创建容器部分 ★★★★★★★★★★★★★★★★★★★★★★
 
             Log::info("================== 开始创建虚拟机并建立连接 ==================");
-
             $baseDir = $this->_get_global_directory();
             $imageDir = $baseDir . '/virsh/images';
             $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
 
-            // ★★★★★★★★★★★★★★★★★★★★★ 开始修改：创建虚拟机部分 ★★★★★★★★★★★★★★★★★★★★★★
             foreach ($connections as $conn) {
                 $itemNode = null; $switchNode = null; $ip = null;
                 if ($conn['source']['type'] === 'virtual_machine' && $conn['target']['type'] === 'switch') {
@@ -147,56 +130,54 @@ class AdController extends Controller
                     $switchNode = $nodesById[$conn['source']['id']];
                     $ip = $conn['target']['ip'];
                 }
-
                 if (!$itemNode || !$switchNode) continue;
-
-                // ★ 核心改动 4：从原始拓扑的节点信息中精确读取 isTarget
                 $nodeInfo = $nodesById->get($itemNode['id']);
                 $isTarget = $nodeInfo['config']['isTarget'] ?? false;
-                $parsedVmNode = $vmsParsed[$itemNode['id']]; // 保持原有逻辑以获取 image 等信息
+                $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
-
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
                     $correctImageName = 'v_att_tcpScanning';
                     Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
                 }
-
-                // ★ 核心改动 5：根据 isTarget 的值决定是否生成 Flag
                 $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
-
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
-
-                // ★ 核心改动 6：将正确的 flag 值 (UUID 或 null) 存入数据库
                 $vmInstance = SceneVmInstance::create([
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
-                    'c_flag'               => $flag, // ★ 这里存入的值直接反映了它是否为靶机
+                    'c_flag'               => $flag,
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
-
                 $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
-
-                $this->cliService->createVm([
-                    'id'                  => $vmDbId,
-                    'vm_name'             => $vmName,
-                    'image'               => $correctImageName,
-                    'ip'                  => $ip,
+                $cliService->createVm([
+                    'id'                  => $vmDbId, 'vm_name'             => $vmName,
+                    'image'               => $correctImageName, 'ip'                  => $ip,
                     'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                    'flag'                => $flag ?? 'NULL',
-                    'switch_name'         => $actualSwitchName,
-                    'image_dir'           => $imageDir,
-                    'instance_base_dir'   => $instanceBaseDir,
+                    'flag'                => $flag ?? 'NULL', 'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir, 'instance_base_dir'   => $instanceBaseDir,
                 ]);
-
                 $createdItemsInfo[$itemNode['id']] = [ 'id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine' ];
             }
-            // ★★★★★★★★★★★★★★★★★★★★★ 结束修改：创建虚拟机部分 ★★★★★★★★★★★★★★★★★★★★★★
 
             Log::info("================== 开始建立剩余网络连接 ==================");
-            foreach ($connections as $conn) { /* ... (连接逻辑不变) ... */ }
-
+            foreach ($connections as $conn) {
+                $source = $conn['source']; $target = $conn['target'];
+                if ($source['type'] === 'switch' && $target['type'] === 'switch') {
+                    $cliService->connectSwitchToSwitch($createdSwitchesInfo[$source['id']]['actual_name'], $createdSwitchesInfo[$target['id']]['actual_name']);
+                } elseif (($source['type'] === 'container' && $target['type'] === 'switch') || ($source['type'] === 'switch' && $target['type'] === 'container')) {
+                    $containerNode = $source['type'] === 'container' ? $source : $target;
+                    $switchNode = $source['type'] === 'switch' ? $source : $target;
+                    $cliService->connectContainerToSwitch($createdSwitchesInfo[$switchNode['id']]['actual_name'], $createdItemsInfo[$containerNode['id']]['actual_name'], $containerNode['ip']);
+                } elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
+                    $switchNode = $source['type'] === 'switch' ? $source : $target;
+                    $bridgeNode = $source['type'] === 'nat_bridge' ? $source : $target;
+                    $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
+                    $bridgeName = $bridgeNode['label'];
+                    Log::info("正在连接 OVS 交换机 '{$actualSwitchName}' 到 Linux Bridge '{$bridgeName}'");
+                    $cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
+                }
+            }
             $gatewayIp = '10.100.0.254/16';
             $containersToRoute = [];
             foreach ($parsedTopology['containers'] as $containerData) {
@@ -204,33 +185,24 @@ class AdController extends Controller
                 $containersToRoute[] = ['name' => $actualContainerName];
             }
             if (!empty($containersToRoute)) {
-                $this->cliService->configureBridgeAndRoutes('br0', $gatewayIp, $containersToRoute);
+                $cliService->configureBridgeAndRoutes('br0', $gatewayIp, $containersToRoute);
                 Log::info("================== 网关和路由配置完成 ==================");
             }
-
             $sceneInstance->c_status = 'RUNNING';
             $sceneInstance->save();
-
             $adConfig = AdConfig::find($adConfigId);
             if ($adConfig) {
                 $adConfig->c_scene_instance_id = $sceneInstance->c_scene_instances_id;
                 $adConfig->c_status = 'running';
                 $adConfig->save();
-                Log::info("成功更新演练配置的实例ID和状态", [
-                    'ad_config_id' => $adConfigId,
-                    'scene_instance_id' => $sceneInstance->c_scene_instances_id
-                ]);
+                Log::info("成功更新演练配置的实例ID和状态", ['ad_config_id' => $adConfigId, 'scene_instance_id' => $sceneInstance->c_scene_instances_id]);
             } else {
                 Log::warning("启动场景后，未找到要更新的演练配置记录", ['ad_config_id' => $adConfigId]);
             }
-
             return response()->json([
-                'message' => '演练场景已成功启动！',
-                'scene_instance_id' => $sceneInstance->c_scene_instances_id,
-                'created_items' => $createdItemsInfo,
-                'created_switches' => $createdSwitchesInfo,
+                'message' => '演练场景已成功启动！', 'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                'created_items' => $createdItemsInfo, 'created_switches' => $createdSwitchesInfo,
             ]);
-
         } catch (\Exception $e) {
             if ($sceneInstance) {
                 $sceneInstance->c_status = 'FAILED';
@@ -246,15 +218,11 @@ class AdController extends Controller
     {
         $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
         $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
-
         $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
             return explode('/', $ip)[0];
         })->unique()->flip();
-
         Log::info('Found existing IPs in DB', $existingIps->keys()->toArray());
-
         $octet3 = 0; $octet4 = 0;
-
         $getNextIp = function() use (&$octet3, &$octet4, &$existingIps) {
             do {
                 if ($octet4 >= 254) { $octet4 = 1; $octet3++; } else { $octet4++; }
@@ -265,16 +233,10 @@ class AdController extends Controller
             Log::info("Assigned new IP: {$newIp}");
             return $newIp . "/16";
         };
-
         foreach ($connections as &$connection) {
             if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') { continue; }
             if (empty($connection['source']['ip'])) { $connection['source']['ip'] = $getNextIp(); }
             if (empty($connection['target']['ip'])) { $connection['target']['ip'] = $getNextIp(); }
         }
-    }
-
-    private function _get_global_directory()
-    {
-        return env('GLOBAL_DIRECTORY', '/var/www/html');
     }
 }
