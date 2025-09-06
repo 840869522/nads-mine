@@ -5,24 +5,31 @@ namespace App\Http\Controllers\scenario;
 
 use App\Http\Controllers\Controller;
 use App\Models\scenario\SceneInstance;
+use App\Models\scenario\SceneContainerInstance;
+use App\Models\scenario\SceneSwitchInstance;
+use App\Models\scenario\SceneVmInstance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use App\RunTool\TopologyParser;
 
 class InstanceController extends Controller
 {
     protected DockerService $docker;
     protected CommandLineService $cliService;
+    private array $vmImageOsMap = [];
 
     public function __construct(DockerService $docker, CommandLineService $cliService)
     {
         $this->docker = $docker;
         $this->cliService = $cliService;
+        $this->loadVmImageOsMap();
     }
 
 
@@ -415,12 +422,16 @@ class InstanceController extends Controller
             $instance->c_scene_config = $validated['topology'];
             $instance->save();
 
+            // 应用拓扑差异：按新增节点与连接进行资源创建与连接
+            $applyResult = $this->applyTopologyDiff($instance, $instance->c_scene_config);
+
             return response()->json([
-                'message' => '场景实例拓扑已更新',
+                'message' => '场景实例拓扑已更新并应用',
                 'data' => [
                     'instance_id' => $instance->c_scene_instances_id,
                     'c_scene_config' => $instance->c_scene_config,
                 ],
+                'applied' => $applyResult,
             ], 200);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -434,6 +445,393 @@ class InstanceController extends Controller
             return response()->json([
                 'message' => '服务器内部错误，更新失败。'
             ], 500);
+        }
+    }
+
+    /**
+     * 解析并应用拓扑差异：创建新增的交换机、容器、虚拟机，并建立必要连接。
+     * 仅处理新增，不删除既有资源。
+     */
+    private function applyTopologyDiff(SceneInstance $instance, array $topology): array
+    {
+        $parsed = TopologyParser::parse($topology);
+        $connections = &$parsed['connections'];
+
+        // 给未指定的连接分配 IP，避免冲突（基于 DB 中已有 IP）
+        try {
+            $this->assignIpAddresses($connections);
+        } catch (\Exception $e) {
+            Log::warning('为新拓扑连接分配IP失败: ' . $e->getMessage());
+        }
+
+        $nodesById = collect($topology['nodes'] ?? [])->keyBy('id');
+
+        $instanceShortId = substr(str_replace('-', '', $instance->c_scene_instances_id), -8);
+        $switchIdSuffix  = substr(str_replace('-', '', $instance->c_scene_instances_id), -5);
+
+        $createdSwitchesInfo = []; // nodeId => ['actual_name' => ..., 'label' => ...]
+        $actualSwitchNames = [];   // nodeId => actual switch name
+        $newSwitchNodeIds = [];
+
+        // 现有交换机映射
+        $existingSwitchNames = SceneSwitchInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+            ->pluck('c_switch_name')->all();
+
+        foreach ($parsed['switches'] as $sw) {
+            $expectedName = $this->sanitizeName($sw['label']) . '_' . $switchIdSuffix;
+            $actualSwitchNames[$sw['id']] = $expectedName;
+            if (!in_array($expectedName, $existingSwitchNames, true)) {
+                try {
+                    $this->cliService->createSwitch($expectedName, null, true);
+                    // 与总交换机相连
+                    $this->cliService->connectSwitchToSwitch($expectedName, 'ovs-switch');
+                    SceneSwitchInstance::create([
+                        'c_switch_name' => $expectedName,
+                        'c_scene_instances_id' => $instance->c_scene_instances_id,
+                    ]);
+                    $createdSwitchesInfo[$sw['id']] = ['actual_name' => $expectedName, 'label' => $sw['label']];
+                    $newSwitchNodeIds[$sw['id']] = true;
+                } catch (\Exception $e) {
+                    Log::error('创建/连接交换机失败: ' . $e->getMessage(), ['switch' => $expectedName]);
+                }
+            } else {
+                $createdSwitchesInfo[$sw['id']] = ['actual_name' => $expectedName, 'label' => $sw['label']];
+            }
+        }
+
+        $createdItemsInfo = [];   // nodeId => ['id'=>..., 'actual_name'=>..., 'type'=>...]
+        $newItemNodeIds = [];     // nodeId => true for new container/vm
+
+        // 现有容器与虚拟机名称集合
+        $existingContainerNames = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+            ->pluck('c_container_name')->all();
+        $existingVmNames = SceneVmInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+            ->pluck('c_vm_name')->all();
+
+        // 预采集容器 IP（从连接中）
+        $containerIps = [];
+        foreach ($connections as $conn) {
+            if ($conn['source']['type'] === 'container' && !empty($conn['source']['ip'])) {
+                $containerIps[$conn['source']['id']] = $conn['source']['ip'];
+            }
+            if ($conn['target']['type'] === 'container' && !empty($conn['target']['ip'])) {
+                $containerIps[$conn['target']['id']] = $conn['target']['ip'];
+            }
+        }
+
+        // 创建容器
+        foreach ($parsed['containers'] as $c) {
+            $expectedName = $this->sanitizeName($c['label']) . '_' . $instanceShortId;
+            if (!in_array($expectedName, $existingContainerNames, true)) {
+                try {
+                    $options = [
+                        'image' => $c['image'],
+                        'name'  => $expectedName,
+                        'ports' => $c['portMappings'],
+                        'env'   => $c['env'],
+                        'scene_instance_id' => $instance->c_scene_instances_id,
+                    ];
+                    $flagUuid = null;
+                    if (!empty($c['isTarget'])) {
+                        $flagUuid = Str::uuid()->toString();
+                        $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+                    }
+                    $containerId = $this->cliService->createContainer($options);
+                    $containerIp = $containerIps[$c['id']] ?? null;
+
+                    SceneContainerInstance::create([
+                        'c_container_id' => $containerId,
+                        'c_scene_instances_id' => $instance->c_scene_instances_id,
+                        'c_flag' => $flagUuid,
+                        'c_ip' => $containerIp,
+                        'c_container_name' => $expectedName,
+                    ]);
+                    $createdItemsInfo[$c['id']] = [
+                        'id' => $containerId, 'actual_name' => $expectedName, 'type' => 'container'
+                    ];
+                    $newItemNodeIds[$c['id']] = true;
+                } catch (\Exception $e) {
+                    Log::error('创建容器失败: ' . $e->getMessage(), ['container' => $expectedName]);
+                }
+            } else {
+                $createdItemsInfo[$c['id']] = [
+                    'id' => null, 'actual_name' => $expectedName, 'type' => 'container'
+                ];
+            }
+        }
+
+        // 创建虚拟机并连接到交换机（按连接）
+        $baseDir = $this->_get_global_directory();
+        $imageDir = $baseDir . '/virsh/images';
+        $instanceBaseDir = $baseDir . '/virsh/instances/' . $instance->c_scene_instances_id;
+
+        $vmsParsed = collect($parsed['vms'])->keyBy('id');
+        foreach ($connections as $conn) {
+            $itemNode = null; $switchNode = null; $ip = null;
+            if ($conn['source']['type'] === 'virtual_machine' && $conn['target']['type'] === 'switch') {
+                $itemNode = $nodesById[$conn['source']['id']] ?? null;
+                $switchNode = $nodesById[$conn['target']['id']] ?? null;
+                $ip = $conn['source']['ip'] ?? null;
+            } elseif ($conn['target']['type'] === 'virtual_machine' && $conn['source']['type'] === 'switch') {
+                $itemNode = $nodesById[$conn['target']['id']] ?? null;
+                $switchNode = $nodesById[$conn['source']['id']] ?? null;
+                $ip = $conn['target']['ip'] ?? null;
+            }
+
+            if (!$itemNode || !$switchNode) continue;
+
+            $expectedVmName = $this->sanitizeName($itemNode['label']) . '_' . $instanceShortId;
+            $alreadyExists = in_array($expectedVmName, $existingVmNames, true);
+            $actualSwitchName = $actualSwitchNames[$switchNode['id']] ?? null;
+            if (!$actualSwitchName) continue;
+
+            if (!$alreadyExists) {
+                try {
+                    $parsedVmNode = $vmsParsed[$itemNode['id']] ?? null;
+                    $correctImageName = $parsedVmNode['image'] ?? null;
+                    if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
+                        $correctImageName = 'v_att_tcpScanning';
+                        Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 使用默认镜像: {$correctImageName}");
+                    }
+                    $imageFileName = Str::endsWith($correctImageName, '.qcow2') ? $correctImageName : $correctImageName . '.qcow2';
+                    $osData = $this->vmImageOsMap[$imageFileName] ?? null;
+                    $osType = strtolower($osData['osType'] ?? 'ubuntu');
+
+                    $flagUuid = null;
+                    if (!empty($parsedVmNode['isTarget'])) {
+                        $flagUuid = Str::uuid()->toString();
+                    }
+
+                    $vmInstance = SceneVmInstance::create([
+                        'c_vm_name'            => $expectedVmName,
+                        'c_scene_instances_id' => $instance->c_scene_instances_id,
+                        'c_ip'                 => $ip,
+                        'c_flag'               => $flagUuid,
+                    ]);
+                    $vmDbId = $vmInstance->c_vm_id;
+
+                    if ($osType === 'win7') {
+                        $this->cliService->createVmWin7([
+                            'id'                => $vmDbId,
+                            'vm_name'           => $expectedVmName,
+                            'image'             => $correctImageName,
+                            'ip'                => $ip,
+                            'scene_instance_id' => $instance->c_scene_instances_id,
+                            'flag'              => $flagUuid ?? 'NULL',
+                            'switch_name'       => $actualSwitchName,
+                            'image_dir'         => $imageDir,
+                            'instance_base_dir' => $instanceBaseDir,
+                        ]);
+                    } elseif ($osType === 'win7_1') {
+                        $this->cliService->createVmWin7_1([
+                            'id'                => $vmDbId,
+                            'vm_name'           => $expectedVmName,
+                            'image'             => $correctImageName,
+                            'switch_name'       => $actualSwitchName,
+                            'image_dir'         => $imageDir,
+                            'instance_base_dir' => $instanceBaseDir,
+                        ]);
+                    } elseif ($osType === 'win2003') {
+                        $this->cliService->createVmWin2003([
+                            'id'                => $vmDbId,
+                            'vm_name'           => $expectedVmName,
+                            'image'             => $correctImageName,
+                            'switch_name'       => $actualSwitchName,
+                            'image_dir'         => $imageDir,
+                            'instance_base_dir' => $instanceBaseDir,
+                        ]);
+                    } else {
+                        $this->cliService->createVm([
+                            'id'                => $vmDbId,
+                            'vm_name'           => $expectedVmName,
+                            'image'             => $correctImageName,
+                            'ip'                => $ip,
+                            'scene_instance_id' => $instance->c_scene_instances_id,
+                            'flag'              => $flagUuid ?? 'NULL',
+                            'switch_name'       => $actualSwitchName,
+                            'image_dir'         => $imageDir,
+                            'instance_base_dir' => $instanceBaseDir,
+                        ]);
+                    }
+
+                    $createdItemsInfo[$itemNode['id']] = [
+                        'id' => $vmDbId, 'actual_name' => $expectedVmName, 'type' => 'virtual_machine'
+                    ];
+                    $newItemNodeIds[$itemNode['id']] = true;
+                } catch (\Exception $e) {
+                    Log::error('创建虚拟机失败: ' . $e->getMessage(), ['vm' => $expectedVmName]);
+                }
+            } else {
+                $createdItemsInfo[$itemNode['id']] = [
+                    'id' => null, 'actual_name' => $expectedVmName, 'type' => 'virtual_machine'
+                ];
+            }
+        }
+
+        // 建立连接：仅针对新增节点涉及的连接，避免重复
+        foreach ($connections as $conn) {
+            $source = $conn['source'];
+            $target = $conn['target'];
+
+            if ($source['type'] === 'switch' && $target['type'] === 'switch') {
+                $srcNew = !empty($newSwitchNodeIds[$source['id']]);
+                $tgtNew = !empty($newSwitchNodeIds[$target['id']]);
+                if ($srcNew || $tgtNew) {
+                    try {
+                        $this->cliService->connectSwitchToSwitch(
+                            $createdSwitchesInfo[$source['id']]['actual_name'] ?? ($actualSwitchNames[$source['id']] ?? ''),
+                            $createdSwitchesInfo[$target['id']]['actual_name'] ?? ($actualSwitchNames[$target['id']] ?? '')
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('连接交换机-交换机失败(可能已存在): ' . $e->getMessage());
+                    }
+                }
+            }
+            elseif (($source['type'] === 'container' && $target['type'] === 'switch') || ($source['type'] === 'switch' && $target['type'] === 'container')) {
+                $containerNode = $source['type'] === 'container' ? $source : $target;
+                $switchNode = $source['type'] === 'switch' ? $source : $target;
+                $isNew = !empty($newItemNodeIds[$containerNode['id']]) || !empty($newSwitchNodeIds[$switchNode['id']]);
+                if ($isNew) {
+                    try {
+                        $this->cliService->connectContainerToSwitch(
+                            $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? ($actualSwitchNames[$switchNode['id']] ?? ''),
+                            $createdItemsInfo[$containerNode['id']]['actual_name'] ?? $this->sanitizeName($containerNode['label']) . '_' . $instanceShortId,
+                            $containerNode['ip'] ?? null
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('连接容器-交换机失败(可能已存在): ' . $e->getMessage());
+                    }
+                }
+            }
+            elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
+                $switchNode = $source['type'] === 'switch' ? $source : $target;
+                $bridgeNode = $source['type'] === 'nat_bridge' ? $source : $target;
+                $isNew = !empty($newSwitchNodeIds[$switchNode['id']]);
+                if ($isNew) {
+                    $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? ($actualSwitchNames[$switchNode['id']] ?? '');
+                    $bridgeName = $bridgeNode['label'];
+                    try {
+                        $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
+                    } catch (\Exception $e) {
+                        Log::warning('连接交换机到 Bridge 失败(可能已存在): ' . $e->getMessage());
+                    }
+                }
+            }
+        }
+
+        // 若有 NAT 连接，为新容器设置路由
+        $gatewayIp = '10.100.0.254/16';
+        $switchesConnectedToBridge = [];
+        foreach ($connections as $conn) {
+            if ($conn['source']['type'] === 'nat_bridge' && $conn['target']['type'] === 'switch') {
+                $switchesConnectedToBridge[$conn['target']['id']] = true;
+            } elseif ($conn['target']['type'] === 'nat_bridge' && $conn['source']['type'] === 'switch') {
+                $switchesConnectedToBridge[$conn['source']['id']] = true;
+            }
+        }
+
+        $containersToRoute = [];
+        if (!empty($switchesConnectedToBridge)) {
+            foreach ($connections as $conn) {
+                $containerNode = null;
+                $switchNode = null;
+                if ($conn['source']['type'] === 'container' && $conn['target']['type'] === 'switch') {
+                    $containerNode = $conn['source'];
+                    $switchNode = $conn['target'];
+                } elseif ($conn['target']['type'] === 'container' && $conn['source']['type'] === 'switch') {
+                    $containerNode = $conn['target'];
+                    $switchNode = $conn['source'];
+                }
+                if ($containerNode && isset($switchesConnectedToBridge[$switchNode['id']]) && !empty($newItemNodeIds[$containerNode['id']])) {
+                    $containersToRoute[] = ['name' => $createdItemsInfo[$containerNode['id']]['actual_name']];
+                }
+            }
+        }
+        if (!empty($containersToRoute)) {
+            try {
+                $this->cliService->configureBridgeAndRoutes('br0', $gatewayIp, $containersToRoute);
+            } catch (\Exception $e) {
+                Log::warning('配置网关和路由失败: ' . $e->getMessage());
+            }
+        }
+
+        return [
+            'new_switches'  => array_keys($newSwitchNodeIds),
+            'new_items'     => array_keys($newItemNodeIds),
+        ];
+    }
+
+    private function sanitizeName(string $label): string
+    {
+        return str_replace([' '], '_', $label);
+    }
+
+    /**
+     * 复制 DrillController 的 IP 分配逻辑，避免与数据库中已有IP冲突。
+     */
+    private function assignIpAddresses(array &$connections): void
+    {
+        $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
+        $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
+
+        $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
+            return explode('/', $ip)[0];
+        })->unique()->flip();
+
+        $octet3 = 0;
+        $octet4 = 0;
+
+        $getNextIp = function() use (&$octet3, &$octet4, &$existingIps) {
+            do {
+                if ($octet4 >= 254) {
+                    $octet4 = 1;
+                    $octet3++;
+                } else {
+                    $octet4++;
+                }
+
+                if ($octet3 >= 255) {
+                    throw new \Exception("IP地址池 10.100.0.0/16 已耗尽。");
+                }
+
+                $newIp = "10.100.{$octet3}.{$octet4}";
+
+            } while (isset($existingIps[$newIp]));
+
+            $existingIps[$newIp] = true;
+            return $newIp . "/16";
+        };
+
+        foreach ($connections as &$connection) {
+            if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') {
+                continue;
+            }
+            if (empty($connection['source']['ip'])) {
+                $connection['source']['ip'] = $getNextIp();
+            }
+            if (empty($connection['target']['ip'])) {
+                $connection['target']['ip'] = $getNextIp();
+            }
+        }
+        unset($connection);
+    }
+
+    /**
+     * 加载 vmImageOverrides.json 内容
+     */
+    private function loadVmImageOsMap(): void
+    {
+        try {
+            $path = base_path('../src/data/vmImageOverrides.json');
+            if (File::exists($path)) {
+                $jsonContent = File::get($path);
+                $this->vmImageOsMap = json_decode($jsonContent, true) ?: [];
+            } else {
+                Log::warning('vmImageOverrides.json 不存在', ['path' => $path]);
+            }
+        } catch (\Exception $e) {
+            Log::error('加载 vmImageOverrides.json 失败: ' . $e->getMessage());
+            $this->vmImageOsMap = [];
         }
     }
 }
