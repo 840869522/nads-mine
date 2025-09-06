@@ -48,6 +48,11 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
     const [showTopologyEditor, setShowTopologyEditor] = useState(false);
     // 新增状态：存储从API获取的预置场景模板
     const [sceneTemplates, setSceneTemplates] = useState<SceneTemplate[]>([]);
+    // 新增状态：场景名称和描述
+    const [scenarioName, setScenarioName] = useState<string>('');
+    const [scenarioDescription, setScenarioDescription] = useState<string>('');
+    // 新增状态：控制保存场景对话框
+    const [showSaveDialog, setShowSaveDialog] = useState(false);
 
     // 加载预置场景模板
     const loadSceneTemplates = useCallback(async () => {
@@ -79,6 +84,9 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
             setIsSaving(false);
             setError(null);
             setShowTopologyEditor(false);
+            setScenarioName('');
+            setScenarioDescription('');
+            setShowSaveDialog(false);
         }
     }, [open, loadSceneTemplates]);
 
@@ -104,12 +112,31 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
 
 
 
-    // 创建新场景的逻辑 (保持不变)
-    const handleCreate = async () => {
+    // 处理保存场景按钮点击
+    const handleSaveClick = () => {
         if (!selectedTemplate) {
             setError("请选择一个模板。");
             return;
         }
+        // 设置默认的场景名称和描述
+        setScenarioName(selectedTemplate.fileName.replace('.json', ''));
+        setScenarioDescription('基于预置场景快速创建');
+        setShowSaveDialog(true);
+        setError(null);
+    };
+
+    // 保存场景的逻辑
+    const handleSave = async () => {
+        if (!selectedTemplate) {
+            setError("请选择一个模板。");
+            return;
+        }
+        
+        if (!scenarioName.trim()) {
+            setError("请输入场景名称。");
+            return;
+        }
+        
         setIsSaving(true);
         setError(null);
 
@@ -119,16 +146,16 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: selectedTemplate?.fileName || '预置场景',
-                    description: '快速创建的预设场景',
+                    name: scenarioName.trim(),
+                    description: scenarioDescription.trim() || '基于预置场景快速创建',
                     topology: selectedTemplate?.topology_json,
                 }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('创建场景失败:', errorData);
-                throw new Error(errorData.message || '创建失败');
+                console.error('保存场景失败:', errorData);
+                throw new Error(errorData.message || '保存失败');
             }
             onSaveSuccess();
             onClose();
@@ -144,6 +171,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
     const doNothing = useCallback(() => {}, []);
 
     return (
+        <>
         <Dialog
             open={open}
             onClose={onClose}
@@ -266,16 +294,66 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                 ) : (
                     // 拓扑编辑器界面的按钮
                     <Button 
-                        onClick={handleCreate} 
+                        onClick={handleSaveClick} 
                         variant="contained" 
                         color="secondary" 
                         disabled={isSaving || !selectedTemplate}
                     >
-                        {isSaving ? <CircularProgress size={24} /> : '创建场景'}
+                        {isSaving ? <CircularProgress size={24} /> : '保存场景'}
                     </Button>
                 )}
             </DialogActions>
         </Dialog>
+        
+        {/* 保存场景对话框 */}
+        <Dialog
+            open={showSaveDialog}
+            onClose={() => setShowSaveDialog(false)}
+            maxWidth="sm"
+            fullWidth
+        >
+            <DialogTitle>
+                保存场景
+            </DialogTitle>
+            <DialogContent>
+                <Box sx={{ pt: 2 }}>
+                    <TextField
+                        fullWidth
+                        label="场景名称"
+                        value={scenarioName}
+                        onChange={(e) => setScenarioName(e.target.value)}
+                        variant="outlined"
+                        sx={{ mb: 2 }}
+                        required
+                        error={!scenarioName.trim() && scenarioName !== ''}
+                        helperText={!scenarioName.trim() && scenarioName !== '' ? '请输入场景名称' : ''}
+                    />
+                    <TextField
+                        fullWidth
+                        label="场景描述"
+                        value={scenarioDescription}
+                        onChange={(e) => setScenarioDescription(e.target.value)}
+                        variant="outlined"
+                        multiline
+                        rows={3}
+                    />
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setShowSaveDialog(false)} disabled={isSaving}>
+                    取消
+                </Button>
+                <Button 
+                    onClick={handleSave} 
+                    variant="contained" 
+                    color="primary"
+                    disabled={isSaving || !scenarioName.trim()}
+                >
+                    {isSaving ? <CircularProgress size={24} /> : '确认保存'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+        </>
     );
 };
 

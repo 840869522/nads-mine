@@ -58,6 +58,10 @@ const ScenarioManagementPage: React.FC = () => {
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
     const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null); // 新增导出状态
+    
+    // 导出功能启用状态 - 可以通过硬编码控制
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const isExportEnabled = false; // 设置为 false 可以禁用导出功能
 
 
 
@@ -206,7 +210,10 @@ const ScenarioManagementPage: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ topologyData }),
+                body: JSON.stringify({ 
+                    topologyData,
+                    scenarioName: scenario.name 
+                }),
             });
 
             const result = await response.json();
@@ -273,7 +280,7 @@ const ScenarioManagementPage: React.FC = () => {
                     {/* 快速创建按钮 */}
                     <Button
                         variant="contained"
-                        color="secondary"
+                        color="primary"
                         startIcon={<QuickCreateIcon />}
                         onClick={() => setQuickCreateDialogOpen(true)}
                     >
@@ -346,18 +353,20 @@ const ScenarioManagementPage: React.FC = () => {
                                                 </IconButton>
                                             </Tooltip>
                                             {/* --- MODIFICATION END --- */}
-                                            <Tooltip title="导出到预置场景">
-                                                <span>
-                                                    <IconButton
-                                                        color="secondary"
-                                                        size="small"
-                                                        onClick={() => handleExportScenario(scenario)}
-                                                        disabled={exportingScenarioId === scenario.id}
-                                                    >
-                                                        {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
+                                            {isExportEnabled && (
+                                                <Tooltip title="导出到预置场景">
+                                                    <span>
+                                                        <IconButton
+                                                            color="secondary"
+                                                            size="small"
+                                                            onClick={() => handleExportScenario(scenario)}
+                                                            disabled={exportingScenarioId === scenario.id}
+                                                        >
+                                                            {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                            )}
                                             <Tooltip title="启动演练">
                                                 {/* 3. 更新按钮，根据状态显示加载动画或图标 */}
                                                 <span>

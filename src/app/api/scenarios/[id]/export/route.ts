@@ -15,8 +15,8 @@ export async function POST(
             return NextResponse.json({ message: '缺少场景 ID' }, { status: 400 });
         }
 
-        // 从请求体中读取拓扑数据
-        const { topologyData } = await request.json();
+        // 从请求体中读取拓扑数据和场景名称
+        const { topologyData, scenarioName } = await request.json();
 
         if (!topologyData) {
             return NextResponse.json({ message: '场景拓扑数据为空，无法导出' }, { status: 400 });
@@ -25,9 +25,13 @@ export async function POST(
         // 确保 scene 目录存在
         await fs.mkdir(SCENE_DIR, { recursive: true });
 
-        // 生成预置场景文件名（使用时间戳避免冲突）
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        const fileName = `scenario_${scenarioId}_${timestamp}.json`;
+        // 生成预置场景文件名（使用场景名称）
+        const sanitizedScenarioName = (scenarioName || `scenario_${scenarioId}`)
+            .replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_') // 替换非法字符为下划线
+            .replace(/_{2,}/g, '_') // 将多个连续下划线替换为单个下划线
+            .replace(/^_|_$/g, ''); // 移除开头和结尾的下划线
+        
+        const fileName = `${sanitizedScenarioName}.json`;
         const sceneFilePath = path.join(SCENE_DIR, fileName);
 
         // 创建预置场景格式的数据（只包含 edges 和 nodes）
