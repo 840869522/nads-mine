@@ -26,6 +26,7 @@ interface TopologyToolbarProps {
   onRedo: () => void;
   canRedo: boolean;
   onSave: () => void; // 新增：保存功能的回调函数
+  isSaving?: boolean; // 新增：保存中状态，用于禁用按钮/显示加载
 }
 
 const DeviceIcon: React.FC<{ type: DeviceType }> = ({ type }) => {
@@ -53,7 +54,8 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                            canUndo,
                                                            onRedo,
                                                            canRedo,
-                                                           onSave // 新增
+                                                           onSave, // 新增
+                                                           isSaving = false,
                                                          }) => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, deviceType: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', deviceType);
@@ -82,12 +84,12 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
           ))}
           <div className="flex-grow"></div> {/* Spacer */}
           <div className="flex items-center gap-2">
-            <Button onClick={onDeleteSelected} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
-            <Button onClick={onUndo} disabled={!canUndo} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
-            <Button onClick={onRedo} disabled={!canRedo} variant="outline" size="sm" leftIcon={<ArrowUturnRightIcon className="h-4 w-4"/>} aria-label="重做">重做</Button>
+            <Button onClick={onDeleteSelected} disabled={isSaving} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
+            <Button onClick={onUndo} disabled={!canUndo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
+            <Button onClick={onRedo} disabled={!canRedo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnRightIcon className="h-4 w-4"/>} aria-label="重做">重做</Button>
 
             {/* 3. 替换为“保存”按钮 */}
-            <Button onClick={onSave} variant="secondary" size="sm" leftIcon={<DocumentCheckIcon className="h-4 w-4"/>} aria-label="保存拓扑">保存</Button>
+            <Button onClick={onSave} isLoading={isSaving} disabled={isSaving} variant="secondary" size="sm" leftIcon={<DocumentCheckIcon className="h-4 w-4"/>} aria-label="保存拓扑">{isSaving ? '保存中...' : '保存'}</Button>
 
             {/* 移除了原来的导出和导入按钮以及隐藏的 input 元素 */}
           </div>

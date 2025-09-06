@@ -16,6 +16,7 @@ import NodeEditModal from './NodeEditModal';
 import EdgeEditModal from './EdgeEditModal';
 import VirtualMachineEditModal from './VirtualMachineEditModal'; // 新增：导入VM编辑模态框
 import Card from '../../ui/Card';
+import { Backdrop, CircularProgress } from '@mui/material';
 import SaveScenarioModal from './SaveScenarioModal';//
 
 // ... generateId, TopologyState, Reducer, initial state 等代码保持不变 ...
@@ -348,7 +349,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 canUndo={undoStack.length > 0}
                 onRedo={handleRedo}
                 canRedo={redoStack.length > 0}
-                onSave={handleSave} // 保持不变，它现在会打开弹窗
+                onSave={handleSave} // 在实例模式下直接保存并展示等待动画
+                isSaving={isSaving}
                 // onExport={handleExport}
                 // onImport={handleImport}
                 onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}
@@ -411,6 +413,10 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                     />
                 </>
             )}
+            {/* 全局等待遮罩，防操作过多 */}
+            <Backdrop open={isSaving} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
+                <CircularProgress color="inherit" />
+            </Backdrop>
             <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400 italic p-4">
                 说明：从工具栏拖动设备到画布创建节点。单击节点开始连接，再单击另一个节点完成连接。双击节点或连接进行编辑。
             </p>
