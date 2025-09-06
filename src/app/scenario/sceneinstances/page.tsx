@@ -11,9 +11,11 @@ import {
     Search as SearchIcon,
     Visibility as ViewIcon,
     Delete as DeleteIcon,
-    Stop as StopIcon, // <-- 修改：导入 Stop 图标
+    Stop as StopIcon,
+    AccountTree as TopologyIcon,
 } from '@mui/icons-material';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
+import InstanceTopologyDialog from './InstanceTopologyDialog';
 import { customFetch } from '@/utils/fetch';
 
 interface ScenarioInstance {
@@ -22,6 +24,7 @@ interface ScenarioInstance {
     username: string;
     runtime: string;
     status: 'CREATING' | 'RUNNING' | 'FAILED' | 'STOPPED';
+    c_scene_config?: any;
 }
 
 type Order = 'asc' | 'desc';
@@ -47,6 +50,8 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+    const [isTopologyOpen, setIsTopologyOpen] = useState(false);
+    const [selectedTopology, setSelectedTopology] = useState<any>(null);
 
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);
@@ -79,6 +84,12 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setSelectedInstanceId(instance.instance_id);
         setSelectedScenarioName(instance.scenario_name);
         setIsDetailsModalOpen(true);
+    };
+
+    const handleViewTopology = (instance: ScenarioInstance) => {
+        setSelectedScenarioName(instance.scenario_name);
+        setSelectedTopology(instance.c_scene_config);
+        setIsTopologyOpen(true);
     };
 
     const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
@@ -229,6 +240,11 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
+                                            <Tooltip title="查看拓扑">
+                                                <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
+                                                    <TopologyIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {/* 修改：停止按钮 */}
                                             <Tooltip title="停止场景">
                                                 <IconButton color="warning" size="small" onClick={() => handleStopInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
@@ -266,6 +282,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     onClose={() => setIsDetailsModalOpen(false)}
                     instanceId={selectedInstanceId}
                     scenarioName={selectedScenarioName} 
+                />
+            )}
+            {isTopologyOpen && (
+                <InstanceTopologyDialog
+                    open={isTopologyOpen}
+                    onClose={() => setIsTopologyOpen(false)}
+                    title={`实例拓扑：${selectedScenarioName}`}
+                    topology={selectedTopology}
                 />
             )}
         </Paper>
