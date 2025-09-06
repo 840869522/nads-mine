@@ -350,10 +350,10 @@ const AdManagementPage: React.FC = () => {
     };
 
     const handleOpenView = (c_scene_instance_id:string | null) => {
-        if (!c_scene_instance_id) {
-            setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' });
-            return;
-        }
+        // if (!c_scene_instance_id) {
+        //     setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' });
+        //     return;
+        // }
         window.open('/visualization', '_blank');
     }
 

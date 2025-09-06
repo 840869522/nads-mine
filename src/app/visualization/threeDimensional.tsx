@@ -1,219 +1,54 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
-import {OrbitControls} from "three-stdlib";
+import {GLTFLoader, OrbitControls} from "three-stdlib";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
+import FictionTeam from "./fictionTeam";
 
-function createNetworkNodes(
+function createSpaceship(
     scene: THREE.Scene,
-    gridSize: number,
-    geometry: THREE.PlaneGeometry,
-    redCount: number,
-    blueCount: number
-) {
-    const nodeCount = redCount + blueCount;
-    const redNodes: THREE.Group[] = [];
-    const blueNodes: THREE.Group[] = [];
+    rings: THREE.Group,
+    modelPath: string,
+    scale: number = 6,
+    idx: number = 0
+): Promise<THREE.Object3D> {
+    return new Promise((resolve) => {
+        const loader = new GLTFLoader();
+        loader.load(modelPath, (gltf) => {
+            const spaceship = gltf.scene;
+            spaceship.scale.set(scale, scale, scale);
 
-    for (let i = 0; i < nodeCount; i++) {
-        // ---------- 找到底面高度 ----------
-        const x = (Math.random() - 0.5) * gridSize * 0.9;
-        const z = (Math.random() - 0.5) * gridSize * 0.9;
+            // 随机选择一个圆环
+            const ringIndex = Math.floor(Math.random() * rings.children.length);
+            const ring = rings.children[ringIndex];
+            
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-expect-error
+            const positions = ring.geometry.attributes.position.array;
+            const segments = positions.length / 3;
 
-        let y = 0;
-        {
-            const posAttr = geometry.attributes.position as THREE.BufferAttribute;
-            let nearestDist = Infinity;
-            for (let j = 0; j < posAttr.count; j++) {
-                const px = posAttr.getX(j);
-                const pz = posAttr.getZ(j);
-                const dist = (px - x) ** 2 + (pz - z) ** 2;
-                if (dist < nearestDist) {
-                    nearestDist = dist;
-                    y = posAttr.getY(j);
-                }
-            }
-        }
+            // 随机选择圆环上的一个顶点
+            const vertexIndex = Math.floor(Math.random() * segments);
 
-        const offset = 10;
-        const nodeGroup = new THREE.Group();
-        nodeGroup.position.set(x, y + offset, z);
+            const x = positions[vertexIndex * 3];
+            const y = positions[vertexIndex * 3 + 1];
+            const z = positions[vertexIndex * 3 + 2];
 
-        // 判断颜色类型
-        const isRed = i < redCount;
+            spaceship.position.set(x, z, y);
 
-        const baseColor = isRed ? 0x660000 : 0x003366;
-        const emissiveColor = isRed ? 0xff0000 : 0x0066ff;
-        const coreColor = isRed ? 0xcc0000 : 0x0066ff;
-        const wireColor = isRed ? 0xff3333 : 0x0066ff;
+            // 朝向圆心
+            spaceship.lookAt(0, 0, 0);
 
-        // ---------- 底座 ----------
-        const baseGeo = new THREE.CylinderGeometry(12, 14, 6, 32, 1, true);
-        const baseMat = new THREE.MeshStandardMaterial({
-            color: baseColor,
-            emissive: emissiveColor,
-            emissiveIntensity: 1.0,
-            metalness: 0.6,
-            roughness: 0.2,
-            transparent: true,
-            opacity: 0.8,
+            // 模型修正方向
+            if(idx == 1)
+                spaceship.rotateY(Math.PI);
+
+            // 将飞船添加到场景中
+            scene.add(spaceship);
+
+            // 返回飞船对象
+            resolve(spaceship);
         });
-        const base = new THREE.Mesh(baseGeo, baseMat);
-        base.position.y = -8;
-        nodeGroup.add(base);
-
-        // ---------- 底座发光边框 ----------
-        const ringGeo = new THREE.RingGeometry(14, 16, 32);
-        const ringMat = new THREE.MeshBasicMaterial({
-            color: emissiveColor,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.DoubleSide,
-        });
-        const baseRing = new THREE.Mesh(ringGeo, ringMat);
-        baseRing.rotation.x = Math.PI / 2;
-        baseRing.position.y = -5;
-        nodeGroup.add(baseRing);
-
-        // ---------- 核心球 ----------
-        const coreGeo = new THREE.SphereGeometry(10, 20, 20);
-        const coreMat = new THREE.MeshStandardMaterial({
-            color: coreColor,
-            emissive: emissiveColor,
-            emissiveIntensity: 0.6,
-            metalness: 0.3,
-            roughness: 0.4,
-            transparent: true,
-            opacity: 0.7,
-        });
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        nodeGroup.add(core);
-
-        // ---------- 外层线框 ----------
-        const wireGeo = new THREE.IcosahedronGeometry(14, 1);
-        const wireMat = new THREE.MeshBasicMaterial({
-            color: wireColor,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.35,
-        });
-        const wire = new THREE.Mesh(wireGeo, wireMat);
-        nodeGroup.add(wire);
-
-        // ---------- 外层发光环 ----------
-        const haloGeo = new THREE.RingGeometry(14, 16, 32);
-        const haloMat = new THREE.MeshBasicMaterial({
-            color: emissiveColor,
-            transparent: true,
-            opacity: 0.25,
-            side: THREE.DoubleSide,
-        });
-        const halo = new THREE.Mesh(haloGeo, haloMat);
-        halo.rotation.x = Math.PI / 2;
-        nodeGroup.add(halo);
-
-        scene.add(nodeGroup);
-
-        if (isRed) {
-            redNodes.push(nodeGroup);
-        } else {
-            blueNodes.push(nodeGroup);
-        }
-    }
-
-    // ---------- 更新函数 ----------
-    const update = () => {
-        [...redNodes, ...blueNodes].forEach((node) => {
-            node.children.forEach((child) => {
-                if ((child as THREE.Mesh).geometry instanceof THREE.IcosahedronGeometry) {
-                    child.rotation.y += 0.01;
-                }
-                if ((child as THREE.Mesh).geometry instanceof THREE.RingGeometry) {
-                    child.rotation.z += 0.008;
-                }
-            });
-        });
-    };
-
-    return { redNodes, blueNodes, update };
-}
-
-// 射线函数：沿抛物线延伸，完成后销毁
-function shootRay(scene: THREE.Scene, startNode: THREE.Group, endNode: THREE.Group) {
-    const start = startNode.position.clone();
-    const end = endNode.position.clone();
-
-    const steps = 100; // 分段数
-    const height = 80 + Math.random() * 50; // 抛物线顶点高度
-
-    // 二次贝塞尔控制点
-    const mid = start.clone().add(end).multiplyScalar(0.5);
-    mid.y += height;
-
-    // 生成完整轨迹数组
-    const trajectory: THREE.Vector3[] = [];
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const point = start.clone().multiplyScalar((1 - t) ** 2)
-            .add(mid.clone().multiplyScalar(2 * (1 - t) * t))
-            .add(end.clone().multiplyScalar(t ** 2));
-        trajectory.push(point);
-    }
-
-    // 初始化 geometry，把所有点放进去
-    const geometry = new THREE.BufferGeometry().setFromPoints(trajectory);
-    geometry.setDrawRange(0, 2);
-
-    const material = new THREE.LineBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 1,
     });
-
-    const line = new THREE.Line(geometry, material);
-    scene.add(line);
-
-    // let progress = 2;
-    // let stopped = false;
-
-    const startTime = performance.now();
-    const duration = 2000; // 2s 发射完成
-
-    function animate() {
-        const elapsed = performance.now() - startTime;
-        const t = Math.min(elapsed / duration, 1); // 0 ~ 1
-        const progress = Math.floor(t * steps);
-
-        geometry.setDrawRange(0, progress + 1);
-
-        if (t < 1) {
-            requestAnimationFrame(animate);
-        } else {
-            setTimeout(() => {
-                scene.remove(line);
-                geometry.dispose();
-                material.dispose();
-            }, 1000);
-        }
-    }
-
-    animate();
-}
-
-function startRandomRays(
-    scene: THREE.Scene,
-    redNodes: THREE.Group[],
-    blueNodes: THREE.Group[]
-) {
-    setInterval(() => {
-        if (redNodes.length === 0 || blueNodes.length === 0) return;
-
-        // 起点：红节点
-        const start = redNodes[Math.floor(Math.random() * redNodes.length)];
-        // 终点：蓝节点
-        const end = blueNodes[Math.floor(Math.random() * blueNodes.length)];
-
-        shootRay(scene, start, end);
-    }, 3000); // 每3秒发射一次
 }
 
 export default function ThreeDimensional(){
@@ -237,157 +72,207 @@ export default function ThreeDimensional(){
 
     useEffect(() => {
         if (!containerRef.current) return;
-        const width = containerRef.current!.clientWidth;
-        const height = containerRef.current!.clientHeight;
+        
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
 
-        // ---------- 场景 ----------
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
 
-        // ---------- 相机 ----------
         const camera = new THREE.PerspectiveCamera(60, width / height, 1, 5000);
-        camera.position.set(0, 400, 800);
+        camera.position.set(0, 150, 400);
 
-        // ---------- 渲染器 ----------
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(width, height);
-        containerRef.current!.appendChild(renderer.domElement);
+        containerRef.current.appendChild(renderer.domElement);
 
-        // ---------- 控制器 ----------
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
 
-        // ---------- 光照 ----------
-        scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        dirLight.position.set(200, 400, 200);
-        scene.add(dirLight);
+        // 添加一个环境光，让场景有一个基础亮度，避免模型全黑
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 颜色, 强度
+        scene.add(ambientLight);
 
-        // ---------- 凸起底面 ----------
-        const gridSize = 1000;
-        const segments = 100;
-        const geometry = new THREE.PlaneGeometry(gridSize, gridSize, segments, segments);
-        geometry.rotateX(-Math.PI / 2);
+        // 添加一个平行光（像太阳光），可以产生阴影和高光
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5); // 从斜上方照射
+        scene.add(directionalLight);
 
-        for (let i = 0; i < geometry.attributes.position.count; i++) {
-            const x = geometry.attributes.position.getX(i);
-            const z = geometry.attributes.position.getZ(i);
-            const distance = Math.sqrt(x * x + z * z);
-            const maxR = gridSize / 2;
-            const t = THREE.MathUtils.clamp(distance / maxR, 0, 1);
+        // ---------- 太阳核心 ----------
+        const sunRadius = 20; // 太阳核心半径
+        const sunGeometry = new THREE.SphereGeometry(sunRadius, 64, 64);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffdd55 });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        scene.add(sun);
 
-            // 中间高、周围低，凸起高度可调
-            const maxHeight = 60;
-            const y = Math.cos(t * Math.PI / 2) * maxHeight;
-            geometry.attributes.position.setY(i, y);
-        }
-        geometry.computeVertexNormals();
-
-        const colors = new Float32Array(geometry.attributes.position.count * 3);
-        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-        const floorMaterial = new THREE.MeshStandardMaterial({
-            vertexColors: true,
-            metalness: 0.3,
-            roughness: 0.5,
-            emissive: 0x330066,
-            emissiveIntensity: 0.4,
-        });
-
-        const floor = new THREE.Mesh(geometry, floorMaterial);
-        scene.add(floor);
-
-        // ---------- 网格线 ----------
-        const wireframe = new THREE.LineSegments(
-            new THREE.WireframeGeometry(geometry),
-            new THREE.LineBasicMaterial({
-                color: 0x66ccff,
-                opacity: 0.4,
-                transparent: true,
-            })
-        );
-        scene.add(wireframe);
-
-        // ---------- 粒子 ----------
-        const pointCount = 600;
-        const pointsGeometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(pointCount * 3);
-        const velocities = new Float32Array(pointCount * 3);
-
-        for (let i = 0; i < pointCount; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * gridSize * 1.5;
-            positions[i * 3 + 1] = Math.random() * 200 + 10;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * gridSize * 1.5;
-
-            velocities[i * 3] = 0;
-            velocities[i * 3 + 1] = 0.2 + Math.random() * 0.15; // 粒子上升速度稍快
-            velocities[i * 3 + 2] = 0;
-        }
-
-        pointsGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        pointsGeometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-
-        const particleTexture = new THREE.TextureLoader().load(
-            "data:image/svg+xml;base64," +
-            btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-                <circle cx="32" cy="32" r="30" fill="white" />
-              </svg>`)
-        );
-
-        const pointsMaterial = new THREE.PointsMaterial({
-            map: particleTexture,
-            color: 0x66ccff,
-            size: 10,
+        // ---------- 火焰球面 ----------
+        const flameGeometry = new THREE.SphereGeometry(sunRadius * 1.2, 128, 128);
+        const flameMaterial = new THREE.ShaderMaterial({
+            vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            void main() {
+                vNormal = normal;
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+            }`,
+            fragmentShader: `
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            uniform float time;
+            void main() {
+                float intensity = length(vNormal.xy) + sin(time + length(vPosition)) * 0.5;
+                intensity = clamp(intensity, 0.0, 1.0);
+                vec3 color = mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.0, 0.0), intensity);
+                gl_FragColor = vec4(color, 1.0);
+            }`,
+            uniforms: {
+                time: { value: 0 }
+            },
             transparent: true,
-            opacity: 0.6,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
             depthWrite: false,
         });
+        const flames = new THREE.Mesh(flameGeometry, flameMaterial);
+        scene.add(flames);
 
-        const points = new THREE.Points(pointsGeometry, pointsMaterial);
-        scene.add(points);
+        // ---------- 星空背景 ----------
+        const starCount = 1000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            starPositions[i * 3] = (Math.random() - 0.5) * 2000; // 随机星星位置
+            starPositions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+            starPositions[i * 3 + 2] = (Math.random() - 0.5) * 2000;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
 
-        // 创建网络节点
-        const { redNodes, blueNodes, update } = createNetworkNodes(scene, gridSize, geometry, 5, 5);
-        // 启动射线
-        startRandomRays(scene, redNodes, blueNodes);
+        // ---------- 云层贴图 ----------
+        const cloudTextureUrl = "/mapdata/img/cloud.jpg"; // 替换为你的云层图URL
+        const cloudTexture = new THREE.TextureLoader().load(cloudTextureUrl);
+
+        // 创建云层几何体，包裹整个场景
+        const cloudGeometry = new THREE.SphereGeometry(3000, 64, 64); // 云层球体，半径为 4000
+        const cloudMaterial = new THREE.MeshBasicMaterial({
+            map: cloudTexture,
+            transparent: true,
+            opacity: 0.25, // 透明度设置得很低，模拟远距离的云层
+            side: THREE.DoubleSide,
+            depthWrite: false, // 不写深度，避免遮挡
+            blending: THREE.AdditiveBlending, // 混合模式
+        });
+
+        // 创建云层对象
+        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        scene.add(cloud);
+
+        // 创建轨道
+        const ringCount = 6;  // 设置6个圆环
+        const rings = new THREE.Group();  // 用于保存所有圆环线
+
+        // 生成圆环线并添加到场景中
+        for (let i = 0; i < ringCount; i++) {
+            // 每个圆环的半径：逐渐增大，确保不靠太近
+            const radius = sunRadius * (3 + i * 3);  // 增大每个圆环的半径，确保它们之间有间距
+
+            const segments = 64; // 圆环的分段数
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(segments * 3);  // 每个点(x, y, z)
+            const uv = new Float32Array(segments * 2);  // 每个顶点的UV坐标，用于渐变颜色
+
+            // 生成圆环的顶点和UV坐标
+            for (let j = 0; j < segments; j++) {
+                const angle = (j / segments) * Math.PI * 2;  // 计算每个顶点的角度
+                positions[j * 3] = radius * Math.cos(angle);  // x 坐标
+                positions[j * 3 + 1] = radius * Math.sin(angle);  // y 坐标
+                positions[j * 3 + 2] = 0;  // z 坐标（平面上的圆环）
+
+                // 给每个顶点设置UV坐标，0到1，用于后续渐变颜色
+                uv[j * 2] = j / segments;  // UV的x坐标（用于渐变）
+                uv[j * 2 + 1] = 0;  // 固定UV的y坐标
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));  // 设置UV坐标
+
+            // 创建自定义材质：通过着色器进行颜色渐变
+            const material = new THREE.ShaderMaterial({
+                vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;  // 传递UV坐标
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }`,
+                fragmentShader: `
+                varying vec2 vUv;
+                void main() {
+                    // 渐变效果：沿着圆环从浅蓝色到深蓝色
+                    vec3 startColor = vec3(0.678, 0.847, 1.0);  // 浅蓝色
+                    vec3 endColor = vec3(0.0, 0.0, 0.545);    // 深蓝色
+                    vec3 color = mix(startColor, endColor, vUv.x);  // 根据UV坐标进行渐变
+
+                    gl_FragColor = vec4(color, 1.0);  // 设定最终颜色
+                }`,
+                transparent: true,
+                side: THREE.DoubleSide,  // 两面可见
+            });
+
+            // 创建圆环并应用自定义材质
+            const ring = new THREE.LineLoop(geometry, material);  // 创建圆环线条
+            ring.rotation.x = Math.PI / 2;  // 确保圆环是水平放置的
+            ring.position.set(0, 0, 0);  // 设置圆环位置
+
+            rings.add(ring);  // 将圆环添加到组中
+        }
+
+        scene.add(rings);  // 将所有圆环添加到场景中
+
+        const redSpaceships: THREE.Object3D[] = [];
+        const blueSpaceships: THREE.Object3D[] = [];
+
+        for (let i = 0; i < 3; i++) {
+            createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2).then((spaceship) => {
+                redSpaceships.push(spaceship);
+            });
+        }
+
+        for (let i = 0; i < 4; i++) {
+            createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
+                blueSpaceships.push(spaceship);
+            });
+        }
+
         // ---------- 动画 ----------
+        const clock = new THREE.Clock();
         const animate = () => {
             requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            (flameMaterial.uniforms['time']).value = time;
 
-            // 顶点颜色径向渐变
-            for (let i = 0; i < geometry.attributes.position.count; i++) {
-                const x = geometry.attributes.position.getX(i);
-                const z = geometry.attributes.position.getZ(i);
-                const distance = Math.sqrt(x * x + z * z);
-                const maxR = gridSize / 2;
-                const t = THREE.MathUtils.clamp(1 - distance / maxR, 0, 1);
-
-                const hue = 0.65 - 0.25 * t;
-                const saturation = 0.8;
-                let lightness = 0.15 + 0.5 * t;
-
-                const deepFactor = 0.3;
-                lightness = Math.max(0, lightness - deepFactor);
-
-                const color = new THREE.Color().setHSL(hue, saturation, lightness);
-
-                colors[i * 3] = color.r;
-                colors[i * 3 + 1] = color.g;
-                colors[i * 3 + 2] = color.b;
+            // 火焰球面微小变形
+            const pos = flameGeometry.attributes.position as THREE.BufferAttribute;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const y = pos.getY(i);
+                const z = pos.getZ(i);
+                const len = Math.sqrt(x * x + y * y + z * z);
+                const nx = x / len;
+                const ny = y / len;
+                const nz = z / len;
+                const offset = Math.sin(time * 3 + i * 0.1) * 2.0;
+                pos.setXYZ(i, nx * (sunRadius * 1.2 + offset), ny * (sunRadius * 1.2 + offset), nz * (sunRadius * 1.2 + offset));
             }
-            geometry.attributes.color.needsUpdate = true;
+            pos.needsUpdate = true;
 
-            // 粒子漂浮
-            const posAttr = points.geometry.attributes.position as THREE.BufferAttribute;
-            const velAttr = points.geometry.attributes.velocity as THREE.BufferAttribute;
-            for (let i = 0; i < pointCount; i++) {
-                let y = posAttr.getY(i) + velAttr.getY(i);
-                if (y > 200) y = 10;
-                posAttr.setY(i, y);
-            }
-            posAttr.needsUpdate = true;
+            // 动态云层效果：微小的漂浮，模拟自然运动
+            cloud.rotation.y += 0.001;
 
-            update();
+            rings.rotation.y += 0.01;  // 让所有圆环沿y轴旋转
+
             controls.update();
             renderer.render(scene, camera);
         };
@@ -395,14 +280,16 @@ export default function ThreeDimensional(){
 
         return () => {
             renderer.dispose();
-            // containerRef.current?.removeChild(renderer.domElement);
+            if (containerRef.current?.contains(renderer.domElement)) {
+                containerRef.current.removeChild(renderer.domElement);
+            }
         };
     }, []);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
-            <Team {...blueTeamState} />
-            <Team {...redTeamState} />
+            <FictionTeam {...blueTeamState} />
+            <FictionTeam {...redTeamState} />
             <div className="relative w-full"
                     style={{
                         height: 'calc(100% - 60px)',
