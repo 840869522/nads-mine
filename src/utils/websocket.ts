@@ -150,4 +150,4 @@ class WSClient {
 }
 
 // 全局单例
-export const websocketClient = new WSClient("ws://127.0.0.1:8080");
+export const websocketClient = new WSClient("ws://10.12.0.102:8080");
