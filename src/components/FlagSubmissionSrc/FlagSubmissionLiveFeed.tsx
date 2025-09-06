@@ -14,6 +14,8 @@ import FlagIcon from '@mui/icons-material/Flag';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useAuth } from '@/hooks/useAuth'; // 假设你有一个useAuth hook来获取token
+import { websocketClient } from '@/utils/websocket';
+import { getCookie } from '@/utils/cookie.tsx';
 
 interface SubmissionMessage {
     submission_id: string;
@@ -26,64 +28,42 @@ interface SubmissionMessage {
     c_vm_instance_id?: string;
 }
 
-const WS_URL = 'ws://your-workerman-server-ip:8080'; // 替换为你的Workerman服务器IP
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'; // 环境变量配置
 
 const FlagSubmissionLiveFeed: React.FC = () => {
     const [messages, setMessages] = useState<SubmissionMessage[]>([]);
-    const { token } = useAuth(); // 从你的认证上下文中获取token
+    const { user } = useAuth(); // 从认证上下文中获取用户信息
 
     useEffect(() => {
-        // 确保有token和URL才建立连接
-        if (!token || !WS_URL) {
-            console.warn('WebSocket URL or JWT token is missing. Live feed will not connect.');
+        // 从 cookie 中获取 token
+        const token = getCookie('_auth');
+        
+        if (!token || !user) {
+            console.warn('JWT token or user info is missing. Live feed will not connect.');
             return;
         }
 
-        const ws = new WebSocket(WS_URL);
-
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            // 在连接打开时，发送认证信息和订阅消息
-            const authMessage = JSON.stringify({
-                action: 'auth',
-                token: token,
-            });
-            ws.send(authMessage);
-
-            // 如果Workerman需要显式订阅，可以在这里发送订阅消息
-            // const subscribeMessage = JSON.stringify({
-            //   action: 'subscribe',
-            //   channel: 'flag-submissions',
-            // });
-            // ws.send(subscribeMessage);
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'flag_submission') {
-                    setMessages((prevMessages) => [data, ...prevMessages].slice(0, 10)); // 只保留最新的10条消息
-                }
-            } catch (e) {
-                console.error('Failed to parse WebSocket message:', e);
+        // 设置token并连接
+        websocketClient.setToken(token);
+        
+        // 消息处理函数
+        const handleMessage = (data: any) => {
+            if (data.type === 'flag_submission') {
+                setMessages((prevMessages) => [data, ...prevMessages].slice(0, 10));
             }
         };
+        
+        // 注册消息处理器
+        websocketClient.onMessage(handleMessage);
+        
+        // 连接WebSocket
+        websocketClient.connect();
 
-        ws.onclose = () => {
-            console.log('WebSocket disconnected');
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        // 组件卸载时断开连接
+        // 组件卸载时清理
         return () => {
-            if (ws.readyState === 1) {
-                ws.close();
-            }
+            websocketClient.offMessage(handleMessage);
         };
-    }, [token]);
+    }, [user]);
 
     return (
         <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>

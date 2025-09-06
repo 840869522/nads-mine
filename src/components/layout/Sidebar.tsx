@@ -34,6 +34,7 @@ import Cog6ToothIcon from '@heroicons/react/24/outline/Cog6ToothIcon';
 import UserGroupIcon from '@heroicons/react/24/outline/UserGroupIcon';
 import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
 import ArrowLeftEndOnRectangleIcon from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
+import FlagIcon from '@heroicons/react/24/outline/FlagIcon';
 import MenuIcon from '@mui/icons-material/Menu'; // 设置通用图标
 
 
@@ -99,6 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     "QuestionMarkCircleIcon": QuestionMarkCircleIcon,
     "FolderOpenIconHero": FolderOpenIconHero,
     "DocumentTextIcon": DocumentTextIcon,
+    "FlagIcon": FlagIcon,
     "MenuIcon":MenuIcon
   };
 
@@ -205,6 +207,18 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
       <Divider />
       <List component="nav" sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         {renderNavList(filteredNavItems)}
+        {/* 临时添加的Flag历史页面菜单项 */}
+        <ListItemButton
+          component={Link}
+          href="/flag-history"
+          selected={pathname === "/flag-history"}
+          sx={{ pl: 2 }}
+        >
+          <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>
+            <FlagIcon style={{ height: 20, width: 20, color: 'currentColor' }} />
+          </ListItemIcon>
+          <ListItemText primary="Flag提交历史" />
+        </ListItemButton>
       </List>
       <Divider />
       <Box sx={{ p: 2 }}>
