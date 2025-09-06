@@ -159,7 +159,11 @@ class DrillController extends Controller
 
         try {
             $sceneInstance = SceneInstance::create([
-                'c_config_id' => $scenario->c_config_id, 'c_username' => $userName, 'c_status' => 'CREATING',
+                'c_config_id'     => $scenario->c_config_id,
+                'c_username'      => $userName,
+                'c_status'        => 'CREATING',
+                // 将场景模板 JSON 直接写入实例表的 c_scene_config
+                'c_scene_config'  => $topologyJson,
             ]);
             Log::info("创建场景实例记录成功", ['instance_id' => $sceneInstance->c_scene_instances_id]);
             

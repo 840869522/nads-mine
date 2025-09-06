@@ -22,6 +22,12 @@ class SceneInstance extends Model
         'c_config_id',
         'c_username',
         'c_status',
+        'c_scene_config',
+    ];
+
+    // 最小修改：确保 JSON 可写入/读取
+    protected $casts = [
+        'c_scene_config' => 'array',
     ];
 
     protected static function boot()
