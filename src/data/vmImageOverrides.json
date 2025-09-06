@@ -242,7 +242,5 @@
   "v_att_oracleEp.qcow2": {
     "osType": "win7_1"
   },
-  "v_att_oracleControl.qcow2": {
-    "osType": "win7_1"
-  }
+  "v_att_oracleControl.qcow2": {}
 }
