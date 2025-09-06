@@ -4,31 +4,64 @@ namespace App\Models\scenario;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-// ★ 核心修正：明确引入正确的 Builder 类
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\ad\AdConfig;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
 
 class SceneContainerInstance extends Model
 {
     use HasFactory;
 
+    /**
+     * 手动指定模型关联的数据表名。
+     * @var string
+     */
     protected $table = 'c_scene_container_instances';
-    protected $primaryKey = 'c_container_id';
-    protected $keyType = 'string';
-    public $incrementing = false;
-    public $timestamps = false;
-    protected $fillable = ['c_container_id', 'c_scene_instances_id', 'c_flag', 'c_ip', 'c_container_name'];
 
-    public function sceneInstance(): BelongsTo
+    /**
+     * 手动指定主键。
+     * @var string
+     */
+    protected $primaryKey = 'c_container_id';
+
+    /**
+     * 主键的类型是字符串 (CHAR/VARCHAR)。
+     * @var string
+     */
+    protected $keyType = 'string';
+
+    /**
+     * 主键不是自增整数。
+     * @var bool
+     */
+    public $incrementing = false;
+
+    /**
+     * 指示模型是否自动维护时间戳。
+     * 因为表中没有 created_at 和 updated_at 字段，所以设为 false。
+     * @var bool
+     */
+    public $timestamps = false;
+
+    /**
+     * 可批量赋值的属性。
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'c_container_id',
+        'c_scene_instances_id',
+        'c_flag',
+        'c_ip',
+        'c_container_name', // <-- Added this line
+    ];
+
+    /**
+     * 定义与 SceneInstance 模型的关系 (可选，但推荐)。
+     * 假设 SceneInstance 的主键是 c_scene_instances_id。
+     */
+    public function sceneInstance()
     {
         return $this->belongsTo(SceneInstance::class, 'c_scene_instances_id', 'c_scene_instances_id');
     }
-
     /**
-     * ★ 核心修正：将类型提示从隐式的 Builder 改为明确的 Builder
+     * ★ 新增：权限作用域，与 SceneVmInstance 逻辑完全相同
      */
     public function scopeForCurrentUser(Builder $query, string $sceneInstanceId): Builder
     {
