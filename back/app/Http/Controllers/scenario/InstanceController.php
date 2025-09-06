@@ -37,6 +37,8 @@ class InstanceController extends Controller
                     'username'      => $instance->c_username,
                     'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
                     'status'        => $instance->c_status,
+                    // 新增：直接返回场景实例保存的场景配置 JSON
+                    'c_scene_config'=> $instance->c_scene_config,
                 ];
             });
             return response()->json($data);
