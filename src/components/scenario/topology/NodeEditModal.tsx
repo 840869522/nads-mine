@@ -18,6 +18,7 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
+import SearchableSelect from './SearchableSelect';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 // 确保从 types 文件中导入新增的 IptablesRule 类型
@@ -189,12 +190,21 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
             {/* 容器的高级配置 */}
             {showAdvancedConfig && (
                 <>
-                  <FormControl fullWidth>
-                    <InputLabel id="docker-image-select-label">Docker 镜像</InputLabel>
-                    <Select labelId="docker-image-select-label" value={dockerImage} label="Docker 镜像" onChange={(e) => setDockerImage(e.target.value)} required>
-                      {images.map((img) => (<MenuItem key={img.id} value={`${img.name}:${img.version}`}>{`${img.name}:${img.version}`}</MenuItem>))}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect
+                    label="Docker 镜像"
+                    value={dockerImage}
+                    onChange={setDockerImage}
+                    options={images.map(img => ({
+                      id: img.id,
+                      name: img.name,
+                      version: img.version,
+                      displayName: `${img.name}:${img.version}`
+                    }))}
+                    required
+                    placeholder=""
+                    error={!!_errors.dockerImage}
+                    helperText={_errors.dockerImage}
+                  />
                   <FormControlLabel control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />} label="设置为靶机" />
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
