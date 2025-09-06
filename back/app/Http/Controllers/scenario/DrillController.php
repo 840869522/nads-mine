@@ -283,6 +283,15 @@ class DrillController extends Controller
                         'image_dir'           => $imageDir,
                         'instance_base_dir'   => $instanceBaseDir,
                     ]);
+                } elseif ($osType === 'win2003') {
+                    $this->cliService->createVmWin2003([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName, 
+                        'image'               => $correctImageName,
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
                 } else { // 默认为 ubuntu
                     $this->cliService->createVm([
                         'id'                  => $vmDbId,
