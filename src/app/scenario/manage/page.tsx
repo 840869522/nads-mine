@@ -16,7 +16,8 @@ import {
     Add as AddIcon,
     PeopleAlt as PermissionIcon,
     Visibility as ViewInstancesIcon, // <-- 新增图标
-    FlashOn as QuickCreateIcon // <-- 新增快速创建图标
+    FlashOn as QuickCreateIcon, // <-- 新增快速创建图标
+    Download as ExportIcon // <-- 新增导出图标
 } from '@mui/icons-material';
 import Link from 'next/link'; // <-- 新增导入
 import ScenarioCreateDialog from './ScenarioCreateDialog';
@@ -56,6 +57,7 @@ const ScenarioManagementPage: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
+    const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null); // 新增导出状态
 
 
 
@@ -138,7 +140,7 @@ const ScenarioManagementPage: React.FC = () => {
     // 启动场景
     const handleStartDrill = async (scenario: Scenario) => {
         // 1. 从 useAuth Hook 获取用户名
-        const username = user.user.c_username;
+        const username = (user?.user as any)?.c_username;
 
         if (!username) {
             alert('无法获取当前用户名，请确保您已登录。');
@@ -177,6 +179,49 @@ const ScenarioManagementPage: React.FC = () => {
             alert(`启动失败: ${err.message}`);
         } finally {
             setStartingScenarioId(null); // 3. 结束加载状态
+        }
+    };
+
+    // 导出场景到预置场景文件
+    const handleExportScenario = async (scenario: Scenario) => {
+        if (!window.confirm(`您确定要将场景 "${scenario.name}" 导出为预置场景吗？`)) {
+            return;
+        }
+
+        setExportingScenarioId(scenario.id);
+        setError(null);
+
+        try {
+            // 获取场景的拓扑数据
+            const topologyData = scenario.topology_json;
+            
+            if (!topologyData) {
+                throw new Error('场景拓扑数据为空，无法导出');
+            }
+
+            // 调用 Next.js API 路由将场景保存为预置场景文件
+            const response = await fetch(`/api/scenarios/${scenario.id}/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ topologyData }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || '导出失败');
+            }
+
+            alert(`场景 "${scenario.name}" 已成功导出为预置场景文件！\n\n文件已保存到：src/app/scenario/manage/scene/${result.file_name}`);
+
+        } catch (err: any) {
+            setError(err.message || '导出失败');
+            alert(`导出失败: ${err.message}`);
+        } finally {
+            setExportingScenarioId(null);
         }
     };
 
@@ -301,6 +346,18 @@ const ScenarioManagementPage: React.FC = () => {
                                                 </IconButton>
                                             </Tooltip>
                                             {/* --- MODIFICATION END --- */}
+                                            <Tooltip title="导出到预置场景">
+                                                <span>
+                                                    <IconButton
+                                                        color="secondary"
+                                                        size="small"
+                                                        onClick={() => handleExportScenario(scenario)}
+                                                        disabled={exportingScenarioId === scenario.id}
+                                                    >
+                                                        {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
                                             <Tooltip title="启动演练">
                                                 {/* 3. 更新按钮，根据状态显示加载动画或图标 */}
                                                 <span>

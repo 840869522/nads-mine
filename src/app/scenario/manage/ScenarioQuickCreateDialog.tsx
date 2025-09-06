@@ -22,19 +22,11 @@ import TopologyEditor from '@/components/scenario/topology/TopologyEditor';
 import { TopologyData } from '@/types'; // 确保类型路径正确
 import { customFetch } from '@/utils/fetch';
 
-// 1. 直接从 manage/scene 文件夹导入预定义的场景JSON文件
-import scene1Data from './scene/1.json';
-import scene2Data from './scene/2.json';
-
-// 2. 直接使用文件名作为模板
-const sceneTemplates = [
-    {
-        topology_json: scene1Data as TopologyData,
-    },
-    {
-        topology_json: scene2Data as TopologyData,
-    },
-];
+// 预置场景模板接口
+interface SceneTemplate {
+    fileName: string;
+    topology_json: TopologyData;
+}
 
 
 interface ScenarioQuickCreateDialogProps {
@@ -51,22 +43,51 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
     // 新增状态：控制是否显示拓扑编辑器
     const [showTopologyEditor, setShowTopologyEditor] = useState(false);
+    // 新增状态：存储从API获取的预置场景模板
+    const [sceneTemplates, setSceneTemplates] = useState<SceneTemplate[]>([]);
 
-    // 当弹窗打开时，默认选择第一个模板，并重置拓扑编辑器状态
+    // 加载预置场景模板
+    const loadSceneTemplates = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/scene-templates');
+            if (!response.ok) {
+                throw new Error('加载预置场景模板失败');
+            }
+            const templates = await response.json();
+            setSceneTemplates(templates);
+        } catch (err: any) {
+            setError(err.message || '加载预置场景模板失败');
+            setSceneTemplates([]);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // 当弹窗打开时，加载预置场景模板
     useEffect(() => {
-        if (open && sceneTemplates.length > 0) {
-            setSelectedTemplateId('0');
+        if (open) {
+            loadSceneTemplates();
             setShowTopologyEditor(false); // 重置为选择界面
-        } else if (!open) {
+        } else {
             // 关闭时重置状态
             setSelectedTemplateId('');
             setIsSaving(false);
             setError(null);
             setShowTopologyEditor(false);
         }
-    }, [open]);
+    }, [open, loadSceneTemplates]);
+
+    // 当模板加载完成后，默认选择第一个
+    useEffect(() => {
+        if (sceneTemplates.length > 0 && !selectedTemplateId) {
+            setSelectedTemplateId('0');
+        }
+    }, [sceneTemplates, selectedTemplateId]);
 
     // 根据索引查找当前选中的模板对象
     const selectedTemplate = sceneTemplates[parseInt(selectedTemplateId) || 0];
@@ -98,9 +119,9 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: selectedTemplateId === '0' ? '1.json' : '2.json',
+                    name: selectedTemplate?.fileName || '预置场景',
                     description: '快速创建的预设场景',
-                    topology: selectedTemplate.topology_json,
+                    topology: selectedTemplate?.topology_json,
                 }),
             });
 
@@ -133,7 +154,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
             <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FlashOn color="secondary" />
-                    {showTopologyEditor ? `预览场景：${selectedTemplateId === '0' ? '1.json' : '2.json'}` : '快速创建场景'}
+                    {showTopologyEditor ? `预览场景：${selectedTemplate?.fileName || '未知'}` : '快速创建场景'}
                 </Box>
                 <IconButton aria-label="close" onClick={onClose} disabled={isSaving}>
                     <CloseIcon />
@@ -147,38 +168,50 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                             <Typography variant="h6" gutterBottom>
                                 选择场景模板
                             </Typography>
-                            <TextField
-                                select
-                                fullWidth
-                                label="场景模板"
-                                value={selectedTemplateId}
-                                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                variant="outlined"
-                                size="small"
-                                disabled={sceneTemplates.length === 0}
-                                sx={{ mb: 2 }}
-                            >
-                                {sceneTemplates.map((template, index) => (
-                                    <MenuItem key={index} value={index}>
-                                        <Typography variant="subtitle1">
-                                            {index === 0 ? '1.json' : '2.json'}
+                            
+                            {isLoading ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+                                    <CircularProgress />
+                                    <Typography variant="body2" sx={{ ml: 2 }}>
+                                        加载预置场景模板中...
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                <>
+                                    <TextField
+                                        select
+                                        fullWidth
+                                        label="场景模板"
+                                        value={selectedTemplateId}
+                                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                        variant="outlined"
+                                        size="small"
+                                        disabled={sceneTemplates.length === 0}
+                                        sx={{ mb: 2 }}
+                                    >
+                                        {sceneTemplates.map((template, index) => (
+                                            <MenuItem key={index} value={index}>
+                                                <Typography variant="subtitle1">
+                                                    {template.fileName}
+                                                </Typography>
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                    
+                                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                                    
+                                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                                        <Typography variant="h6" gutterBottom>
+                                            {selectedTemplate?.fileName || '请选择模板'}
                                         </Typography>
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            
-                            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                            
-                            <Box sx={{ textAlign: 'center', py: 2 }}>
-                                <Typography variant="h6" gutterBottom>
-                                    {selectedTemplateId === '0' ? '1.json' : '2.json'}
-                                </Typography>
-                            </Box>
+                                    </Box>
+                                </>
+                            )}
                         </Box>
                         
                         <Box sx={{ flexGrow: 1, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Typography variant="body2" color="text.secondary">
-                                点击确认按钮进入拓扑预览界面
+                                {isLoading ? '正在加载预置场景模板...' : '点击确认按钮进入拓扑预览界面'}
                             </Typography>
                         </Box>
                     </>
@@ -197,9 +230,9 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                                     // 包装成符合Scenario接口的对象
                                     initialData={{
                                         id: selectedTemplateId,
-                                        name: selectedTemplateId === '0' ? '1.json' : '2.json',
+                                        name: selectedTemplate?.fileName || '预置场景',
                                         description: '快速创建的预设场景',
-                                        topology_json: selectedTemplate.topology_json
+                                        topology_json: selectedTemplate?.topology_json
                                     }}
                                     // 模板在快速创建时是只读的，不可编辑
                                     onAddNode={doNothing}
