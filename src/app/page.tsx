@@ -21,7 +21,7 @@ const DashboardPage: React.FC = () => {
   const features = [
       {
           name: '基础支撑分系统',
-          description: '管理用户角色、权限分配、系统级镜像和全局配置。',
+          description: '进行互动测验，获取AI反馈，并管理相关题库。',
           path: '/admin/users',
           icon: ServerStackIcon,
           color: 'text-yellow-500',
@@ -42,7 +42,7 @@ const DashboardPage: React.FC = () => {
     },
       {
           name: '人员测试分系统',
-          description: '进行互动测验，获取AI反馈，并管理相关题库。',
+          description: '管理用户角色、权限分配、系统级镜像和全局配置。',
           path: '/learn/quiz',
           icon: AcademicCapIcon,
           color: 'text-blue-500',

@@ -49,39 +49,35 @@ class InstanceController extends Controller
     public function show(SceneInstance $instance)
     {
         try {
-            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
+            $containersFromDb = $instance->containers()
+                ->forCurrentUser($instance->c_scene_instances_id)
+                ->get();
             $runningInstances = [];
-            foreach ($instance->containers as $containerInstance) {
+            $instance->loadMissing('sceneConfig');
+            foreach ($containersFromDb as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
                 try {
                     $details = $this->docker->containerInspect($containerId);
                     $stats = $this->docker->containerStats($containerId);
                     $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
                     $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
-                    $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
+                    $cpus = $stats->cpu_stats->online_cpus ?? 1;
                     $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
                     $memUsage = $stats->memory_stats->usage ?? 0;
                     $memLimit = $stats->memory_stats->limit ?? 0;
-
                     $ports = [];
-                    foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
-                        foreach ($bindingList ?? [] as $b) {
-                            $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
-                        }
+                    if ($details->getHostConfig()) {
+                        foreach ($details->getHostConfig()->getPortBindings() ?? [] as $k => $v) { /* ... */ }
                     }
-
                     $runningInstances[] = [
-                        'id' => $details->getId(),
-                        'name' => ltrim($details->getName() ?? '', '/'),
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
+                        'id' => $details->getId(), 'name' => ltrim($details->getName() ?? '', '/'),
+                        'type' => 'container', 'ipAddress' => $containerInstance->c_ip,
                         'scene_instance_id' => $containerInstance->c_scene_instances_id,
                         'scene_name' => $instance->sceneConfig->c_name ?? null,
                         'status' => $this->mapStatus($details->getState()->getStatus()),
-                        'ports' => implode(', ', $ports),
-                        'imageName' => $details->getConfig()->getImage(),
+                        'ports' => implode(', ', $ports), 'imageName' => $details->getConfig()->getImage(),
                         'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
-                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
+                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage/1048576, $memLimit/1048576),
                         'uptime' => $details->getState()->getStartedAt(),
                         'createdAt' => $details->getCreated(),
                         'is_target' => !empty($containerInstance->c_flag),
