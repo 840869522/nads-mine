@@ -18,7 +18,7 @@ class CoursePermissionModel
     {
         try {
             $users = DB::table('c_users')
-                ->select('c_username')
+                ->select('c_username', 'c_name')
                 ->get()
                 ->toArray();
 
@@ -137,13 +137,18 @@ class CoursePermissionModel
                 ->delete();
 
             if (!empty($userIds)) {
-                $insertData = array_map(function ($userId) use ($courseId) {
-                    return [
-                        'c_course_id' => $courseId,
-                        'c_username' => $userId,
-                    ];
-                }, $userIds);
+                $userNames = DB::table('c_users')
+                ->whereIn('c_username', $userIds)
+                ->pluck('c_name', 'c_username')
+                ->toArray();
 
+$insertData = array_map(function ($userId) use ($courseId, $userNames) {
+    return [
+        'c_course_id' => $courseId,
+        'c_username' => $userId,
+        'c_name' => $userNames[$userId] ?? '',
+    ];
+}, $userIds);
                 DB::table(self::COURSES_USERS_TABLE)->insert($insertData);
             }
 
@@ -203,11 +208,12 @@ class CoursePermissionModel
             }
 
             DB::beginTransaction();
-            $result = DB::insert(
-                'INSERT INTO ' . self::COURSES_USERS_TABLE . ' (c_username, c_course_id) VALUES (?, ?)',
-                [$userId, $courseId]
-            );
+            $userName = DB::table('c_users')->where('c_username', $userId)->value('c_name');
 
+$result = DB::insert(
+    'INSERT INTO ' . self::COURSES_USERS_TABLE . ' (c_username, c_course_id, c_name) VALUES (?, ?, ?)',
+    [$userId, $courseId, $userName ?? '']
+);
             if ($result) {
                 DB::commit();
                 return [

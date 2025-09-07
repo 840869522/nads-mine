@@ -18,41 +18,41 @@ class TestsModel extends Model{
     public $pageSize = 20;
 
 
-    /**
-     * Notes:添加测试
-     * User: zhangnan
-     * DateTime: 2025/7/11 13:41
-     * @param $c_name
-     * @param $c_description
-     * @param $c_paper_count
-     * @param $c_start
-     * @param $c_end
-     * @param $c_course_id
-     * @return bool
-     */
-    public function create_test_info($c_name="",$c_test_type="",$c_type="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
-    {
-        $mod = new TestsModel();
-        $mod->c_id = Str::uuid()->toString();;
-        $mod->c_name = $c_name;
-        $mod->c_test_type = $c_test_type;
-        $mod->c_type = $c_type;
-        $mod->c_description = $c_description;
-        $mod->c_paper_count = $c_paper_count;
-        $mod->c_start = $c_start;
-        $mod->c_end = $c_end;
-        $mod->c_course_id = $c_course_id;
-        try{
-            $res = $mod->save();
-            if(!$res){
-                return false;
-            }
-            return true;
-        }catch(\Exception $e){
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+    // 修改添加测试的模型方法，添加时长参数并保存
+public function create_test_info(
+    $c_name="",
+    $c_test_type="",
+    $c_type="",
+    $c_description="",
+    $c_paper_count=0,
+    $c_start="",
+    $c_end="",
+    $c_course_id="",
+    $c_duration=0 // 新增：添加时长参数
+) {
+    $mod = new TestsModel();
+    $mod->c_id = Str::uuid()->toString();
+    $mod->c_name = $c_name;
+    $mod->c_test_type = $c_test_type;
+    $mod->c_type = $c_type;
+    $mod->c_description = $c_description;
+    $mod->c_paper_count = $c_paper_count;
+    $mod->c_start = $c_start;
+    $mod->c_end = $c_end;
+    $mod->c_course_id = $c_course_id;
+    $mod->c_duration = $c_duration; // 新增：保存时长到数据库
+    
+    try{
+        $res = $mod->save();
+        if(!$res){
             return false;
         }
+        return true;
+    }catch(\Exception $e){
+        DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','test_log');
+        return false;
     }
+}
 
 /**
  * Notes:修改测试
@@ -69,16 +69,28 @@ class TestsModel extends Model{
  * @param $c_course_id
  * @return bool
  */
-public function update_test_info($info="",$c_name="",$c_test_type="",$c_type="",$c_description="",$c_paper_count=0,$c_start="",$c_end="",$c_course_id="")
-{
+public function update_test_info(
+    $info="",
+    $c_name="",
+    $c_test_type="",
+    $c_type="",
+    $c_description="",
+    $c_paper_count=0,
+    $c_start="",
+    $c_end="",
+    $c_course_id="",
+    $c_duration=0 // 新增：测试时长参数
+) {
     $info->c_name = $c_name;
-    $info->c_test_type = $c_test_type; // 修复：用$info而非未定义的$mod
-    $info->c_type = $c_type; // 修复：用$info而非未定义的$mod
+    $info->c_test_type = $c_test_type;
+    $info->c_type = $c_type;
     $info->c_description = $c_description;
     $info->c_paper_count = $c_paper_count;
     $info->c_start = $c_start;
     $info->c_end = $c_end;
     $info->c_course_id = $c_course_id;
+    $info->c_duration = $c_duration; // 新增：更新测试时长
+    
     try{
         $res = $info->save();
         if(!$res){

@@ -25,6 +25,8 @@
     use App\Http\Controllers\Experiment\ExperimentResourceController;
     use App\Http\Controllers\Course\CoursePermissionController;
     use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
+use App\Http\Controllers\Test1\TestControllerNew;
+
 /*
     |--------------------------------------------------------------------------
     | API Routes
@@ -49,6 +51,7 @@
  * 较为特殊的路由
  */
 Route::prefix("")->group(function () {
+    Route::post("/support/user/test",[UserController::class, "test"]);
     Route::post("support/user/login", [UserController::class, "login"]);
     Route::post("/support/permission/all_menu", [PermissionController::class, "getSystemAllMenu"]);
     Route::post("/support/permission/all_permission", [PermissionController::class, "getSystemAllPermission"]);
@@ -180,6 +183,7 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
+    Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
 });
 
 Route::prefix('images')->group(function () {
@@ -245,6 +249,10 @@ Route::prefix('study')->group(function () {
         Route::get('/getAllUsers', [TestController::class, 'getAllUsers']);
         Route::post('/batchStoreTestUsers', [TestController::class, 'batchStoreTestUsers']);
         Route::post('/destroy', [TestController::class, 'destroy']);
+        Route::get('/getUserRelatedTests', [TestController::class, 'getUserRelatedTests']);
+        Route::post('/getTestUserRelation', [TestController::class, 'getTestUserRelation']);
+        Route::post('/get_exam_paper_details', [TestController::class, 'get_exam_paper_details']);
+        Route::post('/getAllStudentsObjectiveScore', [TestController::class, 'getAllStudentsObjectiveScore']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
         Route::delete('/paper_rules_del', [TestController::class, 'paper_rules_del']);
@@ -270,6 +278,7 @@ Route::prefix('study')->group(function () {
         Route::get('/', [TeamController::class, 'index']); // TeamController.index
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{team}', [TeamController::class, 'show']);
+        Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
         Route::put('/{team}', [TeamController::class, 'update']);
         Route::delete('/{team}', [TeamController::class, 'destroy']);
     });
@@ -299,16 +308,19 @@ Route::prefix('ad')->group(function () {
 Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
-    
+
     // 历史记录查询接口
     Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
-    
-    
+
+
     // 获取场景实例列表接口
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
-    
-    // 获取靶机实例列表接口  
+
+    // 获取靶机实例列表接口
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
+
+    // 临时调试接口
+    //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
 /**
  * 定义安全实验分系统路由
