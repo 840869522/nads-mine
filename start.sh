@@ -151,7 +151,7 @@ start_services() {
             command="cd $FRONTEND_DIR && npm run build && npm start >> $FRONTEND_LOG"
         fi
         log_file="$FRONTEND_LOG"
-    elif ["$service_name" = "Python"]; then
+    elif [ "$service_name" = "Python" ]; then
         session_name="$SESSION_PYTHON"
         command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
          log_file="$CHAT_LOG"
@@ -260,7 +260,7 @@ if [ "$command_choice" = "start" ]; then
         start_services "NODE"
     fi
 
-    if ["$PYTHON_NEW" ="true"]; then
+    if [ "$PYTHON_NEW" = "true" ]; then
         start_services "Python"
     fi
 
