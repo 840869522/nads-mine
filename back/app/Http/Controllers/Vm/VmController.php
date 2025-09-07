@@ -28,7 +28,13 @@ class VmController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     /**
-     * ★ 替换：此方法的内部实现被完全替换，以解决 SQL Collation (字符集排序规则) 错误
+     * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
+     */
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
+     */
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以解决 SQL ambiguous column 错误
      */
     public function listVmsBySceneInstance(string $instance_id)
     {
@@ -44,22 +50,15 @@ class VmController extends Controller
         }
 
         try {
-            // ★★★★★ 核心修正点：使用闭包和 DB::raw() 解决 Collation 冲突 ★★★★★
+            // ★★★★★ 核心修正点 ★★★★★
+            // 在 where 子句中明确指定表名 'c_scene_vm_instances.c_scene_instances_id'
             $vmDetailsFromDb = SceneVmInstance::where('c_scene_vm_instances.c_scene_instances_id', $instance_id)
                 ->forCurrentUser($instance_id)
-                ->leftJoin('c_scene_instances as si', function ($join) {
-                    // 在 JOIN 的 ON 子句中，强制将两个比较字段的排序规则统一为 utf8mb4_unicode_ci
-                    $join->on(
-                        DB::raw('c_scene_vm_instances.c_scene_instances_id COLLATE utf8mb4_unicode_ci'),
-                        '=',
-                        DB::raw('si.c_scene_instances_id COLLATE utf8mb4_unicode_ci')
-                    );
-                })
+                ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select('c_scene_vm_instances.*', 'sc.c_name as scene_name')
                 ->get()->keyBy('c_vm_name');
-            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
+            // ★★★★★★★★★★★★★★★★★★★
         } catch (\Throwable $e) {
             Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
             return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
