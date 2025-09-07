@@ -15,6 +15,7 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
+import SearchableSelect from './SearchableSelect';
 import { TopologyNode, NodeConfig } from '../../../types';
 
 // 假设 VMImage 类型
@@ -106,23 +107,21 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
             />
             <TextField label="设备类型/名称" value={node.config.deviceName} fullWidth disabled />
 
-            {/* 虚拟机镜像下拉菜单 */}
-            <FormControl fullWidth required error={!!_errors.baseImage}>
-              <InputLabel id="vm-image-select-label">基础镜像</InputLabel>
-              <Select
-                labelId="vm-image-select-label"
-                value={baseImage}
-                label="基础镜像"
-                onChange={(e) => setBaseImage(e.target.value)}
-              >
-                {images.map((img) => (
-                  <MenuItem key={img.id || img.name} value={img.name}>
-                    {img.name}
-                  </MenuItem>
-                ))}
-              </Select>
-              {_errors.baseImage && <p className="text-red-500 text-xs mt-1">{_errors.baseImage}</p>}
-            </FormControl>
+            {/* 虚拟机镜像选择 */}
+            <SearchableSelect
+              label="基础镜像"
+              value={baseImage}
+              onChange={setBaseImage}
+              options={images.map(img => ({
+                id: img.id || img.name,
+                name: img.name,
+                displayName: img.name
+              }))}
+              required
+              placeholder=""
+              error={!!_errors.baseImage}
+              helperText={_errors.baseImage}
+            />
 
             {/* 是否为靶机选项 */}
             <FormControlLabel

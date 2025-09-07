@@ -452,7 +452,7 @@ XML;
         }
         
         // d. 设置网络模式为 none，这是后续手动连接的关键
-        $command[] = '--network=none';
+        // $command[] = '--network=none';
 
         // e. 添加镜像名称（必须是命令的最后一部分）
         if (empty($options['image'])) {
@@ -524,6 +524,86 @@ XML;
         $output = trim($process->getOutput());
         return empty($output) ? [] : explode("\n", $output);
     }
+    public function createVmWin7(array $options): void
+{
+    // 指向新的 win7 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win7.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['ip'],
+        $options['scene_instance_id'],
+        $options['flag'] ?? 'NULL',
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'], 
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
+
+    public function createVmWin7_1(array $options): void
+{
+    // 指向新的 win7_1 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win7_1.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script (win7_1): ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script (win7_1) for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
+
+    public function createVmWin2003(array $options): void
+{
+    // 指向新的 win2003 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win_2003.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script (win2003): ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script (win2003) for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
 }
 
 // // ```json

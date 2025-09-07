@@ -39,10 +39,12 @@ import {
     ViewColumn as ViewColumnIcon,
     Refresh as RefreshIcon,
     Flag as FlagIcon,
+    Article as ArticleIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import { v4 as uuidv4 } from 'uuid';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -218,6 +220,21 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }
     };
 
+    const handleOpenLogs = React.useCallback((vm: VmInstance) => {
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
+    }, []);
+
     const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
@@ -247,7 +264,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 200,
+                width: 240,
                 renderCell: (params) => {
                     const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
@@ -277,13 +294,20 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                     </span>
                                 </Tooltip>
                             )}
+                            <Tooltip title="日志">
+                                <span>
+                                    <IconButton onClick={() => handleOpenLogs(vm)} size="small">
+                                        <ArticleIcon fontSize="small" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
                             <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
                         </Box>
                     );
                 },
             },
         ],
-        [actionLoading, showColumns]
+        [actionLoading, showColumns, handleOpenLogs]
     );
 
     const filteredRows = React.useMemo(() => {

@@ -96,11 +96,11 @@
     "description": "SMB远程溢出植入病毒攻击镜像"
   },
   "v_tar_fingerprint_win.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "主机指纹探测靶机镜像"
   },
   "v_tar_smbPasswd.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "SMB口令探测靶机镜像"
   },
   "v_att_oracleCommandAttack.qcow2": {
@@ -116,7 +116,7 @@
     "description": "UDP泛洪攻击攻击镜像"
   },
   "v_tar_RDPblueScreen.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "RDP远程溢出蓝屏攻击靶机镜像"
   },
   "v_tar_oracleRemote.qcow2": {
@@ -144,11 +144,11 @@
     "description": "TCP泛洪攻击攻击镜像"
   },
   "v_tar_windowsRemote.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "Windows远程溢出漏洞探测靶机镜像"
   },
   "v_tar_windowsControl.qcow2": {
-    "osType": "Windows",
+    "osType": "win7",
     "description": "Windows系统账号控制靶机镜像"
   },
   "ICMP泛洪攻击.qcow2": {
@@ -238,5 +238,58 @@
   "v_att_oracleImplant.qcow2": {
     "osType": "Linux",
     "description": "Oracle命令执行植入病毒攻击镜像"
+  },
+  "v_att_oracleEp.qcow2": {
+    "osType": "win7_1",
+    "description": "Oracle系统提权攻击镜像"
+  },
+  "v_att_oracleControl.qcow2": {},
+  "v_tar_RDP.qcow2": {
+    "osType": "win7",
+    "description": "Windows远程溢出漏洞探测靶机镜像"
+  },
+  "v_att_RDP.qcow2": {
+    "osType": "win7",
+    "description": "WindowsRDP远程溢出漏洞探测攻击镜像"
+  },
+  "v_tar_RDPremote.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出远控靶机镜像"
+  },
+  "v_att_RDPremote.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出远控攻击镜像"
+  },
+  "v_att_RDPimplant.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出植入病毒攻击镜像"
+  },
+  "v_tar_localImplant.qcow2": {
+    "osType": "Linux",
+    "description": "本地提权植入病毒靶机镜像\n"
+  },
+  "v_tar_oracleEp.qcow2": {
+    "osType": "win2003",
+    "description": "Oracle系统提权靶机镜像"
+  },
+  "v_tar_RDPimplant.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出植入病毒靶机镜像"
+  },
+  "v_att_RDPAttack.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出漏洞攻击攻击镜像"
+  },
+  "v_att_webSecurity.qcow2": {
+    "osType": "Linux",
+    "description": "Web安全测试攻击镜像"
+  },
+  "v_tar_webSecurity.qcow2": {
+    "osType": "Linux",
+    "description": "Web安全测试攻击镜像"
+  },
+  "v_tar_RDPAttack.qcow2": {
+    "osType": "win7",
+    "description": "RDP远程溢出漏洞攻击靶机镜像"
   }
 }

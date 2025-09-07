@@ -263,6 +263,9 @@ class TestController extends Controller
             $validatedData = $request->validate($validated_data, $validated_msg);
             $QuestionsOptionsMod = new QuestionsOptionsModel();
             foreach($questions as $k=>$v){
+                $answer = explode(';',$v['answer']);
+                $dx_zong_cnt = count($answer);
+                $dx_cnt = 0;
                 if(in_array($v['type'],[1,2])){
                     if(!isset($v['options'])){
                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项不能为空");
@@ -280,8 +283,6 @@ class TestController extends Controller
                                 $verify_answer=1;
                             }
                         }else{
-                            $answer = explode(';',$v['answer']);
-                            $dx_zong_cnt = count($answer);
                             if(in_array($v1['c_content'],$answer)){
                                 if(!isset($dx_cnt)){
                                     $dx_cnt=0;

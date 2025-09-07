@@ -8,7 +8,7 @@ export const defaultPermissions = [
   { key: 'SCENARIO_ENVIRONMENTS_CONFIG', label: '配置环境 (拓扑)', category: '环境构建分系统' },
   { key: 'SCENARIO_IMAGES_MANAGE', label: '管理镜像', category: '环境构建分系统' },
   { key: 'SCENARIO_INSTANCES_MANAGE', label: '管理实例', category: '环境构建分系统' },
-  { key: 'DRILL_ACCESS', label: '访问安全演练', category: '安全使用分系统' },
+  { key: 'DRILL_ACCESS', label: '访问安全演练', category: '安全实验分系统' },
   { key: 'ADMIN_USERS_MANAGE', label: '管理用户', category: '基础支撑分系统' },
   { key: 'ADMIN_ROLES_MANAGE', label: '管理角色与权限', category: '基础支撑分系统' },
 ];

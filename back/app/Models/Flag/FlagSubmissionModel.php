@@ -13,7 +13,7 @@ class FlagSubmissionModel extends Model
      *
      * @var string
      */
-    protected $table = 'c_flag_submissions';
+    protected $table = 'c_flag_submission';
 
     /**
      * 与表关联的主键。
@@ -42,6 +42,24 @@ class FlagSubmissionModel extends Model
      * @var bool
      */
     public $timestamps = true;
+
+    /**
+     * 可以批量赋值的属性。
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'c_submission_id',
+        'c_username',
+        'c_scene_instances_id',
+        'c_container_instance_id',
+        'c_vm_instance_id',
+        'c_submitted_flag',
+        'c_is_correct',
+        'c_points_earned',
+        'c_submitted_at',
+        'c_attempt_count'
+    ];
 
     /**
      * 获取提交此 Flag 的容器实例。

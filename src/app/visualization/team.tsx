@@ -74,7 +74,7 @@ function LogInfo(props: {logList: LogInfo[]}){
             bottom-[10px] overflow-y-visible
             relative">
             <div className="text-base mb-2 text-[#7dd3fc] h-[20px] flex items-center gap-[6px]">
-                <FontAwesomeIcon icon={faClipboardList}/> 过程日志
+                <FontAwesomeIcon className="w-4 h-4 text-[#7dd3fc]" icon={faClipboardList}/> 过程日志
             </div>
             <ul className="list-none overflow-y-auto h-[calc(100%-30px)] pr-[5px] mb-2.5 text-white" id="blue-log">
                 {props.logList.slice().reverse().map((logInfo) => (
