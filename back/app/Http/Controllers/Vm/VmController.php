@@ -33,6 +33,9 @@ class VmController extends Controller
     /**
      * ★ 替换：此方法的内部实现被完全替换，以集成权限控制
      */
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以解决 SQL ambiguous column 错误
+     */
     public function listVmsBySceneInstance(string $instance_id)
     {
         try {
@@ -47,12 +50,15 @@ class VmController extends Controller
         }
 
         try {
-            $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
+            // ★★★★★ 核心修正点 ★★★★★
+            // 在 where 子句中明确指定表名 'c_scene_vm_instances.c_scene_instances_id'
+            $vmDetailsFromDb = SceneVmInstance::where('c_scene_vm_instances.c_scene_instances_id', $instance_id)
                 ->forCurrentUser($instance_id)
                 ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select('c_scene_vm_instances.*', 'sc.c_name as scene_name')
                 ->get()->keyBy('c_vm_name');
+            // ★★★★★★★★★★★★★★★★★★★
         } catch (\Throwable $e) {
             Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
             return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);

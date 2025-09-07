@@ -52,8 +52,10 @@ class InstanceController extends Controller
     public function show(SceneInstance $instance)
     {
         try {
-            $containersFromDb = $instance->containers()
-                ->forCurrentUser($instance->c_scene_instances_id)
+            $query = SceneContainerInstance::query();
+            $query->where('c_scene_container_instances.c_scene_instances_id', $instance->c_scene_instances_id);
+
+            $containersFromDb = $query->forCurrentUser($instance->c_scene_instances_id)
                 ->get();
             $runningInstances = [];
             $instance->loadMissing('sceneConfig');
