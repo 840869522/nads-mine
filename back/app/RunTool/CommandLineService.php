@@ -52,6 +52,101 @@ class CommandLineService
             }
         }
     }
+
+    /**
+     * Remove DNAT rules by hostPort from nat table for a scene instance.
+     * It parses `iptables-save -t nat` to reconstruct exact rule specs and deletes them.
+     *
+     * @param array       $rules           Array like [['hostPort'=>8080, 'instanceName'=>'X', 'instancePort'=>80], ...]
+     * @param string|null $sceneInstanceId Optional, used if you maintain per-instance chains in future; for now we always look into PREROUTING.
+     */
+    public function removeIptablesRulesByHostPorts(array $rules, ?string $sceneInstanceId = null): void
+    {
+        // 1) Collect unique host ports from rules
+        $hostPorts = [];
+        foreach ($rules as $r) {
+            $hp = $r['hostPort'] ?? null;
+            if ($hp !== null && $hp !== '') {
+                $hostPorts[(string)$hp] = true;
+            }
+        }
+        if (empty($hostPorts)) {
+            Log::info('[iptables] No hostPorts to remove');
+            return;
+        }
+
+        // 2) Determine chains to inspect: per-instance chain (optional) and PREROUTING as fallback
+        $chains = [];
+        if (!empty($sceneInstanceId)) {
+            $chains[] = $this->getNatChainName($sceneInstanceId);
+        }
+        $chains[] = 'PREROUTING';
+
+        // 3) Dump NAT table and collect matching rules
+        $dumpCmd = ['sudo', 'iptables-save', '-t', 'nat'];
+        $proc = new Process($dumpCmd);
+        $proc->run();
+        if (!$proc->isSuccessful()) {
+            Log::error('[iptables] Failed to run iptables-save for cleanup', ['error' => $proc->getErrorOutput()]);
+            return; // fail-soft
+        }
+
+        $lines = preg_split('/\r?\n/', $proc->getOutput());
+        $toDelete = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || !str_starts_with($line, '-A ')) continue;
+
+            // Example line: -A PREROUTING -p tcp -m tcp --dport 8080 -j DNAT --to-destination 10.100.0.2:80
+            $parts = preg_split('/\s+/', $line);
+            if (count($parts) < 4) continue;
+            $chain = $parts[1] ?? '';
+            if (!in_array($chain, $chains, true)) continue;
+
+            // Quick filters
+            if (strpos($line, '-j DNAT') === false) continue;
+            if (strpos($line, '--dport') === false) continue;
+
+            // Find hostPort in line
+            foreach (array_keys($hostPorts) as $hp) {
+                if (preg_match('/--dport\s+' . preg_quote($hp, '/') . '(\s|$)/', $line)) {
+                    // collect args excluding "-A <CHAIN>"
+                    $args = array_slice($parts, 2);
+                    $toDelete[] = ['chain' => $chain, 'args' => $args, 'raw' => $line];
+                    break;
+                }
+            }
+        }
+
+        // 4) Delete collected rules (dedupe identical specs)
+        $seen = [];
+        foreach ($toDelete as $item) {
+            $key = $item['chain'] . '|' . implode(' ', $item['args']);
+            if (isset($seen[$key])) continue; // avoid double delete
+            $seen[$key] = true;
+
+            $cmd = array_merge(['sudo', 'iptables', '-t', 'nat', '-D', $item['chain']], $item['args']);
+            Log::info('[iptables] Deleting rule: ' . implode(' ', $cmd));
+            $p = new Process($cmd);
+            $p->run();
+            if (!$p->isSuccessful()) {
+                Log::warning('[iptables] Failed to delete rule (may be already gone)', [
+                    'raw' => $item['raw'],
+                    'error' => $p->getErrorOutput(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Build per-scene NAT chain name.
+     */
+    private function getNatChainName(string $sceneInstanceId): string
+    {
+        $clean = preg_replace('/[^A-Za-z0-9]/', '', $sceneInstanceId) ?? '';
+        $suffix = substr($clean, -8) ?: $clean;
+        return 'NADS_' . $suffix;
+    }
      /**
      * 为网桥配置IP地址，并为容器设置默认路由。
      *
