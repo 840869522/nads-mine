@@ -12,7 +12,9 @@ import {
     Visibility as ViewIcon,
     Delete as DeleteIcon,
     Stop as StopIcon, // <-- 修改：导入 Stop 图标
+    Security as SecurityIcon, // iptables 管理入口图标
 } from '@mui/icons-material';
+import Link from 'next/link';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import { customFetch } from '@/utils/fetch';
 
@@ -157,14 +159,25 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 <Typography variant="h4" component="h1" fontWeight="bold">
                     场景实例管理
                 </Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
-                    onClick={handleRefresh}
-                    disabled={isLoading}
-                >
-                    {isLoading ? '加载中...' : '刷新'}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? '加载中...' : '刷新'}
+                    </Button>
+                    <Button
+                        component={Link}
+                        href="/ad/iptables"
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<SecurityIcon />}
+                    >
+                        iptables 管理
+                    </Button>
+                </Box>
             </Box>
 
             <Paper elevation={2}>
