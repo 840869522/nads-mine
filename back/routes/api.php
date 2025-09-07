@@ -176,6 +176,10 @@ Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
 });
 
 Route::prefix('scenariosinstances')->group(function () {
+    // iptables 管理（必须放在通用路由之前）
+    Route::get('/iptables', [IptablesController::class, 'index']);
+    Route::delete('/iptables', [IptablesController::class, 'destroy']);
+    
     Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
     Route::get('/switches', [SwitchController::class, 'index']);
     Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
@@ -185,9 +189,6 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
     Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
-    // iptables 管理（并入到 scenariosinstances 前缀下）
-    Route::get('/iptables', [IptablesController::class, 'index']);
-    Route::delete('/iptables', [IptablesController::class, 'destroy']);
 });
 
 Route::prefix('images')->group(function () {
