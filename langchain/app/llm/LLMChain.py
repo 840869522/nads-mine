@@ -1,5 +1,6 @@
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_ollama import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
@@ -35,9 +36,15 @@ chat_llm = ChatOpenAI(
     api_key=config['chatModel']['api_key'],
 )
 
-embedding_model = OllamaEmbeddings(
+# embedding_model = OllamaEmbeddings(
+#     model=config['embeddingModel']['model'],
+#     base_url=config['embeddingModel']['base_url']
+# )
+
+embedding_model = OpenAIEmbeddings(
     model=config['embeddingModel']['model'],
-    base_url=config['embeddingModel']['base_url']
+    base_url=config['embeddingModel']['base_url'],
+    api_key=config['embeddingModel']['api_key'],
 )
 
 vector_store = QdrantVectorStore(
