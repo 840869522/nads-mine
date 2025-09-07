@@ -165,7 +165,56 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     // --- 修改结束 ---
     const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
     const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [nodeMoveInitialPosition, pushToUndoStack]);
-    const handleNodeSelect = useCallback((nodeId: string | null, event?: React.MouseEvent) => { event?.stopPropagation(); if (!nodeId) { dispatch({ type: 'CLEAR_SELECTION', payload: null }); return; } if (linkingState) { if (linkingState.startNodeId === nodeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); } else { const sourceNode = nodes.find(n => n.id === linkingState.startNodeId); const targetNode = nodes.find(n => n.id === nodeId); if (sourceNode && targetNode) { const edgeExists = edges.some(edge => (edge.source === sourceNode.id && edge.target === targetNode.id) || (edge.source === targetNode.id && edge.target === sourceNode.id)); if (!edgeExists) { const newEdge: TopologyEdge = { id: generateId('edge'), source: sourceNode.id, target: targetNode.id, config: { ...DEFAULT_EDGE_CONFIG, sourceInterface: '',targetInterface: '',sourceIp: '', targetIp: '' } }; const action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: newEdge } }; dispatch(action); pushToUndoStack(action); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } } } else { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } }); dispatch({ type: 'START_LINKING', payload: { startNodeId: nodeId } }); } }, [linkingState, nodes, edges, dispatch, pushToUndoStack]);
+    const canDirectlyLink = useCallback((a: TopologyNode, b: TopologyNode) => {
+        // 至少一端为交换机即可直连
+        return a.type === 'switch' || b.type === 'switch';
+    }, []);
+
+    const handleNodeSelect = useCallback((nodeId: string | null, event?: React.MouseEvent) => {
+        event?.stopPropagation();
+        if (!nodeId) {
+            dispatch({ type: 'CLEAR_SELECTION', payload: null });
+            return;
+        }
+
+        if (linkingState) {
+            if (linkingState.startNodeId === nodeId) {
+                dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } });
+            } else {
+                const sourceNode = nodes.find(n => n.id === linkingState.startNodeId);
+                const targetNode = nodes.find(n => n.id === nodeId);
+                if (sourceNode && targetNode) {
+                    if (!canDirectlyLink(sourceNode, targetNode)) {
+                        return;
+                    }
+
+                    const edgeExists = edges.some(edge =>
+                        (edge.source === sourceNode.id && edge.target === targetNode.id) ||
+                        (edge.source === targetNode.id && edge.target === sourceNode.id)
+                    );
+                    if (!edgeExists) {
+                        const newEdge: TopologyEdge = {
+                            id: generateId('edge'),
+                            source: sourceNode.id,
+                            target: targetNode.id,
+                            config: { ...DEFAULT_EDGE_CONFIG, sourceInterface: '', targetInterface: '', sourceIp: '', targetIp: '' }
+                        };
+                        const action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: newEdge } };
+                        dispatch(action);
+                        pushToUndoStack(action);
+                    } else {
+                        dispatch({ type: 'CLEAR_SELECTION', payload: null });
+                    }
+                } else {
+                    dispatch({ type: 'CLEAR_SELECTION', payload: null });
+                }
+            }
+        } else {
+            // 第一次点击：任意节点可作为起点；后续由 canDirectlyLink 判定目标是否合法
+            dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } });
+            dispatch({ type: 'START_LINKING', payload: { startNodeId: nodeId } });
+        }
+    }, [linkingState, nodes, edges, dispatch, pushToUndoStack, canDirectlyLink]);
     const handleEdgeSelect = useCallback((edgeId: string | null) => { if (edgeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: edgeId, type: 'edge' } } }); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } }, [dispatch]);
     const handleCanvasClick = useCallback(() => { dispatch({ type: 'CLEAR_SELECTION', payload: null }); }, [dispatch]);
 
@@ -380,4 +429,3 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 };
 
 export default TopologyEditor;
-
