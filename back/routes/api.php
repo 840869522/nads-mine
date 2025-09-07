@@ -11,6 +11,7 @@
     use App\Http\Controllers\scenario\DrillController;
     use App\Http\Controllers\scenario\InstanceController;
     use App\Http\Controllers\scenario\SwitchController;
+    use App\Http\Controllers\scenario\IptablesController;
     use App\Http\Controllers\Docker\ImagesController;
     use App\Http\Controllers\Docker\InstancesController;
     use App\Http\Controllers\Docker\ContainersController;
@@ -184,6 +185,9 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
     Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
+    // iptables 管理（并入到 scenariosinstances 前缀下）
+    Route::get('/iptables', [IptablesController::class, 'index']);
+    Route::delete('/iptables', [IptablesController::class, 'destroy']);
 });
 
 Route::prefix('images')->group(function () {
@@ -199,6 +203,8 @@ Route::prefix('instances')->group(function () {
     Route::put('/', [InstancesController::class, 'update']);
     Route::delete('/', [InstancesController::class, 'destroy']);
 });
+
+
 
 Route::prefix('containers')->group(function () {
     Route::post('/', [ContainersController::class, 'create']);
