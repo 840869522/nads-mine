@@ -222,7 +222,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleOpenLogs = React.useCallback((vm: VmInstance) => {
         const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
-        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
         const id = uuidv4();
         const title = `${vm.scene_instance_id || ''}_${vm.name}`;
         const params = encodeURIComponent(JSON.stringify({
