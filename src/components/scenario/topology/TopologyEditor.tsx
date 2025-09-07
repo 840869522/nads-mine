@@ -35,6 +35,11 @@ interface TopologyState {
     selectedElement: { id: string; type: 'node' | 'edge' } | null;
     linkingState: { startNodeId: string } | null;
 }
+// 辅助：判断两节点是否允许直连（至少一端为交换机）
+const canDirectlyLinkNodes = (a?: TopologyNode, b?: TopologyNode): boolean => {
+    return !!(a && b && (a.type === 'switch' || b.type === 'switch'));
+};
+
 // 函数: 这是一个纯函数，是状态管理的核心。它接收当前的状态 (state)
 // 和一个动作 (action)，然后根据动作的类型（如 'ADD_NODE', 'MOVE_NODE'）
 // 返回一个全新的状态对象。这种模式使得状态变更的逻辑被集中管理，非常清晰且易于调试。
@@ -43,7 +48,16 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'ADD_NODE': { const newNode = action.payload.node as TopologyNode; return { ...state, nodes: [...state.nodes, newNode] }; }
         case 'MOVE_NODE': { const { nodeId, newX, newY } = action.payload; return { ...state, nodes: state.nodes.map(n => n.id === nodeId ? { ...n, x: newX, y: newY } : n), }; }
         case 'UPDATE_NODE_CONFIG': { const { nodeId, newConfig, newLabel } = action.payload; return { ...state, nodes: state.nodes.map(n => n.id === nodeId ? { ...n, config: newConfig, label: newLabel } : n), }; }
-        case 'ADD_EDGE': { const newEdge = action.payload.edge as TopologyEdge; return { ...state, edges: [...state.edges, newEdge], linkingState: null, selectedElement: null }; }
+        case 'ADD_EDGE': {
+            const newEdge = action.payload.edge as TopologyEdge;
+            const src = state.nodes.find(n => n.id === newEdge.source);
+            const tgt = state.nodes.find(n => n.id === newEdge.target);
+            if (!canDirectlyLinkNodes(src, tgt)) {
+                // 非法边：不添加
+                return { ...state, linkingState: null, selectedElement: null };
+            }
+            return { ...state, edges: [...state.edges, newEdge], linkingState: null, selectedElement: null };
+        }
         case 'UPDATE_EDGE_CONFIG': { const { edgeId, newConfig } = action.payload; return { ...state, edges: state.edges.map(e => e.id === edgeId ? { ...e, config: newConfig } : e), }; }
         
 
@@ -52,7 +66,15 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'SELECT_ELEMENT': return { ...state, selectedElement: action.payload.element, linkingState: null };
         case 'CLEAR_SELECTION': return { ...state, selectedElement: null, linkingState: null };
         case 'START_LINKING': return { ...state, linkingState: { startNodeId: action.payload.startNodeId } };
-        case 'LOAD_TOPOLOGY': const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData; return { ...initialTopologyState, nodes: loadedNodes, edges: loadedEdges };
+        case 'LOAD_TOPOLOGY': {
+            const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData;
+            const filtered = loadedEdges.filter(e => {
+                const s = loadedNodes.find(n => n.id === e.source);
+                const t = loadedNodes.find(n => n.id === e.target);
+                return canDirectlyLinkNodes(s, t);
+            });
+            return { ...initialTopologyState, nodes: loadedNodes, edges: filtered };
+        }
         default: return state;
     }
 }

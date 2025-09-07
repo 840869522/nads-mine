@@ -202,6 +202,9 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           const sourceNode = nodes.find(n => n.id === edge.source);
           const targetNode = nodes.find(n => n.id === edge.target);
           if (!sourceNode || !targetNode) return null;
+          // 安全过滤：仅渲染“至少一端为交换机”的边
+          const edgeAllowed = sourceNode.type === 'switch' || targetNode.type === 'switch';
+          if (!edgeAllowed) return null;
 
           const isSelected = selectedElement?.type === 'edge' && selectedElement.id === edge.id;
 
