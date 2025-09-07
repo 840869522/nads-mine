@@ -208,7 +208,7 @@
     "description": "密码破解攻击攻击镜像"
   },
   "v_tar_smbRemote.qcow2": {
-    "osType": "Linux",
+    "osType": "win7",
     "description": "SMB远程溢出植入远控靶机镜像"
   },
   "v_tar_smbImplant.qcow2": {
