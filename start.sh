@@ -154,7 +154,7 @@ start_services() {
     elif [ "$service_name" = "Python" ]; then
         session_name="$SESSION_PYTHON"
         command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
-         log_file="$CHAT_LOG"
+        log_file="$CHAT_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
         return 1
@@ -248,10 +248,11 @@ if [ "$command_choice" = "start" ]; then
     confirm_and_kill $CHAT_PORT "Chat"
     if [ $? -eq 0 ]; then
         echo -e "${ICON_CHECK} CHAT 服务已终止，准备启动新服务"
-        PHP_NEW=true
+        PYTHON_NEW=true
     else
         echo -e "${ICON_WARN} CHAT 服务未终止，跳过启动"
     fi
+
     if [ "$PHP_NEW" = "true" ]; then
         start_services "PHP"
     fi
