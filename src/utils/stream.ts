@@ -63,7 +63,7 @@ export const streamPostRequest = async (
 
             for (const line of lines) {
                 if (line.startsWith('data:')) {
-                    const dataContent = line.replace('data:', '');
+                    const dataContent = line.replace('data:', '').trim();
                     if (dataContent) {
                         onMessage(dataContent); // 直接传递 data: 后的内容
                     }

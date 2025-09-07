@@ -17,8 +17,9 @@ from app import config
 system_template = """
     你是一个非常有用的问答助手，根据下面给出的知识和以往的对话，
     回答给出的问题,当你知道问题的答案时，准确的回答问题；如果你不知道答案，那么直接回答“我不知道”。
-    知识：{knowledge}
 """
+# 知识：{knowledge}
+
 human_template = """
     问题：{question}
 """
@@ -53,12 +54,13 @@ chat_llm = ChatOpenAI(
 #     embedding=embedding_model
 # )
 
-# chat_memory = ConversationBufferMemory(
-#     chat_memory=FileChatMessageHistory(file_path="./history.txt"),
-#     memory_key="history",
-#     return_messages=True,
-#     max_message = 10
-# )
+chat_memory = ConversationBufferMemory(
+    chat_memory=FileChatMessageHistory(file_path="./history.txt"),
+    memory_key="history",
+    return_messages=True,
+    max_message = 10
+)
+
 # retriever = vector_store.as_retriever(
 #     search_type="similarity",
 #     search_kwargs={'k': 6}
