@@ -169,12 +169,13 @@ class CommandLineService
         //     throw new ProcessFailedException($processConfigBridge);
         // }
 
-        // 2. 循环为每个容器配置默认路由
+        // 2. 循环为每个容器配置默认路由（使用 replace 避免 File exists 错误，保证幂等）
         foreach ($containers as $container) {
             $containerName = $container['name'];
-            $commandAddRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'add', 'default', 'via', $gatewayIpOnly];
-            Log::info("Executing [IP-Config]: Adding default route for container {$containerName}");
-            (new Process($commandAddRoute))->mustRun();
+            // 使用 ip route replace，若不存在则新增，存在则覆盖，避免重复添加报错
+            $commandReplaceRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'replace', 'default', 'via', $gatewayIpOnly];
+            Log::info("Executing [IP-Config]: Replacing default route for container {$containerName} via {$gatewayIpOnly}");
+            (new Process($commandReplaceRoute))->mustRun();
         }
     }
     //交换机和br0连接
