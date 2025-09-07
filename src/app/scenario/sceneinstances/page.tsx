@@ -170,14 +170,15 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     >
                         {isLoading ? '加载中...' : '刷新'}
                     </Button>
-                    <Button
+                    {/* 暂时隐藏iptables按钮 */}
+                    {/* <Button
                         variant="contained"
                         color="secondary"
                         startIcon={<SecurityIcon />}
                         onClick={() => setIptablesOpen(true)}
                     >
                         iptables 管理
-                    </Button>
+                    </Button> */}
                 </Box>
             </Box>
 
