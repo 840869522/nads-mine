@@ -30,6 +30,7 @@ SESSION_FRONT="nads_project_front"
 SESSION_PYTHON="nads_project_python"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
+CHAT_PORT=9009
 FRONTEND_DIR="$SCRIPT_DIR/src"
 BACKEND_DIR="$SCRIPT_DIR/back"
 CHAT_DIR="$SCRIPT_DIR/langchain"
@@ -101,6 +102,10 @@ test_services() {
     if [ "$app_name" = "Node" ]; then
         url="$url:3000"
         port=3000
+    fi
+    if ["$app_name" = "Python"]; then
+        url="$url:9009"
+        port=9009
     fi
     echo "测试 $app_name 服务, 地址为 $url ..."
     http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time $time_out "$url")
@@ -222,6 +227,7 @@ if [ "$command_choice" = "start" ]; then
 
     PHP_NEW=false
     NODE_NEW=false
+    PYTHON_NEW=false
 
     confirm_and_kill $FRONTEND_PORT "Node"
     if [ $? -eq 0 ]; then
@@ -238,13 +244,24 @@ if [ "$command_choice" = "start" ]; then
     else
         echo -e "${ICON_WARN} PHP 服务未终止，跳过启动"
     fi
-
+    
+    confirm_and_kill $CHAT_PORT "Chat"
+    if [ $? -eq 0 ]; then
+        echo -e "${ICON_CHECK} CHAT 服务已终止，准备启动新服务"
+        PHP_NEW=true
+    else
+        echo -e "${ICON_WARN} CHAT 服务未终止，跳过启动"
+    fi
     if [ "$PHP_NEW" = "true" ]; then
         start_services "PHP"
     fi
 
     if [ "$NODE_NEW" = "true" ]; then
         start_services "NODE"
+    fi
+
+    if ["$PYTHON_NEW" ="true"]; then
+        start_services "Python"
     fi
 
     echo -e "${ICON_HAPPY} Happy! 启动流程已结束！"
