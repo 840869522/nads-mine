@@ -40,11 +40,6 @@ chat_llm = ChatOpenAI(
     api_key=config['chatModel']['api_key'],
 )
 
-embedding_model_open = OpenAIEmbeddings(
-    model=config['embeddingModel']['model'],
-    base_url="http://43.143.151.41:3000",
-    api_key=config['embeddingModel']['api_key']
-)
 
 embedding_model = CustomEmbeddings(
     model=config['embeddingModel']['model'],
@@ -52,12 +47,7 @@ embedding_model = CustomEmbeddings(
     api_key=config['embeddingModel']['api_key'],
 )
 
-try:
-    test_vector = embedding_model.embed_documents(["test"])[0]
-    vector_size = len(test_vector)
-    print(f"Embedding vector size: {vector_size}")
-except Exception as e:
-    raise RuntimeError("嵌入模型调用失败，请检查 API 配置和服务状态") from e
+
 
 vector_store = QdrantVectorStore(
     client=qdrant,
@@ -96,7 +86,7 @@ rag_chain = (
             "question": itemgetter("question"),
             "history": itemgetter("history")
         }
-        # | RunnableLambda(search_document)
+        | RunnableLambda(search_document)
         | chat_template
         | chat_llm
         | StrOutputParser()

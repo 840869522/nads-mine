@@ -2,6 +2,9 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.llm.LLMChain import generate_response
 from app.schema.ChatMessage import ChatMessage
+from app.schema.ParseFile import FileParseMessage
+
+from app.llm.ParseFile import parseFile
 
 
 chat_route = APIRouter(
@@ -11,5 +14,10 @@ chat_route = APIRouter(
 
 
 @chat_route.post("/chat")
-async def chat(message: ChatMessage):
+async def chatController(message: ChatMessage):
     return StreamingResponse(generate_response(message.message), media_type="text/event-stream")
+
+@chat_route.post("/parse")
+async def parseFileController(message: FileParseMessage):
+    code = parseFile(message.file_path,message.file_type)
+    
