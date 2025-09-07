@@ -8,7 +8,8 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
-    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon
+    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
+    Article as ArticleIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
@@ -20,6 +21,7 @@ import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 
@@ -151,6 +153,21 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setIsConfirmDialogOpen(true);
     }, [fetchInstanceDetails, user]);
 
+    const handleOpenLogs = useCallback((instance: RunningInstance) => {
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '';
+        const id = uuidv4();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`;
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
+    }, []);
+
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
@@ -179,7 +196,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 220,
+            field: 'actions', headerName: '操作', sortable: false, width: 260,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
@@ -220,12 +237,19 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </span>
                             </Tooltip>
                         )}
+                        <Tooltip title="日志">
+                            <span>
+                                <IconButton onClick={() => handleOpenLogs(instance)} size="small">
+                                    <ArticleIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
