@@ -11,7 +11,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import FileChatMessageHistory
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from operator import itemgetter
-from . import qdrant
+# from . import qdrant
 from app import config
 
 system_template = """
@@ -41,28 +41,28 @@ chat_llm = ChatOpenAI(
 #     base_url=config['embeddingModel']['base_url']
 # )
 
-embedding_model = OpenAIEmbeddings(
-    model=config['embeddingModel']['model'],
-    base_url=config['embeddingModel']['base_url'],
-    api_key=config['embeddingModel']['api_key'],
-)
+# embedding_model = OpenAIEmbeddings(
+#     model=config['embeddingModel']['model'],
+#     base_url=config['embeddingModel']['base_url'],
+#     api_key=config['embeddingModel']['api_key'],
+# )
 
-vector_store = QdrantVectorStore(
-    client=qdrant,
-    collection_name="qdrant_collection",
-    embedding=embedding_model
-)
+# vector_store = QdrantVectorStore(
+#     client=qdrant,
+#     collection_name="qdrant_collection",
+#     embedding=embedding_model
+# )
 
-chat_memory = ConversationBufferMemory(
-    chat_memory=FileChatMessageHistory(file_path="./history.txt"),
-    memory_key="history",
-    return_messages=True,
-    max_message = 10
-)
-retriever = vector_store.as_retriever(
-    search_type="similarity",
-    search_kwargs={'k': 6}
-)
+# chat_memory = ConversationBufferMemory(
+#     chat_memory=FileChatMessageHistory(file_path="./history.txt"),
+#     memory_key="history",
+#     return_messages=True,
+#     max_message = 10
+# )
+# retriever = vector_store.as_retriever(
+#     search_type="similarity",
+#     search_kwargs={'k': 6}
+# )
 
 memory_store = {}
 
@@ -83,7 +83,7 @@ rag_chain = (
             "question": itemgetter("question"),
             "history": itemgetter("history")
         }
-        | RunnableLambda(search_document)
+        # | RunnableLambda(search_document)
         | chat_template
         | chat_llm
         | StrOutputParser()

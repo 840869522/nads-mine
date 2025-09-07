@@ -17,7 +17,7 @@ const handle = app.getRequestHandler();
 const MAIN_PORT = parseInt(process.env.PORT || '3000', 10);
 const GUAC_INTERNAL_PORT = parseInt(process.env.GUAC_PORT || '3001', 10); // Guac 服务的内部端口
 const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
-const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 8080;
+const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 9000;
 
 // --- Target URLs for Proxies ---
 const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;

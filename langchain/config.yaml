@@ -8,7 +8,7 @@ embeddingModel:
     api_key: "sk-45jfj2wN89d0hwLFA18c71D7D3A3462b9eBe96F6Ea7d8cF5"
 server:
   ip: 127.0.0.1
-  port: 8080
+  port: 9000
 database:
   type: "mysql"
   host: "127.0.0.1"
