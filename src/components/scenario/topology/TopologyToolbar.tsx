@@ -68,7 +68,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
       <Card className="mb-4">
         <div className="flex flex-wrap items-center gap-4 p-2">
           <div className="font-semibold text-neutral-700 dark:text-neutral-300">设备:</div>
-          {TOPOLOGY_DEVICE_TYPES.map(device => (
+          {TOPOLOGY_DEVICE_TYPES.filter(device => device.type !== 'router').map(device => (
               <div
                   key={device.type}
                   className="flex flex-col items-center p-3 border border-neutral-300 dark:border-neutral-600 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-grab shadow-sm"
