@@ -1,6 +1,4 @@
 from langchain_openai.chat_models import ChatOpenAI
-from langchain_core.embeddings import Embeddings
-import requests
 from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
@@ -14,32 +12,7 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 from operator import itemgetter
 from . import qdrant
 from app import config
-
-
-
-class CustomEmbeddings(Embeddings):
-    def __init__(self, api_key: str, base_url: str, model: str):
-        self.api_key = api_key
-        self.base_url = base_url
-        self.model = model
-
-    def embed_documents(self, texts):
-        url = f"{self.base_url}/embeddings"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "input": texts,
-            "model": self.model
-        }
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code != 200:
-            raise Exception(f"Embedding failed: {response.text}")
-        return [item["embedding"] for item in response.json()["data"]]
-
-    def embed_query(self, text):
-        return self.embed_documents([text])[0]
+from .CustomEmbeddings import CustomEmbeddings
 
 
 
