@@ -27,12 +27,15 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 # ====== 配置参数 ======
 SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
+SESSION_PYTHON="nads_project_python"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
 FRONTEND_DIR="$SCRIPT_DIR/src"
 BACKEND_DIR="$SCRIPT_DIR/back"
+CHAT_DIR="$SCRIPT_DIR/langchain"
 FRONTEND_LOG="$FRONTEND_DIR/front.log"
 BACKEND_LOG="$BACKEND_DIR/back.log"
+CHAT_LOG="$BACKEND_DIR/chat.log"
 
 # ====== 检测并终止单个服务函数 ======
 confirm_and_kill() {
@@ -143,6 +146,10 @@ start_services() {
             command="cd $FRONTEND_DIR && npm run build && npm start >> $FRONTEND_LOG"
         fi
         log_file="$FRONTEND_LOG"
+    elif ["$service_name" = "Python"]; then
+        session_name="$SESSION_PYTHON"
+        command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
+         log_file="$CHAT_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
         return 1
