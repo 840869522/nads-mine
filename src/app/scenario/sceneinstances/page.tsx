@@ -14,7 +14,8 @@ import {
     Stop as StopIcon, // <-- 修改：导入 Stop 图标
     Security as SecurityIcon, // iptables 管理入口图标
 } from '@mui/icons-material';
-import Link from 'next/link';
+// import Link from 'next/link';
+import IptablesDialog from './IptablesDialog';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import { customFetch } from '@/utils/fetch';
 
@@ -47,6 +48,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
 
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [iptablesOpen, setIptablesOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
 
@@ -169,11 +171,10 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         {isLoading ? '加载中...' : '刷新'}
                     </Button>
                     <Button
-                        component={Link}
-                        href="/ad/iptables"
                         variant="contained"
                         color="secondary"
                         startIcon={<SecurityIcon />}
+                        onClick={() => setIptablesOpen(true)}
                     >
                         iptables 管理
                     </Button>
@@ -273,14 +274,16 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 />
             </Paper>
             
-            {isDetailsModalOpen && selectedInstanceId && (
-                <InstanceDetailsDialog
-                    open={isDetailsModalOpen}
-                    onClose={() => setIsDetailsModalOpen(false)}
-                    instanceId={selectedInstanceId}
-                    scenarioName={selectedScenarioName} 
-                />
-            )}
+        {isDetailsModalOpen && selectedInstanceId && (
+            <InstanceDetailsDialog
+                open={isDetailsModalOpen}
+                onClose={() => setIsDetailsModalOpen(false)}
+                instanceId={selectedInstanceId}
+                scenarioName={selectedScenarioName} 
+            />
+        )}
+
+        <IptablesDialog open={iptablesOpen} onClose={() => setIptablesOpen(false)} />
         </Paper>
     );
 };
