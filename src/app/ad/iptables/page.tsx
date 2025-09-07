@@ -33,7 +33,16 @@ type Rule = {
   to_destination?: string | null;
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const r = await fetch(url);
+  let data: any = null;
+  try { data = await r.json(); } catch {}
+  if (!r.ok) {
+    const msg = (data && (data.message || data.error)) || `请求失败 (${r.status})`;
+    throw new Error(msg);
+  }
+  return data;
+};
 
 export default function IptablesAdminPage() {
   const [table, setTable] = React.useState<string>("nat");
@@ -86,7 +95,7 @@ export default function IptablesAdminPage() {
         <CardContent>
           {error && <Typography color="error">加载失败: {String(error)}</Typography>}
           {isLoading && <Typography>加载中...</Typography>}
-          {!isLoading && data && (
+          {!isLoading && Array.isArray(data?.rules) && (
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -100,7 +109,7 @@ export default function IptablesAdminPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.rules.map((r) => (
+                {(data?.rules ?? []).map((r) => (
                   <TableRow key={r.id} hover>
                     <TableCell>{r.chain}</TableCell>
                     <TableCell>{r.protocol || ""}</TableCell>
