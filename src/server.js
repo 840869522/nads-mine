@@ -41,7 +41,10 @@ app.prepare().then(() => {
     const phpProxy = createProxyMiddleware({
         target: PHP_TARGET_URL,
         changeOrigin: true,
-        pathRewrite: { '^/back/': '/' },
+        pathRewrite: { 
+            '^/back/': '/', 
+            '^/api/': '/'
+        },
         logLevel: dev ? 'debug' : 'info',
     });
 
@@ -95,6 +98,9 @@ app.prepare().then(() => {
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
+            return phpProxy(req, res);
+        }
+        if (url.startsWith('/api/')) {
             return phpProxy(req, res);
         }
         if (url.startsWith('/chat/')) {
@@ -210,9 +216,10 @@ app.prepare().then(() => {
 
     mainHttpServer.listen(MAIN_PORT, () => {
         console.log(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
-        console.log(`> ➡️  PHP proxied from /back/`);
+        console.log(`> ➡️  PHP proxied from /back/ and /api/`);
         console.log(`> ➡️  AI proxied from /chat/`);
         console.log(`> ➡️  Guacamole proxied from /connect-guac`);
+        console.log(`> ➡️  WebSocket proxied from /ws`);
         console.log(`> ➡️  Terminal WebSocket direct at /api/terminal`);
     });
 
