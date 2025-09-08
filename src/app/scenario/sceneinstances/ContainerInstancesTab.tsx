@@ -22,6 +22,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 
@@ -154,6 +155,21 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setIsConfirmDialogOpen(true);
     }, [fetchInstanceDetails, user]);
 
+    const handleOpenLogs = useCallback((instance: RunningInstance) => {
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
+    }, []);
+
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
@@ -230,12 +246,19 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </Tooltip>
                             </>
                         )}
+                        <Tooltip title="日志">
+                            <span>
+                                <IconButton onClick={() => handleOpenLogs(instance)} size="small">
+                                    <ArticleIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -350,7 +373,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
                 />
             )}
-            
+
             {flagHistoryModalOpen && (
                 <FlagHistoryModal
                     open={flagHistoryModalOpen}

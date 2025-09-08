@@ -27,16 +27,20 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 # ====== 配置参数 ======
 SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
+SESSION_PYTHON="nads_project_python"
 SESSION_WEBSOCKET="nads_project_websocket"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
 WEBSOCKET_PORT=8080     # WebSocket 服务端口
 WEBSOCKET_INTERNAL_PORT=2347  # WebSocket 内部通信端口
+CHAT_PORT=9009
 FRONTEND_DIR="$SCRIPT_DIR/src"
 BACKEND_DIR="$SCRIPT_DIR/back"
+CHAT_DIR="$SCRIPT_DIR/langchain"
 FRONTEND_LOG="$FRONTEND_DIR/front.log"
 BACKEND_LOG="$BACKEND_DIR/back.log"
 WEBSOCKET_LOG="$BACKEND_DIR/websocket.log"
+CHAT_LOG="$BACKEND_DIR/chat.log"
 
 # ====== 检测并终止单个服务函数 ======
 confirm_and_kill() {
@@ -115,6 +119,10 @@ test_services() {
         fi
         return
     fi
+    if ["$app_name" = "Python"]; then
+        url="$url:9009"
+        port=9009
+    fi
     echo "测试 $app_name 服务, 地址为 $url ..."
     http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time $time_out "$url")
     if [ $http_code -eq 200 ]; then
@@ -163,6 +171,10 @@ start_services() {
         session_name="$SESSION_WEBSOCKET"
         command="cd $BACKEND_DIR && php artisan websocket:server start >> $WEBSOCKET_LOG"
         log_file="$WEBSOCKET_LOG"
+    elif [ "$service_name" = "Python" ]; then
+        session_name="$SESSION_PYTHON"
+        command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
+        log_file="$CHAT_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
         return 1
@@ -236,6 +248,7 @@ if [ "$command_choice" = "start" ]; then
     PHP_NEW=false
     NODE_NEW=false
     WEBSOCKET_NEW=false
+    PYTHON_NEW=false
 
     # 检查并停止现有服务
     confirm_and_kill $FRONTEND_PORT "Node"
@@ -252,6 +265,14 @@ if [ "$command_choice" = "start" ]; then
         PHP_NEW=true
     else
         echo -e "${ICON_WARN} PHP 服务未终止，跳过启动"
+    fi
+
+    confirm_and_kill $CHAT_PORT "Chat"
+    if [ $? -eq 0 ]; then
+        echo -e "${ICON_CHECK} CHAT 服务已终止，准备启动新服务"
+        PYTHON_NEW=true
+    else
+        echo -e "${ICON_WARN} CHAT 服务未终止，跳过启动"
     fi
 
     confirm_and_kill $WEBSOCKET_PORT "WebSocket"
@@ -278,6 +299,10 @@ if [ "$command_choice" = "start" ]; then
     if [ "$NODE_NEW" = "true" ]; then
         echo -e "${ICON_INFO} 步骤 3/3: 启动前端服务..."
         start_services "NODE"
+    fi
+
+    if [ "$PYTHON_NEW" = "true" ]; then
+        start_services "Python"
     fi
 
     echo -e "${ICON_HAPPY} Happy! 启动流程已结束！"

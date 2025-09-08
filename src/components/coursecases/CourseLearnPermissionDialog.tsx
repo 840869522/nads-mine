@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { getCookie } from '@/utils/cookie';
+import { TextField } from '@mui/material';
 
 // 类型定义
 interface Course {
@@ -14,6 +15,7 @@ interface Course {
 interface User {
     id: string;
     name: string;
+    username: string; // Added to store c_username
 }
 interface CourseLearnPermissionDialogProps {
     open: boolean;
@@ -25,6 +27,7 @@ const CourseLearnPermissionDialog: React.FC<CourseLearnPermissionDialogProps> = 
     const [permittedUsers, setPermittedUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         const loadData = async () => {
@@ -55,7 +58,8 @@ const CourseLearnPermissionDialog: React.FC<CourseLearnPermissionDialogProps> = 
                 const fetchedUsers: User[] = Array.isArray(permissionsData.data)
                     ? permissionsData.data.map((u: any) => ({
                         id: u.c_username,
-                        name: u.c_username
+                        username: u.c_username,
+                        name: u.c_name || u.c_username // Fallback to username if name is empty
                     }))
                     : [];
                 setPermittedUsers(fetchedUsers);
@@ -73,6 +77,7 @@ const CourseLearnPermissionDialog: React.FC<CourseLearnPermissionDialogProps> = 
             setPermittedUsers([]);
             setError(null);
             setIsLoading(false);
+            setSearchTerm('');
         }
     }, [open, course]);
 
@@ -94,14 +99,31 @@ const CourseLearnPermissionDialog: React.FC<CourseLearnPermissionDialogProps> = 
                 </Typography>
             );
         }
+        const filteredUsers = permittedUsers.filter(user =>
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.username.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
         return (
-            <List sx={{ p: 1 }}>
-                {permittedUsers.map(user => (
-                    <ListItem key={user.id} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-                        <ListItemText primary={user.name} />
-                    </ListItem>
-                ))}
-            </List>
+            <>
+                <Box sx={{ p: 2, pb: 0 }}>
+                    <TextField
+                        fullWidth
+                        variant="outlined"
+                        label="搜索用户姓名或用户名"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        size="small"
+                    />
+                </Box>
+                <List sx={{ p: 1 }}>
+                    {filteredUsers.map(user => (
+                        <ListItem key={user.id} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+                            <ListItemText primary={`${user.name} (${user.username})`} />
+                        </ListItem>
+                    ))}
+                </List>
+            </>
         );
     };
 
