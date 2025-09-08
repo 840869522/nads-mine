@@ -35,6 +35,7 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
+import { customFetch } from "@/utils/fetch"
 
 // --- MUI 图标导入 ---
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -107,7 +108,7 @@ const RefereeOverviewPage: React.FC = () => {
             params.append('search', debouncedSearchQuery);
             params.append('page', String(page + 1));
             params.append('per_page', String(rowsPerPage));
-            const response = await fetch(`${API_BASE_URL}/ad/referees/all?${params.toString()}`);
+            const response = await customFetch(`${API_BASE_URL}/ad/referees/all?${params.toString()}`);
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || '获取裁判总览列表失败');
@@ -141,7 +142,7 @@ const RefereeOverviewPage: React.FC = () => {
         }
         if (!window.confirm(`您确定要为演练 “${adConfig.c_drill_name}” 启动场景实例吗？`)) return;
         try {
-            const response = await fetch(`/back/api/scenarios/${adConfig.c_scene_config_id}/start`, {
+            const response = await customFetch(`/back/api/scenarios/${adConfig.c_scene_config_id}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({ username: username, ad_config_id: adConfig.c_id }),
@@ -170,7 +171,7 @@ const RefereeOverviewPage: React.FC = () => {
         setInstanceDetailsError(null);
         setSelectedInstanceDetails(null);
         try {
-            const response = await fetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/details`);
+            const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/details`);
             const result = await response.json();
             if (!response.ok || result.status !== 'success') {
                 throw new Error(result.message || '获取实例资源失败');
