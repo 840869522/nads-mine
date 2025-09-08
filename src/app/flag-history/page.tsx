@@ -160,13 +160,18 @@ export default function FlagHistoryPage() {
                 },
                 body: JSON.stringify({
                     scope: 'all',
-                    target_scope: 'all_targets_in_all_scenes'
+                    target_scope: 'all_targets_in_all_scenes',
+                    token: token  // 添加token字段以适配JWT中间件
                 }),
             });
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('历史记录API响应:', data);
+                
                 if (data.code === 200 && data.data) {
+                    console.log('获取到历史数据:', data.data.length, '条记录');
+                    
                     // 转换数据格式
                     const formattedSubmissions = data.data.map((item: any) => ({
                         submission_id: item.c_submission_id,
@@ -180,8 +185,25 @@ export default function FlagHistoryPage() {
                         instance_type: item.instance_type,
                         attempt_count: item.c_attempt_count,
                     }));
+                    
+                    console.log('格式化后的数据:', formattedSubmissions);
                     setSubmissions(formattedSubmissions);
+                    
+                    // 更新统计数据
+                    const totalCount = formattedSubmissions.length;
+                    const correctCount = formattedSubmissions.filter(s => s.is_correct).length;
+                    setStats({
+                        total_submissions: totalCount,
+                        correct_submissions: correctCount,
+                        success_rate: totalCount > 0 ? (correctCount / totalCount) * 100 : 0,
+                        active_users: 0
+                    });
+                } else {
+                    console.error('历史记录API返回错误:', data);
                 }
+            } else {
+                const errorText = await response.text();
+                console.error('HTTP请求失败:', response.status, errorText);
             }
         } catch (error) {
             console.error('获取历史数据失败:', error);
