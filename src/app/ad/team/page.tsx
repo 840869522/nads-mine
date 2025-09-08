@@ -31,6 +31,7 @@ import FindInPageIcon from '@mui/icons-material/FindInPage';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import InputAdornment from '@mui/material/InputAdornment';
 import SearchIcon from '@mui/icons-material/Search';
+import { customFetch } from "@/utils/fetch"
 
 // 导入新创建的组件
 import InstanceDetailsDialog from './InstanceDetailsDialog';
@@ -119,7 +120,7 @@ const Page: React.FC = () => {
                 params.append('search', debouncedSearchQuery);
             }
             const urlString = `${API_BASE_URL}/ad/team?${params.toString()}`;
-            const response = await fetch(urlString);
+            const response = await customFetch(urlString);
             if (!response.ok) throw new Error('从服务器获取队伍列表失败');
 
             const result = await response.json();
@@ -150,7 +151,7 @@ const Page: React.FC = () => {
         if (allUsers.length > 0) return;
         setIsUsersLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/ad/users`);
+            const response = await customFetch(`${API_BASE_URL}/ad/users`);
             if (!response.ok) throw new Error('获取用户列表失败');
             const result = await response.json();
             if (result && result.status === 'success' && Array.isArray(result.data)) {
@@ -195,7 +196,7 @@ const Page: React.FC = () => {
         try {
             const url = editingTeam ? `${API_BASE_URL}/ad/team/${editingTeam.c_id}` : `${API_BASE_URL}/ad/team`;
             const method = editingTeam ? 'PUT' : 'POST';
-            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(teamData) });
+            const response = await customFetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(teamData) });
             const result = await response.json();
             if (!response.ok) {
                 if (response.status === 422 && result.errors) throw new Error(JSON.stringify(result.errors));
@@ -224,7 +225,7 @@ const Page: React.FC = () => {
         setIsSubmitting(true);
         setStatusMessage(null);
         try {
-            const response = await fetch(`${API_BASE_URL}/ad/team/${teamToDelete.c_id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+            const response = await customFetch(`${API_BASE_URL}/ad/team/${teamToDelete.c_id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
             if (!response.ok) { const result = await response.json(); throw new Error(result.message || '删除队伍失败'); }
             setStatusMessage({ type: 'success', message: '删除成功！' });
             await fetchTeams();
@@ -245,7 +246,7 @@ const Page: React.FC = () => {
         setTeamDrills([]);
         try {
             // 后端需要确保返回 c_scene_instance_id
-            const response = await fetch(`${API_BASE_URL}/ad/team/${team.c_id}/drills`);
+            const response = await customFetch(`${API_BASE_URL}/ad/team/${team.c_id}/drills`);
             if (!response.ok) {
                 throw new Error('获取演练列表失败');
             }
@@ -275,7 +276,7 @@ const Page: React.FC = () => {
         setSelectedInstanceDetails(null);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/details`);
+            const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/details`);
             const result = await response.json();
             if (!response.ok || result.status !== 'success') {
                 throw new Error(result.message || '获取实例资源失败');

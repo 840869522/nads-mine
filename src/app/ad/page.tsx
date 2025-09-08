@@ -46,6 +46,7 @@ import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {TopologyData} from "@/types";
 import {useAuth} from "@/hooks/useAuth";
+import { customFetch } from "@/utils/fetch"
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 
 // --- 类型定义 ---
@@ -146,10 +147,10 @@ const AdManagementPage: React.FC = () => {
             const scenesUrl = `${API_BASE_URL}/scenarios`;
 
             const [adConfigsRes, teamsRes, usersRes, scenesRes] = await Promise.all([
-                fetch(adConfigsUrl),
-                fetch(teamsUrl),
-                fetch(usersUrl),
-                fetch(scenesUrl),
+                customFetch(adConfigsUrl),
+                customFetch(teamsUrl),
+                customFetch(usersUrl),
+                customFetch(scenesUrl),
             ]);
 
             if (!adConfigsRes.ok || !teamsRes.ok || !usersRes.ok || !scenesRes.ok) throw new Error('获取基础数据失败');
@@ -164,7 +165,7 @@ const AdManagementPage: React.FC = () => {
             setTotalAdConfigs(adConfigsData.meta?.total || 0);
 
             setTeams(teamsData.data || []);
-            setUsers(usersData.data || []);
+            setUsers(usersData.data.data || []);
 
             // 现在可以安全地使用 scenesData
             const formattedScenes = (Array.isArray(scenesData) ? scenesData : scenesData.data || []).map((scene: any) => ({
@@ -253,7 +254,7 @@ const AdManagementPage: React.FC = () => {
         try {
             const url = editingAdConfig ? `${API_BASE_URL}/ad-configs/${editingAdConfig.c_id}` : `${API_BASE_URL}/ad-configs`;
             const method = editingAdConfig ? 'PUT' : 'POST';
-            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(adConfigData) });
+            const response = await customFetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(adConfigData) });
             const result = await response.json();
             if (!response.ok) {
                 if (response.status === 422 && result.errors) throw new Error(JSON.stringify(result.errors));
@@ -280,7 +281,7 @@ const AdManagementPage: React.FC = () => {
         if (!adConfigToDelete) return;
         setIsSubmitting(true);
         try {
-            await fetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
+            await customFetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
             setStatusMessage({ type: 'success', message: `演练 "${adConfigToDelete.c_drill_name}" 已删除。` });
             await fetchData();
         } catch (err) {
@@ -304,7 +305,7 @@ const AdManagementPage: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
+            const response = await customFetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({

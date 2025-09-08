@@ -181,7 +181,7 @@ Route::prefix('scenariosinstances')->group(function () {
     // iptables 管理（必须放在通用路由之前）
     Route::get('/iptables', [IptablesController::class, 'index']);
     Route::delete('/iptables', [IptablesController::class, 'destroy']);
-    
+
     Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
     Route::get('/switches', [SwitchController::class, 'index']);
     Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
@@ -281,37 +281,76 @@ Route::prefix('study')->group(function () {
     });
 });
 
+/**
+ * 定义安全实验分系统路由 (已整合和修正)
+ */
+/*
+|--------------------------------------------------------------------------
+| 安全实验分系统 API 路由 (无 apiResource 版本)
+|--------------------------------------------------------------------------
+|
+| 此文件将所有 apiResource 的用法替换为独立的路由定义，
+| 与项目中其他分系统的风格保持一致。
+|
+*/
 
-    Route::get('ad/users', [UserController::class, 'getAllUser']);
-    Route::prefix('ad/team')->group(function () {
-        Route::get('/', [TeamController::class, 'index']); // TeamController.index
-        Route::post('/', [TeamController::class, 'store']);
-        Route::get('/{team}', [TeamController::class, 'show']);
-        Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
-        Route::put('/{team}', [TeamController::class, 'update']);
-        Route::delete('/{team}', [TeamController::class, 'destroy']);
-    });
-    Route::apiResource('ad-configs', AdConfigController::class);
+/**
+ * 演练配置管理 (ad-configs)
+ *
+ * 对应 AdConfigController 的 CRUD 操作。
+ * URL: /api/ad-configs
+ */
+// 获取演练配置列表 (GET /api/ad-configs)
+Route::get('/ad-configs', [AdConfigController::class, 'index']);
+// 创建一个新的演练配置 (POST /api/ad-configs)
+Route::post('/ad-configs', [AdConfigController::class, 'store']);
+// 获取单个演练配置的详情 (GET /api/ad-configs/{config})
+Route::get('/ad-configs/{config}', [AdConfigController::class, 'show']);
+// 更新一个演练配置 (PUT /api/ad-configs/{config})
+Route::put('/ad-configs/{config}', [AdConfigController::class, 'update']);
+// 删除一个演练配置 (DELETE /api/ad-configs/{config})
+Route::delete('/ad-configs/{config}', [AdConfigController::class, 'destroy']);
 
-      Route::post('/ad-configs/{adConfig}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill'])->name('ad-configs.start-drill');
-//    Route::prefix('ad-configs/{adConfig}')->group(function () {
-//        Route::post('/start', [AdConfigController::class, 'start'])->name('ad-configs.start');
-//        Route::post('/stop', [AdConfigController::class, 'stop'])->name('ad-configs.stop');
-//    });
 
+/**
+ * 演练配置的自定义操作
+ */
+// 启动演练 (简单状态变更)
+Route::post('/ad-configs/{config}/start', [AdConfigController::class, 'start']);
+// 停止演练 (简单状态变更)
+Route::post('/ad-configs/{config}/stop', [AdConfigController::class, 'stop']);
+
+
+/**
+ * 攻防演练核心功能组 (ad)
+ *
+ * URL 前缀: /api/ad
+ */
 Route::prefix('ad')->group(function () {
 
-    Route::get('users', [RefereeController::class, 'availableUsers'])->name('ad.users');
-    Route::get('team', [TeamController::class, 'index'])->name('ad.teams');
+    // --- 队伍管理 (team) ---
+    // 获取队伍列表 (GET /api/ad/team)
+    Route::get('/team', [TeamController::class, 'index']);
+    // 创建一个新队伍 (POST /api/ad/team)
+    Route::post('/team', [TeamController::class, 'store']);
+    // 获取单个队伍详情 (GET /api/ad/team/{team})
+    Route::get('/team/{team}', [TeamController::class, 'show']);
+    // 更新一个队伍 (PUT /api/ad/team/{team})
+    Route::put('/team/{team}', [TeamController::class, 'update']);
+    // 删除一个队伍 (DELETE /api/ad/team/{team})
+    Route::delete('/team/{team}', [TeamController::class, 'destroy']);
+    // 获取指定队伍参与的所有演练
+    Route::get('/team/{team}/drills', [TeamController::class, 'getDrills']);
 
-    Route::get('/referees/all', [RefereeController::class, 'index']);
+    // --- 裁判管理 (referees) ---
+    Route::get('/referees', [RefereeController::class, 'index']);
+    Route::get('/available-referees', [RefereeController::class, 'availableUsers']);
 
-    Route::get('available-referee-users', [RefereeController::class, 'availableUsers'])->name('ad.available-users'); // 改为更明确的名称
+    // --- 演练环境构建 ---
+    Route::post('/drills/{scenario}/start', [AdController::class, 'startDrill']);
 
-    Route::post('/{ad}/start', [\App\Http\Controllers\ad\AdController::class, 'startDrill']);
-
-    // 你可能还有其他辅助路由，可以像这样添加
-    // Route::get('some-other-data', [SomeController::class, 'getData']);
+    // --- 辅助路由 ---
+    Route::get('/users', [UserController::class, 'getAllUser']);
 });
 //导调相关接口
 Route::prefix('guidance')->middleware('jwtcheck')->group(function () {
@@ -362,9 +401,7 @@ Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     // 临时调试接口
     //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
-/**
- * 定义安全实验分系统路由
- */
+
 //Route::prefix("ad")->group(function() {
 //
 //})->middleware("jwtcheck:ad");
