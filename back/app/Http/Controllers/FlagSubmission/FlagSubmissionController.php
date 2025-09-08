@@ -51,7 +51,7 @@ class FlagSubmissionController extends BaseController
     public function submitFlag(Request $request)
     {
         // 1. 简化用户信息获取，使用请求参数或默认用户
-        $token_data  = $req->input("token_data");
+        $token_data  = $request->input("token_data");
         $username = $token_data['id'];
 //         $username = $request->input('username', 'anonymous');
 //         if (empty($username)) {
