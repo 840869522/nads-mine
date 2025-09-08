@@ -324,7 +324,7 @@ const PermissionManagementPage: React.FC = () => {
                 { id: "c_des", label: "描述" },
                 { id: "c_api_src", label: "api接口" },
                 { id: "c_src", label: "前端地址" },
-                { id: "c_pid", label: "所属父项" },
+                { id: "c_pid", label: "所属菜单" },
                 { id: "c_status", label: "状态" },
               ].map((headCell) => (
                 <TableCell

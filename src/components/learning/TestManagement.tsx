@@ -17,7 +17,7 @@ import {
   MenuBook as MenuBookIcon,
   Warning as WarningIcon,
   Visibility as VisibilityIcon,
-  Check as CheckIcon,
+  CheckCircle as CheckCircleIcon,
   ContentCopy as ContentCopyIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -26,22 +26,24 @@ import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
 import FixedSizeFormDialog from './TestFormDialog'; 
 import TestUserDrawer from './TestUserDrawer';
+import TestCorrectionDialog from './TestCorrectionDialog';
 import { apiClientWithToken } from "@/utils/axios";
 
 // 应用中文本地化
 moment.locale('zh-cn');
 
-// 定义接口类型（与后端数据库字段严格匹配）
+// 定义接口类型
 interface TestData {
-  c_id?: string;
+  c_id?: string; // 可选，新增时不传递，更新时必须存在
   c_name: string;
   c_description: string;
-  c_test_type: string; // 后端存储："理论测试"或"实践操作"
-  c_type: string; // 后端存储："考试"或"练习"
+  c_test_type: string;
+  c_type: string;
   c_paper_count: number;
   c_course_id: string;
-  c_start: moment.Moment | null; // moment类型，便于格式化
-  c_end: moment.Moment | null;   // moment类型，便于格式化
+  c_start: string | null;
+  c_end: string | null;
+  c_duration?: number;
   c_create_at?: string;
 }
 
@@ -82,7 +84,6 @@ interface ApiResponse {
   data: any;
 }
 
-// 定义标签页类型
 type TestTab = 'practice' | 'theory';
 
 const TestManagement = () => {
@@ -113,9 +114,13 @@ const TestManagement = () => {
   const [userToDelete, setUserToDelete] = useState<TestUser | null>(null);
   const [testToDelete, setTestToDelete] = useState<string | null>(null);
 
-  // 新增：查看测试ID弹窗状态
+  // 查看测试ID弹窗状态
   const [viewTestIdOpen, setViewTestIdOpen] = useState<boolean>(false);
-  const [currentTestId, setCurrentTestId] = useState<string | null>(null); // 存储当前要显示的测试ID
+  const [currentTestId, setCurrentTestId] = useState<string | null>(null);
+
+  // 批改试卷弹窗状态
+  const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState<boolean>(false);
+  const [currentTestForCorrection, setCurrentTestForCorrection] = useState<TestData | null>(null);
 
   // 显示提示消息
   const showSnackbar = (message: string, severity: SnackbarState['severity'] = 'success') => {
@@ -130,7 +135,11 @@ const TestManagement = () => {
   // 切换标签页
   const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
     setActiveTab(newValue);
-    newValue === 'practice' ? setPagePractice(1) : setPageTheory(1);
+    if (newValue === 'practice') {
+      setPagePractice(1);
+    } else {
+      setPageTheory(1);
+    }
   };
 
   // 获取测试列表
@@ -140,19 +149,22 @@ const TestManagement = () => {
       const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/test_list', {
         params: { page, pageSize }
       });
+      
       if (response.data.code === 200) {
-        const responseData = response.data.data || [];
+        const responseData = response.data.data || {};
         const rawTests = responseData.data || [];
-        // 后端返回的rawTests已包含c_id，直接赋值（核心：确保测试ID从后端正确获取）
+        
         const formattedTests = rawTests.map((item: any) => ({
-          c_id: item.c_id, // 关键：保留后端返回的测试ID
+          c_id: item.c_id, // 列表中需要获取c_id用于后续操作
           c_name: item.c_name,
           c_description: item.c_description,
           c_type: item.c_type,
           c_test_type: item.c_test_type,
           c_course_id: item.c_course_id,
-          c_start: item.c_start ? moment(item.c_start) : null,
-          c_end: item.c_end ? moment(item.c_end) : null
+          c_start: item.c_start || null,
+          c_end: item.c_end || null,
+          c_paper_count: item.c_paper_count || 0,
+          c_duration: item.c_duration || 0
         }));
         
         setTests(formattedTests);
@@ -222,22 +234,23 @@ const TestManagement = () => {
       );
       
       if (response.data.code === 200) {
-        const formattedUsers = response.data.data.map((user: any) => {
+        const usersData = response.data.data || [];
+        const formattedUsers = usersData.map((user: any) => {
           const userInfo = allUsers.find(u => u.username === user.username);
           
           return {
             id: `${user.test_id}-${user.username}`,
             username: user.username,
-            name: user.name || userInfo?.name || user.username,
+            name: userInfo?.name || user.username,
             c_test_id: user.test_id,
             c_paper_id: user.paper_id,
             c_answers: user.answers,
             start_time: user.start_time,
             end_time: user.end_time,
             submit_time: user.submit_time,
-            score: user.score,
-            correct_status: user.correct_status,
-            correct_status_text: user.correct_status_text
+            score: user.score || 0,
+            correct_status: user.correct_status || 0,
+            correct_status_text: user.correct_status_text || '未批改'
           };
         });
         
@@ -265,7 +278,7 @@ const TestManagement = () => {
       );
       
       if (response.data.code === 200) {
-        showSnackbar(`成功添加 ${response.data.data.count} 个用户`);
+        showSnackbar(`成功添加 ${response.data.data?.count || usersData.length} 个用户`);
         return true;
       } else {
         showSnackbar('批量添加用户失败: ' + response.data.message, 'error');
@@ -316,52 +329,93 @@ const TestManagement = () => {
     }
   };
 
-  // 添加测试
-  const handleAddTest = async (testData: TestData) => {
-    try {
-      const formattedTestData = {
-        name: testData.c_name,
-        test_type: testData.c_test_type,
-        type: testData.c_type,
-        description: testData.c_description,
-        paper_count: testData.c_paper_count,
-        course_id: testData.c_course_id,
-        start: testData.c_start ? testData.c_start.format('YYYY-MM-DD HH:mm:ss') : '',
-        end: testData.c_end ? testData.c_end.format('YYYY-MM-DD HH:mm:ss') : ''
-      };
-
-      const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_add', formattedTestData);
-      
-      if (response.data.code === 200) {
-        showSnackbar('测试添加成功');
-        fetchTests();
-        return true;
-      } else {
-        showSnackbar('测试添加失败: ' + response.data.message, 'error');
-        return false;
-      }
-    } catch (error: any) {
-      console.error('添加测试失败:', error);
-      showSnackbar('测试添加失败: ' + (error.response?.data?.message || error.message), 'error');
+  // 添加测试方法（修复时长传递问题）
+const handleAddTest = async (testData: TestData) => {
+  try {
+    // 验证数据
+    if (!testData.c_name.trim()) {
+      showSnackbar('测试名称不能为空', 'error');
       return false;
     }
-  };
+    
+    // 关键修复：确保时长正确传递，特别是考试类型
+    if (testData.c_type === '考试' && (!testData.c_duration || testData.c_duration <= 0)) {
+      showSnackbar('考试类型的测试必须设置有效的时长（分钟）', 'error');
+      return false;
+    }
 
-  // 更新测试
-  const handleUpdateTest = async (testData: TestData & { id: string }) => {
+      const formatDate = (dateString: string | null) => {
+      if (!dateString) return '';
+      // 如果只有日期部分，添加默认时间
+      if (dateString.length === 10) { // 假设是 YYYY-MM-DD 格式
+        return `${dateString} 00:00:00`;
+      }
+      return dateString;
+    };
+    
+    // 构建提交数据，确保duration字段正确设置
+    const { c_id, ...formattedTestData } = {
+      name: testData.c_name,
+      test_type: testData.c_test_type,
+      type: testData.c_type,
+      description: testData.c_description,
+      paper_count: testData.c_paper_count,
+      course_id: testData.c_course_id,
+       start: formatDate(testData.c_start),
+      end: formatDate(testData.c_end),
+      duration: testData.c_duration || 0 // 确保时长正确传递
+    };
+   
+
+    console.log('提交添加测试数据（包含时长）:', formattedTestData);
+    const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_add', formattedTestData);
+    
+    if (response.data.code === 200) {
+      showSnackbar('测试添加成功');
+      fetchTests();
+      return true;
+    } else {
+      showSnackbar('测试添加失败: ' + response.data.message, 'error');
+      return false;
+    }
+  } catch (error: any) {
+    console.error('添加测试失败:', error);
+    showSnackbar('测试添加失败: ' + (error.response?.data?.message || error.message), 'error');
+    return false;
+  }
+};
+
+  // 更新测试（确保传递正确的id）
+  const handleUpdateTest = async (testData: TestData) => {
     try {
+      // 关键验证：确保更新时有c_id
+      if (!testData.c_id) {
+        showSnackbar('测试ID不能为空，无法更新', 'error');
+        console.error('更新测试失败：c_id为空', testData);
+        return false;
+      }
+
+      // 验证测试时长是否存在（对于考试类型）
+      if (testData.c_type === '考试' && (!testData.c_duration || testData.c_duration <= 0)) {
+        showSnackbar('考试类型的测试必须设置有效的时长（分钟）', 'error');
+        return false;
+      }
+
+      // 构建更新数据，确保包含id字段（后端需要）
       const formattedTestData = {
-        id: testData.id,
+        id: testData.c_id, // 明确将c_id映射到后端需要的id字段
         name: testData.c_name,
         test_type: testData.c_test_type,
         type: testData.c_type,
         description: testData.c_description,
         paper_count: testData.c_paper_count,
         course_id: testData.c_course_id,
-        start: testData.c_start ? testData.c_start.format('YYYY-MM-DD HH:mm:ss') : '',
-        end: testData.c_end ? testData.c_end.format('YYYY-MM-DD HH:mm:ss') : ''
+        start: testData.c_start || '',
+        end: testData.c_end || '',
+        duration: testData.c_duration
       };
 
+      console.log('提交更新测试数据（含id）:', formattedTestData);
       const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_update', formattedTestData);
       
       if (response.data.code === 200) {
@@ -374,7 +428,7 @@ const TestManagement = () => {
       }
     } catch (error: any) {
       console.error('更新测试失败:', error);
-      showSnackbar('测试更新失败: ' + (error.response?.data?.message || error.message), 'error');
+      showSnackbar('更新测试失败: ' + (error.response?.data?.message || error.message), 'error');
       return false;
     }
   };
@@ -417,7 +471,7 @@ const TestManagement = () => {
     }
   };
 
-  // 获取测试详情（核心：确保返回c_id）
+  // 获取测试详情
   const fetchTestInfo = async (testId: string) => {
     try {
       const response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_info', {
@@ -425,11 +479,11 @@ const TestManagement = () => {
       });
       
       if (response.data.code === 200) {
-        // 后端返回的data已包含c_id，直接返回（关键：保留测试ID）
         return {
           ...response.data.data,
-          c_start: response.data.data.c_start ? moment(response.data.data.c_start) : null,
-          c_end: response.data.data.c_end ? moment(response.data.data.c_end) : null
+          c_start: response.data.data.c_start || null,
+          c_end: response.data.data.c_end || null,
+          c_duration: response.data.data.c_duration
         };
       } else {
         showSnackbar('获取测试详情失败: ' + response.data.message, 'error');
@@ -442,21 +496,42 @@ const TestManagement = () => {
     }
   };
 
-  // 新增：打开查看测试ID弹窗
+  // 打开查看测试ID弹窗
   const handleOpenViewTestId = (test: TestData, e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止事件冒泡（避免触发表格行点击）
+    e.stopPropagation();
     if (test.c_id) {
-      setCurrentTestId(test.c_id); // 存储当前测试的ID
-      setViewTestIdOpen(true);     // 打开弹窗
+      setCurrentTestId(test.c_id);
+      setViewTestIdOpen(true);
     } else {
       showSnackbar('测试ID不存在，无法查看', 'error');
     }
   };
 
-  // 新增：关闭查看测试ID弹窗
+  // 关闭查看测试ID弹窗
   const handleCloseViewTestId = () => {
     setViewTestIdOpen(false);
     setCurrentTestId(null);
+  };
+
+  // 复制测试ID到剪贴板
+  const copyTestIdToClipboard = () => {
+    if (currentTestId) {
+      navigator.clipboard.writeText(currentTestId)
+        .then(() => {
+          showSnackbar('测试ID已成功复制到剪贴板', 'success');
+        })
+        .catch((err) => {
+          console.error('复制失败:', err);
+          showSnackbar('复制失败，请手动复制', 'error');
+        });
+    }
+  };
+
+  // 打开批改试卷对话框
+  const handleOpenCorrection = (test: TestData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentTestForCorrection(test);
+    setIsCorrectionDialogOpen(true);
   };
 
   // 初始化数据
@@ -472,16 +547,32 @@ const TestManagement = () => {
     setPageTheory(1);
   };
 
-  // 打开添加测试对话框
+  // 打开添加测试对话框 - 确保不包含c_id
   const handleAddTestClick = () => {
-    setCurrentTest(null);
+    setCurrentTest({
+      c_name: '',
+      c_description: '',
+      c_test_type: '',
+      c_type: '',
+      c_paper_count: 1,
+      c_course_id: '',
+      c_start: null,
+      c_end: null,
+      c_duration: undefined
+      // 明确不设置c_id字段
+    });
     setIsDialogOpen(true);
   };
 
   // 打开编辑测试对话框
   const handleEditTest = async (test: TestData) => {
+    if (!test.c_id) {
+      showSnackbar('测试ID不存在，无法编辑', 'error');
+      return;
+    }
+    
     setLoading(true);
-    const testInfo = await fetchTestInfo(test.c_id || '');
+    const testInfo = await fetchTestInfo(test.c_id);
     setLoading(false);
     
     if (testInfo) {
@@ -513,14 +604,22 @@ const TestManagement = () => {
     }
   };
 
-  // 保存测试（分发添加/更新）
+  // 保存测试的方法
   const handleSaveTest = async (testData: TestData) => {
-    const isSuccess = currentTest 
-      ? await handleUpdateTest({ ...testData, id: currentTest.c_id || '' })
-      : await handleAddTest(testData);
-    
-    if (isSuccess) {
-      setIsDialogOpen(false);
+    try {
+      console.log('保存测试数据:', testData);
+      
+      // 根据是否有c_id判断是新增还是更新
+      const isSuccess = currentTest?.c_id 
+        ? await handleUpdateTest(testData)  // 更新操作，确保传递c_id
+        : await handleAddTest(testData);   // 新增操作，不传递c_id
+      
+      if (isSuccess) {
+        setIsDialogOpen(false);
+      }
+    } catch (error) {
+      console.error('保存测试失败:', error);
+      showSnackbar('保存测试时发生错误', 'error');
     }
   };
 
@@ -566,7 +665,7 @@ const TestManagement = () => {
     setDeleteConfirmOpen(true);
   };
 
-  // 关闭确认弹窗（统一处理用户和测试删除的弹窗关闭）
+  // 关闭确认弹窗
   const handleCloseConfirm = () => {
     setDeleteConfirmOpen(false);
     setUserToDelete(null);
@@ -576,8 +675,8 @@ const TestManagement = () => {
   // 获取测试状态
   const getTestStatus = (test: TestData) => {
     const now = moment();
-    const start = test.c_start || moment();
-    const end = test.c_end || moment();
+    const start = test.c_start ? moment(test.c_start) : moment().add(1, 'hour');
+    const end = test.c_end ? moment(test.c_end) : moment().add(2, 'hours');
     
     if (now.isBefore(start)) {
       return { label: '未开始', color: 'primary' as const };
@@ -594,8 +693,11 @@ const TestManagement = () => {
                           test.c_description.toLowerCase().includes(searchText.toLowerCase()) ||
                           test.c_course_id.toLowerCase().includes(searchText.toLowerCase());
     
-    const matchesStartDate = !startDate || (test.c_start && test.c_start.isSameOrAfter(startDate, 'day'));
-    const matchesEndDate = !endDate || (test.c_end && test.c_end.isSameOrBefore(endDate, 'day'));
+    const matchesStartDate = !startDate || 
+      (test.c_start && moment(test.c_start).isSameOrAfter(startDate, 'day'));
+      
+    const matchesEndDate = !endDate || 
+      (test.c_end && moment(test.c_end).isSameOrBefore(endDate, 'day'));
     
     return matchesSearch && matchesStartDate && matchesEndDate;
   });
@@ -617,7 +719,7 @@ const TestManagement = () => {
     pageTheory * rowsPerPage
   );
 
-  // 渲染测试表格（核心：在操作栏添加眼睛按钮）
+  // 渲染测试表格
   const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatch<React.SetStateAction<number>>, pageCount: number) => {
     if (loading) {
       return (
@@ -646,17 +748,20 @@ const TestManagement = () => {
                 <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>课程ID</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>时间范围</TableCell>
+                {activeTab === 'theory' && (
+                  <TableCell align="center" sx={{ fontWeight: 600 }}>时长(分钟)</TableCell>
+                )}
                 <TableCell align="center" sx={{ fontWeight: 600 }}>状态</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, width: 220 }}>操作</TableCell> {/* 调整宽度以容纳新按钮 */}
+                <TableCell align="center" sx={{ fontWeight: 600, width: 300 }}>操作</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {tests.map((test) => {
                 const status = getTestStatus(test);
-                const startStr = test.c_start ? test.c_start.format('YYYY-MM-DD') : '未设置';
-                const endStr = test.c_end ? test.c_end.format('YYYY-MM-DD') : '未设置';
+                const startStr = test.c_start ? moment(test.c_start).format('YYYY-MM-DD') : '未设置';
+                const endStr = test.c_end ? moment(test.c_end).format('YYYY-MM-DD') : '未设置';
                 const isDeleting = deletingTestId === test.c_id;
-                
+                const isPractice = test.c_type === '考试'; 
                 return (
                   <TableRow key={test.c_id} hover>
                     <TableCell sx={{ fontWeight: 500 }}>{test.c_name}</TableCell>
@@ -676,6 +781,9 @@ const TestManagement = () => {
                         <div>结束: {endStr}</div>
                       </Box>
                     </TableCell>
+                    {activeTab === 'theory' && (
+                      <TableCell align="center">{test.c_duration || 0}</TableCell>
+                    )}
                     <TableCell align="center">
                       <Chip 
                         label={status.label} 
@@ -684,18 +792,32 @@ const TestManagement = () => {
                         sx={{ borderRadius: 1, fontWeight: 500 }}
                       />
                     </TableCell>
-                    <TableCell align="center" sx={{ width: 220 }}>
-                      {/* 新增：查看测试ID按钮（眼睛图标） */}
+                    <TableCell align="center" sx={{ width: 300 }}>
+                      {/* 查看测试ID按钮 */}
                       <Tooltip title="查看测试ID">
                         <IconButton 
                           onClick={(e) => handleOpenViewTestId(test, e)} 
                           color="info" 
                           disabled={isDeleting}
-                          sx={{ mr: 0.5 }} // 调整间距
+                          sx={{ mr: 0.5 }}
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+
+                      {/* 批改试卷按钮 - 只在考试模式下显示 */}
+                      {isPractice && (
+                        <Tooltip title="批改试卷">
+                          <IconButton 
+                            onClick={(e) => handleOpenCorrection(test, e)} 
+                            color="warning" 
+                            disabled={isDeleting}
+                            sx={{ mr: 0.5 }}
+                          >
+                            <CheckCircleIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
 
                       {/* 编辑按钮 */}
                       <Tooltip title="编辑测试">
@@ -753,9 +875,8 @@ const TestManagement = () => {
     );
   };
 
-  // 渲染确认弹窗（区分用户删除和测试删除）
+  // 渲染确认弹窗
   const renderConfirmDialog = () => {
-    // 测试删除确认弹窗
     if (testToDelete) {
       return (
         <Dialog
@@ -805,7 +926,6 @@ const TestManagement = () => {
       );
     }
 
-    // 用户删除确认弹窗
     if (userToDelete) {
       return (
         <Dialog
@@ -858,154 +978,132 @@ const TestManagement = () => {
     return null;
   };
 
-  // 新增：渲染查看测试ID弹窗
-// 新增：复制测试ID到剪贴板的函数
-const copyTestIdToClipboard = () => {
-  if (currentTestId) {
-    navigator.clipboard.writeText(currentTestId)
-      .then(() => {
-        showSnackbar('测试ID已成功复制到剪贴板', 'success');
-      })
-      .catch((err) => {
-        console.error('复制失败:', err);
-        showSnackbar('复制失败，请手动复制', 'error');
-      });
-  }
-};
-
-
-const renderViewTestIdDialog = () => {
-  return (
-    <Dialog
-      open={viewTestIdOpen}
-      onClose={handleCloseViewTestId}
-      maxWidth="xs" // 更紧凑的宽度
-      PaperProps={{ 
-        style: { 
-          borderRadius: 12,
-          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1)',
-          overflow: 'hidden'
-        } 
-      }}
-    >
-      {/* 顶部装饰条 - 替代原来的标题背景 */}
-      <Box sx={{ 
-        height: 6, 
-        width: '100%', 
-        backgroundColor: theme => theme.palette.info.main 
-      }} />
-      
-      {/* 内容区域 - ID展示在中间 */}
-      <DialogContent sx={{ 
-        p: 5, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', // 水平居中
-        justifyContent: 'center', // 垂直居中
-        textAlign: 'center'
-      }}>
-        {/* 眼睛图标 */}
+  // 渲染查看测试ID弹窗
+  const renderViewTestIdDialog = () => {
+    return (
+      <Dialog
+        open={viewTestIdOpen}
+        onClose={handleCloseViewTestId}
+        maxWidth="xs"
+        PaperProps={{ 
+          style: { 
+            borderRadius: 12,
+            boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden'
+          } 
+        }}
+      >
         <Box sx={{ 
-          backgroundColor: theme => theme.palette.info.light,
-          borderRadius: '50%',
-          p: 2,
-          mb: 4,
-          color: theme => theme.palette.info.contrastText
-        }}>
-          <VisibilityIcon sx={{ fontSize: 32 }} />
-        </Box>
+          height: 6, 
+          width: '100%', 
+          backgroundColor: 'primary.main' 
+        }} />
         
-         {/* 标题文本 */}
-        <Typography variant="h6" sx={{ 
-          mb: 3, 
-          fontWeight: 600,
-          // 关键修改：使用主题的文本主色，自动适配明暗模式
-          color: theme => theme.palette.text.primary
+        <DialogContent sx={{ 
+          p: 5, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center'
         }}>
-          测试ID信息
-        </Typography>
+          <Box sx={{ 
+            backgroundColor: 'primary.light',
+            borderRadius: '50%',
+            p: 2,
+            mb: 4,
+            color: 'white'
+          }}>
+            <VisibilityIcon sx={{ fontSize: 32 }} />
+          </Box>
+          
+          <Typography variant="h6" sx={{ 
+            mb: 3, 
+            fontWeight: 600,
+            color: 'text.primary'
+          }}>
+            测试ID信息
+          </Typography>
 
-        {/* ID展示区域 */}
-        <Box sx={{ 
-          width: '100%',
-          mb: 4,
-          position: 'relative'
+          <Box sx={{ 
+            width: '100%',
+            mb: 4,
+            position: 'relative'
+          }}>
+            <Typography 
+              component="div" 
+              sx={{ 
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e9ecef',
+                borderRadius: 8,
+                p: 3,
+                fontFamily: 'monospace',
+                wordBreak: 'break-all',
+                fontSize: '1rem',
+                color: '#2d3748',
+                minHeight: 60,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              {currentTestId || '未获取到测试ID'}
+            </Typography>
+          </Box>
+          
+          <Typography sx={{ 
+            color: 'text.secondary', 
+            fontSize: '0.875rem',
+            mb: 1,
+            maxWidth: '90%'
+          }}>
+            测试ID用于系统内部标识，可复制用于数据查询和调试
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ 
+          p: 3, 
+          justifyContent: 'center', 
+          gap: 2,
+          borderTop: '1px solid',
+          borderColor: 'divider'
         }}>
-          <Typography 
-            component="div" 
+          <Button 
+            onClick={copyTestIdToClipboard}
+            variant="outlined"
+            startIcon={<ContentCopyIcon />}
             sx={{ 
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #e9ecef',
-              borderRadius: 8,
-              p: 3,
-              fontFamily: 'monospace',
-              wordBreak: 'break-all',
-              fontSize: '1rem',
-              color: '#2d3748',
-              minHeight: 60,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              textTransform: 'none',
+              borderRadius: 20,
+              px: 4,
+              borderColor: 'grey.300',
+              '&:hover': {
+                borderColor: 'primary.main',
+                backgroundColor: 'rgba(25, 118, 210, 0.04)'
+              }
             }}
           >
-            {currentTestId || '未获取到测试ID'}
-          </Typography>
-        </Box>
-        
-        {/* 提示文本 */}
-        <Typography sx={{ 
-          color: '#6c757d', 
-          fontSize: '0.875rem',
-          mb: 1,
-          maxWidth: '90%'
-        }}>
-          测试ID用于系统内部标识，可复制用于数据查询和调试
-        </Typography>
-      </DialogContent>
-      
-      {/* 底部按钮区域 */}
-      <DialogActions sx={{ 
-        p: 3, 
-        justifyContent: 'center', 
-        gap: 2,
-       borderTop: theme => `1px solid ${theme.palette.divider}`
-      }}>
-        <Button 
-          onClick={copyTestIdToClipboard}
-          variant="outlined"
-          startIcon={<ContentCopyIcon />}
-          sx={{ 
-            textTransform: 'none',
-            borderRadius: 20,
-            px: 4,
-            borderColor: '#dee2e6',
-            '&:hover': {
-              borderColor: theme => theme.palette.info.main,
-              backgroundColor: 'rgba(22, 163, 74, 0.04)'
-            }
-          }}
-        >
-          复制ID
-        </Button>
-        <Button 
-          onClick={handleCloseViewTestId}
-          variant="contained"
-          sx={{ 
-            textTransform: 'none',
-            borderRadius: 20,
-            px: 4,
-            backgroundColor: theme => theme.palette.info.main,
-            '&:hover': {
-              backgroundColor: theme => theme.palette.info.dark
-            }
-          }}
-        >
-          关闭
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
+            复制ID
+          </Button>
+          <Button 
+            onClick={handleCloseViewTestId}
+            variant="contained"
+            sx={{ 
+              textTransform: 'none',
+              borderRadius: 20,
+              px: 4,
+              backgroundColor: 'primary.main',
+              '&:hover': {
+                backgroundColor: 'primary.dark'
+              }
+            }}
+          >
+            关闭
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
 
   return (
     <Paper sx={{ p: 3, borderRadius: 4, position: 'relative' }}>
@@ -1037,7 +1135,7 @@ const renderViewTestIdDialog = () => {
             InputProps={{
               startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />,
             }}
-            sx={{ width: { xs: '100%', md: '100%' }, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           />
         </Grid>
         <Grid item xs={6} md={3}>
@@ -1136,10 +1234,20 @@ const renderViewTestIdDialog = () => {
         deletingKey={deletingKey}
       />
 
-      {/* 确认弹窗（用户删除或测试删除） */}
+      {/* 批改试卷对话框 */}
+      {currentTestForCorrection && (
+        <TestCorrectionDialog
+          open={isCorrectionDialogOpen}
+          onClose={() => setIsCorrectionDialogOpen(false)}
+          testId={currentTestForCorrection.c_id || ''}
+          testName={currentTestForCorrection.c_name}
+        />
+      )}
+
+      {/* 确认弹窗 */}
       {renderConfirmDialog()}
 
-      {/* 新增：查看测试ID弹窗 */}
+      {/* 查看测试ID弹窗 */}
       {renderViewTestIdDialog()}
 
       {/* 提示消息 */}
@@ -1158,3 +1266,5 @@ const renderViewTestIdDialog = () => {
 };
 
 export default TestManagement;
+
+

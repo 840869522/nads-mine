@@ -15,9 +15,19 @@ class VmController extends Controller
 
     private CommandLineService $cliService;
 
+    private const VALID_IMAGE_EXTENSIONS = [
+        'qcow2', 'raw', 'img', 'iso', 'vmdk', 'vdi', 'vhd', 'vhdx'
+    ];
+
     public function __construct(CommandLineService $cliService)
     {
         $this->cliService = $cliService;
+    }
+
+    private function isValidImageFile(string $path): bool
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return in_array($ext, self::VALID_IMAGE_EXTENSIONS, true);
     }
 
 
@@ -251,8 +261,8 @@ class VmController extends Controller
                 /** @var \SplFileInfo $fi */
                 // 仅处理普通文件；隐藏/临时文件自己按需调整
                 if (!$fi->isFile()) { continue; }
-
                 $vol  = $fi->getFilename();
+                if (!$this->isValidImageFile($vol)) { continue; }
                 $path = $fi->getPathname();
 
                 // 这些信息在底层已缓存，基本不触发额外子进程
@@ -313,6 +323,9 @@ class VmController extends Controller
                 // 某些版本只输出 Name/Path
                 $path = $cols[1];
             }
+
+            $targetPath = isset($path) ? $path : $name;
+            if (!$this->isValidImageFile($targetPath)) { continue; }
 
             // 用 Capacity 为主（更快且不触发 I/O）；没有就留空
             $bytes = $capacityStr ? $this->parseVirshSizeToBytes($capacityStr) : null;
@@ -393,6 +406,7 @@ class VmController extends Controller
             if (count($parts) < 1) { continue; }
             $vol = $parts[0];
             $path = $parts[1] ?? rtrim($poolPath, '/') . '/' . $vol;
+            if (!$this->isValidImageFile($path)) { continue; }
             $images[] = [
                 'name' => $vol,
                 'path' => $path,

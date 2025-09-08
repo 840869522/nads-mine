@@ -46,7 +46,9 @@ export const streamPostRequest = async (
         if (!response.body) {
             throw new Error('响应不支持流式数据');
         }
-
+        if (!response.ok) {
+            throw new Error("网络发生错误");
+        }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -63,7 +65,7 @@ export const streamPostRequest = async (
 
             for (const line of lines) {
                 if (line.startsWith('data:')) {
-                    const dataContent = line.replace('data:', '');
+                    const dataContent = line.replace('data:', '').trim();
                     if (dataContent) {
                         onMessage(dataContent); // 直接传递 data: 后的内容
                     }

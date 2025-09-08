@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\DockerService;
 use App\RunTool\CommandLineService;
+use App\RunTool\TopologyParser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
@@ -137,6 +138,31 @@ class InstanceController extends Controller
     {
         $instanceId = $instance->c_scene_instances_id;
         Log::info("开始删除场景实例: {$instanceId}");
+
+        // 先尝试根据场景配置JSON中的 iptablesRules 删除对应转发规则（按 hostPort 匹配）
+        try {
+            $instance->load('sceneConfig');
+            $sceneConfig = $instance->sceneConfig;
+            $topology = $sceneConfig?->c_scene ?? null;
+            if (is_array($topology)) {
+                $parsed = TopologyParser::parse($topology);
+                $iptablesRules = $parsed['iptablesRules'] ?? [];
+                if (!empty($iptablesRules)) {
+                    Log::info('开始清理该实例的 iptables 转发规则（基于 hostPort 匹配）', [
+                        'instance' => $instanceId,
+                        'rule_count' => count($iptablesRules),
+                    ]);
+                    // 注意：这里按 hostPort 解析系统现有规则删除，不依赖动态分配的实例IP
+                    $this->cliService->removeIptablesRulesByHostPorts($iptablesRules, $instanceId);
+                } else {
+                    Log::info('该实例场景未配置 iptablesRules，跳过转发规则清理。');
+                }
+            } else {
+                Log::warning('未获取到场景拓扑JSON，无法清理 iptables 转发规则。');
+            }
+        } catch (\Throwable $e) {
+            Log::error('清理 iptables 转发规则时发生错误（将继续删除其他资源）: ' . $e->getMessage());
+        }
 
         $instance->load(['containers', 'vms', 'switches']);
         $errors = [];
