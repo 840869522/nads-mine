@@ -300,7 +300,7 @@ Route::prefix('ad')->group(function () {
     // 你可能还有其他辅助路由，可以像这样添加
     // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
-// Flag 相关接口路由组，统一添加 JWT 认证
+// Flag 相关接口路由组，去掉JWT认证简化使用
 Route::prefix('flag')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');

@@ -164,10 +164,14 @@ export default function FlagHistoryPage() {
         try {
             // 简化版本，直接请求而不需要认证
             const response = await fetch('/back/api/flag/submission-history', {
-                method: 'GET',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({
+                    scope: 'all',
+                    target_scope: 'all_targets_in_all_scenes'
+                }),
             });
 
             if (response.ok) {
