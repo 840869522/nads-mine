@@ -44,7 +44,7 @@ app.prepare().then(() => {
   });
 
   // AI CHAT SERVER PROXY
-  const aiChatProxy = createProxyMiddleware({
+  const aiChatProxy = createProxyMiddleware({   
     target: AI_CHAT_URL,
     changeOrigin: true,
     pathRewrite : {"^/chat/" : "/"},

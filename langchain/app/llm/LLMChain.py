@@ -12,7 +12,6 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 from operator import itemgetter
 from . import qdrant
 from app import config
-from .CustomEmbeddings import CustomEmbeddings
 
 
 
@@ -38,21 +37,6 @@ chat_llm = ChatOpenAI(
     model=config['chatModel']['model'],
     base_url=config['chatModel']['base_url'],
     api_key=config['chatModel']['api_key'],
-)
-
-
-embedding_model = CustomEmbeddings(
-    model=config['embeddingModel']['model'],
-    base_url=config['embeddingModel']['base_url'],
-    api_key=config['embeddingModel']['api_key'],
-)
-
-
-
-vector_store = QdrantVectorStore(
-    client=qdrant,
-    collection_name="qdrant_collection",
-    embedding=embedding_model
 )
 
 chat_memory = ConversationBufferMemory(
