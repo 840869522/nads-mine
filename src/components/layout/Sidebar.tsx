@@ -165,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
             key={item.label}
             component={Link}
             href={item.to}
-            selected={pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to))}
+            selected={pathname === item.to}
             sx={{ pl: isSubmenu ? 4 : 2 }}
           >
             <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>

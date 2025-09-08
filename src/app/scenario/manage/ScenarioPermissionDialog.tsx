@@ -43,7 +43,7 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // 数据获取逻辑 (无变化)
+    // 数据获取逻辑
     useEffect(() => {
         const token = getCookie('_auth');
         const loadData = async () => {
@@ -67,7 +67,12 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
                     throw new Error(`加载数据失败 (HTTP 状态: ${usersRes.status}, ${permissionsRes.status})`);
                 }
                 const usersData = await usersRes.json();
-                const permissionsData = await usersRes.json();
+
+                // ▼▼▼ BUG修复 ▼▼▼
+                // 错误地对 usersRes 调用了两次 .json()，现已修正为对 permissionsRes 调用。
+                const permissionsData = await permissionsRes.json();
+                // ▲▲▲ 修复结束 ▲▲▲
+
                 const fetchedUsers: User[] = Array.isArray(usersData) ? usersData : [];
                 setAllUsers(fetchedUsers);
                 const currentPermissionIds: string[] = Array.isArray(permissionsData) ? permissionsData : [];
@@ -95,8 +100,46 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
         }
     }, [open, scenario, authContext?.user]);
 
-    // 保存权限逻辑 (无变化)
-    const handleSave = async () => { /* ... 省略，代码与之前版本相同 ... */ };
+    // 保存权限逻辑
+    const handleSave = async () => {
+        if (!scenario) {
+            setError("无法保存，场景信息丢失。");
+            return;
+        }
+        setIsSaving(true);
+        setError(null);
+        try {
+            const token = getCookie('_auth');
+            if (!token) {
+                throw new Error("认证失败，请重新登录。");
+            }
+            const grantedUserIds = Object.keys(permissions).filter(userId => permissions[userId]);
+            const response = await customFetch(`${API_PREFIX}/scenarios/${scenario.id}/permissions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'token': token,
+                },
+                body: JSON.stringify({ users: grantedUserIds }),
+            });
+
+            if (!response.ok) {
+                // 尝试解析错误信息
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `保存失败 (HTTP 状态: ${response.status})`);
+                } catch {
+                    throw new Error(`保存失败 (HTTP 状态: ${response.status})`);
+                }
+            }
+            onSaveSuccess(); // 调用父组件的回调
+            onClose(); // 关闭对话框
+        } catch (err: any) {
+            setError(err.message || "保存时发生未知错误。");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // 复选框变更处理器 (无变化)
     const handlePermissionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,12 +163,12 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
 
     const filteredUsers = getFilteredUsers();
 
-    // 1. 新增：计算“全选”复选框的状态
+    // 1. 计算“全选”复选框的状态 (无变化)
     const selectedFilteredCount = filteredUsers.filter(user => permissions[user.id]).length;
     const isAllFilteredSelected = filteredUsers.length > 0 && selectedFilteredCount === filteredUsers.length;
     const isSomeFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < filteredUsers.length;
 
-    // 2. 新增：“全选”复选框的点击事件处理器
+    // 2. “全选”复选框的点击事件处理器 (无变化)
     const handleSelectAllChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const isChecked = event.target.checked;
         const newPermissions = { ...permissions };
@@ -135,7 +178,7 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
         setPermissions(newPermissions);
     };
 
-    // 渲染对话框内容
+    // 渲染对话框内容 (无变化)
     const renderContent = () => {
         if (isLoading) {
             return (
@@ -176,7 +219,7 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
                     />
                 </Box>
 
-                {/* 3. 新增：“全选”复选框 UI */}
+                {/* “全选”复选框 UI */}
                 <Box sx={{ pl: 1, pr: 1, borderBottom: 1, borderColor: 'divider' }}>
                     <FormControlLabel
                         label="全选/取消全选 (当前结果)"
@@ -185,7 +228,7 @@ const ScenarioPermissionDialog: React.FC<ScenarioPermissionDialogProps> = ({ ope
                                 checked={isAllFilteredSelected}
                                 indeterminate={isSomeFilteredSelected}
                                 onChange={handleSelectAllChange}
-                                disabled={filteredUsers.length === 0} // 如果没有搜索结果，则禁用
+                                disabled={filteredUsers.length === 0}
                             />
                         }
                     />

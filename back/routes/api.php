@@ -25,7 +25,9 @@
     use App\Http\Controllers\Experiment\ExperimentResourceController;
     use App\Http\Controllers\Course\CoursePermissionController;
     use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
-use App\Http\Controllers\Test1\TestControllerNew;
+    use App\Http\Controllers\Test1\TestControllerNew;
+    use App\Http\Controllers\ad\GuidanceController;
+    use App\Http\Controllers\ad\OperationsController;
 
 /*
     |--------------------------------------------------------------------------
@@ -299,6 +301,37 @@ Route::prefix('ad')->group(function () {
 
     // 你可能还有其他辅助路由，可以像这样添加
     // Route::get('some-other-data', [SomeController::class, 'getData']);
+});
+//导调相关接口
+Route::prefix('guidance')->middleware('jwtcheck')->group(function () {
+    // 获取事件注入列表 (GET /api/guidance/injects)
+    Route::get('/injects', [GuidanceController::class, 'index']);
+
+    // 创建一个新的事件注入 (POST /api/guidance/injects)
+    Route::post('/injects', [GuidanceController::class, 'store']);
+
+    // 获取单个事件注入的详情 (GET /api/guidance/injects/{inject})
+    Route::get('/injects/{inject}', [GuidanceController::class, 'show']);
+
+    // 更新一个事件注入 (PUT /api/guidance/injects/{inject})
+    Route::put('/injects/{inject}', [GuidanceController::class, 'update']);
+
+    // 删除一个事件注入 (DELETE /api/guidance/injects/{inject})
+    Route::delete('/injects/{inject}', [GuidanceController::class, 'destroy']);
+
+    // 执行一个事件注入 (POST /api/guidance/injects/{inject}/execute)
+    Route::post('/injects/{inject}/execute', [GuidanceController::class, 'execute']);
+});
+//运维相关接口
+Route::prefix('operations')->middleware('jwtcheck')->group(function () {
+    // 获取系统日志列表 (GET /api/operations/logs)
+    Route::get('/logs', [OperationsController::class, 'index']);
+
+    // 确认一条日志 (POST /api/operations/logs/{log}/acknowledge)
+    Route::post('/logs/{log}/acknowledge', [OperationsController::class, 'acknowledge']);
+
+    // 解决一条日志 (POST /api/operations/logs/{log}/resolve)
+    Route::post('/logs/{log}/resolve', [OperationsController::class, 'resolve']);
 });
 // Flag 相关接口路由组，统一添加 JWT 认证
 Route::prefix('flag')->middleware('jwtcheck')->group(function () {

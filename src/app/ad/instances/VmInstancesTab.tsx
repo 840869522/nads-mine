@@ -19,7 +19,7 @@ import {
     Switch,
     FormControlLabel,
     Tooltip,
-    Chip, // Added Chip import
+    Chip,
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -59,7 +59,9 @@ interface VmInstance {
     scene_instance_id?: string;
     scene_name?: string;
     uptime?: string;
-    is_target: boolean; // Added is_target field
+    is_target: boolean;
+    // ★ 新增：添加 can_operate 字段以接收后端的权限标志
+    can_operate: boolean;
 }
 
 interface OverviewData {
@@ -79,7 +81,7 @@ interface VmInstancesTabProps {
     instanceId: string | null;
 }
 
-/* ---------- SWR Hooks ---------- */
+/* ---------- SWR Hooks (无改动) ---------- */
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefObject<number>) {
@@ -90,7 +92,7 @@ function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefOb
         isValidating,
         mutate,
     } = useSWR<VmInstance[]>(
-        instanceId ? `/back/api/scenariosinstances/${instanceId}/vms` : null, // 根据 instanceId 动态生成 URL
+        instanceId ? `/back/api/scenariosinstances/${instanceId}/vms` : null,
         fetcher,
         {
             dedupingInterval: 10_000,
@@ -152,7 +154,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         pool: false,
         osType: true,
         ip: true,
-        is_target: true, // Added for the new column
+        is_target: true,
     });
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
@@ -239,20 +241,12 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         () => [
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
             { field: 'name', headerName: '名称', flex: 1 },
-            // New column for "Is Target"
             {
                 field: 'is_target',
                 headerName: '是否为靶机',
                 width: 120,
                 hide: !showColumns.is_target,
-                renderCell: (params) => (
-                    <Chip
-                        label={params.value ? '是' : '否'}
-                        color={params.value ? 'primary' : 'default'}
-                        size="small"
-                        variant="outlined"
-                    />
-                )
+                renderCell: (params) => ( <Chip label={params.value ? '是' : '否'} color={params.value ? 'primary' : 'default'} size="small" variant="outlined" /> )
             },
             { field: 'osType', headerName: 'OS 类型', width: 120, hide: !showColumns.osType, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.osType ?? 'N/A'}</VmInfoCell> },
             { field: 'hostNode', headerName: '宿主机', width: 120, hide: !showColumns.hostNode, renderCell: (p) => <VmInfoCell id={p.row.id} width={80}>{d => d.hostNode}</VmInfoCell> },
@@ -271,37 +265,36 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     const state = info?.status || vm.state;
                     const isRunning = state === 'running';
                     const isPaused = state === 'paused';
-                    const isTarget = vm.is_target; // 检查是否为靶机
+                    const isTarget = vm.is_target;
+
+                    // ★ 核心修改：从后端数据中获取操作权限
+                    const canOperate = vm.can_operate;
+
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    <Tooltip title="暂停"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}><PauseIcon fontSize="small" /></IconButton></Tooltip>
-                                    <Tooltip title="关机"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}><StopIcon fontSize="small" color="error" /></IconButton></Tooltip>
-                                    <Tooltip title="重启"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}><ResetIcon fontSize="small" /></IconButton></Tooltip>
+                                    {/* ★ 修改：在 disabled 条件中加入 !canOperate，并用 <span> 包裹 Tooltip */}
+                                    <Tooltip title={canOperate ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperate}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperate ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperate}><StopIcon fontSize="small" color={canOperate ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperate ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperate}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
                                 </>
                             ) : (
-                                <Tooltip title={isPaused ? "恢复" : "启动"}><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading}><StartIcon fontSize="small" color="success" /></IconButton></Tooltip>
+                                <Tooltip title={canOperate ? (isPaused ? "恢复" : "启动") : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading || !canOperate}><StartIcon fontSize="small" color={canOperate ? "success" : "disabled"} /></IconButton></Box></Tooltip>
                             )}
-                            <Tooltip title="删除"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}><DeleteIcon fontSize="small" color="error" /></IconButton></Tooltip>
-                            {/* 只有靶机才显示Flag提交按钮 */}
+                            <Tooltip title={canOperate ? "删除" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading || !canOperate}><DeleteIcon fontSize="small" color={canOperate ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+
                             {isTarget && (
-                                <Tooltip title="提交Flag">
-                                    <span>
-                                        <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
-                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
+                                <Tooltip title="提交Flag"><Box component="span"><IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}><FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} /></IconButton></Box></Tooltip>
                             )}
-                            <Tooltip title="日志">
-                                <span>
-                                    <IconButton onClick={() => handleOpenLogs(vm)} size="small">
-                                        <ArticleIcon fontSize="small" />
-                                    </IconButton>
-                                </span>
-                            </Tooltip>
-                            <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
+
+                            <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(vm)} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
+
+                            <Tooltip title={canOperate ? "更多操作" : "无权限"}><Box component="span">
+                                <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })} disabled={!isRunning || !canOperate}>
+                                    <ArrowDownIcon fontSize="small" />
+                                </IconButton>
+                            </Box></Tooltip>
                         </Box>
                     );
                 },
@@ -316,79 +309,37 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         return rows;
     }, [data, search, showRunningOnly]);
 
-    // 如果没有instanceId，显示提示信息
     if (!instanceId) {
-        return (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography color="text.secondary">请先选择一个场景实例。</Typography>
-            </Box>
-        );
+        return ( <Box sx={{ p: 3, textAlign: 'center' }}><Typography color="text.secondary">请先选择一个场景实例。</Typography></Box> );
     }
 
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
                 <Typography variant="h6">虚拟机列表</Typography>
-                <TextField
-                    variant="outlined"
-                    placeholder="搜索虚拟机..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    size="small"
-                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-                    sx={{ width: { xs: "100%", sm: 260 } }}
-                />
-                <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={() => mutate()} disabled={isValidating}>
-                    {isValidating ? '刷新中...' : '刷新'}
-                </Button>
+                <TextField variant="outlined" placeholder="搜索虚拟机..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ width: { xs: "100%", sm: 260 } }} />
+                <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={() => mutate()} disabled={isValidating}> {isValidating ? '刷新中...' : '刷新'} </Button>
                 <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
-                <FormControlLabel
-                    control={<Checkbox checked={showRunningOnly} onChange={(e) => setShowRunningOnly(e.target.checked)} />}
-                    label="只显示运行中"
-                />
+                <FormControlLabel control={<Checkbox checked={showRunningOnly} onChange={(e) => setShowRunningOnly(e.target.checked)} />} label="只显示运行中" />
             </Box>
 
             <Menu anchorEl={columnAnchor} open={Boolean(columnAnchor)} onClose={() => setColumnAnchor(null)}>
                 {Object.entries(showColumns).map(([key, val]) => (
                     <MenuItem key={key}>
-                        <FormControlLabel
-                            control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} />}
-                            label={
-                                key === 'hostNode' ? '宿主机' :
-                                    key === 'pool' ? '存储池' :
-                                        key === 'osType' ? '系统类型' :
-                                            key === 'ip' ? 'IP地址' :
-                                                key === 'is_target' ? '是否为靶机' :
-                                                    key // Fallback label
-                            }
-                        />
+                        <FormControlLabel control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} />}
+                                          label={ key === 'hostNode' ? '宿主机' : key === 'pool' ? '存储池' : key === 'osType' ? '系统类型' : key === 'ip' ? 'IP地址' : key === 'is_target' ? '是否为靶机' : key } />
                     </MenuItem>
                 ))}
             </Menu>
 
             <Box component={Paper} sx={{ height: 'calc(100vh - 350px)', width: '100%' }}>
-                <DataGrid
-                    rows={filteredRows}
-                    columns={columns}
-                    loading={isLoading}
-                    density="compact"
-                    pageSizeOptions={[10, 25, 50]}
-                    paginationModel={{ pageSize: rowsPerPage, page }}
-                    onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
-                    sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }}
-                />
+                <DataGrid rows={filteredRows} columns={columns} loading={isLoading} density="compact" pageSizeOptions={[10, 25, 50]} paginationModel={{ pageSize: rowsPerPage, page }} onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }} sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }} />
             </Box>
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'ssh'); }}>
-                    <SshIcon fontSize="small" sx={{ mr: 1 }} /> SSH
-                </MenuItem>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'rdp'); }}>
-                    <RdpIcon fontSize="small" sx={{ mr: 1 }} /> RDP
-                </MenuItem>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}>
-                    <VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台
-                </MenuItem>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'ssh'); }}><SshIcon fontSize="small" sx={{ mr: 1 }} /> SSH</MenuItem>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'rdp'); }}><RdpIcon fontSize="small" sx={{ mr: 1 }} /> RDP</MenuItem>
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}><VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台</MenuItem>
             </Menu>
 
             <Backdrop open={actionLoading} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
@@ -396,14 +347,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Backdrop>
 
             {flagSubmissionModalId && (
-                <FlagSubmissionModal
-                    open={Boolean(flagSubmissionModalId)}
-                    onClose={() => setFlagSubmissionModalId(null)}
-                    instanceId={flagSubmissionModalId}
-                    instanceType="vm"
-                    sceneInstanceId={instanceId || ''}
-                    instanceName={data?.find(vm => vm.id === flagSubmissionModalId)?.name}
-                />
+                <FlagSubmissionModal open={Boolean(flagSubmissionModalId)} onClose={() => setFlagSubmissionModalId(null)} instanceId={flagSubmissionModalId} instanceType="vm" sceneInstanceId={instanceId || ''} instanceName={data?.find(vm => vm.id === flagSubmissionModalId)?.name} />
             )}
         </Box>
     );

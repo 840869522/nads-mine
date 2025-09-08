@@ -46,12 +46,22 @@ class InstanceController extends Controller
         }
     }
 
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以集成“可见但不可操作”的权限控制
+     */
     public function show(SceneInstance $instance)
     {
         try {
-            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
+            // ★ 修改 1：不再进行权限过滤，获取此场景下的所有容器
+            $containersFromDb = $instance->containers()->get();
+
+            // ★ 新增：一次性获取演练配置信息，避免在循环中重复查询
+            $adConfig = AdConfig::where('c_scene_instance_id', $instance->c_scene_instances_id)->first();
+
             $runningInstances = [];
-            foreach ($instance->containers as $containerInstance) {
+            $instance->loadMissing('sceneConfig');
+
+            foreach ($containersFromDb as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
                 try {
                     $details = $this->docker->containerInspect($containerId);
@@ -64,9 +74,11 @@ class InstanceController extends Controller
                     $memLimit = $stats->memory_stats->limit ?? 0;
 
                     $ports = [];
-                    foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
-                        foreach ($bindingList ?? [] as $b) {
-                            $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
+                    if ($details->getHostConfig()) {
+                        foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
+                            foreach ($bindingList ?? [] as $b) {
+                                $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
+                            }
                         }
                     }
 
@@ -85,9 +97,29 @@ class InstanceController extends Controller
                         'uptime' => $details->getState()->getStartedAt(),
                         'createdAt' => $details->getCreated(),
                         'is_target' => !empty($containerInstance->c_flag),
+                        // ★ 修改 2：调用权限判断方法，动态生成 can_operate 字段
+                        'can_operate' => $containerInstance->canBeOperatedByUser($adConfig),
                     ];
                 } catch (\Exception $e) {
-                    Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
+                    Log::warning("无法 inspect 容器 {$containerId} (可能已被删除): " . $e->getMessage());
+                    // 增强：即使容器物理上不存在，也返回一条带有错误状态和权限信息的记录
+                    $runningInstances[] = [
+                        'id' => $containerId,
+                        'name' => $containerInstance->c_container_name ?? "未知 (ID: " . substr($containerId, 0, 12) . ")",
+                        'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
+                        'status' => 'error',
+                        'ports' => 'N/A',
+                        'imageName' => 'N/A',
+                        'cpuUsage' => 'N/A',
+                        'memoryUsage' => 'N/A',
+                        'uptime' => 'N/A',
+                        'createdAt' => 'N/A',
+                        'is_target' => !empty($containerInstance->c_flag),
+                        'can_operate' => $containerInstance->canBeOperatedByUser($adConfig),
+                    ];
                 }
             }
             return response()->json($runningInstances);

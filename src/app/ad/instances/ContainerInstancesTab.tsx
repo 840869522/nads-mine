@@ -12,7 +12,12 @@ import {
     Article as ArticleIcon
 } from '@mui/icons-material';
 
-import { RunningInstance, InstanceStatus } from '@/types';
+// ★ 修改：在 RunningInstance 类型中增加 can_operate 字段
+import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
+interface RunningInstance extends OriginalRunningInstance {
+    can_operate: boolean;
+}
+
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
@@ -48,7 +53,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
-        is_target: true, // Added for the new column
+        is_target: true,
         imageName: true,
         ports: true,
         cpuUsage: true,
@@ -77,6 +82,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         }
         setIsLoading(true);
         setFetchError(null);
+        // ★ 注意：确保此 API 端点现在返回的是带有 can_operate 字段的完整列表
         const url = `${API_BASE}/api/scenariosinstances/${instanceId}`;
         try {
             const res = await customFetch(url);
@@ -171,20 +177,12 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
-        // New column for "Is Target"
         {
             field: 'is_target',
             headerName: '是否为靶机',
             width: 120,
             hide: !showColumns.is_target,
-            renderCell: (params) => (
-                <Chip
-                    label={params.value ? '是' : '否'}
-                    color={params.value ? 'primary' : 'default'}
-                    size="small"
-                    variant="outlined"
-                />
-            )
+            renderCell: (params) => ( <Chip label={params.value ? '是' : '否'} color={params.value ? 'primary' : 'default'} size="small" variant="outlined" /> )
         },
         { field: 'imageName', headerName: '镜像', flex: 2, hide: !showColumns.imageName },
         { field: 'ports', headerName: '端口', flex: 2, hide: !showColumns.ports },
@@ -203,48 +201,49 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isStopped = instance.status === 'exited' || instance.status === 'stopped';
                 const isRunning = instance.status === 'running';
                 const isPaused = instance.status === 'paused';
-                const isTarget = instance.is_target; // 检查是否为靶机
+                const isTarget = instance.is_target;
+
+                // ★ 核心修改：从后端数据中获取操作权限
+                const canOperate = instance.can_operate;
+
                 return (
                     <Box>
-                        <Tooltip title={isRunning ? '暂停' : '启动'}>
-                            <span>
-                                <IconButton onClick={() => isRunning ? handlePauseInstance(instance) : handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped)}>
-                                    {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color="success" />}
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                        <Tooltip title="停止">
-                            <span>
-                                <IconButton onClick={() => handleStopInstance(instance)} size="small" disabled={!isActionable || isStopped}>
-                                    <StopIcon fontSize="small" color={isStopped ? 'disabled' : 'error'} />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                        <Tooltip title="删除">
-                            <span>
-                                <IconButton onClick={() => handleDeleteInstance(instance)} size="small" disabled={!isActionable || !isStopped && instance.status !== 'error'}>
-                                    <DeleteIcon fontSize="small" color={isStopped || instance.status === 'error' ? (isActionable ? 'error' : 'disabled') : 'disabled'} />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                        {/* 只有靶机才显示Flag提交按钮 */}
+                        {/* ★ 修改：在所有操作按钮的 disabled 条件中加入 !canOperate */}
+                        <Tooltip title={canOperate ? (isRunning ? '暂停' : '启动') : "无权限"}><Box component="span">
+                            <IconButton onClick={() => isRunning ? handlePauseInstance(instance) : handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperate}>
+                                {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={canOperate ? "success" : "disabled"} />}
+                            </IconButton>
+                        </Box></Tooltip>
+                        <Tooltip title={canOperate ? "停止" : "无权限"}><Box component="span">
+                            <IconButton onClick={() => handleStopInstance(instance)} size="small" disabled={!isActionable || isStopped || !canOperate}>
+                                <StopIcon fontSize="small" color={!isStopped && canOperate ? 'error' : 'disabled'} />
+                            </IconButton>
+                        </Box></Tooltip>
+                        <Tooltip title={canOperate ? "删除" : "无权限"}><Box component="span">
+                            <IconButton onClick={() => handleDeleteInstance(instance)} size="small" disabled={!isActionable || (!isStopped && instance.status !== 'error') || !canOperate}>
+                                <DeleteIcon fontSize="small" color={(isStopped || instance.status === 'error') && canOperate ? 'error' : 'disabled'} />
+                            </IconButton>
+                        </Box></Tooltip>
+
                         {isTarget && (
-                            <Tooltip title="提交Flag">
-                                <span>
-                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                    </IconButton>
-                                </span>
-                            </Tooltip>
-                        )}
-                        <Tooltip title="日志">
-                            <span>
-                                <IconButton onClick={() => handleOpenLogs(instance)} size="small">
-                                    <ArticleIcon fontSize="small" />
+                            <Tooltip title="提交Flag"><Box component="span">
+                                <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                    <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
                                 </IconButton>
-                            </span>
-                        </Tooltip>
-                        <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
+                            </Box></Tooltip>
+                        )}
+
+                        <Tooltip title="日志"><Box component="span">
+                            <IconButton onClick={() => handleOpenLogs(instance)} size="small">
+                                <ArticleIcon fontSize="small" />
+                            </IconButton>
+                        </Box></Tooltip>
+
+                        <Tooltip title={canOperate ? "更多操作" : "无权限"}><Box component="span">
+                            <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small" disabled={!canOperate}>
+                                <MoreVertIcon fontSize="small" />
+                            </IconButton>
+                        </Box></Tooltip>
                     </Box>
                 );
             }
@@ -264,13 +263,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                 <Typography variant="h6">容器列表</Typography>
-                <TextField
-                    variant="outlined"
-                    placeholder="搜索容器名称或镜像..."
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    size="small"
-                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-                />
+                <TextField variant="outlined" placeholder="搜索容器名称或镜像..." onChange={(e) => setSearchTerm(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} />
                 <Button startIcon={<RefreshIcon />} onClick={fetchInstanceDetails} size="small" variant="outlined" disabled={isLoading}>
                     {isLoading ? '刷新中...' : '刷新'}
                 </Button>
@@ -285,84 +278,48 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MuiAlert severity="error">{fetchError}</MuiAlert>
             ) : (
                 <Box component={Paper} sx={{ height: 'calc(100vh - 300px)', width: '100%' }}>
-                    <DataGrid
-                        rows={filteredContainers}
-                        columns={columns}
-                        pageSizeOptions={[10, 20, 50, 100]}
-                        disableRowSelectionOnClick
-                        autoHeight={false}
-                        sx={{
-                            border: 0,
-                            '& .MuiDataGrid-columnHeaders': {
-                                bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
-                            }
-                        }}
-                    />
+                    <DataGrid rows={filteredContainers} columns={columns} pageSizeOptions={[10, 20, 50, 100]} disableRowSelectionOnClick autoHeight={false}
+                              sx={{ border: 0, '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }} />
                 </Box>
             )}
 
             <Menu anchorEl={columnAnchorEl} open={Boolean(columnAnchorEl)} onClose={()=>setColumnAnchorEl(null)}>
                 {Object.entries(showColumns).map(([key,val])=> (
                     <MenuItem key={key}>
-                        <FormControlLabel
-                            control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
-                            label={
-                                key === 'id' ? '容器 ID' :
-                                    key === 'imageName' ? '镜像名' :
-                                        key === 'ports' ? '端口' :
-                                            key === 'cpuUsage' ? 'CPU' :
-                                                key === 'memoryUsage' ? '内存' :
-                                                    key === 'ipAddress' ? 'IP' :
-                                                        key === 'scene_instance_id' ? '场景实例ID' :
-                                                            key === 'scene_name' ? '场景名称' :
-                                                                key === 'is_target' ? '是否为靶机' : // Added label for new column
-                                                                    '运行时间'
-                            }
-                        />
+                        <FormControlLabel control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
+                                          label={ key === 'id' ? '容器 ID' : key === 'imageName' ? '镜像名' : key === 'ports' ? '端口' : key === 'cpuUsage' ? 'CPU' : key === 'memoryUsage' ? '内存' : key === 'ipAddress' ? 'IP' : key === 'scene_instance_id' ? '场景实例ID' : key === 'scene_name' ? '场景名称' : key === 'is_target' ? '是否为靶机' : '运行时间' } />
                     </MenuItem>
                 ))}
             </Menu>
 
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
-                <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Logs
-                </MenuItem>
-                <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Inspect
-                </MenuItem>
-                <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Bind mounts
-                </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Logs </MenuItem>
+                <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Inspect </MenuItem>
+                <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Bind mounts </MenuItem>
+                <MenuItem onClick={() => {
+                    const instance = instances.find(inst => inst.id === moreMenuAnchor.id);
+                    if (instance?.can_operate && moreMenuAnchor.id) {
+                        openTerminal(moreMenuAnchor.id);
+                    }
+                    setMoreMenuAnchor({ anchor: null, id: null });
+                }}
+                    // ★ 修改：禁用终端菜单项
+                          disabled={!instances.find(inst => inst.id === moreMenuAnchor.id)?.can_operate}
+                >
                     Terminal
                 </MenuItem>
             </Menu>
 
             {confirmActionProps && (
-                <ConfirmActionDialog
-                    open={isConfirmDialogOpen}
-                    onClose={() => setIsConfirmDialogOpen(false)}
-                    title={confirmActionProps.title}
-                    message={confirmActionProps.message}
-                    onConfirm={() => {
-                        confirmActionProps.onConfirm();
-                        setIsConfirmDialogOpen(false);
-                    }}
-                />
+                <ConfirmActionDialog open={isConfirmDialogOpen} onClose={() => setIsConfirmDialogOpen(false)} title={confirmActionProps.title} message={confirmActionProps.message}
+                                     onConfirm={() => { confirmActionProps.onConfirm(); setIsConfirmDialogOpen(false); }} />
             )}
 
             {logsModalId && <ContainerLogsModal open={Boolean(logsModalId)} containerId={logsModalId} onClose={() => setLogsModalId(null)} />}
             {inspectModalId && <ContainerInspectModal open={Boolean(inspectModalId)} containerId={inspectModalId} onClose={() => setInspectModalId(null)} />}
             {bindsModalId && <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />}
             {flagSubmissionModalId && (
-                <FlagSubmissionModal
-                    open={Boolean(flagSubmissionModalId)}
-                    onClose={() => setFlagSubmissionModalId(null)}
-                    instanceId={flagSubmissionModalId}
-                    instanceType="docker"
-                    sceneInstanceId={instanceId || ''}
-                    instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
-                />
+                <FlagSubmissionModal open={Boolean(flagSubmissionModalId)} onClose={() => setFlagSubmissionModalId(null)} instanceId={flagSubmissionModalId} instanceType="docker" sceneInstanceId={instanceId || ''} instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name} />
             )}
         </Box>
     );
