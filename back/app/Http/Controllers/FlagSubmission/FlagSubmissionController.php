@@ -51,10 +51,12 @@ class FlagSubmissionController extends BaseController
     public function submitFlag(Request $request)
     {
         // 1. 简化用户信息获取，使用请求参数或默认用户
-        $username = $request->input('username', 'anonymous');
-        if (empty($username)) {
-            $username = 'anonymous';
-        }
+        $token_data  = $req->input("token_data");
+        $username = $token_data['id'];
+//         $username = $request->input('username', 'anonymous');
+//         if (empty($username)) {
+//              = 'anonymous';
+//         }
 
         // 2. 参数校验
         $validator = Validator::make($request->all(), [
@@ -79,7 +81,7 @@ class FlagSubmissionController extends BaseController
         $correctFlag = null;
         $instance = null; // 确保实例变量在任何情况下都已定义
         $actualDbId = null; // 存储实际的数据库ID
-        
+
         // 添加详细的参数调试信息
         Log::info("Flag提交请求参数详情", [
             'all_inputs' => $request->all(),
@@ -110,7 +112,7 @@ class FlagSubmissionController extends BaseController
                 $correctFlag = $instance->c_flag;
                 $actualDbId = $instance->c_container_id; // 容器ID就是数据库ID
                 Log::info("找到容器实例", [
-                    'container_name' => $instance->c_container_name, 
+                    'container_name' => $instance->c_container_name,
                     'has_flag' => !empty($correctFlag)
                 ]);
             } else {
@@ -131,14 +133,14 @@ class FlagSubmissionController extends BaseController
                 'is_numeric' => is_numeric($instance_id),
                 'is_uuid' => preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $instance_id)
             ]);
-            
+
             $actualDbId = null; // 存储实际的数据库ID
-            
+
             // 方法1：尝试作为数字ID查找（数据库c_vm_id）
             if (is_numeric($instance_id)) {
                 $vmId = (int)$instance_id;
                 Log::info("尝试按数字ID查找", ['vm_id' => $vmId]);
-                
+
                 $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
                                                 ->where('c_scene_instances_id', $c_scene_instances_id)
                                                 ->first();
@@ -147,23 +149,23 @@ class FlagSubmissionController extends BaseController
                     $actualDbId = $instance->c_vm_id;
                     Log::info("按数字ID找到VM实例", [
                         'vm_id' => $instance->c_vm_id,
-                        'vm_name' => $instance->c_vm_name, 
+                        'vm_name' => $instance->c_vm_name,
                         'has_flag' => !empty($correctFlag)
                     ]);
                 }
             }
-            
+
             // 方法2：如果按数字ID没找到，尝试作为UUID查找
             if (!$instance && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $instance_id)) {
                 Log::info("数字ID没找到，尝试作为UUID查找", ['uuid' => $instance_id]);
-                
+
                 try {
                     // 通过virsh获取VM名称
                     $vmName = trim(shell_exec("virsh -c qemu:///system domname '{$instance_id}' 2>/dev/null") ?? '');
-                    
+
                     if (!empty($vmName)) {
                         Log::info("通过UUID找到VM名称", ['uuid' => $instance_id, 'vm_name' => $vmName]);
-                        
+
                         // 通过VM名称在数据库中查找
                         $instance = SceneVmInstanceModel::where('c_vm_name', $vmName)
                                                         ->where('c_scene_instances_id', $c_scene_instances_id)
@@ -190,7 +192,7 @@ class FlagSubmissionController extends BaseController
                     Log::error("UUID查找失败", ['uuid' => $instance_id, 'error' => $e->getMessage()]);
                 }
             }
-            
+
             // 如果前两种都没找到，记录错误信息
             if (!$instance) {
                 Log::error("VM实例查找完全失败", [
@@ -238,7 +240,7 @@ class FlagSubmissionController extends BaseController
             // 如果数据库中只存储UUID，加上flag{}包装
             $normalizedCorrectFlag = 'flag{' . $correctFlag . '}';
         }
-        
+
         // 添加详细的flag比对调试信息
         Log::info("Flag比对详情", [
             'submitted_flag' => $submittedFlag,
@@ -253,7 +255,7 @@ class FlagSubmissionController extends BaseController
             'submitted_flag_hex' => bin2hex($submittedFlag),
             'correct_flag_hex' => bin2hex($normalizedCorrectFlag ?? '')
         ]);
-        
+
         $is_correct = (trim($submittedFlag) === trim($normalizedCorrectFlag));
         $points_earned = 0;
         $message = 'Flag提交失败，请重试';
@@ -338,14 +340,14 @@ class FlagSubmissionController extends BaseController
                 'c_vm_instance_id' => $submission->c_vm_instance_id,
                 'instance_type' => $instance_type,
             ];
-            
+
             Log::info("📱 即将发送WebSocket消息", [
                 'workerman_service_exists' => !is_null($this->workermanService),
                 'broadcast_data' => $broadcastData
             ]);
-            
+
             $sendResult = $this->workermanService->send($broadcastData);
-            
+
             Log::info("📱 WebSocket消息发送结果", [
                 'send_result' => $sendResult,
                 'message_type' => $broadcastData['type']
@@ -361,8 +363,8 @@ class FlagSubmissionController extends BaseController
             //     'points_earned' => $points_earned,
             //     'instance_type' => $instance_type,
             //     'instance_id' => $instance_id,
-            //     'instance_name' => $instance_type === 'docker' 
-            //         ? ($instance->c_container_name ?? 'Unknown Container') 
+            //     'instance_name' => $instance_type === 'docker'
+            //         ? ($instance->c_container_name ?? 'Unknown Container')
             //         : ($instance->c_vm_name ?? 'Unknown VM'),
             //     'scene_instance_id' => $c_scene_instances_id,
             //     'attempt_count' => $submission->c_attempt_count,
@@ -388,7 +390,7 @@ class FlagSubmissionController extends BaseController
                     'username' => $username ?? 'null'
                 ]
             ]);
-            
+
             // 返回更详细的错误信息用于调试
             return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '系统错误: ' . $e->getMessage());
         }
@@ -593,7 +595,7 @@ class FlagSubmissionController extends BaseController
 
             // 5. 合并结果
             $targetInstances = $containerInstances->merge($vmInstances);
-            
+
             Log::info("获取到的目标靶机实例", [
                 'scene_id' => $sceneId,
                 'container_count' => $containerInstances->count(),
@@ -625,7 +627,7 @@ class FlagSubmissionController extends BaseController
     public function debugSceneData(Request $request)
     {
         $sceneId = $request->input('scene_id');
-        
+
         try {
             $result = [
                 'scene_instance' => SceneInstanceModel::where('c_scene_instances_id', $sceneId)
@@ -648,7 +650,7 @@ class FlagSubmissionController extends BaseController
                     ->whereNotNull('c_flag')
                     ->count(),
             ];
-            
+
             return response()->json($result);
         } catch (\Exception $e) {
             Log::error("调试数据获取失败: " . $e->getMessage());
@@ -667,21 +669,21 @@ class FlagSubmissionController extends BaseController
         try {
             // 使用 Laravel Redis facade（兼容 predis）
             $redis = \Illuminate\Support\Facades\Redis::connection('cache');
-            
+
             // 发送到 Redis 列表（可以用作消息队列）
             $listKey = 'flag_submissions_queue';
             $redis->lpush($listKey, json_encode($messageData));
-            
+
             // 设置一个带过期时间的键值对（用于监控最新提交）
             $latestKey = 'latest_flag_submission:' . $messageData['user_id'];
             $redis->setex($latestKey, 3600, json_encode($messageData)); // 1小时过期
-            
+
             // 发送到 Redis 频道（用于实时通知）
             $channelName = 'flag_submissions_channel';
             $redis->publish($channelName, json_encode($messageData));
-            
+
             Log::info("Redis 消息发送成功", ['user' => $messageData['username'], 'event' => $messageData['event']]);
-            
+
         } catch (\Exception $e) {
             Log::error("Redis 消息发送失败: " . $e->getMessage(), ['messageData' => $messageData]);
         }
