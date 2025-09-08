@@ -25,7 +25,9 @@ class WSClient {
   connect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
 
-    console.log('正在连接WebSocket...');
+    console.log('正在连接WebSocket...', this.url);
+    console.log('当前页面地址:', window.location.href);
+    console.log('解析的主机名:', window.location.hostname);
     this.ws = new WebSocket(this.url);
 
     this.ws.onopen = () => {
@@ -149,5 +151,12 @@ class WSClient {
   }
 }
 
-// 全局单例
-export const websocketClient = new WSClient("ws://10.12.0.102:8080");
+// 全局单例 - 使用与前端相同的地址和端口，通过 Next.js 代理访问 WebSocket
+const getWebSocketUrl = () => {
+  if (typeof window !== 'undefined') {
+    return `ws://${window.location.host}/ws`; // 使用/ws路径通过代理访问
+  }
+  return 'ws://localhost:3000/ws'; // 服务器端渲染时的默认值
+};
+
+export const websocketClient = new WSClient(getWebSocketUrl());

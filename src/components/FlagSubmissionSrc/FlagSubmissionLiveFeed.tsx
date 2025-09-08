@@ -28,7 +28,7 @@ interface SubmissionMessage {
     c_vm_instance_id?: string;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'; // 环境变量配置
+// 使用与websocket.ts相同的动态URL生成逻辑，通过代理访问
 
 const FlagSubmissionLiveFeed: React.FC = () => {
     const [messages, setMessages] = useState<SubmissionMessage[]>([]);
