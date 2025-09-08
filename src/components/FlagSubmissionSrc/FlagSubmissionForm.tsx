@@ -25,16 +25,18 @@ const FlagSubmissionForm: React.FC<FlagSubmissionFormProps> = ({
 
         try {
             const response = await axios.post(
-                '/api/flag/submit-flag',
+                '/back/flag/submit-flag',
                 {
                     c_scene_instances_id: sceneInstanceId,
                     instance_id: instanceId,
                     instance_type: instanceType,
                     flag: flag,
+                    token: token  // 为了适配JWT中间件，同时添加token字段
                 },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
                     },
                 }
             );

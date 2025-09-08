@@ -319,6 +319,13 @@ class FlagSubmissionController extends BaseController
 
             DB::commit();
 
+            Log::info("💾 数据库事务提交成功，准备发送WebSocket消息", [
+                'submission_id' => $submission->c_submission_id,
+                'username' => $submission->c_username,
+                'is_correct' => $submission->c_is_correct,
+                'points_earned' => $submission->c_points_earned
+            ]);
+
             // 发送 Workerman 广播消息
             $broadcastData = [
                 'type' => 'flag_submission',
@@ -332,7 +339,18 @@ class FlagSubmissionController extends BaseController
                 'c_vm_instance_id' => $submission->c_vm_instance_id,
                 'instance_type' => $instance_type,
             ];
-            $this->workermanService->send($broadcastData);
+            
+            Log::info("📱 即将发送WebSocket消息", [
+                'workerman_service_exists' => !is_null($this->workermanService),
+                'broadcast_data' => $broadcastData
+            ]);
+            
+            $sendResult = $this->workermanService->send($broadcastData);
+            
+            Log::info("📱 WebSocket消息发送结果", [
+                'send_result' => $sendResult,
+                'message_type' => $broadcastData['type']
+            ]);
 
             // 发送 Redis 消息（临时禁用）
             // $this->sendRedisMessage([
