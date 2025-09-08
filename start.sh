@@ -28,14 +28,18 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
 SESSION_PYTHON="nads_project_python"
+SESSION_WEBSOCKET="nads_project_websocket"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
+WEBSOCKET_PORT=8080     # WebSocket 服务端口
+WEBSOCKET_INTERNAL_PORT=2347  # WebSocket 内部通信端口
 CHAT_PORT=9009
 FRONTEND_DIR="$SCRIPT_DIR/src"
 BACKEND_DIR="$SCRIPT_DIR/back"
 CHAT_DIR="$SCRIPT_DIR/langchain"
 FRONTEND_LOG="$FRONTEND_DIR/front.log"
 BACKEND_LOG="$BACKEND_DIR/back.log"
+WEBSOCKET_LOG="$BACKEND_DIR/websocket.log"
 CHAT_LOG="$BACKEND_DIR/chat.log"
 
 # ====== 检测并终止单个服务函数 ======
@@ -103,6 +107,18 @@ test_services() {
         url="$url:3000"
         port=3000
     fi
+    if [ "$app_name" = "WebSocket" ]; then
+        # WebSocket测试需要特殊处理
+        port=8080
+        echo "测试 $app_name 服务, 端口为 $port ..."
+        pid_test=$(sudo lsof -t -i:$port 2>/dev/null)
+        if [ -z "$pid_test" ]; then
+            echo -e "${ICON_CROSS} 未发现 ${app_name} 服务运行"
+        else
+            echo -e "${ICON_CHECK} 发现 ${app_name} 服务正在运行（PID: $pid_test）"
+        fi
+        return
+    fi
     if ["$app_name" = "Python"]; then
         url="$url:9009"
         port=9009
@@ -147,10 +163,14 @@ start_services() {
         elif [ "$mode" = "dev" ]; then 
             command="cd $FRONTEND_DIR && npm run dev >> $FRONTEND_LOG"
         else 
-            echo "无效的输入，以build模式运行前端服务"
-            command="cd $FRONTEND_DIR && npm run build && npm start >> $FRONTEND_LOG"
+            echo "无效的输入，以dev模式运行前端服务"
+            command="cd $FRONTEND_DIR && npm run dev >> $FRONTEND_LOG"
         fi
         log_file="$FRONTEND_LOG"
+    elif [ "$service_name" = "WEBSOCKET" ]; then
+        session_name="$SESSION_WEBSOCKET"
+        command="cd $BACKEND_DIR && php artisan websocket:server start >> $WEBSOCKET_LOG"
+        log_file="$WEBSOCKET_LOG"
     elif [ "$service_name" = "Python" ]; then
         session_name="$SESSION_PYTHON"
         command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
@@ -227,8 +247,10 @@ if [ "$command_choice" = "start" ]; then
 
     PHP_NEW=false
     NODE_NEW=false
+    WEBSOCKET_NEW=false
     PYTHON_NEW=false
 
+    # 检查并停止现有服务
     confirm_and_kill $FRONTEND_PORT "Node"
     if [ $? -eq 0 ]; then
         echo -e "${ICON_CHECK} Node 服务已终止，准备启动新服务"
@@ -244,7 +266,7 @@ if [ "$command_choice" = "start" ]; then
     else
         echo -e "${ICON_WARN} PHP 服务未终止，跳过启动"
     fi
-    
+
     confirm_and_kill $CHAT_PORT "Chat"
     if [ $? -eq 0 ]; then
         echo -e "${ICON_CHECK} CHAT 服务已终止，准备启动新服务"
@@ -253,11 +275,29 @@ if [ "$command_choice" = "start" ]; then
         echo -e "${ICON_WARN} CHAT 服务未终止，跳过启动"
     fi
 
+    confirm_and_kill $WEBSOCKET_PORT "WebSocket"
+    if [ $? -eq 0 ]; then
+        echo -e "${ICON_CHECK} WebSocket 服务已终止，准备启动新服务"
+        WEBSOCKET_NEW=true
+    else
+        echo -e "${ICON_WARN} WebSocket 服务未终止，跳过启动"
+    fi
+
+    # 按顺序启动服务
     if [ "$PHP_NEW" = "true" ]; then
+        echo -e "${ICON_INFO} 步骤 1/3: 启动 Laravel 后端服务..."
         start_services "PHP"
+        sleep 3
+    fi
+
+    if [ "$WEBSOCKET_NEW" = "true" ]; then
+        echo -e "${ICON_INFO} 步骤 2/3: 启动 WebSocket 服务..."
+        start_services "WEBSOCKET"
+        sleep 3
     fi
 
     if [ "$NODE_NEW" = "true" ]; then
+        echo -e "${ICON_INFO} 步骤 3/3: 启动前端服务..."
         start_services "NODE"
     fi
 
@@ -266,10 +306,20 @@ if [ "$command_choice" = "start" ]; then
     fi
 
     echo -e "${ICON_HAPPY} Happy! 启动流程已结束！"
+    echo -e "${ICON_INFO} 访问地址:"
+    echo -e "  - 前端: http://localhost:$FRONTEND_PORT"
+    echo -e "  - 后端 API: http://localhost:$BACKEND_PORT"
+    echo -e "  - WebSocket: ws://localhost:$WEBSOCKET_PORT"
+    echo -e "  - Flag历史: http://localhost:$FRONTEND_PORT/flag-history"
 elif [ "$command_choice" = "stop" ]; then
     confirm_and_kill $BACKEND_PORT "PHP"
     if [ $? -eq 0 ]; then
         cleanup_screen_session "$SESSION_BACK"
+    fi
+
+    confirm_and_kill $WEBSOCKET_PORT "WebSocket"
+    if [ $? -eq 0 ]; then
+        cleanup_screen_session "$SESSION_WEBSOCKET"
     fi
 
     confirm_and_kill $FRONTEND_PORT "NODE"
@@ -280,6 +330,7 @@ elif [ "$command_choice" = "stop" ]; then
     echo -e "${ICON_HAPPY} Happy! 停止流程已结束！"
 elif [ "$command_choice" = "test" ]; then
     test_services "PHP"
+    test_services "WebSocket"
     test_services "Node"
 else
     show_help

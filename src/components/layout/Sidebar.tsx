@@ -34,6 +34,7 @@ import Cog6ToothIcon from '@heroicons/react/24/outline/Cog6ToothIcon';
 import UserGroupIcon from '@heroicons/react/24/outline/UserGroupIcon';
 import KeyIcon from '@heroicons/react/24/outline/KeyIcon';
 import ArrowLeftEndOnRectangleIcon from '@heroicons/react/24/outline/ArrowLeftEndOnRectangleIcon';
+import FlagIcon from '@heroicons/react/24/outline/FlagIcon';
 import MenuIcon from '@mui/icons-material/Menu'; // 设置通用图标
 
 
@@ -99,6 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     "QuestionMarkCircleIcon": QuestionMarkCircleIcon,
     "FolderOpenIconHero": FolderOpenIconHero,
     "DocumentTextIcon": DocumentTextIcon,
+    "FlagIcon": FlagIcon,
     "MenuIcon":MenuIcon
   };
 

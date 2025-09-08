@@ -9,7 +9,7 @@ import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
-    Article as ArticleIcon
+    History as HistoryIcon
 } from '@mui/icons-material';
 
 // ★ 修改：在 RunningInstance 类型中增加 can_operate 字段
@@ -23,10 +23,10 @@ import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
-import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 
@@ -49,6 +49,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
+    const [flagHistoryModalOpen, setFlagHistoryModalOpen] = useState(false);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
@@ -226,11 +227,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                         </Box></Tooltip>
 
                         {isTarget && (
-                            <Tooltip title="提交Flag"><Box component="span">
-                                <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                    <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                </IconButton>
-                            </Box></Tooltip>
+                            <>
+                                <Tooltip title="提交Flag">
+                                    <span>
+                                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                                <Tooltip title="Flag历史记录">
+                                    <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
+                                        <HistoryIcon fontSize="small" color="info" />
+                                    </IconButton>
+                                </Tooltip>
+                            </>
                         )}
 
                         <Tooltip title="日志"><Box component="span">
@@ -320,6 +330,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             {bindsModalId && <BindMountsModal open={Boolean(bindsModalId)} containerId={bindsModalId} onClose={() => setBindsModalId(null)} />}
             {flagSubmissionModalId && (
                 <FlagSubmissionModal open={Boolean(flagSubmissionModalId)} onClose={() => setFlagSubmissionModalId(null)} instanceId={flagSubmissionModalId} instanceType="docker" sceneInstanceId={instanceId || ''} instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name} />
+            )}
+
+            {flagHistoryModalOpen && (
+                <FlagHistoryModal
+                    open={flagHistoryModalOpen}
+                    onClose={() => setFlagHistoryModalOpen(false)}
+                    sceneInstanceId={instanceId || ''}
+                    title="Docker容器Flag历史记录"
+                />
             )}
         </Box>
     );

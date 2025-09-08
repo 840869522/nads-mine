@@ -39,3 +39,13 @@ images
 
 mima.md
 *.sql
+debug-flag-history.md
+debug_flag_flow.php
+debug_routes.php
+debug_routes_detailed.php
+test_database.php
+test_websocket.php
+test_websocket_flag.php
+WebSocket实时Flag提交历史检查报告.md
+WebSocket简化使用说明.md
+WebSocket系统使用说明.md

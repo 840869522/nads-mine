@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, TextField, Button, Typography, Alert } from '@mui/material';
-import axios from 'axios';
+import {apiClientWithToken} from "@/utils/axios.tsx";
 import { useAuth } from '../../contexts/AuthContext'; // 假设你有一个AuthContext来获取JWT token
 
 interface FlagSubmissionFormProps {
@@ -24,18 +24,14 @@ const FlagSubmissionForm: React.FC<FlagSubmissionFormProps> = ({
         setIsSuccess(false);
 
         try {
-            const response = await axios.post(
-                '/api/flag/submit-flag',
+            const response = await apiClientWithToken.post(
+                '/back/api/flag/submit-flag',
                 {
                     c_scene_instances_id: sceneInstanceId,
                     instance_id: instanceId,
                     instance_type: instanceType,
                     flag: flag,
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    token: token  // 为了适配JWT中间件，同时添加token字段
                 }
             );
 
