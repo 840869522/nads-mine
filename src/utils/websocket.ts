@@ -40,6 +40,8 @@ class WSClient {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('WebSocket原始消息:', event.data);
+        console.log('WebSocket解析后数据:', data);
         
         // 处理认证响应
         if (data.type === 'auth_response') {
@@ -51,9 +53,23 @@ class WSClient {
           }
         }
         
-        this.handlers.forEach(fn => fn(data));
+        // 特别处理flag_submission消息
+        if (data.type === 'flag_submission') {
+          console.log('✅ 收到Flag提交消息:', {
+            submission_id: data.submission_id,
+            username: data.c_username,
+            is_correct: data.c_is_correct,
+            instance_type: data.instance_type
+          });
+        }
+        
+        console.log('当前注册的消息处理器数量:', this.handlers.length);
+        this.handlers.forEach((fn, index) => {
+          console.log(`调用消息处理器 ${index}:`, fn.name || '匿名函数');
+          fn(data);
+        });
       } catch (err) {
-        console.error("解析消息失败:", err);
+        console.error("解析消息失败:", err, '原始数据:', event.data);
       }
     };
 

@@ -18,7 +18,7 @@ try {
     echo "1. 检查最近的Flag提交记录...\n";
     
     $recentSubmissions = DB::table('c_flag_submission')
-        ->select(['c_submission_id', 'c_username', 'c_is_correct', 'c_points_earned', 'c_submitted_at', 'created_at', 'updated_at'])
+        ->select(['c_submission_id', 'c_username', 'c_is_correct', 'c_points_earned', 'c_submitted_at', 'created_at', 'updated_at', 'c_container_instance_id', 'c_vm_instance_id'])
         ->orderBy('c_submitted_at', 'desc')
         ->limit(10)
         ->get();
