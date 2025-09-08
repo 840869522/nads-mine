@@ -78,9 +78,10 @@ export default function FlagHistoryPage() {
 
     // WebSocket消息处理
     const handleWebSocketMessage = useCallback((message: any) => {
-        console.log('收到WebSocket消息:', message);
+        console.log('📨 收到WebSocket消息:', message);
         
         if (message.type === 'flag_submission') {
+            console.log('🏴 处理Flag提交消息...');
             const newSubmission: FlagSubmission = {
                 submission_id: message.submission_id,
                 username: message.c_username || message.username,
@@ -95,7 +96,12 @@ export default function FlagHistoryPage() {
                 attempt_count: message.attempt_count || 1,
             };
 
-            setSubmissions(prev => [newSubmission, ...prev.slice(0, 49)]); // 保持最新50条
+            console.log('💾 更新提交列表...');
+            setSubmissions(prev => {
+                const updated = [newSubmission, ...prev.slice(0, 49)];
+                console.log('✅ 提交列表已更新，当前数量:', updated.length);
+                return updated;
+            });
             
             // 更新统计数据
             setStats(prev => ({
@@ -105,18 +111,20 @@ export default function FlagHistoryPage() {
                 active_users: prev.active_users, // 这个需要从后端获取
             }));
 
-            // 自动滚动到顶部
-            if (autoScroll) {
-                setTimeout(() => {
+            // 自动滚动到顶部 - 使用回调式获取当前值
+            setTimeout(() => {
+                // 从 localStorage或状态中获取autoScroll状态
+                const shouldAutoScroll = document.querySelector('[data-auto-scroll]')?.getAttribute('data-auto-scroll') === 'true';
+                if (shouldAutoScroll) {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                }, 100);
-            }
+                }
+            }, 100);
         }
         
         if (message.type === 'auth_response') {
             setIsAuthenticated(message.success);
         }
-    }, [autoScroll]);
+    }, []); // 移除所有依赖项，避免不必要的重新创建
 
     // 初始化WebSocket连接
     useEffect(() => {
@@ -127,9 +135,15 @@ export default function FlagHistoryPage() {
         }
 
         if (isRealTimeEnabled) {
+            console.log('🔧 注册WebSocket消息处理器...');
             websocketClient.setToken(token);
             websocketClient.onMessage(handleWebSocketMessage);
             websocketClient.connect();
+            
+            // 确认处理器已注册
+            setTimeout(() => {
+                console.log('✅ 当前WebSocket处理器数量:', websocketClient.getHandlerCount?.() || 'N/A');
+            }, 100);
 
             // 监听连接状态
             const checkConnection = () => {
@@ -140,6 +154,7 @@ export default function FlagHistoryPage() {
             const interval = setInterval(checkConnection, 1000);
 
             return () => {
+                console.log('🧹 清理WebSocket连接...');
                 clearInterval(interval);
                 websocketClient.offMessage(handleWebSocketMessage);
             };
@@ -325,9 +340,11 @@ export default function FlagHistoryPage() {
                                 checked={autoScroll}
                                 onChange={(e) => setAutoScroll(e.target.checked)}
                                 color="primary"
+                                data-auto-scroll={autoScroll}
                             />
                         }
                         label="自动滚动"
+                        data-auto-scroll={autoScroll}
                     />
                     {!isConnected && isRealTimeEnabled && (
                         <Alert severity="warning" sx={{ ml: 2 }}>

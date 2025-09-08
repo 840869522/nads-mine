@@ -165,6 +165,11 @@ class WSClient {
   isAuth() {
     return this.isAuthenticated;
   }
+  
+  // 获取处理器数量
+  getHandlerCount() {
+    return this.handlers.length;
+  }
 }
 
 // 全局单例 - 使用与前端相同的地址和端口，通过 Next.js 代理访问 WebSocket
