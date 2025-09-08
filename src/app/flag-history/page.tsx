@@ -159,7 +159,6 @@ export default function FlagHistoryPage() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    token_data: { id: 'current_user' }, // 这需要根据实际认证系统调整
                     scope: 'all',
                     target_scope: 'all_targets_in_all_scenes'
                 }),

@@ -306,7 +306,7 @@ Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
 
     // 历史记录查询接口
-    Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
 
 
     // 获取场景实例列表接口
