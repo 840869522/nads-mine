@@ -11,9 +11,14 @@ import {
     Search as SearchIcon,
     Visibility as ViewIcon,
     Delete as DeleteIcon,
+
     Stop as StopIcon,
     AccountTree as TopologyIcon,
+    Security as SecurityIcon, // iptables 管理入口图标
+
 } from '@mui/icons-material';
+// import Link from 'next/link';
+import IptablesDialog from './IptablesDialog';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import InstanceTopologyDialog from './InstanceTopologyDialog';
 import { customFetch } from '@/utils/fetch';
@@ -48,6 +53,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
 
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [iptablesOpen, setIptablesOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
@@ -169,14 +175,25 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 <Typography variant="h4" component="h1" fontWeight="bold">
                     场景实例管理
                 </Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
-                    onClick={handleRefresh}
-                    disabled={isLoading}
-                >
-                    {isLoading ? '加载中...' : '刷新'}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? '加载中...' : '刷新'}
+                    </Button>
+                    {/* 暂时隐藏iptables按钮 */}
+                    {/* <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<SecurityIcon />}
+                        onClick={() => setIptablesOpen(true)}
+                    >
+                        iptables 管理
+                    </Button> */}
+                </Box>
             </Box>
 
             <Paper elevation={2}>
@@ -277,6 +294,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                 />
             </Paper>
             
+
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
@@ -294,6 +312,11 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     instanceId={selectedInstanceId || ''}
                 />
             )}
+
+
+
+        <IptablesDialog open={iptablesOpen} onClose={() => setIptablesOpen(false)} />
+
         </Paper>
     );
 };

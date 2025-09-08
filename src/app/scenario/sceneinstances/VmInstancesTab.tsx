@@ -39,10 +39,14 @@ import {
     ViewColumn as ViewColumnIcon,
     Refresh as RefreshIcon,
     Flag as FlagIcon,
+    History as HistoryIcon,
+    Article as ArticleIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
+import { v4 as uuidv4 } from 'uuid';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -145,6 +149,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const [showRunningOnly, setShowRunningOnly] = React.useState(false);
     const [columnAnchor, setColumnAnchor] = React.useState<null | HTMLElement>(null);
     const [flagSubmissionModalId, setFlagSubmissionModalId] = React.useState<string | null>(null);
+    const [flagHistoryModalOpen, setFlagHistoryModalOpen] = React.useState(false);
     const [showColumns, setShowColumns] = React.useState({
         hostNode: false,
         pool: false,
@@ -218,6 +223,21 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }
     };
 
+    const handleOpenLogs = React.useCallback((vm: VmInstance) => {
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
+    }, []);
+
     const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
@@ -247,7 +267,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 200,
+                width: 240,
                 renderCell: (params) => {
                     const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
@@ -269,21 +289,35 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                             <Tooltip title="删除"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading}><DeleteIcon fontSize="small" color="error" /></IconButton></Tooltip>
                             {/* 只有靶机才显示Flag提交按钮 */}
                             {isTarget && (
-                                <Tooltip title="提交Flag">
-                                    <span>
-                                        <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
-                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                <>
+                                    <Tooltip title="提交Flag">
+                                        <span>
+                                            <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
+                                                <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                    <Tooltip title="Flag历史记录">
+                                        <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small" disabled={actionLoading}>
+                                            <HistoryIcon fontSize="small" color="info" />
                                         </IconButton>
-                                    </span>
-                                </Tooltip>
+                                    </Tooltip>
+                                </>
                             )}
+                            <Tooltip title="日志">
+                                <span>
+                                    <IconButton onClick={() => handleOpenLogs(vm)} size="small">
+                                        <ArticleIcon fontSize="small" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
                             <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
                         </Box>
                     );
                 },
             },
         ],
-        [actionLoading, showColumns]
+        [actionLoading, showColumns, handleOpenLogs]
     );
 
     const filteredRows = React.useMemo(() => {
@@ -379,6 +413,15 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     instanceType="vm"
                     sceneInstanceId={instanceId || ''}
                     instanceName={data?.find(vm => vm.id === flagSubmissionModalId)?.name}
+                />
+            )}
+
+            {flagHistoryModalOpen && (
+                <FlagHistoryModal
+                    open={flagHistoryModalOpen}
+                    onClose={() => setFlagHistoryModalOpen(false)}
+                    sceneInstanceId={instanceId || ''}
+                    title="虚拟Flag历史记录"
                 />
             )}
         </Box>

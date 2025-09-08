@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { getCookie } from '@/utils/cookie';
-import { BACK_IP_PORT } from '@/constants';
+import { TextField } from '@mui/material';
 
 // 类型定义
 interface Course {
@@ -18,6 +18,7 @@ interface Course {
 interface User {
     id: string;
     name: string;
+    username: string; // Added to store c_username
 }
 interface CoursePermissionDialogProps {
     open: boolean;
@@ -32,6 +33,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         const loadData = async () => {
@@ -73,7 +75,8 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
 
                 const fetchedUsers: User[] = Array.isArray(usersData.data) ? usersData.data.map((u: any) => ({
                     id: u.c_username,
-                    name: u.c_username
+                    username: u.c_username,
+                    name: u.c_name || u.c_username // Fallback to username if name is empty
                 })) : [];
                 console.log('Fetched users:', fetchedUsers);
                 setAllUsers(fetchedUsers);
@@ -175,17 +178,60 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                 </Typography>
             );
         }
+        const filteredUsers = allUsers.filter(user =>
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.username.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
         return (
-            <FormGroup>
-                {allUsers.map(user => (
-                    <FormControlLabel
-                        key={user.id}
-                        control={<Checkbox checked={!!permissions[user.id]} onChange={handlePermissionChange} name={user.id} disabled={isSaving} />}
-                        label={user.name}
-                        sx={{ pl: 1, pr: 1, borderBottom: '1px solid', borderColor: 'divider' }}
+            <>
+                <Box sx={{ p: 2, pb: 0 }}>
+                    <TextField
+                        fullWidth
+                        variant="outlined"
+                        label="搜索用户姓名或用户名"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        size="small"
                     />
-                ))}
-            </FormGroup>
+                </Box>
+                <FormGroup>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => {
+                                const newPermissions = { ...permissions };
+                                filteredUsers.forEach(user => { newPermissions[user.id] = true; });
+                                setPermissions(newPermissions);
+                            }}
+                            disabled={isSaving}
+                        >
+                            全选
+                        </Button>
+                        <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => {
+                                const newPermissions = { ...permissions };
+                                filteredUsers.forEach(user => { newPermissions[user.id] = false; });
+                                setPermissions(newPermissions);
+                            }}
+                            disabled={isSaving}
+                        >
+                            取消全选
+                        </Button>
+                    </Box>
+                    {filteredUsers.map(user => (
+                        <FormControlLabel
+                            key={user.id}
+                            control={<Checkbox checked={!!permissions[user.id]} onChange={handlePermissionChange} name={user.id} disabled={isSaving} />}
+                            label={`${user.name} (${user.username})`}
+                            sx={{ pl: 1, pr: 1, borderBottom: '1px solid', borderColor: 'divider' }}
+                        />
+                    ))}
+                </FormGroup>
+            </>
         );
     };
 

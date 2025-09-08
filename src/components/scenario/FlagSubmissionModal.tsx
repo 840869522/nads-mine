@@ -106,10 +106,11 @@ const FlagSubmissionModal: React.FC<FlagSubmissionModalProps> = ({
                 instance_id: instanceId,
                 instance_type: instanceType,
                 flag: trimmedFlag,
+                token: document.cookie.split('; ').find(row => row.startsWith('_auth='))?.split('=')[1] || ''  // 为了适配JWT中间件，添加token字段
             };
 
             const response = await apiClientWithToken.post(
-                `/back/api/flag/submit-flag`,  // 使用相对路径避免端口问题
+                `/back/api/flag/submit-flag`,  // 使用带有/back/api的路径以匹配后端和代理
                 requestBody
             );
 

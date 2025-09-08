@@ -14,7 +14,7 @@ import {
     ButtonGroup,
     Button,
 } from '@mui/material';
-import axios from 'axios';
+import {apiClientWithToken} from "@/utils/axios.tsx";
 import { useAuth } from '../../contexts/AuthContext'; // 假设你有一个AuthContext来获取JWT token  src/contexts/AuthContext.tsx
 
 interface SubmissionHistoryProps {
@@ -50,7 +50,7 @@ const SubmissionHistory: React.FC<SubmissionHistoryProps> = ({ instanceId, scene
                     c_scene_instances_id: sceneInstanceId,
                     instance_id: instanceId,
                 };
-                const response = await axios.get('/api/submission-history', {
+                const response = await apiClientWithToken.get('/api/submission-history', {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },

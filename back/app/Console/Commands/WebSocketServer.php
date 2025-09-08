@@ -92,20 +92,28 @@ class WebSocketServer extends Command
         // 收到客户端消息时触发
         $this->ws->onMessage = function ($connection, $data) {
             $this->info("Received from [{$connection->id}]: {$data}");
+            $connection->lastMessageTime = time();
 
-            // 解析JSON格式消息（假设客户端发送JSON）
+            // 解析JSON格式消息
             $message = json_decode($data, true);
+            if (!$message || !isset($message['type'])) {
+                $connection->send(json_encode([
+                    'type' => 'error',
+                    'message' => 'Invalid message format'
+                ]));
+                return;
+            }
 
-            // 示例：回复消息
-            $connection->send(json_encode([
-                'type' => 'reply',
-                'message' => "Server received: {$message['content']}"
-            ]));
-
-            // 示例：广播消息给所有连接的客户端
-            // foreach ($this->ws->connections as $client) {
-            //     $client->send("User {$connection->id} said: {$message['content']}");
-            // }
+            // 处理不同类型的消息
+            switch ($message['type']) {
+                case 'ping':
+                    $connection->send(json_encode(['type' => 'pong', 'timestamp' => time()]));
+                    break;
+                default:
+                    // 简化处理，直接接受所有消息
+                    $this->info("Message processed: {$message['type']}");
+                    break;
+            }
         };
 
         // 客户端断开连接时触发
@@ -120,12 +128,32 @@ class WebSocketServer extends Command
         };
 
         $this->ws->onWorkerStart = function ($worker) {
-// 开启一个内部端口，方便内部系统推送数据，Text协议格式 文本+换行符
+            // 获取外部作用域的引用
+            $uidConnections = &$this->uidConnections;
+            
+            // 开启一个内部端口，方便内部系统推送数据，Text协议格式 文本+换行符
             $inner_text_worker = new Worker("text://0.0.0.0:2347");
-            $inner_text_worker->onMessage = function ($connection, $buffer) {
+            $inner_text_worker->onMessage = function ($connection, $buffer) use (&$uidConnections) {
+                echo "[Internal] 接收到内部消息: " . $buffer . "\n";
+                
                 // $data数组格式，里面有uid，表示向那个uid的页面推送数据
                 $data = json_decode($buffer, true);
-                $this->broadcast($data);
+                if (!$data) {
+                    echo "[Internal] 无效的JSON数据: " . $buffer . "\n";
+                    return;
+                }
+                
+                // 广播消息给所有连接
+                $jsonMessage = is_string($data) ? $data : json_encode($data);
+                $sentCount = 0;
+                
+                foreach($uidConnections as $connectionId => $wsConnection) {
+                    // 向所有连接发送消息
+                    $wsConnection->send($jsonMessage);
+                    $sentCount++;
+                }
+                
+                echo "[Internal] 消息广播完成，发送给 {$sentCount} 个客户端\n";
             };
             $inner_text_worker->listen();
             Timer::add(10, function()use($worker){
@@ -155,13 +183,4 @@ class WebSocketServer extends Command
         };
     }
 
-
-    // 向所有验证的用户推送数据
-    public function broadcast($message)
-    {
-        foreach($this->uidConnections as $connection)
-        {
-            $connection->send($message);
-        }
-    }
 }

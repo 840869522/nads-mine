@@ -33,7 +33,7 @@ class SceneVmInstance extends Model
      * 指示主键是否是自增的
      */
     public $incrementing = true;
-    
+
     /**
      * 主键的类型
      */

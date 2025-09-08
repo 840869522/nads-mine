@@ -8,7 +8,8 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
-    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon
+    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
+    History as HistoryIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
@@ -17,6 +18,7 @@ import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
@@ -42,6 +44,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
+    const [flagHistoryModalOpen, setFlagHistoryModalOpen] = useState(false);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
@@ -151,6 +154,21 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setIsConfirmDialogOpen(true);
     }, [fetchInstanceDetails, user]);
 
+    const handleOpenLogs = useCallback((instance: RunningInstance) => {
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
+    }, []);
+
     const columns: GridColDef[] = React.useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
@@ -179,7 +197,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 220,
+            field: 'actions', headerName: '操作', sortable: false, width: 260,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
@@ -212,20 +230,34 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                         </Tooltip>
                         {/* 只有靶机才显示Flag提交按钮 */}
                         {isTarget && (
-                            <Tooltip title="提交Flag">
-                                <span>
-                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                            <>
+                                <Tooltip title="提交Flag">
+                                    <span>
+                                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                                <Tooltip title="Flag历史记录">
+                                    <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
+                                        <HistoryIcon fontSize="small" color="info" />
                                     </IconButton>
-                                </span>
-                            </Tooltip>
+                                </Tooltip>
+                            </>
                         )}
+                        <Tooltip title="日志">
+                            <span>
+                                <IconButton onClick={() => handleOpenLogs(instance)} size="small">
+                                    <ArticleIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -338,6 +370,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     instanceType="docker"
                     sceneInstanceId={instanceId || ''}
                     instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
+                />
+            )}
+
+            {flagHistoryModalOpen && (
+                <FlagHistoryModal
+                    open={flagHistoryModalOpen}
+                    onClose={() => setFlagHistoryModalOpen(false)}
+                    sceneInstanceId={instanceId || ''}
+                    title="Docker容器Flag历史记录"
                 />
             )}
         </Box>

@@ -43,63 +43,33 @@ class AnswersModel extends Model{
     }
 
 
+    
     /**
-     * Notes:通过测试id和考生查看主观题答题数据
-     * User: zhangnan
-     * DateTime: 2025/7/25 19:05
-     * @param $test_id
-     * @param $username
-     * @return mixed
+     * 获取用户作答信息
      */
-    public function get_answers_list_by_name($test_id="",$username="")
+    public function get_user_answers($test_id, $username, $paper_id = '')
     {
-        $mod = new AnswersModel();
-        $res = $mod->where('c_test_id',$test_id)->where('c_username',$username)->get()->toArray();
-        return $res;
-    }
-
-
-    /**
-     * Notes:主观题批卷
-     * User: zhangnan
-     * DateTime: 2025/7/28 09:55
-     * @param $data
-     * @param $answre_data
-     * @param $c_teacher_name
-     * @return bool
-     */
-    public function batch_answers($data=[],$answre_data=[],$c_test_id="",$user_name="",$c_teacher_name="",$zong_score=0)
-    {
-        DB::beginTransaction();
-        try{
-            foreach($data as $k=>$v){
-                $mod = new AnswersModel();
-                $score = $answre_data[$v['question_id']];
-                $res_data = array(
-                    'c_update_at'=>date('Y-m-d H:i:s'),
-                    'c_score'=>$score,
-                    'c_teacher'=>$c_teacher_name,
-                    'c_score_at'=>date('Y-m-d H:i:s'),
-                );
-                $res = $mod->where('c_id',$v['id'])->update($res_data);
-                if(!$res){
-                    DB::rollback();
-                    return false;
+        try {
+            $query = DB::table($this->table)
+                ->where('c_test_id', $test_id)
+                ->where('c_username', $username);
+            
+            // 如果提供了paper_id，则添加到查询条件
+            if (!empty($paper_id)) {
+                $hasPaperIdColumn = $this->checkColumnExists('c_paper_id');
+                if ($hasPaperIdColumn) {
+                    $query->where('c_paper_id', $paper_id);
                 }
             }
-            $test_user_mod = new TestUsersModel();
-            $test_user_res = $test_user_mod->update_test_user_by_zg($c_test_id,$user_name,$zong_score);
-            if(!$test_user_res){
-                DB::rollback();
-                return false;
-            }
-
-            DB::commit();
-            return true;
-        }catch(\Exception $e){
-            DB::rollback();
-            DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','batch_answers_log');
-            return false;
+            
+            $result = $query->select('c_answers', 'c_paper_id')
+                ->first();
+            
+            return $result ? (array)$result : null;
+            
+        } catch (\Exception $e) {
+            Log::error("获取用户作答失败: " . $e->getMessage());
+            return null;
         }
     }
 

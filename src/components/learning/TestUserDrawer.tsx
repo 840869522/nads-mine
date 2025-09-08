@@ -716,14 +716,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                     {formatDate(selectedUser.start_time)}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    截止时间
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: getTextColor() }}>
-                    {formatDate(selectedUser.end_time)}
-                  </Typography>
-                </Grid>
+                
                 
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>

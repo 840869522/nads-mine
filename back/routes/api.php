@@ -11,6 +11,7 @@
     use App\Http\Controllers\scenario\DrillController;
     use App\Http\Controllers\scenario\InstanceController;
     use App\Http\Controllers\scenario\SwitchController;
+    use App\Http\Controllers\scenario\IptablesController;
     use App\Http\Controllers\Docker\ImagesController;
     use App\Http\Controllers\Docker\InstancesController;
     use App\Http\Controllers\Docker\ContainersController;
@@ -175,6 +176,10 @@ Route::prefix('scenarios/{scenarioId}/permissions')->group(function () {
 });
 
 Route::prefix('scenariosinstances')->group(function () {
+    // iptables 管理（必须放在通用路由之前）
+    Route::get('/iptables', [IptablesController::class, 'index']);
+    Route::delete('/iptables', [IptablesController::class, 'destroy']);
+    
     Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
     Route::get('/switches', [SwitchController::class, 'index']);
     Route::get('/{instance:c_scene_instances_id}/switches', [SwitchController::class, 'show']);
@@ -201,6 +206,8 @@ Route::prefix('instances')->group(function () {
     Route::put('/', [InstancesController::class, 'update']);
     Route::delete('/', [InstancesController::class, 'destroy']);
 });
+
+
 
 Route::prefix('containers')->group(function () {
     Route::post('/', [ContainersController::class, 'create']);
@@ -251,6 +258,10 @@ Route::prefix('study')->group(function () {
         Route::get('/getAllUsers', [TestController::class, 'getAllUsers']);
         Route::post('/batchStoreTestUsers', [TestController::class, 'batchStoreTestUsers']);
         Route::post('/destroy', [TestController::class, 'destroy']);
+        Route::get('/getUserRelatedTests', [TestController::class, 'getUserRelatedTests']);
+        Route::post('/getTestUserRelation', [TestController::class, 'getTestUserRelation']);
+        Route::post('/get_exam_paper_details', [TestController::class, 'get_exam_paper_details']);
+        Route::post('/getAllStudentsObjectiveScore', [TestController::class, 'getAllStudentsObjectiveScore']);
         Route::post('/paper_rules_add', [TestController::class, 'paper_rules_add']);
         Route::post('/paper_rules_update', [TestController::class, 'paper_rules_update']);
         Route::delete('/paper_rules_del', [TestController::class, 'paper_rules_del']);
@@ -302,13 +313,13 @@ Route::prefix('ad')->group(function () {
     // 你可能还有其他辅助路由，可以像这样添加
     // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
-// Flag 相关接口路由组，统一添加 JWT 认证
-Route::prefix('flag')->middleware('jwtcheck')->group(function () {
+// Flag 相关接口路由组，去掉JWT认证简化使用
+Route::prefix('flag')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
 
     // 历史记录查询接口
-    Route::get('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
 
 
     // 获取场景实例列表接口

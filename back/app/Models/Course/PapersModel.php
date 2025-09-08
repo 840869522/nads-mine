@@ -138,21 +138,31 @@ public function update_paper_info($c_test_id = "", $qusetion_list = [])
         return $res;
     }
 
-    /**
-     * Notes:获取试卷信息
-     * User: zhangnan
-     * DateTime: 2025/7/22 16:15
-     * @param $c_id
-     * @return false
+   /**
+     * 获取试卷信息
      */
-    public function get_paper_info_by_id($c_id="")
+    public function get_paper_info_by_id($c_id = "")
     {
-        $mod = new PapersModel();
-        $res = $mod->where("c_id",$c_id)->first();
-        if(empty($res)){
+        try {
+            Log::info('尝试获取试卷信息', ['paper_id' => $c_id]);
+            
+            $res = $this->where("c_id", $c_id)->first();
+            
+            if (empty($res)) {
+                Log::warning('试卷不存在', ['paper_id' => $c_id]);
+                return false;
+            }
+            
+            Log::info('试卷信息查询成功', ['paper_id' => $c_id, 'data' => (array)$res]);
+            return $res;
+        } catch (\Exception $e) {
+            Log::error('获取试卷信息失败', [
+                'paper_id' => $c_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return false;
         }
-        return $res;
     }
 
 }
