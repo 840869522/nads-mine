@@ -137,13 +137,12 @@ export default function FlagHistoryPage() {
 
         if (isRealTimeEnabled) {
             console.log('🔧 初始化WebSocket连接...');
-            websocketClient.setToken(token);
             websocketClient.connect();
 
             // 监听连接状态
             const checkConnection = () => {
                 setIsConnected(websocketClient.isConnected());
-                setIsAuthenticated(websocketClient.isAuth());
+                // setIsAuthenticated(websocketClient.isAuth());
             };
 
             const interval = setInterval(checkConnection, 1000);
