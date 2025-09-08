@@ -8,7 +8,8 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
-    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon
+    ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
+    History as HistoryIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
@@ -17,6 +18,7 @@ import ContainerLogsModal from '@/components/scenario/ContainerLogsModal';
 import ContainerInspectModal from '@/components/scenario/ContainerInspectModal';
 import BindMountsModal from '@/components/scenario/BindMountsModal';
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
@@ -42,6 +44,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [inspectModalId, setInspectModalId] = useState<string | null>(null);
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
+    const [flagHistoryModalOpen, setFlagHistoryModalOpen] = useState(false);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
@@ -179,7 +182,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 220,
+            field: 'actions', headerName: '操作', sortable: false, width: 260,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
@@ -212,13 +215,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                         </Tooltip>
                         {/* 只有靶机才显示Flag提交按钮 */}
                         {isTarget && (
-                            <Tooltip title="提交Flag">
-                                <span>
-                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                            <>
+                                <Tooltip title="提交Flag">
+                                    <span>
+                                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                                <Tooltip title="Flag历史记录">
+                                    <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
+                                        <HistoryIcon fontSize="small" color="info" />
                                     </IconButton>
-                                </span>
-                            </Tooltip>
+                                </Tooltip>
+                            </>
                         )}
                         <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
                     </Box>
@@ -338,6 +348,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     instanceType="docker"
                     sceneInstanceId={instanceId || ''}
                     instanceName={instances.find(i => i.id === flagSubmissionModalId)?.name}
+                />
+            )}
+            
+            {flagHistoryModalOpen && (
+                <FlagHistoryModal
+                    open={flagHistoryModalOpen}
+                    onClose={() => setFlagHistoryModalOpen(false)}
+                    sceneInstanceId={instanceId || ''}
+                    title="Docker容器Flag历史记录"
                 />
             )}
         </Box>
