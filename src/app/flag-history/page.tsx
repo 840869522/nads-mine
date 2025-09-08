@@ -152,7 +152,7 @@ export default function FlagHistoryPage() {
             const token = getAuthToken();
             if (!token) return;
 
-            const response = await fetch('/api/flag/submission-history', {
+            const response = await fetch('/back/api/flag/submission-history', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

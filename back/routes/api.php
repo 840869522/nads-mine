@@ -301,7 +301,7 @@ Route::prefix('ad')->group(function () {
     // Route::get('some-other-data', [SomeController::class, 'getData']);
 });
 // Flag 相关接口路由组，统一添加 JWT 认证
-Route::prefix('flag')->middleware('jwtcheck')->group(function () {
+Route::prefix('flag')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
 

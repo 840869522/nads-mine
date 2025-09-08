@@ -110,7 +110,7 @@ const FlagSubmissionModal: React.FC<FlagSubmissionModalProps> = ({
             };
 
             const response = await apiClientWithToken.post(
-                `/api/flag/submit-flag`,  // 恢复原始的API路径
+                `/back/api/flag/submit-flag`,  // 使用带有/back/api的路径以匹配后端和代理
                 requestBody
             );
 

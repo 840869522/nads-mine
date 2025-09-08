@@ -25,7 +25,7 @@ const FlagSubmissionForm: React.FC<FlagSubmissionFormProps> = ({
 
         try {
             const response = await axios.post(
-                '/api/flag/submit-flag',
+                '/back/api/flag/submit-flag',
                 {
                     c_scene_instances_id: sceneInstanceId,
                     instance_id: instanceId,
