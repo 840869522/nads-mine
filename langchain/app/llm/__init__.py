@@ -2,6 +2,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance
 from app import config
 from .CustomEmbeddings import CustomEmbeddings
+from langchain_qdrant import QdrantVectorStore
+
 
 try:
     qdrant = QdrantClient(
