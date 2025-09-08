@@ -31,7 +31,6 @@ class WebSocketServer extends Command
 
 
     protected $uidConnections = [];
-    protected $authenticatedUsers = [];
 
     /**
      * 执行命令
@@ -107,21 +106,12 @@ class WebSocketServer extends Command
 
             // 处理不同类型的消息
             switch ($message['type']) {
-                case 'auth':
-                    $this->handleAuth($connection, $message);
-                    break;
                 case 'ping':
                     $connection->send(json_encode(['type' => 'pong', 'timestamp' => time()]));
                     break;
                 default:
-                    // 检查是否已认证
-                    if (!isset($this->authenticatedUsers[$connection->id])) {
-                        $connection->send(json_encode([
-                            'type' => 'error',
-                            'message' => 'Authentication required'
-                        ]));
-                        return;
-                    }
+                    // 简化处理，直接接受所有消息
+                    $this->info("Message processed: {$message['type']}");
                     break;
             }
         };
@@ -130,7 +120,6 @@ class WebSocketServer extends Command
         $this->ws->onClose = function ($connection) {
             $this->info("Client [{$connection->id}] disconnected");
             unset($this->uidConnections[$connection->id]);
-            unset($this->authenticatedUsers[$connection->id]);
         };
 
         // 发生错误时触发
@@ -141,11 +130,10 @@ class WebSocketServer extends Command
         $this->ws->onWorkerStart = function ($worker) {
             // 获取外部作用域的引用
             $uidConnections = &$this->uidConnections;
-            $authenticatedUsers = &$this->authenticatedUsers;
             
             // 开启一个内部端口，方便内部系统推送数据，Text协议格式 文本+换行符
             $inner_text_worker = new Worker("text://0.0.0.0:2347");
-            $inner_text_worker->onMessage = function ($connection, $buffer) use (&$uidConnections, &$authenticatedUsers) {
+            $inner_text_worker->onMessage = function ($connection, $buffer) use (&$uidConnections) {
                 echo "[Internal] 接收到内部消息: " . $buffer . "\n";
                 
                 // $data数组格式，里面有uid，表示向那个uid的页面推送数据
@@ -155,19 +143,17 @@ class WebSocketServer extends Command
                     return;
                 }
                 
-                // 广播消息给所有已认证的连接
+                // 广播消息给所有连接
                 $jsonMessage = is_string($data) ? $data : json_encode($data);
                 $sentCount = 0;
                 
                 foreach($uidConnections as $connectionId => $wsConnection) {
-                    // 只向已认证的用户发送消息
-                    if (isset($authenticatedUsers[$connectionId])) {
-                        $wsConnection->send($jsonMessage);
-                        $sentCount++;
-                    }
+                    // 向所有连接发送消息
+                    $wsConnection->send($jsonMessage);
+                    $sentCount++;
                 }
                 
-                echo "[Internal] 消息广播完成，发送给 {$sentCount} 个已认证客户端\n";
+                echo "[Internal] 消息广播完成，发送给 {$sentCount} 个客户端\n";
             };
             $inner_text_worker->listen();
             Timer::add(10, function()use($worker){
@@ -197,49 +183,4 @@ class WebSocketServer extends Command
         };
     }
 
-    // 处理用户认证
-    private function handleAuth($connection, $message)
-    {
-        if (!isset($message['token'])) {
-            $connection->send(json_encode([
-                'type' => 'auth_response',
-                'success' => false,
-                'error' => 'Token required'
-            ]));
-            return;
-        }
-
-        // 简单的JWT解析（在实际中应该使用适当的JWT库）
-        try {
-            // 这里可以调用Laravel的JWT验证方法
-            // 目前简化处理，只检查token是否存在
-            $token = $message['token'];
-            if (strlen($token) > 10) { // 简单验证
-                $this->authenticatedUsers[$connection->id] = [
-                    'token' => $token,
-                    'auth_time' => time()
-                ];
-                
-                $connection->send(json_encode([
-                    'type' => 'auth_response',
-                    'success' => true,
-                    'message' => 'Authentication successful'
-                ]));
-                
-                $this->info("Client [{$connection->id}] authenticated successfully");
-            } else {
-                $connection->send(json_encode([
-                    'type' => 'auth_response',
-                    'success' => false,
-                    'error' => 'Invalid token'
-                ]));
-            }
-        } catch (\Exception $e) {
-            $connection->send(json_encode([
-                'type' => 'auth_response',
-                'success' => false,
-                'error' => 'Authentication failed'
-            ]));
-        }
-    }
 }

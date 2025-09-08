@@ -5,21 +5,15 @@ class WSClient {
   private ws: WebSocket | null = null;
   private handlers: MessageHandler[] = [];
   private url: string;
-  private token: string | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectInterval = 3000;
-  private isAuthenticated = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
   constructor(url: string) {
     this.url = url;
   }
 
-  // 设置认证token
-  setToken(token: string) {
-    this.token = token;
-  }
 
   // 建立连接
   connect() {
@@ -33,7 +27,6 @@ class WSClient {
     this.ws.onopen = () => {
       console.log("WebSocket 已连接");
       this.reconnectAttempts = 0;
-      this.authenticate();
       this.startHeartbeat();
     };
 
@@ -42,16 +35,6 @@ class WSClient {
         const data = JSON.parse(event.data);
         console.log('WebSocket原始消息:', event.data);
         console.log('WebSocket解析后数据:', data);
-        
-        // 处理认证响应
-        if (data.type === 'auth_response') {
-          if (data.success) {
-            this.isAuthenticated = true;
-            console.log('WebSocket 认证成功');
-          } else {
-            console.error('WebSocket 认证失败:', data.error);
-          }
-        }
         
         // 特别处理flag_submission消息
         if (data.type === 'flag_submission') {
@@ -75,7 +58,6 @@ class WSClient {
 
     this.ws.onclose = () => {
       console.log("WebSocket 已关闭");
-      this.isAuthenticated = false;
       this.stopHeartbeat();
       this.attemptReconnect();
     };
@@ -85,15 +67,6 @@ class WSClient {
     };
   }
 
-  // 认证
-  private authenticate() {
-    if (this.token) {
-      this.send({
-        type: 'auth',
-        token: this.token
-      });
-    }
-  }
 
   // 尝试重连
   private attemptReconnect() {
@@ -131,7 +104,6 @@ class WSClient {
       this.ws.close();
       this.ws = null;
     }
-    this.isAuthenticated = false;
   }
 
   // 注册消息回调
@@ -161,10 +133,6 @@ class WSClient {
     return this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 
-  // 检查认证状态
-  isAuth() {
-    return this.isAuthenticated;
-  }
   
   // 获取处理器数量
   getHandlerCount() {
