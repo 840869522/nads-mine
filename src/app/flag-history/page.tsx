@@ -126,7 +126,7 @@ export default function FlagHistoryPage() {
         }
     }, []); // 移除所有依赖项，避免不必要的重新创建
 
-    // 初始化WebSocket连接
+    // 初始化WebSocket连接（仅依赖isRealTimeEnabled）
     useEffect(() => {
         const token = getAuthToken();
         if (!token) {
@@ -135,15 +135,9 @@ export default function FlagHistoryPage() {
         }
 
         if (isRealTimeEnabled) {
-            console.log('🔧 注册WebSocket消息处理器...');
+            console.log('🔧 初始化WebSocket连接...');
             websocketClient.setToken(token);
-            websocketClient.onMessage(handleWebSocketMessage);
             websocketClient.connect();
-            
-            // 确认处理器已注册
-            setTimeout(() => {
-                console.log('✅ 当前WebSocket处理器数量:', websocketClient.getHandlerCount?.() || 'N/A');
-            }, 100);
 
             // 监听连接状态
             const checkConnection = () => {
@@ -154,12 +148,34 @@ export default function FlagHistoryPage() {
             const interval = setInterval(checkConnection, 1000);
 
             return () => {
-                console.log('🧹 清理WebSocket连接...');
+                console.log('🧹 清理WebSocket连接状态检查...');
                 clearInterval(interval);
-                websocketClient.offMessage(handleWebSocketMessage);
+                if (!isRealTimeEnabled) {
+                    websocketClient.disconnect();
+                }
             };
+        } else {
+            websocketClient.disconnect();
+            setIsConnected(false);
+            setIsAuthenticated(false);
         }
-    }, [handleWebSocketMessage, isRealTimeEnabled]);
+    }, [isRealTimeEnabled]); // 只依赖isRealTimeEnabled
+    
+    // 单独管理消息处理器（仅在组件挂载时注册一次）
+    useEffect(() => {
+        console.log('🔧 注册WebSocket消息处理器...');
+        websocketClient.onMessage(handleWebSocketMessage);
+        
+        // 确认处理器已注册
+        setTimeout(() => {
+            console.log('✅ 当前WebSocket处理器数量:', websocketClient.getHandlerCount?.() || 'N/A');
+        }, 100);
+
+        return () => {
+            console.log('🧹 移除WebSocket消息处理器...');
+            websocketClient.offMessage(handleWebSocketMessage);
+        };
+    }, []); // 空依赖数组，只在组件挂载/卸载时执行
 
     // 获取历史数据（通过HTTP API）
     const fetchHistoryData = async () => {
