@@ -35,6 +35,8 @@ import {
     Stop,
 } from '@mui/icons-material';
 import { websocketClient } from '@/utils/websocket';
+import { getCookie } from '@/utils/cookie.tsx';
+import {customFetch} from "@/utils/fetch.ts";
 
 interface FlagSubmission {
     submission_id: string;
@@ -66,9 +68,14 @@ export default function FlagHistoryPage() {
         active_users: 0,
     });
     const [isConnected, setIsConnected] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [autoScroll, setAutoScroll] = useState(true);
     const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
 
+    // 获取认证token（从 cookie 中获取）
+    const getAuthToken = () => {
+        return getCookie('_auth');
+    };
 
     // WebSocket消息处理
     const handleWebSocketMessage = useCallback((message: any) => {
@@ -115,17 +122,28 @@ export default function FlagHistoryPage() {
             }, 100);
         }
         
+        if (message.type === 'auth_response') {
+            setIsAuthenticated(message.success);
+        }
     }, []); // 移除所有依赖项，避免不必要的重新创建
 
     // 初始化WebSocket连接（仅依赖isRealTimeEnabled）
     useEffect(() => {
+        const token = getAuthToken();
+        if (!token) {
+            console.error('未找到认证token');
+            return;
+        }
+
         if (isRealTimeEnabled) {
             console.log('🔧 初始化WebSocket连接...');
+            websocketClient.setToken(token);
             websocketClient.connect();
 
             // 监听连接状态
             const checkConnection = () => {
                 setIsConnected(websocketClient.isConnected());
+                setIsAuthenticated(websocketClient.isAuth());
             };
 
             const interval = setInterval(checkConnection, 1000);
@@ -140,6 +158,7 @@ export default function FlagHistoryPage() {
         } else {
             websocketClient.disconnect();
             setIsConnected(false);
+            setIsAuthenticated(false);
         }
     }, [isRealTimeEnabled]); // 只依赖isRealTimeEnabled
     
@@ -159,18 +178,22 @@ export default function FlagHistoryPage() {
         };
     }, []); // 空依赖数组，只在组件挂载/卸载时执行
 
-    // 获取历史数据（通过HTTP API） - 简化版本
+    // 获取历史数据（通过HTTP API）
     const fetchHistoryData = async () => {
         try {
-            // 简化版本，直接请求而不需要认证
-            const response = await fetch('/back/api/flag/submission-history', {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const response = await customFetch('/back/api/flag/submission-history', {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     scope: 'all',
-                    target_scope: 'all_targets_in_all_scenes'
+                    target_scope: 'all_targets_in_all_scenes',
+                    token: token  // 添加token字段以适配JWT中间件
                 }),
             });
 
@@ -234,11 +257,16 @@ export default function FlagHistoryPage() {
         setIsRealTimeEnabled(!isRealTimeEnabled);
         if (!isRealTimeEnabled) {
             // 重新连接
-            websocketClient.connect();
+            const token = getAuthToken();
+            if (token) {
+                websocketClient.setToken(token);
+                websocketClient.connect();
+            }
         } else {
             // 断开连接
             websocketClient.disconnect();
             setIsConnected(false);
+            setIsAuthenticated(false);
         }
     };
 
@@ -295,8 +323,8 @@ export default function FlagHistoryPage() {
                             </Typography>
                             <Box display="flex" alignItems="center">
                                 <Chip
-                                    label={isConnected ? '已连接' : '未连接'}
-                                    color={isConnected ? 'success' : 'error'}
+                                    label={isConnected && isAuthenticated ? '已连接' : '未连接'}
+                                    color={isConnected && isAuthenticated ? 'success' : 'error'}
                                     size="small"
                                 />
                             </Box>
