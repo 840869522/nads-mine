@@ -224,7 +224,7 @@ Route::prefix('containers')->group(function () {
 
 
 
-Route::prefix('vms')->group(function () {
+Route::prefix('vms')->middleware('jwtcheck')->group(function () {
     $c = \App\Http\Controllers\Vm\VmController::class;
     Route::get('/', [$c, 'listVms']);
     Route::get('/images', [$c, 'listVmImages']);
