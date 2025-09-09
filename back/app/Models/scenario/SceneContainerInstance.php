@@ -4,6 +4,12 @@ namespace App\Models\scenario;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+// ★★★★★ 核心修正点：确保引入所有需要的类 ★★★★★
+use App\Models\ad\AdConfig;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Request;
 
 class SceneContainerInstance extends Model
 {
