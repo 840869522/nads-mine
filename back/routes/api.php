@@ -2,6 +2,7 @@
 
 
     use App\Http\Controllers\ad\AdConfigController;
+    use App\Http\Controllers\ad\AdController;
     use App\Http\Controllers\scenario\ScenarioPermissionController;
     use Illuminate\Support\Facades\Route;
     use App\Http\Controllers\Users\UserController;
@@ -286,15 +287,7 @@ Route::prefix('study')->group(function () {
 /**
  * 定义安全实验分系统路由 (已整合和修正)
  */
-/*
-|--------------------------------------------------------------------------
-| 安全实验分系统 API 路由 (无 apiResource 版本)
-|--------------------------------------------------------------------------
-|
-| 此文件将所有 apiResource 的用法替换为独立的路由定义，
-| 与项目中其他分系统的风格保持一致。
-|
-*/
+
 
 /**
  * 演练配置管理 (ad-configs)
@@ -404,8 +397,3 @@ Route::prefix('flag')->group(function () {
     //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
 
-//Route::prefix("ad")->group(function() {
-//
-//})->middleware("jwtcheck:ad");
-//
-//?>
