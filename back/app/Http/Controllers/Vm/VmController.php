@@ -8,31 +8,20 @@ use Illuminate\Support\Facades\Log;
 use App\Models\scenario\SceneVmInstance;
 use App\RunTool\CommandLineService;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Str;
 
 class VmController extends Controller
 {
-
     private CommandLineService $cliService;
-
-    private const VALID_IMAGE_EXTENSIONS = [
-        'qcow2', 'raw', 'img', 'iso', 'vmdk', 'vdi', 'vhd', 'vhdx'
-    ];
 
     public function __construct(CommandLineService $cliService)
     {
         $this->cliService = $cliService;
     }
 
-    private function isValidImageFile(string $path): bool
-    {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        return in_array($ext, self::VALID_IMAGE_EXTENSIONS, true);
-    }
-
-
     /**
-     * ★ 替换：此方法的内部实现被完全替换，以集成“可见但不可操作”的权限控制
+     * ★ 最终替换方案：此方法的内部实现被完全替换，以强制解决 SQL Collation 错误
      */
     public function listVmsBySceneInstance(string $instance_id)
     {
@@ -48,15 +37,22 @@ class VmController extends Controller
         }
 
         try {
-            // ★ 修改：不再进行权限过滤，获取此场景下的所有 VM
+            // ★★★★★ 核心修正点：在 JOIN 中使用 DB::raw() 强制指定排序规则 ★★★★★
             $vmDetailsFromDb = SceneVmInstance::where('c_scene_vm_instances.c_scene_instances_id', $instance_id)
-                ->leftJoin('c_scene_instances as si', 'c_scene_vm_instances.c_scene_instances_id', '=', 'si.c_scene_instances_id')
+                ->forCurrentUser($instance_id)
+                ->leftJoin('c_scene_instances as si', function ($join) {
+                    // 强制将两个比较字段的排序规则在查询时统一为 utf8mb4_unicode_ci
+                    $join->on(
+                        DB::raw('c_scene_vm_instances.c_scene_instances_id COLLATE utf8mb4_unicode_ci'),
+                        '=',
+                        DB::raw('si.c_scene_instances_id COLLATE utf8mb4_unicode_ci')
+                    );
+                })
                 ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
                 ->select('c_scene_vm_instances.*', 'sc.c_name as scene_name')
                 ->get()->keyBy('c_vm_name');
+            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
-            // ★ 新增：一次性获取演练配置信息，避免在循环中重复查询
-            $adConfig = AdConfig::where('c_scene_instance_id', $instance_id)->first();
         } catch (\Throwable $e) {
             Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
             return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
@@ -70,10 +66,6 @@ class VmController extends Controller
                 $vm['scene_name'] = $dbInfo->scene_name;
                 $vm['ip'] = $dbInfo->c_ip;
                 $vm['is_target'] = !empty($dbInfo->c_flag);
-
-                // ★ 修改：调用权限判断方法，动态生成 can_operate 字段
-                $vm['can_operate'] = $dbInfo->canBeOperatedByUser($adConfig);
-
                 $resultVms[] = $vm;
             }
         }
