@@ -537,6 +537,46 @@ class VmController extends Controller
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
 
+        // ★ 添加权限检查：验证用户是否有权访问此VM的VNC控制台
+        try {
+            $vmInstance = SceneVmInstance::where('c_vm_name', $vmQueryName)->first();
+            if (!$vmInstance) {
+                Log::warning('VM not found in database', ['vm_name' => $vmQueryName]);
+                return response()->json(['error' => '虚拟机不存在'], 404);
+            }
+
+            // 获取对应的演练配置
+            $adConfig = DB::table('c_scene_instances as si')
+                ->join('c_ad_configs as ac', 'si.c_config_id', '=', 'ac.c_config_id')
+                ->where('si.c_scene_instances_id', $vmInstance->c_scene_instances_id)
+                ->first();
+
+            $adConfigObj = null;
+            if ($adConfig) {
+                // 转换为对象以便传递给canBeOperatedByUser方法
+                $adConfigObj = (object)[
+                    'c_red_team_id' => $adConfig->c_red_team_id,
+                    'c_blue_team_id' => $adConfig->c_blue_team_id,
+                ];
+            }
+
+            // 使用现有的canBeOperatedByUser方法检查权限
+            if (!$vmInstance->canBeOperatedByUser($adConfigObj)) {
+                Log::warning('User not authorized to access VM', [
+                    'vm_name' => $vmQueryName,
+                    'user' => $request->get('token_data')['username'] ?? 'unknown',
+                    'is_target' => !empty($vmInstance->c_flag)
+                ]);
+                return response()->json(['error' => '无权访问此虚拟机的控制台'], 403);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Permission check failed for VM access', [
+                'vm_name' => $vmQueryName,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['error' => '权限检查失败'], 500);
+        }
+
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
             $vncPort = $this->parseVncPort($xml) ?? 5900;
