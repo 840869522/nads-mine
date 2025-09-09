@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Http\Controllers\ad;
-
 use App\Http\Controllers\Controller;
 use App\Models\ad\AdConfig;
 use App\Models\scenario\SceneConfig;
@@ -21,28 +19,20 @@ class AdController extends Controller
 {
     private CommandLineService $cliService;
 
-    public function __construct(CommandLineService $cliService)
+    public function __construct(Request $request, CommandLineService $cliService)
     {
-        // 你的基类 Controller 有一个处理权限的构造函数。
-        // 这个构造函数会覆盖它。请确保这是你期望的行为。
-        // 如果此处的 startDrill 也需要基类的权限检查，
-        // 你必须在此处调用 parent::__construct($request) 并接收 Request 对象。
-        // 为了保持和你原始代码一致，我们暂时保留这个构造函数。
+        parent::__construct($request);
         $this->cliService = $cliService;
     }
 
-    /**
-     * ★ 修改：此方法被重写以正确处理 c_scene JSON 中的 isTarget 属性
-     */
     public function startDrill(Request $request, SceneConfig $scenario)
     {
-        $validator = Validator::make($request->all(), ['username' => 'required|string|max:50', 'ad_config_id' => 'required|uuid',]);
+        $validator = Validator::make($request->all(), ['username' => 'required|string|max:50', 'ad_config_id' => 'required|string|exists:c_ad_configs,c_id']);
         if ($validator->fails()) {
-            return response()->json(['message' => '请求格式不正确，必须包含用户名和演练配置ID', 'errors' => $validator->errors()], 422);
+            return response()->json(['message' => '请求格式不正确，必须包含有效的用户名和演练配置ID', 'errors' => $validator->errors()], 422);
         }
         $userName = $request->input('username');
         $adConfigId = $request->input('ad_config_id');
-
         $topologyJson = is_string($scenario->c_scene) ? json_decode($scenario->c_scene, true) : $scenario->c_scene;
 
         $parsedTopology = TopologyParser::parse($topologyJson);
@@ -106,17 +96,14 @@ class AdController extends Controller
                 $nodeInfo = $nodesById->get($containerData['id']);
                 $isTarget = $nodeInfo['config']['isTarget'] ?? false;
                 $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
-
                 $options = [
                     'image' => $containerData['image'], 'name'  => $containerName,
                     'ports' => $containerData['portMappings'], 'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                 ];
                 if ($flag) { $options['env'][] = ['key' => 'FLAG', 'value' => $flag]; }
-
                 $containerId = $this->cliService->createContainer($options);
                 $containerIp = $containerIps[$containerData['id']] ?? null;
-
                 SceneContainerInstance::create([
                     'c_container_id' => $containerId,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -130,7 +117,6 @@ class AdController extends Controller
             }
 
             Log::info("================== 开始创建虚拟机并建立连接 ==================");
-
             $baseDir = $this->_get_global_directory();
             $imageDir = $baseDir . '/virsh/images';
             $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
@@ -146,22 +132,16 @@ class AdController extends Controller
                     $switchNode = $nodesById[$conn['source']['id']];
                     $ip = $conn['target']['ip'];
                 }
-
                 if (!$itemNode || !$switchNode) continue;
-
                 $nodeInfo = $nodesById->get($itemNode['id']);
                 $isTarget = $nodeInfo['config']['isTarget'] ?? false;
                 $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
-
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
-
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
                     $correctImageName = 'v_att_tcpScanning';
                 }
-
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
-
                 $vmInstance = SceneVmInstance::create([
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -169,35 +149,25 @@ class AdController extends Controller
                     'c_flag'               => $flag,
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
-                Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
                 $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
                 $this->cliService->createVm([
-                    'id'                  => $vmDbId,
-                    'vm_name'             => $vmName,
-                    'image'               => $correctImageName,
-                    'ip'                  => $ip,
+                    'id'                  => $vmDbId, 'vm_name'             => $vmName,
+                    'image'               => $correctImageName, 'ip'                  => $ip,
                     'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                    'flag'                => $flag ?? 'NULL',
-                    'switch_name'         => $actualSwitchName,
-                    'image_dir'           => $imageDir,
-                    'instance_base_dir'   => $instanceBaseDir,
+                    'flag'                => $flag ?? 'NULL', 'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir, 'instance_base_dir'   => $instanceBaseDir,
                 ]);
                 $createdItemsInfo[$itemNode['id']] = ['id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'];
             }
-
-            Log::info("================== 开始建立剩余网络连接 ==================");
-            // ... (网络连接和路由配置) ...
+            // ... (网络连接和路由配置)
 
             $sceneInstance->c_status = 'RUNNING';
             $sceneInstance->save();
-
             DB::commit();
-
             return response()->json([
                 'message' => '演练场景已成功启动！', 'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                 'created_items' => $createdItemsInfo, 'created_switches' => $createdSwitchesInfo,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             if ($sceneInstance) {
@@ -233,10 +203,5 @@ class AdController extends Controller
             if (empty($connection['source']['ip'])) { $connection['source']['ip'] = $getNextIp(); }
             if (empty($connection['target']['ip'])) { $connection['target']['ip'] = $getNextIp(); }
         }
-    }
-
-    private function _get_global_directory()
-    {
-        return env('GLOBAL_DIRECTORY', '/var/www/nads/back/public');
     }
 }
