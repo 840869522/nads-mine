@@ -1,5 +1,5 @@
 from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-from langchain_community.document_loaders import TxtLoader
+from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter ## markdown 处理
@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from . import vector_store
 
-async def perseFile(file_path: str):
+async def parseFile(file_path: str):
     file_type = await auto_detect_file_type(file_path)
     if file_type.lower() in ['pdf']:
         loader = UnstructuredPDFLoader(file_path, mode="elements")
