@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
@@ -70,11 +71,22 @@ class AdController extends Controller
             }
         }
 
+        DB::beginTransaction();
         try {
             $sceneInstance = SceneInstance::create([
                 'c_config_id' => $scenario->c_config_id, 'c_username' => $userName, 'c_status' => 'CREATING',
             ]);
             Log::info("创建场景实例记录成功", ['instance_id' => $sceneInstance->c_scene_instances_id]);
+
+            $adConfig = AdConfig::find($adConfigId);
+            if ($adConfig) {
+                $adConfig->update([
+                    'c_scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                    'c_status' => 'running',
+                ]);
+            } else {
+                throw new \Exception("启动场景时未找到有效的演练配置记录: " . $adConfigId);
+            }
 
             $instanceShortId = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -8);
             $switchIdSuffix = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -5);
@@ -91,8 +103,6 @@ class AdController extends Controller
 
             foreach ($parsedTopology['containers'] as $containerData) {
                 $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
-
-                // ★ 核心改动：从原始拓扑中精确读取 isTarget，并据此决定 flag 的值
                 $nodeInfo = $nodesById->get($containerData['id']);
                 $isTarget = $nodeInfo['config']['isTarget'] ?? false;
                 $flag = $isTarget ? 'flag{' . Str::uuid()->toString() . '}' : null;
@@ -107,7 +117,6 @@ class AdController extends Controller
                 $containerId = $this->cliService->createContainer($options);
                 $containerIp = $containerIps[$containerData['id']] ?? null;
 
-                // ★ 核心改动：将正确的 flag 值 (UUID 或 null) 存入数据库
                 SceneContainerInstance::create([
                     'c_container_id' => $containerId,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -128,7 +137,6 @@ class AdController extends Controller
 
             foreach ($connections as $conn) {
                 $itemNode = null; $switchNode = null; $ip = null;
-
                 if ($conn['source']['type'] === 'virtual_machine' && $conn['target']['type'] === 'switch') {
                     $itemNode = $nodesById[$conn['source']['id']];
                     $switchNode = $nodesById[$conn['target']['id']];
@@ -150,7 +158,6 @@ class AdController extends Controller
 
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
                     $correctImageName = 'v_att_tcpScanning';
-                    Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
                 }
 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
@@ -163,9 +170,7 @@ class AdController extends Controller
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
-
                 $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
-
                 $this->cliService->createVm([
                     'id'                  => $vmDbId,
                     'vm_name'             => $vmName,
@@ -177,34 +182,16 @@ class AdController extends Controller
                     'image_dir'           => $imageDir,
                     'instance_base_dir'   => $instanceBaseDir,
                 ]);
-
-                $createdItemsInfo[$itemNode['id']] = [
-                    'id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'
-                ];
+                $createdItemsInfo[$itemNode['id']] = ['id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'];
             }
 
             Log::info("================== 开始建立剩余网络连接 ==================");
-            foreach ($connections as $conn) {
-                // ... (网络连接逻辑) ...
-            }
-
-            // ... (网关和路由配置) ...
+            // ... (网络连接和路由配置) ...
 
             $sceneInstance->c_status = 'RUNNING';
             $sceneInstance->save();
 
-            $adConfig = AdConfig::find($adConfigId);
-            if ($adConfig) {
-                $adConfig->c_scene_instance_id = $sceneInstance->c_scene_instances_id;
-                $adConfig->c_status = 'running';
-                $adConfig->save();
-                Log::info("成功更新演练配置的实例ID和状态", [
-                    'ad_config_id' => $adConfigId,
-                    'scene_instance_id' => $sceneInstance->c_scene_instances_id
-                ]);
-            } else {
-                Log::warning("启动场景后，未找到要更新的演练配置记录", ['ad_config_id' => $adConfigId]);
-            }
+            DB::commit();
 
             return response()->json([
                 'message' => '演练场景已成功启动！', 'scene_instance_id' => $sceneInstance->c_scene_instances_id,
@@ -212,13 +199,13 @@ class AdController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             if ($sceneInstance) {
                 $sceneInstance->c_status = 'FAILED';
                 $sceneInstance->save();
             }
-            $errorMessage = $e->getMessage();
-            Log::error("启动场景时发生严重错误: " . $errorMessage, ['trace' => $e->getTraceAsString()]);
-            return response()->json(['message' => '启动场景时发生错误：' . $errorMessage], 500);
+            Log::error("启动场景时发生严重错误: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '启动场景时发生错误：' . $e->getMessage()], 500);
         }
     }
 
@@ -226,51 +213,30 @@ class AdController extends Controller
     {
         $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
         $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
-
         $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
             return explode('/', $ip)[0];
         })->unique()->flip();
-
         Log::info('Found existing IPs in DB', $existingIps->keys()->toArray());
-
-        $octet3 = 0;
-        $octet4 = 0;
-
+        $octet3 = 0; $octet4 = 0;
         $getNextIp = function() use (&$octet3, &$octet4, &$existingIps) {
             do {
-                if ($octet4 >= 254) {
-                    $octet4 = 1;
-                    $octet3++;
-                } else {
-                    $octet4++;
-                }
-
-                if ($octet3 >= 255) {
-                    throw new \Exception("IP地址池 10.100.0.0/16 已耗尽。");
-                }
-
+                if ($octet4 >= 254) { $octet4 = 1; $octet3++; } else { $octet4++; }
+                if ($octet3 >= 255) { throw new \Exception("IP地址池 10.100.0.0/16 已耗尽。"); }
                 $newIp = "10.100.{$octet3}.{$octet4}";
-
             } while (isset($existingIps[$newIp]));
-
             $existingIps[$newIp] = true;
-
             Log::info("Assigned new IP: {$newIp}");
             return $newIp . "/16";
         };
-
         foreach ($connections as &$connection) {
-            // ★★★ 新增：为bridge类型的节点跳过IP分配 ★★★
-            if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') {
-                continue;
-            }
-
-            if (empty($connection['source']['ip'])) {
-                $connection['source']['ip'] = $getNextIp();
-            }
-            if (empty($connection['target']['ip'])) {
-                $connection['target']['ip'] = $getNextIp();
-            }
+            if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') { continue; }
+            if (empty($connection['source']['ip'])) { $connection['source']['ip'] = $getNextIp(); }
+            if (empty($connection['target']['ip'])) { $connection['target']['ip'] = $getNextIp(); }
         }
+    }
+
+    private function _get_global_directory()
+    {
+        return env('GLOBAL_DIRECTORY', '/var/www/nads/back/public');
     }
 }
