@@ -86,7 +86,7 @@ class SceneVmInstance extends Model
             ->where('c_users_roles.c_user_id', $username)
             ->whereIn('c_roles.c_role_name', ['admin', 'referee'])
             ->exists();
-        
+
         if ($isAdminOrReferee) {
             // 管理员和裁判可以查看所有VM
             return $query;
@@ -130,10 +130,10 @@ class SceneVmInstance extends Model
     /**
      * ★ 检查当前登录用户是否有权操作此虚拟机实例
      *
-     * @param AdConfig|null $adConfig 演练配置，由控制器传入以提高效率
+     * @param AdConfig|object|null $adConfig 演练配置，可以是AdConfig模型或包含c_red_team_id和c_blue_team_id属性的对象
      * @return bool
      */
-    public function canBeOperatedByUser(?AdConfig $adConfig): bool
+    public function canBeOperatedByUser($adConfig = null): bool
     {
         $tokenData = Request::get('token_data');
         if (!$tokenData || !isset($tokenData['username'])) {
@@ -141,6 +141,7 @@ class SceneVmInstance extends Model
         }
         $username = $tokenData['username'];
 
+        // 检查管理员和裁判权限
         $isAdminOrReferee = DB::table('c_users_roles')
             ->join('c_roles', 'c_users_roles.c_role_id', '=', 'c_roles.c_id')
             ->where('c_users_roles.c_user_id', $username)
@@ -150,15 +151,41 @@ class SceneVmInstance extends Model
             return true;
         }
 
+        // 如果没有提供演练配置，尝试从数据库查找
+        if (!$adConfig) {
+            $adConfig = DB::table('c_scene_instances as si')
+                ->join('c_ad_configs as ac', 'si.c_config_id', '=', 'ac.c_config_id')
+                ->where('si.c_scene_instances_id', $this->c_scene_instances_id)
+                ->first();
+        }
+
         if (!$adConfig) {
             return false;
         }
 
-        $isRedTeamMember = DB::table('c_teams_users')->where('team_id', $adConfig->c_red_team_id)->where('user_id', $username)->exists();
-        $isBlueTeamMember = DB::table('c_teams_users')->where('team_id', $adConfig->c_blue_team_id)->where('user_id', $username)->exists();
+        // 获取红队和蓝队ID（兼容AdConfig模型和stdClass对象）
+        $redTeamId = $adConfig->c_red_team_id ?? null;
+        $blueTeamId = $adConfig->c_blue_team_id ?? null;
+
+        if (!$redTeamId || !$blueTeamId) {
+            return false;
+        }
+
+        // 检查用户团队成员身份
+        $isRedTeamMember = DB::table('c_teams_users')
+            ->where('team_id', $redTeamId)
+            ->where('user_id', $username)
+            ->exists();
+        $isBlueTeamMember = DB::table('c_teams_users')
+            ->where('team_id', $blueTeamId)
+            ->where('user_id', $username)
+            ->exists();
 
         $isTargetMachine = !empty($this->c_flag);
 
+        // 权限判断逻辑：
+        // 红队成员只能操作非靶机（用于攻击）
+        // 蓝队成员只能操作靶机（用于防御）
         if ($isRedTeamMember && !$isTargetMachine) {
             return true;
         }
