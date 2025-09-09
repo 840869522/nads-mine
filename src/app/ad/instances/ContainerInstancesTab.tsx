@@ -27,6 +27,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 

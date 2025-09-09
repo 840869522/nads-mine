@@ -45,7 +45,7 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
-import {uuidv4} from "zod/v4";
+import { v4 as uuidv4 } from 'uuid';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
