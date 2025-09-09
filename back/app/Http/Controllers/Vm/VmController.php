@@ -544,7 +544,7 @@ class VmController extends Controller
 
             // 获取对应的演练配置
             $adConfig = DB::table('c_scene_instances as si')
-                ->join('c_ad_configs as ac', 'si.c_config_id', '=', 'ac.c_config_id')
+                ->join('c_ad_configs as ac', 'si.c_scene_instances_id', '=', 'ac.c_scene_instance_id')
                 ->where('si.c_scene_instances_id', $vmInstance->c_scene_instances_id)
                 ->first();
 
