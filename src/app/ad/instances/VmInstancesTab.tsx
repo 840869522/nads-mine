@@ -47,7 +47,6 @@ import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
-import { customFetch } from '@/utils/fetch';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -85,7 +84,7 @@ interface VmInstancesTabProps {
 }
 
 /* ---------- SWR Hooks (无改动) ---------- */
-const fetcher = (url: string) => customFetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefObject<number>) {
     const {
@@ -165,7 +164,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await customFetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
+            const res = await fetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -198,7 +197,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await customFetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
+            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
@@ -213,7 +212,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await customFetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
+            const res = await fetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
