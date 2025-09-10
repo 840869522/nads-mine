@@ -9,7 +9,7 @@ import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
-    History as HistoryIcon
+    History as HistoryIcon,Article as ArticleIcon
 } from '@mui/icons-material';
 
 import { RunningInstance, InstanceStatus } from '@/types';
