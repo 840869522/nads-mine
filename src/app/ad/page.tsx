@@ -293,6 +293,38 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
+    // const handleAdAction = async (ad: AdConfig) => {
+    //     const cj_name = findSceneNameById(ad.c_scene_config_id);
+    //     const username = (user as any)?.user?.c_username;
+    //     if (!username) {
+    //         setStatusMessage({ type: 'error', message: '无法获取当前用户名，请确保您已登录。' });
+    //         return;
+    //     }
+    //     if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
+    //         return;
+    //     }
+    //
+    //     try {
+    //         const response = await customFetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    //             body: JSON.stringify({
+    //                 username: username,
+    //                 ad_config_id: ad.c_id
+    //             }),
+    //         });
+    //
+    //         const result = await response.json();
+    //         if (!response.ok) {
+    //             throw new Error(result.message || '启动失败');
+    //         }
+    //
+    //         setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
+    //         await fetchData();
+    //     } catch (err: any) {
+    //         setStatusMessage({ type: 'error', message: (err as Error).message });
+    //     }
+    // };
     const handleAdAction = async (ad: AdConfig) => {
         const cj_name = findSceneNameById(ad.c_scene_config_id);
         const username = (user as any)?.user?.c_username;
@@ -300,18 +332,22 @@ const AdManagementPage: React.FC = () => {
             setStatusMessage({ type: 'error', message: '无法获取当前用户名，请确保您已登录。' });
             return;
         }
-        if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
+        if (!window.confirm(`您确定要启动演练 “${ad.c_drill_name}” 吗？`)) {
             return;
         }
 
+        setIsSubmitting(true); // 开始时设置加载状态
+        setStatusMessage(null); // 清除旧消息
+
         try {
-            const response = await customFetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
+            // ★★★ 让前端调用那个更简单、更符合RESTful风格的“启动”API ★★★
+            // 这个API的URL是 /api/ad-configs/{config_id}/start
+            // 它会被我们修复后的 AdConfigController@start 方法“劫持”并正确处理
+            const response = await customFetch(`/back/api/ad-configs/${ad.c_id}/start`, {
                 method: 'POST',
+                // 这个简单的API不需要请求体，但为了严谨可以保留
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                    username: username,
-                    ad_config_id: ad.c_id
-                }),
+                body: JSON.stringify({ username: username, }), // 后端实际上会从token中获取用户，但传递也没问题
             });
 
             const result = await response.json();
@@ -320,9 +356,11 @@ const AdManagementPage: React.FC = () => {
             }
 
             setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
-            await fetchData();
+            await fetchData(); // 成功后刷新列表
         } catch (err: any) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
+            setStatusMessage({ type: 'error', message: err.message || '启动过程中发生未知错误' });
+        } finally {
+            setIsSubmitting(false); // 结束后无论成功失败都取消加载状态
         }
     };
 
