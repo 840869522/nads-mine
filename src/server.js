@@ -43,7 +43,7 @@ app.prepare().then(() => {
         changeOrigin: true,
         pathRewrite: { 
             '^/back/': '/', 
-            '^/api/': '/'
+            // '^/api/': '/'
         },
         logLevel: dev ? 'debug' : 'info',
     });
@@ -100,9 +100,9 @@ app.prepare().then(() => {
         if (url.startsWith('/back/')) {
             return phpProxy(req, res);
         }
-        if (url.startsWith('/api/')) {
-            return phpProxy(req, res);
-        }
+        // if (url.startsWith('/api/')) {
+        //     return phpProxy(req, res);
+        // }
         if (url.startsWith('/chat/')) {
             return aiChatProxy(req,res);
         }
