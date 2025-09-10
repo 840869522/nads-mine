@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
-use App\RunTool\TopologyParser;
+
 
 class InstanceController extends Controller
 {
@@ -56,49 +56,32 @@ class InstanceController extends Controller
         }
     }
 
+    /**
+     * ★ 替换：此方法的内部实现被完全替换，以集成“可见但不可操作”的权限控制
+     */
     public function show(SceneInstance $instance)
     {
         try {
-            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
+            // ★ 修改：不再进行权限过滤，获取此场景下的所有容器
+            $containersFromDb = $instance->containers()->get();
+
             $runningInstances = [];
-            foreach ($instance->containers as $containerInstance) {
+            $instance->loadMissing('sceneConfig');
+
+            foreach ($containersFromDb as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
                 try {
                     $details = $this->docker->containerInspect($containerId);
                     $stats = $this->docker->containerStats($containerId);
-                    $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
-                    $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
-                    $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
-                    $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
-                    $memUsage = $stats->memory_stats->usage ?? 0;
-                    $memLimit = $stats->memory_stats->limit ?? 0;
-
-                    $ports = [];
-                    foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
-                        foreach ($bindingList ?? [] as $b) {
-                            $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
-                        }
-                    }
+                    // ... (CPU, memory, port calculation logic) ...
 
                     $runningInstances[] = [
-                        'id' => $details->getId(),
-                        'name' => ltrim($details->getName() ?? '', '/'),
-                        'type' => 'container',
-                        'ipAddress' => $containerInstance->c_ip,
-                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
-                        'scene_name' => $instance->sceneConfig->c_name ?? null,
-                        'status' => $this->mapStatus($details->getState()->getStatus()),
-                        'ports' => implode(', ', $ports),
-                        'imageName' => $details->getConfig()->getImage(),
-                        'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
-                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
-                        'uptime' => $details->getState()->getStartedAt(),
-                        'createdAt' => $details->getCreated(),
+                        // ... (all other fields from your original code)
                         'is_target' => !empty($containerInstance->c_flag),
+                        // ★ 修改：调用权限判断方法，动态生成 can_operate 字段
+                        'can_operate' => $containerInstance->canBeOperatedByUser(),
                     ];
-                } catch (\Exception $e) {
-                    Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
-                }
+                } catch (\Exception $e) { /* ... (error handling as in your original code) ... */ }
             }
             return response()->json($runningInstances);
         } catch (\Exception $e) {

@@ -46,6 +46,7 @@ import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {TopologyData} from "@/types";
 import {useAuth} from "@/hooks/useAuth";
+import { customFetch } from "@/utils/fetch"
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 
 // --- 类型定义 ---
@@ -146,10 +147,10 @@ const AdManagementPage: React.FC = () => {
             const scenesUrl = `${API_BASE_URL}/scenarios`;
 
             const [adConfigsRes, teamsRes, usersRes, scenesRes] = await Promise.all([
-                fetch(adConfigsUrl),
-                fetch(teamsUrl),
-                fetch(usersUrl),
-                fetch(scenesUrl),
+                customFetch(adConfigsUrl),
+                customFetch(teamsUrl),
+                customFetch(usersUrl),
+                customFetch(scenesUrl),
             ]);
 
             if (!adConfigsRes.ok || !teamsRes.ok || !usersRes.ok || !scenesRes.ok) throw new Error('获取基础数据失败');
@@ -164,7 +165,7 @@ const AdManagementPage: React.FC = () => {
             setTotalAdConfigs(adConfigsData.meta?.total || 0);
 
             setTeams(teamsData.data || []);
-            setUsers(usersData.data || []);
+            setUsers(usersData.data.data || []);
 
             // 现在可以安全地使用 scenesData
             const formattedScenes = (Array.isArray(scenesData) ? scenesData : scenesData.data || []).map((scene: any) => ({
@@ -253,7 +254,7 @@ const AdManagementPage: React.FC = () => {
         try {
             const url = editingAdConfig ? `${API_BASE_URL}/ad-configs/${editingAdConfig.c_id}` : `${API_BASE_URL}/ad-configs`;
             const method = editingAdConfig ? 'PUT' : 'POST';
-            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(adConfigData) });
+            const response = await customFetch(url, { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(adConfigData) });
             const result = await response.json();
             if (!response.ok) {
                 if (response.status === 422 && result.errors) throw new Error(JSON.stringify(result.errors));
@@ -280,7 +281,7 @@ const AdManagementPage: React.FC = () => {
         if (!adConfigToDelete) return;
         setIsSubmitting(true);
         try {
-            await fetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
+            await customFetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
             setStatusMessage({ type: 'success', message: `演练 "${adConfigToDelete.c_drill_name}" 已删除。` });
             await fetchData();
         } catch (err) {
@@ -292,6 +293,38 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
+    // const handleAdAction = async (ad: AdConfig) => {
+    //     const cj_name = findSceneNameById(ad.c_scene_config_id);
+    //     const username = (user as any)?.user?.c_username;
+    //     if (!username) {
+    //         setStatusMessage({ type: 'error', message: '无法获取当前用户名，请确保您已登录。' });
+    //         return;
+    //     }
+    //     if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
+    //         return;
+    //     }
+    //
+    //     try {
+    //         const response = await customFetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    //             body: JSON.stringify({
+    //                 username: username,
+    //                 ad_config_id: ad.c_id
+    //             }),
+    //         });
+    //
+    //         const result = await response.json();
+    //         if (!response.ok) {
+    //             throw new Error(result.message || '启动失败');
+    //         }
+    //
+    //         setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
+    //         await fetchData();
+    //     } catch (err: any) {
+    //         setStatusMessage({ type: 'error', message: (err as Error).message });
+    //     }
+    // };
     const handleAdAction = async (ad: AdConfig) => {
         const cj_name = findSceneNameById(ad.c_scene_config_id);
         const username = (user as any)?.user?.c_username;
@@ -299,18 +332,22 @@ const AdManagementPage: React.FC = () => {
             setStatusMessage({ type: 'error', message: '无法获取当前用户名，请确保您已登录。' });
             return;
         }
-        if (!window.confirm(`您确定要启动场景 “${cj_name}” 的演练吗？`)) {
+        if (!window.confirm(`您确定要启动演练 “${ad.c_drill_name}” 吗？`)) {
             return;
         }
 
+        setIsSubmitting(true); // 开始时设置加载状态
+        setStatusMessage(null); // 清除旧消息
+
         try {
-            const response = await fetch(`/back/api/scenarios/${ad.c_scene_config_id}/start`, {
+            // ★★★ 让前端调用那个更简单、更符合RESTful风格的“启动”API ★★★
+            // 这个API的URL是 /api/ad-configs/{config_id}/start
+            // 它会被我们修复后的 AdConfigController@start 方法“劫持”并正确处理
+            const response = await customFetch(`/back/api/ad-configs/${ad.c_id}/start`, {
                 method: 'POST',
+                // 这个简单的API不需要请求体，但为了严谨可以保留
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                    username: username,
-                    ad_config_id: ad.c_id
-                }),
+                body: JSON.stringify({ username: username, }), // 后端实际上会从token中获取用户，但传递也没问题
             });
 
             const result = await response.json();
@@ -319,9 +356,11 @@ const AdManagementPage: React.FC = () => {
             }
 
             setStatusMessage({ type: 'success', message: result.message || '演练已成功启动！正在刷新列表...' });
-            await fetchData();
+            await fetchData(); // 成功后刷新列表
         } catch (err: any) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
+            setStatusMessage({ type: 'error', message: err.message || '启动过程中发生未知错误' });
+        } finally {
+            setIsSubmitting(false); // 结束后无论成功失败都取消加载状态
         }
     };
 
