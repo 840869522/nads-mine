@@ -47,6 +47,7 @@ import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
+import { customFetch } from '@/utils/fetch';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -82,7 +83,7 @@ interface VmInstancesTabProps {
 }
 
 /* ---------- SWR Hooks ---------- */
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => customFetch(url).then((r) => r.json());
 
 function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefObject<number>) {
     const {
@@ -162,7 +163,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
+            const res = await customFetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -195,7 +196,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
+            const res = await customFetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
@@ -210,7 +211,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
+            const res = await customFetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -325,7 +326,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
         return rows;
     }, [data, search, showRunningOnly]);
-    
+
     // 如果没有instanceId，显示提示信息
     if (!instanceId) {
         return (
@@ -351,7 +352,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={() => mutate()} disabled={isValidating}>
                     {isValidating ? '刷新中...' : '刷新'}
                 </Button>
-                 <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
+                <Button startIcon={<ViewColumnIcon />} onClick={(e)=>setColumnAnchor(e.currentTarget)} variant="outlined" size="small">显示列</Button>
                 <FormControlLabel
                     control={<Checkbox checked={showRunningOnly} onChange={(e) => setShowRunningOnly(e.target.checked)} />}
                     label="只显示运行中"
@@ -365,11 +366,11 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                             control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} />}
                             label={
                                 key === 'hostNode' ? '宿主机' :
-                                key === 'pool' ? '存储池' :
-                                key === 'osType' ? '系统类型' :
-                                key === 'ip' ? 'IP地址' :
-                                key === 'is_target' ? '是否为靶机' :
-                                key // Fallback label
+                                    key === 'pool' ? '存储池' :
+                                        key === 'osType' ? '系统类型' :
+                                            key === 'ip' ? 'IP地址' :
+                                                key === 'is_target' ? '是否为靶机' :
+                                                    key // Fallback label
                             }
                         />
                     </MenuItem>
@@ -406,7 +407,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Backdrop>
 
             {flagSubmissionModalId && (
-                <FlagSubmissionModal 
+                <FlagSubmissionModal
                     open={Boolean(flagSubmissionModalId)}
                     onClose={() => setFlagSubmissionModalId(null)}
                     instanceId={flagSubmissionModalId}

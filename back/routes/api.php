@@ -1,34 +1,35 @@
 <?php
 
 
-    use App\Http\Controllers\ad\AdConfigController;
-    use App\Http\Controllers\scenario\ScenarioPermissionController;
-    use Illuminate\Support\Facades\Route;
-    use App\Http\Controllers\Users\UserController;
-    use App\Http\Controllers\Users\PermissionController;
-    use App\Http\Controllers\Users\RoleController;
-    use App\Http\Controllers\scenario\ScenarioController;
-    use App\Http\Controllers\scenario\DrillController;
-    use App\Http\Controllers\scenario\InstanceController;
-    use App\Http\Controllers\scenario\SwitchController;
-    use App\Http\Controllers\scenario\IptablesController;
-    use App\Http\Controllers\Docker\ImagesController;
-    use App\Http\Controllers\Docker\InstancesController;
-    use App\Http\Controllers\Docker\ContainersController;
-    use App\Http\Controllers\ad\RefereeController;
-    use App\Http\Controllers\ad\TeamController;
-    use App\Http\Controllers\Course\CourseController;
-    use App\Http\Controllers\Course\CategoryController;
-    use App\Http\Controllers\Course\ResourceController;
-    use App\Http\Controllers\Vm\VmController;
-    use App\Http\Controllers\Course\TestController;
-    use App\Http\Controllers\Experiment\ExperimentController;
-    use App\Http\Controllers\Experiment\ExperimentResourceController;
-    use App\Http\Controllers\Course\CoursePermissionController;
-    use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
-    use App\Http\Controllers\Test1\TestControllerNew;
-    use App\Http\Controllers\ad\GuidanceController;
-    use App\Http\Controllers\ad\OperationsController;
+use App\Http\Controllers\ad\AdConfigController;
+use App\Http\Controllers\ad\AdController;
+use App\Http\Controllers\scenario\ScenarioPermissionController;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Users\UserController;
+use App\Http\Controllers\Users\PermissionController;
+use App\Http\Controllers\Users\RoleController;
+use App\Http\Controllers\scenario\ScenarioController;
+use App\Http\Controllers\scenario\DrillController;
+use App\Http\Controllers\scenario\InstanceController;
+use App\Http\Controllers\scenario\SwitchController;
+use App\Http\Controllers\scenario\IptablesController;
+use App\Http\Controllers\Docker\ImagesController;
+use App\Http\Controllers\Docker\InstancesController;
+use App\Http\Controllers\Docker\ContainersController;
+use App\Http\Controllers\ad\RefereeController;
+use App\Http\Controllers\ad\TeamController;
+use App\Http\Controllers\Course\CourseController;
+use App\Http\Controllers\Course\CategoryController;
+use App\Http\Controllers\Course\ResourceController;
+use App\Http\Controllers\Vm\VmController;
+use App\Http\Controllers\Course\TestController;
+use App\Http\Controllers\Experiment\ExperimentController;
+use App\Http\Controllers\Experiment\ExperimentResourceController;
+use App\Http\Controllers\Course\CoursePermissionController;
+use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
+use App\Http\Controllers\Test1\TestControllerNew;
+use App\Http\Controllers\ad\GuidanceController;
+use App\Http\Controllers\ad\OperationsController;
 
 /*
     |--------------------------------------------------------------------------
@@ -286,15 +287,7 @@ Route::prefix('study')->group(function () {
 /**
  * 定义安全实验分系统路由 (已整合和修正)
  */
-/*
-|--------------------------------------------------------------------------
-| 安全实验分系统 API 路由 (无 apiResource 版本)
-|--------------------------------------------------------------------------
-|
-| 此文件将所有 apiResource 的用法替换为独立的路由定义，
-| 与项目中其他分系统的风格保持一致。
-|
-*/
+
 
 /**
  * 演练配置管理 (ad-configs)
@@ -318,7 +311,7 @@ Route::delete('/ad-configs/{config}', [AdConfigController::class, 'destroy']);
  * 演练配置的自定义操作
  */
 // 启动演练 (简单状态变更)
-Route::post('/ad-configs/{config}/start', [AdConfigController::class, 'start']);
+Route::post('/ad-configs/{adConfig}/start', [AdConfigController::class, 'start']);
 // 停止演练 (简单状态变更)
 Route::post('/ad-configs/{config}/stop', [AdConfigController::class, 'stop']);
 
@@ -349,7 +342,7 @@ Route::prefix('ad')->group(function () {
     Route::get('/available-referees', [RefereeController::class, 'availableUsers']);
 
     // --- 演练环境构建 ---
-    Route::post('/drills/{scenario}/start', [AdController::class, 'startDrill']);
+    Route::post('/ad/drills/{scenario}/start', [AdController::class, 'startDrill']);
 
     // --- 辅助路由 ---
     Route::get('/users', [UserController::class, 'getAllUser']);
@@ -404,8 +397,3 @@ Route::prefix('flag')->group(function () {
     //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
 
-//Route::prefix("ad")->group(function() {
-//
-//})->middleware("jwtcheck:ad");
-//
-//?>

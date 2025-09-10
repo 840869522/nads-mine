@@ -9,7 +9,8 @@ import {
     Refresh as RefreshIcon, Search as SearchIcon, PlayArrow as PlayArrowIcon,
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
-    History as HistoryIcon
+    History as HistoryIcon,
+    Article as ArticleIcon // ★ 确保 ArticleIcon 已导入
 } from '@mui/icons-material';
 
 // ★ 修改：在 RunningInstance 类型中增加 can_operate 字段
@@ -27,6 +28,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 
@@ -83,7 +85,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         }
         setIsLoading(true);
         setFetchError(null);
-        // ★ 注意：确保此 API 端点现在返回的是带有 can_operate 字段的完整列表
         const url = `${API_BASE}/api/scenariosinstances/${instanceId}`;
         try {
             const res = await customFetch(url);
@@ -161,18 +162,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails, user]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
-        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
-        const id = uuidv4();
-        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
-        const params = encodeURIComponent(JSON.stringify({
-            dataViewSpec: { id, title, allowNoIndex: true },
-            columns: ["_source"],
-            query: { language: "kuery", query: "" },
-            filters: []
-        }));
-        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
-        window.open(url, '_blank');
+        // This function seems specific to Kibana and might be better named, but keeping as is.
+        // For containers, a direct logs modal is usually preferred.
+        setLogsModalId(instance.id);
     }, []);
 
     const columns: GridColDef[] = React.useMemo(() => [
@@ -195,7 +187,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 260,
+            field: 'actions', headerName: '操作', sortable: false, width: 280, // ★ 稍微增加宽度
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
@@ -228,26 +220,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
                         {isTarget && (
                             <>
-                                <Tooltip title="提交Flag">
-                                    <span>
-                                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
-                                <Tooltip title="Flag历史记录">
+                                <Tooltip title="提交Flag"><Box component="span">
+                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                                    </IconButton>
+                                </Box></Tooltip>
+                                <Tooltip title="Flag历史记录"><Box component="span">
                                     <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
                                         <HistoryIcon fontSize="small" color="info" />
                                     </IconButton>
-                                </Tooltip>
+                                </Box></Tooltip>
                             </>
                         )}
 
-                        <Tooltip title="日志"><Box component="span">
-                            <IconButton onClick={() => handleOpenLogs(instance)} size="small">
-                                <ArticleIcon fontSize="small" />
-                            </IconButton>
-                        </Box></Tooltip>
+                        <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(instance)} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
 
                         <Tooltip title={canOperate ? "更多操作" : "无权限"}><Box component="span">
                             <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small" disabled={!canOperate}>

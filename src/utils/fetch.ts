@@ -1,3 +1,4 @@
+"use client";
 import { getCookie, deleteCookie } from "./cookie";
 import { toast } from "react-toastify"
 
@@ -40,9 +41,15 @@ const customFetch = async (
     url: string,
     options: RequestInit = {}
 ): Promise<Response> => {
-    const token = getCookie("_auth");
-    const headers = new Headers(options.headers);
-    headers.set('Authorization', `${token}`);
+    var headers;
+    if (typeof window !== 'undefined') { // 检查是否在浏览器世界
+        const token = getCookie("_auth");
+        if (token) {
+            headers = new Headers(options.headers);
+            headers.set('Authorization', `${token}`);
+        }
+    }
+
     const response = await fetch(url, {
         ...options,
         headers,

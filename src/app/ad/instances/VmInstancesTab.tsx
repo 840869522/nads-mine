@@ -40,12 +40,14 @@ import {
     Refresh as RefreshIcon,
     Flag as FlagIcon,
     History as HistoryIcon,
+    Article as ArticleIcon,
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
-import {uuidv4} from "zod/v4";
+import { v4 as uuidv4 } from 'uuid';
+import { customFetch } from '@/utils/fetch';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -83,7 +85,7 @@ interface VmInstancesTabProps {
 }
 
 /* ---------- SWR Hooks (无改动) ---------- */
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>customFetch(url).then((r) => r.json());
 
 function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefObject<number>) {
     const {
@@ -163,7 +165,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
+            const res = await customFetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -196,7 +198,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
+            const res = await customFetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
@@ -211,7 +213,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
+            const res = await customFetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -260,7 +262,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 240,
+                width: 280, // ★ 稍微增加宽度以容纳新按钮
                 renderCell: (params) => {
                     const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
@@ -276,7 +278,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    {/* ★ 修改：在 disabled 条件中加入 !canOperate，并用 <span> 包裹 Tooltip */}
+                                    {/* ★ 修改：在 disabled 条件中加入 !canOperate，并用 <span> 或 <Box> 包裹 Tooltip */}
                                     <Tooltip title={canOperate ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperate}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
                                     <Tooltip title={canOperate ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperate}><StopIcon fontSize="small" color={canOperate ? "error" : "disabled"} /></IconButton></Box></Tooltip>
                                     <Tooltip title={canOperate ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperate}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
@@ -288,18 +290,8 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
                             {isTarget && (
                                 <>
-                                    <Tooltip title="提交Flag">
-                                        <span>
-                                            <IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}>
-                                                <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-                                    <Tooltip title="Flag历史记录">
-                                        <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small" disabled={actionLoading}>
-                                            <HistoryIcon fontSize="small" color="info" />
-                                        </IconButton>
-                                    </Tooltip>
+                                    <Tooltip title="提交Flag"><Box component="span"><IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}><FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} /></IconButton></Box></Tooltip>
+                                    <Tooltip title="Flag历史记录"><Box component="span"><IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small" disabled={actionLoading}><HistoryIcon fontSize="small" color="info" /></IconButton></Box></Tooltip>
                                 </>
                             )}
 
