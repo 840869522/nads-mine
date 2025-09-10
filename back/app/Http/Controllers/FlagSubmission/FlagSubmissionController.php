@@ -353,24 +353,24 @@ class FlagSubmissionController extends BaseController
                 'message_type' => $broadcastData['type']
             ]);
 
-            // 发送 Redis 消息（临时禁用）
-            // $this->sendRedisMessage([
-            //     'event' => 'flag_submission',
-            //     'user_id' => $username,
-            //     'username' => $username,
-            //     'timestamp' => now()->toDateTimeString(),
-            //     'success' => $is_correct,
-            //     'points_earned' => $points_earned,
-            //     'instance_type' => $instance_type,
-            //     'instance_id' => $instance_id,
-            //     'instance_name' => $instance_type === 'docker'
-            //         ? ($instance->c_container_name ?? 'Unknown Container')
-            //         : ($instance->c_vm_name ?? 'Unknown VM'),
-            //     'scene_instance_id' => $c_scene_instances_id,
-            //     'attempt_count' => $submission->c_attempt_count,
-            //     'submission_id' => $submission->c_submission_id,
-            //     'message' => $message
-            // ]);
+            // 发送 Redis 消息
+            $this->sendRedisMessage([
+                'event' => 'flag_submission',
+                'user_id' => $username,
+                'username' => $username,
+                'timestamp' => now()->toDateTimeString(),
+                'success' => $is_correct,
+                'points_earned' => $points_earned,
+                'instance_type' => $instance_type,
+                'instance_id' => $instance_id,
+                'instance_name' => $instance_type === 'docker'
+                    ? ($instance->c_container_name ?? 'Unknown Container')
+                    : ($instance->c_vm_name ?? 'Unknown VM'),
+                'scene_instance_id' => $c_scene_instances_id,
+                'attempt_count' => $submission->c_attempt_count,
+                'submission_id' => $submission->c_submission_id,
+                'message' => $message
+            ]);
 
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message, ['points' => $points_earned, 'is_correct' => $is_correct]);
 
