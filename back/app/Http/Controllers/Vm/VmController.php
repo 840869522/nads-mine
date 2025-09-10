@@ -633,7 +633,7 @@ class VmController extends Controller
                 Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
-
+    Log::info($ip);
         return response()->json([
             'host' => $ip ?? '无效',
             'ssh_port' => 22,

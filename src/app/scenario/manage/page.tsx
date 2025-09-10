@@ -1,4 +1,3 @@
-// /var/www/nads/src/app/scenario/manage/page.tsx
 "use client";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
