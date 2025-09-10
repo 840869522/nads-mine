@@ -14,11 +14,22 @@ use App\Utils\JWTControll;
 
 class VmController extends Controller
 {
+
     private CommandLineService $cliService;
+
+    private const VALID_IMAGE_EXTENSIONS = [
+        'qcow2', 'raw', 'img', 'iso', 'vmdk', 'vdi', 'vhd', 'vhdx'
+    ];
 
     public function __construct(CommandLineService $cliService)
     {
         $this->cliService = $cliService;
+    }
+
+    private function isValidImageFile(string $path): bool
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return in_array($ext, self::VALID_IMAGE_EXTENSIONS, true);
     }
 
     /**

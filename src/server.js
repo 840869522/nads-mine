@@ -130,7 +130,7 @@ app.prepare().then(() => {
                 vnc: ['hostname', 'port', 'password'],
                 join: ['id','width','height','dpi']
             },
-            log: { level: 'INFO' },
+            log: { level: 'NORMAL' },
         }
     );
     guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
