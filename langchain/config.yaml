@@ -6,6 +6,8 @@ embeddingModel:
     model: "nomic-embed-text"
     base_url: "http://43.143.151.41:3000/v1"
     api_key: "sk-45jfj2wN89d0hwLFA18c71D7D3A3462b9eBe96F6Ea7d8cF5"
+qdrant:
+  server: "http://localhost:6333"
 server:
   ip: 127.0.0.1
   port: 9000

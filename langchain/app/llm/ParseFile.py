@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from . import vector_store
 
-async def parseFile(file_path: str):
+async def parseFile(file_path: str,file_type: str):
     file_type = await auto_detect_file_type(file_path)
     if file_type.lower() in ['pdf']:
         loader = UnstructuredPDFLoader(file_path, mode="elements")

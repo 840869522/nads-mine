@@ -7,7 +7,7 @@ from langchain_qdrant import QdrantVectorStore
 
 try:
     qdrant = QdrantClient(
-           url="http://localhost:6333"
+        url=config['qdrant']['server']
     )
     if not qdrant.collection_exists("qdrant_collection"):
         qdrant.create_collection(
