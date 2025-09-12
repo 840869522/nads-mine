@@ -704,6 +704,32 @@ XML;
         'output' => $process->getOutput()
     ]);
 }
+
+    public function createVmWin10(array $options): void
+{
+    // 指向新的 win10 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win10.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script (win10): ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script (win10) for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
 }
 
 // // ```json
