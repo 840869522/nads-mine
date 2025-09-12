@@ -59,6 +59,10 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedTopology, setSelectedTopology] = useState<any>(null);
 
+    // 查看拓扑功能启用状态 - 可以通过硬编码控制
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const isTopologyEnabled = false; // 设置为 false 可以禁用查看拓扑功能
+
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);
         setError(null);
@@ -258,11 +262,13 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
-                                            <Tooltip title="查看拓扑">
-                                                <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
-                                                    <TopologyIcon />
-                                                </IconButton>
-                                            </Tooltip>
+                                            {isTopologyEnabled && (
+                                                <Tooltip title="查看拓扑">
+                                                    <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
+                                                        <TopologyIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             {/* 修改：停止按钮 */}
                                             <Tooltip title="停止场景">
                                                 <IconButton color="warning" size="small" onClick={() => handleStopInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>

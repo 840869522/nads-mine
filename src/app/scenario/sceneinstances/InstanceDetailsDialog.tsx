@@ -8,7 +8,6 @@ import {
     DialogActions,
     Button,
     Box,
-    Typography,
     IconButton,
     Tabs,
     Tab,
@@ -19,6 +18,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContainerInstancesTab from './ContainerInstancesTab'; // 替换旧的 docker.tsx
 import VmInstancesTab from './VmInstancesTab';
 import SwitchInstancesTab from './SwitchInstancesTab';
+import InstanceFlagHistory from './InstanceFlagHistory';
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -56,7 +56,7 @@ interface InstanceDetailsDialogProps {
 const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onClose, scenarioName, instanceId }) => {
     const [tabValue, setTabValue] = useState(0);
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
     };
     
@@ -79,6 +79,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                         <Tab label="容器" id="simple-tab-0" aria-controls="simple-tabpanel-0" />
                         <Tab label="虚拟机" id="simple-tab-1" aria-controls="simple-tabpanel-1" />
                         <Tab label="交换机" id="simple-tab-2" aria-controls="simple-tabpanel-2" />
+                        <Tab label="Flag" id="simple-tab-3" aria-controls="simple-tabpanel-3" />
                     </Tabs>
                 </Box>
                 
@@ -91,6 +92,9 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 </TabPanel>
                 <TabPanel value={tabValue} index={2}>
                     <SwitchInstancesTab instanceId={instanceId}/>
+                </TabPanel>
+                <TabPanel value={tabValue} index={3}>
+                    <InstanceFlagHistory instanceId={instanceId}/>
                 </TabPanel>
 
             </DialogContent>

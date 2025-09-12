@@ -1,5 +1,5 @@
 from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-from langchain_community.document_loaders import TxtLoader
+from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter ## markdown 处理
@@ -12,8 +12,25 @@ from uuid import uuid4
 
 from . import vector_store
 
-async def perseFile(file_path: str):
-    file_type = await auto_detect_file_type(file_path)
+
+def auto_detect_file_type(file_path: str):
+    mime = magic.Magic(mime=True)
+    mime_type = mime.from_file(file_path)
+    if mime_type == 'application/pdf':
+        return 'pdf'
+    elif mime_type == 'text/plain':
+        return 'txt'
+    elif mime_type == 'text/markdown':
+        return 'md'
+    elif mime_type == 'application/msword' or mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return 'word'
+    else:
+        raise ValueError(f"Unsupported file type: {mime_type}")
+
+async def parseFile(file_path: str,file_type1: str):
+    print(file_path)
+    file_type = auto_detect_file_type(file_path)
+    print(file_type)
     if file_type.lower() in ['pdf']:
         loader = UnstructuredPDFLoader(file_path, mode="elements")
     elif file_type.lower() in ['txt']:
@@ -36,21 +53,8 @@ async def perseFile(file_path: str):
         )
     file_data = await loader.aload()
     file_chunks = text_splitter.split_documents(file_data)
+    print(file_chunks[0])
     dids = [f"{file_path}-{str(uuid4())}" for _ in rnage(len(file_chunks))]
     vector_store.add_documents(documents=file_chunks,ids= dids)
+    print("------ success ------")
 
-
-
-async def auto_detect_file_type(file_path: str):
-    mime = magic.Magic(mime=True)
-    mime_type = mime.from_file(file_path)
-    if mime_type == 'application/pdf':
-        return 'pdf'
-    elif mime_type == 'text/plain':
-        return 'txt'
-    elif mime_type == 'text/markdown':
-        return 'md'
-    elif mime_type == 'application/msword' or mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-        return 'word'
-    else:
-        raise ValueError(f"Unsupported file type: {mime_type}")

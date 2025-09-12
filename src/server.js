@@ -43,7 +43,7 @@ app.prepare().then(() => {
         changeOrigin: true,
         pathRewrite: { 
             '^/back/': '/', 
-            '^/api/': '/'
+            // '^/api/': '/'
         },
         logLevel: dev ? 'debug' : 'info',
     });
@@ -100,9 +100,9 @@ app.prepare().then(() => {
         if (url.startsWith('/back/')) {
             return phpProxy(req, res);
         }
-        if (url.startsWith('/api/')) {
-            return phpProxy(req, res);
-        }
+        // if (url.startsWith('/api/')) {
+        //     return phpProxy(req, res);
+        // }
         if (url.startsWith('/chat/')) {
             return aiChatProxy(req,res);
         }
@@ -130,7 +130,7 @@ app.prepare().then(() => {
                 vnc: ['hostname', 'port', 'password'],
                 join: ['id','width','height','dpi']
             },
-            log: { level: 'INFO' },
+            log: { level: 'NORMAL' },
         }
     );
     guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));

@@ -11,6 +11,7 @@ from langchain_community.chat_message_histories import FileChatMessageHistory
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from operator import itemgetter
 from . import qdrant
+from . import vector_store
 from app import config
 
 

@@ -64,7 +64,8 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                 throw new Error('加载预置场景模板失败');
             }
             const templates = await response.json();
-            setSceneTemplates(templates);
+            // 确保 templates 是数组，如果不是则设为空数组
+            setSceneTemplates(Array.isArray(templates) ? templates : []);
         } catch (err: any) {
             setError(err.message || '加载预置场景模板失败');
             setSceneTemplates([]);
@@ -92,13 +93,13 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
 
     // 当模板加载完成后，默认选择第一个
     useEffect(() => {
-        if (sceneTemplates.length > 0 && !selectedTemplateId) {
+        if (Array.isArray(sceneTemplates) && sceneTemplates.length > 0 && !selectedTemplateId) {
             setSelectedTemplateId('0');
         }
     }, [sceneTemplates, selectedTemplateId]);
 
     // 根据索引查找当前选中的模板对象
-    const selectedTemplate = sceneTemplates[parseInt(selectedTemplateId) || 0];
+    const selectedTemplate = Array.isArray(sceneTemplates) ? sceneTemplates[parseInt(selectedTemplateId) || 0] : undefined;
 
     // 处理场景选择确认
     const handleConfirmSelection = () => {
@@ -214,10 +215,10 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                                         onChange={(e) => setSelectedTemplateId(e.target.value)}
                                         variant="outlined"
                                         size="small"
-                                        disabled={sceneTemplates.length === 0}
+                                        disabled={!Array.isArray(sceneTemplates) || sceneTemplates.length === 0}
                                         sx={{ mb: 2 }}
                                     >
-                                        {sceneTemplates.map((template, index) => (
+                                        {(Array.isArray(sceneTemplates) ? sceneTemplates : []).map((template, index) => (
                                             <MenuItem key={index} value={index}>
                                                 <Typography variant="subtitle1">
                                                     {template.fileName}
@@ -271,7 +272,7 @@ const ScenarioQuickCreateDialog: React.FC<ScenarioQuickCreateDialogProps> = ({
                             ) : (
                                 <Box sx={{display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center'}}>
                                     <Typography color="text.secondary">
-                                        {sceneTemplates.length > 0 ? '请选择一个模板来预览' : '没有可用的场景模板'}
+                                        {Array.isArray(sceneTemplates) && sceneTemplates.length > 0 ? '请选择一个模板来预览' : '没有可用的场景模板'}
                                     </Typography>
                                 </Box>
                             )}
