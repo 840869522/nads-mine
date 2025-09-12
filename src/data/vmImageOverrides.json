@@ -291,5 +291,6 @@
   "v_tar_RDPAttack.qcow2": {
     "osType": "win7",
     "description": "RDP远程溢出漏洞攻击靶机镜像"
-  }
+  },
+  "SecurityOnion.qcow2": {}
 }
