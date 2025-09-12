@@ -284,7 +284,9 @@ export default function ThreeDimensional({ id }: { id: string }){
                 });
             }
         }
-        fetchData();
+        if(id !== ""){
+             fetchData();
+        }
 
         // ---------- 动画 ----------
         const clock = new THREE.Clock();
