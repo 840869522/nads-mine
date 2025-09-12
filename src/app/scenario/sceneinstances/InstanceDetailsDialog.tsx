@@ -13,6 +13,7 @@ import {
     Tab,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import IngestControlDialog from '@/components/IngestControlDialog';
 
 // 导入新的标签页组件
 import ContainerInstancesTab from './ContainerInstancesTab'; // 替换旧的 docker.tsx
@@ -55,6 +56,7 @@ interface InstanceDetailsDialogProps {
 
 const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onClose, scenarioName, instanceId }) => {
     const [tabValue, setTabValue] = useState(0);
+    const [ingestOpen, setIngestOpen] = useState(false);
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
@@ -70,7 +72,10 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
         <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xl" PaperProps={{ sx: { height: '90vh' } }} disableEnforceFocus>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 场景实例详情: {scenarioName}
-                <IconButton onClick={handleClose}><CloseIcon /></IconButton>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button size="small" variant="outlined" onClick={() => setIngestOpen(true)}>日志收集</Button>
+                    <IconButton onClick={handleClose}><CloseIcon /></IconButton>
+                </Box>
             </DialogTitle>
             
             <DialogContent dividers>
@@ -102,6 +107,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             <DialogActions>
                 <Button onClick={handleClose}>关闭</Button>
             </DialogActions>
+            <IngestControlDialog open={ingestOpen} onClose={() => setIngestOpen(false)} sceneInstanceId={instanceId} />
         </Dialog>
     );
 };
