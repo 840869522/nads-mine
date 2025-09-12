@@ -12,8 +12,10 @@ from uuid import uuid4
 
 from . import vector_store
 
-async def parseFile(file_path: str,file_type: str):
+async def parseFile(file_path: str,file_type1: str):
+    print(file_path)
     file_type = await auto_detect_file_type(file_path)
+    print(file_type)
     if file_type.lower() in ['pdf']:
         loader = UnstructuredPDFLoader(file_path, mode="elements")
     elif file_type.lower() in ['txt']:
@@ -38,6 +40,7 @@ async def parseFile(file_path: str,file_type: str):
     file_chunks = text_splitter.split_documents(file_data)
     dids = [f"{file_path}-{str(uuid4())}" for _ in rnage(len(file_chunks))]
     vector_store.add_documents(documents=file_chunks,ids= dids)
+    print("------ success ------")
 
 
 

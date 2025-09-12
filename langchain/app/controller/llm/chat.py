@@ -19,5 +19,6 @@ async def chatController(message: ChatMessage):
 
 @chat_route.post("/parse")
 async def parseFileController(message: FileParseMessage):
-    code = parseFile(message.file_path,message.file_type)
+    code = await parseFile(message.file_path,message.file_type)
+    
     
