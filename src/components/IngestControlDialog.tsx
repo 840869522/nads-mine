@@ -11,8 +11,10 @@ import {
   FormControlLabel,
   Checkbox,
 } from "@mui/material";
-import TreeView from "@mui/lab/TreeView";
-import TreeItem from "@mui/lab/TreeItem";
+import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
+import { TreeItem } from "@mui/x-tree-view/TreeItem";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { customFetch } from "@/utils/fetch";
 
 const API_BASE = "/back";
@@ -161,12 +163,18 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
       <DialogContent dividers>
         {loading ? (
           <CircularProgress />
-        ) : (
-          <TreeView>
+        ) : instances.length > 0 ? (
+          <SimpleTreeView
+            slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }}
+            defaultExpanded={instances.flatMap((inst) => [
+              inst.index,
+              ...Object.keys(DEFAULT_FIELDS).map((src) => `${inst.index}-${src}`),
+            ])}
+          >
             {instances.map((inst) => (
               <TreeItem
                 key={inst.index}
-                nodeId={inst.index}
+                itemId={inst.index}
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     {inst.index}
@@ -191,13 +199,13 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 {Object.entries(DEFAULT_FIELDS).map(([src, fields]) => (
                   <TreeItem
                     key={`${inst.index}-${src}`}
-                    nodeId={`${inst.index}-${src}`}
+                    itemId={`${inst.index}-${src}`}
                     label={src}
                   >
                     {fields.map((f) => (
                       <TreeItem
                         key={`${inst.index}-${src}-${f}`}
-                        nodeId={`${inst.index}-${src}-${f}`}
+                        itemId={`${inst.index}-${src}-${f}`}
                         label={
                           <FormControlLabel
                             control={
@@ -219,7 +227,9 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 ))}
               </TreeItem>
             ))}
-          </TreeView>
+          </SimpleTreeView>
+        ) : (
+          <Box sx={{ color: "text.secondary" }}>暂无实例可配置</Box>
         )}
       </DialogContent>
       <DialogActions>
