@@ -79,6 +79,7 @@ interface IngestControlDialogProps {
 
 interface InstanceInfo {
   index: string;
+  name: string;
 }
 
 const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
@@ -108,12 +109,12 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
         const inc: Record<string, Record<string, string[]>> = {};
         containers.forEach((c: any) => {
           const index = `${c.scene_instance_id || ""}_${c.name}`.toLowerCase();
-          list.push({ index });
+          list.push({ index, name: c.name });
           inc[index] = createDefaultInclude();
         });
         vms.forEach((v: any) => {
           const index = `${v.scene_instance_id || ""}_${v.name}`.toLowerCase();
-          list.push({ index });
+          list.push({ index, name: v.name });
           inc[index] = createDefaultInclude();
         });
         setInstances(list);
@@ -177,7 +178,7 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 itemId={inst.index}
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {inst.index}
+                    {inst.name}
                     <Button
                       size="small"
                       onClick={() => handlePause(inst.index, false)}
