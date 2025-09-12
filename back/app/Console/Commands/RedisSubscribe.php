@@ -46,10 +46,11 @@ class RedisSubscribe extends Command
                     try {
                         $this->info("收到 {$channel} 消息: {$message}");
 
+                        $redisData = json_decode($message, true);
                         // 转发给 Workerman
                         $data = [
-                            'type'    => 'flag-log',
-                            'message' => $message
+                            'type' => 'flag-log',
+                            'data' => $redisData
                         ];
 
                         $this->workermanService->send($data);
