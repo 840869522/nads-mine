@@ -5,11 +5,13 @@ from langchain_community.document_loaders import UnstructuredMarkdownLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter ## markdown 处理
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+from concurrent.futures import ThreadPoolExecutor
+
 import magic
 import os
 from uuid import uuid4
 
-
+import asyncio
 from . import vector_store
 
 
@@ -27,6 +29,9 @@ def auto_detect_file_type(file_path: str):
     else:
         raise ValueError(f"Unsupported file type: {mime_type}")
 
+def _add_single_document(chunk, doc_ids):
+    vector_store.add_documents(documents=chunk,ids=doc_ids)
+
 async def parseFile(file_path: str,file_type1: str):
     print(file_path)
     file_type = auto_detect_file_type(file_path)
@@ -36,9 +41,9 @@ async def parseFile(file_path: str,file_type1: str):
     elif file_type.lower() in ['txt']:
         loader = TxtLoader(file_path, encoding="utf-8")
     elif file_type.lower() in ['md']:
-        loader = UnstructuredMarkdownLoader(file_type, mode="elements")
+        loader = UnstructuredMarkdownLoader(file_path, mode="elements")
     elif file_type.lower() in ['word']:
-        laoder = UnstructuredWordDocumentLoader(file_path, mode="elements")
+        loader = UnstructuredWordDocumentLoader(file_path, mode="elements")
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
     if file_type.lower() in ['md']:
@@ -54,7 +59,16 @@ async def parseFile(file_path: str,file_type1: str):
     file_data = await loader.aload()
     file_chunks = text_splitter.split_documents(file_data)
     print(file_chunks[0])
-    dids = [f"{file_path}-{str(uuid4())}" for _ in rnage(len(file_chunks))]
-    vector_store.add_documents(documents=file_chunks,ids= dids)
+    dids = [f"{file_path}-{str(uuid4())}" for _ in range(len(file_chunks))]
+    loop = asyncio.get_event_loop()
+    executor = ThreadPoolExecutor(max_workers=4)
+    tasks = [ ]
+    for i in range(0, len(file_chunks), 30):
+        batch_chunks = file_chunks[i:i+100]
+        batch_ids  dids[i:i+100]
+        tasks.append(
+            loop.run_in_executor(executor, _add_single_document, batch_chunks, batch_ids)
+        )
+    await asyncio.gather(*tasks)
     print("------ success ------")
 

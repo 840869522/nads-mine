@@ -568,6 +568,7 @@ class VmController extends Controller
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
+    Log::info($request);
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
         $auth = $request->header("Authorization",null);
@@ -644,7 +645,7 @@ class VmController extends Controller
                 Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
-    Log::info($ip);
+    Log::info(['L'=>$ip]);
         return response()->json([
             'host' => $ip ?? '无效',
             'ssh_port' => 22,

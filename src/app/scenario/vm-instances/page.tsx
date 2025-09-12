@@ -49,6 +49,7 @@ import useSWR, { mutate as globalMutate } from "swr";
 //import OverviewPanel from "@/components/vm/OverviewPanel";
 import CreateVmModal from "@/components/vm/CreateVmModal";
 import SnapshotsPanel from "@/components/vm/SnapshotsPanel";
+import {customFetch} from "@/utils/fetch.ts";
 
 /* ---------- 类型 ---------- */
 interface VmInstance {
@@ -90,7 +91,7 @@ interface OverviewData {
 }
 
 /* ---------- SWR Hook ---------- */
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => customFetch(url).then((r) => r.json());
 
 function useVmInstances(forceRef?: React.MutableRefObject<number>) {
     const {
@@ -328,7 +329,7 @@ export default function VmPage() {
         // 动作触发即刻进入快速轮询模式
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}/actions/${action}`, {
+            const res = await customFetch(`/back/api/vms/${vm.id}/actions/${action}`, {
                 method: "POST",
             });
             if (!res.ok) {
@@ -367,7 +368,7 @@ export default function VmPage() {
 
     const handleGuac = async (vm: VmInstance, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await fetch(`/back/api/vms/${vm.name}/guac?method=${proto}&vm_name=${encodeURIComponent(vm.name)}`);
+            const res = await customFetch(`/back/api/vms/${vm.name}/guac?method=${proto}&vm_name=${encodeURIComponent(vm.name)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
 
@@ -389,7 +390,7 @@ export default function VmPage() {
         if (!window.confirm(`确定删除虚拟机 ${vm.name}？`)) return;
         setActionLoading(true);
         try {
-            const res = await fetch(`/back/api/vms/${vm.id}?domain_name=${encodeURIComponent(vm.name)}`, { method: 'DELETE' });
+            const res = await customFetch(`/back/api/vms/${vm.id}?domain_name=${encodeURIComponent(vm.name)}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);

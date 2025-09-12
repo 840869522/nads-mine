@@ -60,7 +60,7 @@ class SceneVmInstance extends Model
             ->where('c_users_roles.c_user_id', $username)
             ->whereIn('c_roles.c_id', ['admin', 'referee'])
             ->exists();
-        Log::info($isAdminOrReferee);
+        //Log::info($isAdminOrReferee);
         if ($isAdminOrReferee) {
             // 如果是管理员或裁判，直接授予权限
             return true;
@@ -84,11 +84,15 @@ class SceneVmInstance extends Model
         $isBlueTeamMember = DB::table('c_teams_users')->where('team_id', $adConfig->c_blue_team_id)->where('user_id', $username)->exists();
 
         $isTargetMachine = !empty($this->c_flag);
-
         if ($isRedTeamMember && !$isTargetMachine) {
             // 红队成员操作攻击机，权限通过
             return true;
         }
+Log::info([
+ 'Red' =>DB::table('c_teams_users')->where('team_id', $adConfig->c_red_team_id)->where('user_id', $username)->toSql(),
+ 'Blue' =>DB::table('c_teams_users')->where('team_id', $adConfig->c_blue_team_id)->where('user_id', $username)->toSql(),
+ 'team' =>[1=>$adConfig->c_red_team_id,2=>$adConfig->c_blue_team_id]
+]);
         if ($isBlueTeamMember && $isTargetMachine) {
             // 蓝队成员操作靶机，权限通过
             return true;

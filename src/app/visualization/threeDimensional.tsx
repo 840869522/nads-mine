@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
+import { websocketClient } from "@/utils/websocket";
 
 function createSpaceship(
     scene: THREE.Scene,
@@ -51,7 +52,7 @@ function createSpaceship(
     });
 }
 
-export default function ThreeDimensional(){
+export default function ThreeDimensional({ id }: { id: string }){
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +73,7 @@ export default function ThreeDimensional(){
 
     useEffect(() => {
         if (!containerRef.current) return;
+        console.log(id);
         
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
@@ -278,11 +280,46 @@ export default function ThreeDimensional(){
         };
         animate();
 
+        const handleMessage = (data: any) => {
+            try {
+                const msg = typeof data === "string" ? JSON.parse(data) : data;
+                if (msg.type === "flag-log" && msg.message.scene_instance_id === id) {
+                    const now = new Date();
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+
+                    let newLog: LogInfo = {
+                        logId: Date.now(),
+                        logTime: `${hours}:${minutes}:${seconds}`,
+                        logContent: msg.message.message
+                    };
+
+                    if(msg.message.success){
+                        setRedTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }else{
+                        setBlueTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }
+                }
+            } catch (e) {
+            console.error("解析 WebSocket 数据失败:", e, data);
+            }
+        };
+
+        websocketClient.onMessage(handleMessage);
+
         return () => {
             renderer.dispose();
             if (containerRef.current?.contains(renderer.domElement)) {
                 containerRef.current.removeChild(renderer.domElement);
             }
+            websocketClient.offMessage(handleMessage);
         };
     }, []);
 
