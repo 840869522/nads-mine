@@ -105,8 +105,7 @@ const FlagSubmissionModal: React.FC<FlagSubmissionModalProps> = ({
                 c_scene_instances_id: sceneInstanceId,
                 instance_id: instanceId,
                 instance_type: instanceType,
-                flag: trimmedFlag,
-                token: document.cookie.split('; ').find(row => row.startsWith('_auth='))?.split('=')[1] || ''  // 为了适配JWT中间件，添加token字段
+                flag: trimmedFlag
             };
 
             const response = await apiClientWithToken.post(

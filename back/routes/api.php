@@ -378,8 +378,8 @@ Route::prefix('operations')->middleware('jwtcheck')->group(function () {
     // 解决一条日志 (POST /api/operations/logs/{log}/resolve)
     Route::post('/logs/{log}/resolve', [OperationsController::class, 'resolve']);
 });
-// Flag 相关接口路由组，去掉JWT认证简化使用
-Route::prefix('flag')->group(function () {
+// Flag 相关接口路由组，添加JWT认证保护
+Route::prefix('flag')->middleware('jwtcheck')->group(function () {
     // Flag 提交接口，添加限流保护
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
 

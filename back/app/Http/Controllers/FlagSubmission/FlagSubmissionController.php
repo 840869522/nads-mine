@@ -51,12 +51,24 @@ class FlagSubmissionController extends BaseController
     public function submitFlag(Request $request)
     {
         // 1. 简化用户信息获取，使用请求参数或默认用户
-        $token_data  = $request->input("token_data");
-        $username = $token_data['id'];
-//         $username = $request->input('username', 'anonymous');
-//         if (empty($username)) {
-//              = 'anonymous';
-//         }
+        $token_data = $request->input("token_data");
+        
+        // 修复数组访问错误：检查token_data是否存在且为数组
+        if (is_array($token_data) && isset($token_data['id'])) {
+            $username = $token_data['id'];
+        } else {
+            // 如果token_data无效，尝试从其他地方获取用户信息
+            $username = $request->input('username', 'anonymous');
+            if (empty($username)) {
+                $username = 'anonymous';
+            }
+            
+            Log::warning("Token data无效，使用备用用户名", [
+                'token_data' => $token_data,
+                'fallback_username' => $username,
+                'request_all' => $request->all()
+            ]);
+        }
 
         // 2. 参数校验
         $validator = Validator::make($request->all(), [
@@ -354,6 +366,15 @@ class FlagSubmissionController extends BaseController
             ]);
 
             // 发送 Redis 消息
+            $instance_name = 'Unknown Instance';
+            if ($instance && is_object($instance)) {
+                if ($instance_type === 'docker' && isset($instance->c_container_name)) {
+                    $instance_name = $instance->c_container_name;
+                } elseif ($instance_type === 'vm' && isset($instance->c_vm_name)) {
+                    $instance_name = $instance->c_vm_name;
+                }
+            }
+            
             $this->sendRedisMessage([
                 'event' => 'flag_submission',
                 'user_id' => $username,
@@ -363,9 +384,7 @@ class FlagSubmissionController extends BaseController
                 'points_earned' => $points_earned,
                 'instance_type' => $instance_type,
                 'instance_id' => $instance_id,
-                'instance_name' => $instance_type === 'docker'
-                    ? ($instance->c_container_name ?? 'Unknown Container')
-                    : ($instance->c_vm_name ?? 'Unknown VM'),
+                'instance_name' => $instance_name,
                 'scene_instance_id' => $c_scene_instances_id,
                 'attempt_count' => $submission->c_attempt_count,
                 'submission_id' => $submission->c_submission_id,
@@ -404,10 +423,21 @@ class FlagSubmissionController extends BaseController
      */
     public function getSubmissionHistory(Request $request)
     {
-        // 1. 简化用户信息获取
-        $username = $request->input('username', 'anonymous');
-        if (empty($username)) {
-            $username = 'anonymous';
+        // 1. 简化用户信息获取及安全检查
+        $token_data = $request->input("token_data");
+        
+        if (is_array($token_data) && isset($token_data['id'])) {
+            $username = $token_data['id'];
+        } else {
+            $username = $request->input('username', 'anonymous');
+            if (empty($username)) {
+                $username = 'anonymous';
+            }
+            
+            Log::warning("getSubmissionHistory: Token data无效", [
+                'token_data' => $token_data,
+                'fallback_username' => $username
+            ]);
         }
 
         // 2. 参数校验
@@ -513,10 +543,16 @@ class FlagSubmissionController extends BaseController
      */
     public function getSceneInstances(Request $request)
     {
-        // 1. 简化用户信息获取（可选）
-        $username = $request->input('username', 'anonymous');
-        if (empty($username)) {
-            $username = 'anonymous';
+        // 1. 简化用户信息获取及安全检查（可选）
+        $token_data = $request->input("token_data");
+        
+        if (is_array($token_data) && isset($token_data['id'])) {
+            $username = $token_data['id'];
+        } else {
+            $username = $request->input('username', 'anonymous');
+            if (empty($username)) {
+                $username = 'anonymous';
+            }
         }
 
         try {
@@ -545,10 +581,16 @@ class FlagSubmissionController extends BaseController
      */
     public function getTargetInstances(Request $request)
     {
-        // 1. 简化用户信息获取（可选）
-        $username = $request->input('username', 'anonymous');
-        if (empty($username)) {
-            $username = 'anonymous';
+        // 1. 简化用户信息获取及安全检查（可选）
+        $token_data = $request->input("token_data");
+        
+        if (is_array($token_data) && isset($token_data['id'])) {
+            $username = $token_data['id'];
+        } else {
+            $username = $request->input('username', 'anonymous');
+            if (empty($username)) {
+                $username = 'anonymous';
+            }
         }
 
         // 2. 参数校验
