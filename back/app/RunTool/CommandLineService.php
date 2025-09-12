@@ -548,7 +548,11 @@ XML;
         }
         
         // d. 设置网络模式为 none，这是后续手动连接的关键
-        // $command[] = '--network=none';
+        // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
+        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1'];
+        if (!in_array($options['image'], $skipNetworkImages)) {
+            $command[] = '--network=none';
+        }
 
         // e. 添加镜像名称（必须是命令的最后一部分）
         if (empty($options['image'])) {
