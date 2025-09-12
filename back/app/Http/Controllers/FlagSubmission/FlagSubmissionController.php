@@ -70,16 +70,16 @@ class FlagSubmissionController extends BaseController
             ]);
         }
 
-        // 2. 参数校验
+        // 2. 参数校验 - 简化正则表达式验证防止语法错误
         $validator = Validator::make($request->all(), [
-            'c_scene_instances_id' => ['required', 'string', 'exists:c_scene_instances,c_scene_instances_id'],
-            'instance_id' => ['required', 'string'],
-            'instance_type' => ['required', 'string', 'in:docker,vm'],
-            'flag' => ['required', 'string', 'regex:/^flag\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}$/'],
+            'c_scene_instances_id' => 'required|string|exists:c_scene_instances,c_scene_instances_id',
+            'instance_id' => 'required|string',
+            'instance_type' => 'required|string|in:docker,vm',
+            'flag' => 'required|string|min:40|max:50', // 简化验证，稍后在代码中进行正则验证
         ], [
             'c_scene_instances_id.exists' => '场景实例不存在',
             'instance_type.in' => '实例类型不合法',
-            'flag.regex' => 'Flag格式不正确'
+            'flag.min' => 'Flag格式不正确'
         ]);
 
         if ($validator->fails()) {
@@ -90,6 +90,12 @@ class FlagSubmissionController extends BaseController
         $instance_id = $request->input('instance_id');
         $instance_type = $request->input('instance_type');
         $submittedFlag = $request->input('flag');
+        
+        // 在代码中进行Flag格式验证，防止转义问题
+        $flagPattern = '/^flag\\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\}$/';
+        if (!preg_match($flagPattern, $submittedFlag)) {
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, 'Flag格式不正确，应为flag{UUID}格式');
+        }
         $correctFlag = null;
         $instance = null; // 确保实例变量在任何情况下都已定义
         $actualDbId = null; // 存储实际的数据库ID
@@ -173,7 +179,8 @@ class FlagSubmissionController extends BaseController
 
                 try {
                     // 通过virsh获取VM名称
-                    $vmName = trim(shell_exec("virsh -c qemu:///system domname '{$instance_id}' 2>/dev/null") ?? '');
+                    $vmNameOutput = shell_exec("virsh -c qemu:///system domname '{$instance_id}' 2>/dev/null");
+                    $vmName = trim($vmNameOutput ?? '');
 
                     if (!empty($vmName)) {
                         Log::info("通过UUID找到VM名称", ['uuid' => $instance_id, 'vm_name' => $vmName]);
