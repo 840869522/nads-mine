@@ -88,4 +88,34 @@ function getCurrentAction()
     return ['controller' => $class, 'method' => $method];
 }
 
+/**
+ * PHP版本兼容性函数 - str_starts_with
+ * PHP 8.0+ 原生函数的兼容实现
+ */
+if (!function_exists('str_starts_with')) {
+    function str_starts_with($haystack, $needle) {
+        return (string)$needle !== '' && strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
+
+/**
+ * PHP版本兼容性函数 - str_ends_with
+ * PHP 8.0+ 原生函数的兼容实现
+ */
+if (!function_exists('str_ends_with')) {
+    function str_ends_with($haystack, $needle) {
+        return $needle !== '' && substr($haystack, -strlen($needle)) === (string)$needle;
+    }
+}
+
+/**
+ * PHP版本兼容性函数 - str_contains
+ * PHP 8.0+ 原生函数的兼容实现
+ */
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle) {
+        return $needle !== '' && strpos($haystack, $needle) !== false;
+    }
+}
+
 
