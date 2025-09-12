@@ -65,7 +65,7 @@ async def parseFile(file_path: str,file_type1: str):
     tasks = [ ]
     for i in range(0, len(file_chunks), 30):
         batch_chunks = file_chunks[i:i+100]
-        batch_ids  dids[i:i+100]
+        batch_ids = dids[i:i+100]
         tasks.append(
             loop.run_in_executor(executor, _add_single_document, batch_chunks, batch_ids)
         )

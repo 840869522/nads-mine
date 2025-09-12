@@ -108,7 +108,7 @@ const RefereeOverviewPage: React.FC = () => {
             params.append('search', debouncedSearchQuery);
             params.append('page', String(page + 1));
             params.append('per_page', String(rowsPerPage));
-            const response = await customFetch(`${API_BASE_URL}/ad/referees/all?${params.toString()}`);
+            const response = await customFetch(`${API_BASE_URL}/ad/referees?${params.toString()}`);
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || '获取裁判总览列表失败');
