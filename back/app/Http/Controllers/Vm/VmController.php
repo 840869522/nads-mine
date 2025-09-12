@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\scenario\SceneVmInstance;
 use App\RunTool\CommandLineService;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Str;
-use App\Utils\JWTControll;
 
 class VmController extends Controller
 {
@@ -32,19 +30,19 @@ class VmController extends Controller
         return in_array($ext, self::VALID_IMAGE_EXTENSIONS, true);
     }
 
+
     /**
-     * 获取指定场景实例下的所有虚拟机列表，并为每台虚拟机动态计算当前用户的操作权限。
+     * 根据场景实例ID获取其下的所有虚拟机实例。
      *
      * @param string $instance_id 场景实例的UUID
-     * @param \Illuminate\Http\Request $request Laravel的请求对象，由框架自动注入
      * @return \Illuminate\Http\JsonResponse
      */
-    public function listVmsBySceneInstance(string $instance_id, \Illuminate\Http\Request $request)
+    public function listVmsBySceneInstance(string $instance_id)
     {
-        // --- 步骤 1: 从底层虚拟化系统获取所有虚拟机的“物理”状态 ---
+        // 1. 从虚拟化平台获取所有VM的实时状态
         try {
-            // 这个方法（例如通过 `virsh list --all`）获取宿主机上所有虚拟机的原始列表
             $allVmsFromHypervisor = $this->fetchVmInstances();
+            // 如果返回的不是数组，或获取失败，返回空列表
             if (!is_array($allVmsFromHypervisor)) {
                 Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
                 return response()->json([]);
@@ -54,55 +52,48 @@ class VmController extends Controller
             return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
         }
 
-        // --- 步骤 2: 从数据库获取属于该场景实例的虚拟机的“逻辑”信息 ---
+        // 2. 从数据库查询与该场景实例ID关联的虚拟机的详细信息
         try {
-            // 查询数据库，只获取与当前场景实例ID匹配的虚拟机记录
-            // 使用 keyBy('c_vm_name') 可以极大地提高后续数据合并的效率
-            $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
-                ->get()->keyBy('c_vm_name');
+            $vmDetailsFromDb = DB::table('c_scene_vm_instances as v')
+                ->leftJoin('c_scene_instances as si', DB::raw('v.c_scene_instances_id COLLATE utf8mb4_unicode_ci'), '=', 'si.c_scene_instances_id')
+                ->leftJoin('c_scene_configs as sc', 'si.c_config_id', '=', 'sc.c_config_id')
+                ->select(
+                    'v.c_vm_name',
+                    'v.c_scene_instances_id',
+                    'v.c_ip',
+                    'v.c_flag', // ★★★ 1. 查询 c_flag 字段 ★★★
+                    'sc.c_name as scene_name'
+                )
+                // 核心筛选条件：只选择属于特定场景实例的VM
+                ->where('v.c_scene_instances_id', $instance_id)
+                ->get()
+                // 使用VM名称作为Key，方便后续快速查找
+                ->keyBy('c_vm_name');
+
         } catch (\Throwable $e) {
             Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
             return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
         }
 
-        // --- 步骤 3: 合并物理和逻辑数据，并为每台虚拟机计算操作权限 ---
+        // 3. 过滤并合并数据
         $resultVms = [];
-
-        // 您添加的调试日志：检查由认证中间件注入的用户信息是否存在
-        // 如果前端请求正确，这里应该能打印出用户信息；如果请求错误，这里会打印 null。
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
-        $tokenData = $jwtRes["data"];
-        // 遍历所有物理虚拟机
+        // 遍历从虚拟化平台获取的所有VM
         foreach ($allVmsFromHypervisor as $vm) {
-            // 检查这台物理虚拟机是否在我们从数据库中查出的“属于此场景”的列表里
-            if (
-                isset(
-                    $vmDetailsFromDb[$vm['name']]
-                )
-            ) {
-
-                // 如果是，说明它属于当前场景，我们开始处理它
+            // 检查这个VM是否存在于我们从数据库查出的该场景的VM列表中
+            if (isset($vmDetailsFromDb[$vm['name']])) {
                 $dbInfo = $vmDetailsFromDb[$vm['name']];
 
-                // 合并数据库中的信息（IP, 是否为靶机等）到结果中
+                // 合并数据库信息到VM实时状态数据中
                 $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
-                $vm['scene_name'] = null; // 可根据需要进行扩展
-                $vm['ip'] = $dbInfo->c_ip;
-                $vm['is_target'] = !empty($dbInfo->c_flag);
+                $vm['scene_name']        = $dbInfo->scene_name;
+                $vm['ip']                = $dbInfo->c_ip;
+                // ★★★ 2. 根据 c_flag 是否为空来设置 is_target ★★★
+                $vm['is_target']         = !empty($dbInfo->c_flag);
 
-                // ★ 关键：调用权限检查函数来动态生成 can_operate 字段 ★
-                // 这个函数内部会自己从 Request 中获取用户信息，所以我们不需要传递参数。
-                // 它的返回值 (true/false) 将决定前端按钮是否可操作。
-                $vm['can_operate'] = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
-
-                // 将处理完毕的虚拟机信息添加到最终结果中
                 $resultVms[] = $vm;
             }
-            Log::info($resultVms);
         }
 
-        // --- 步骤 4: 将最终结果以 JSON 格式返回给前端 ---
         return response()->json($resultVms);
     }
     /**
@@ -568,53 +559,8 @@ class VmController extends Controller
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
-    Log::info($request);
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
-        $tokenData = $jwtRes["data"];
-
-        // ★ 添加权限检查：验证用户是否有权访问此VM的VNC控制台
-        try {
-            $vmInstance = SceneVmInstance::where('c_vm_name', $vmQueryName)->first();
-            if (!$vmInstance) {
-                Log::warning('VM not found in database', ['vm_name' => $vmQueryName]);
-                return response()->json(['error' => '虚拟机不存在'], 404);
-            }
-
-            // 获取对应的演练配置
-            $adConfig = DB::table('c_scene_instances as si')
-                ->join('c_ad_configs as ac', 'si.c_scene_instances_id', '=', 'ac.c_scene_instance_id')
-                ->where('si.c_scene_instances_id', $vmInstance->c_scene_instances_id)
-                ->first();
-
-            $adConfigObj = null;
-
-            if ($adConfig) {
-                // 转换为对象以便传递给canBeOperatedByUser方法
-                $adConfigObj = (object)[
-                    'c_red_team_id' => $adConfig->c_red_team_id,
-                    'c_blue_team_id' => $adConfig->c_blue_team_id,
-                    "token_data"=> $tokenData
-                ];
-            }
-            // 使用现有的canBeOperatedByUser方法检查权限
-            if (!$vmInstance->canBeOperatedByUser($adConfigObj)) {
-                Log::warning('User not authorized to access VM', [
-                    'vm_name' => $vmQueryName,
-                    'user' => $tokenData['id'] ?? 'unknown',
-                    'is_target' => !empty($vmInstance->c_flag)
-                ]);
-                return response()->json(['error' => '无权访问此虚拟机的控制台'], 403);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Permission check failed for VM access', [
-                'vm_name' => $vmQueryName,
-                'error' => $e->getMessage()
-            ]);
-            return response()->json(['error' => '权限检查失败'], 500);
-        }
 
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
@@ -645,7 +591,7 @@ class VmController extends Controller
                 Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
-    Log::info(['L'=>$ip]);
+
         return response()->json([
             'host' => $ip ?? '无效',
             'ssh_port' => 22,
