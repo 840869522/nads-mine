@@ -32,7 +32,7 @@ class VmController extends Controller
     {
         // --- 步骤 1: 从底层虚拟化系统获取所有虚拟机的“物理”状态 ---
         try {
-            // 这个方法（例如通过 `virsh list --all`）获取宿主机上所有虚拟机的原始列表
+            // 这个方法（例如通过 `virsh list --all`）获取宿主机上 所有虚拟机的原始列表
             $allVmsFromHypervisor = $this->fetchVmInstances();
             if (!is_array($allVmsFromHypervisor)) {
                 Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
