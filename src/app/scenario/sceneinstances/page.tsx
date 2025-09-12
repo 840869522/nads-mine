@@ -15,6 +15,9 @@ import {
     Stop as StopIcon,
     AccountTree as TopologyIcon,
     Security as SecurityIcon, // iptables 管理入口图标
+    Tune as TuneIcon,
+    PlayArrow as PlayArrowIcon,
+    Pause as PauseIcon,
 
 } from '@mui/icons-material';
 // import Link from 'next/link';
@@ -22,6 +25,7 @@ import IptablesDialog from './IptablesDialog';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import InstanceTopologyDialog from './InstanceTopologyDialog';
 import { customFetch } from '@/utils/fetch';
+import IngestControlDialog from '@/components/IngestControlDialog';
 
 interface ScenarioInstance {
     instance_id: string;
@@ -59,6 +63,29 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedTopology, setSelectedTopology] = useState<any>(null);
 
+    const [logStatus, setLogStatus] = useState<Record<string, boolean>>({});
+    const [ingestOpen, setIngestOpen] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState<string | null>(null);
+
+    const getIndexName = (inst: ScenarioInstance) => `${inst.instance_id || ''}_${inst.scenario_name}`.toLowerCase();
+
+    const fetchLogStatuses = useCallback(async (list: ScenarioInstance[]) => {
+        const status: Record<string, boolean> = {};
+        await Promise.all(
+            list.map(async (inst) => {
+                const idx = getIndexName(inst);
+                try {
+                    const res = await customFetch(`/api/ingest-control?index=${idx}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        status[idx] = data.pause || false;
+                    }
+                } catch { /* ignore */ }
+            })
+        );
+        setLogStatus(status);
+    }, []);
+
     // 查看拓扑功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const isTopologyEnabled = false; // 设置为 false 可以禁用查看拓扑功能
@@ -74,13 +101,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
             }
             const data: ScenarioInstance[] = await response.json();
             setInstances(data);
+            fetchLogStatuses(data);
         } catch (err: any) {
             setError(err.message || '发生未知错误');
             setInstances([]);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [fetchLogStatuses]);
 
     useEffect(() => {
         fetchInstances();
@@ -101,6 +129,27 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setSelectedTopology(instance.c_scene_config);
         setSelectedInstanceId(instance.instance_id);
         setIsTopologyOpen(true);
+    };
+
+    const handleOpenIngestDialog = (instance: ScenarioInstance) => {
+        const idx = getIndexName(instance);
+        setSelectedIndex(idx);
+        setIngestOpen(true);
+    };
+
+    const handleToggleLogging = async (instance: ScenarioInstance) => {
+        const idx = getIndexName(instance);
+        const paused = logStatus[idx] ?? false;
+        try {
+            await customFetch('/api/ingest-control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: idx, pause: !paused }),
+            });
+            setLogStatus(prev => ({ ...prev, [idx]: !paused }));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
@@ -262,6 +311,16 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
+                                            <Tooltip title="日志收集规则">
+                                                <IconButton color="info" size="small" onClick={() => handleOpenIngestDialog(instance)}>
+                                                    <TuneIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title={logStatus[getIndexName(instance)] ? '启动日志收集' : '停止日志收集'}>
+                                                <IconButton color="secondary" size="small" onClick={() => handleToggleLogging(instance)}>
+                                                    {logStatus[getIndexName(instance)] ? <PlayArrowIcon /> : <PauseIcon />}
+                                                </IconButton>
+                                            </Tooltip>
                                             {isTopologyEnabled && (
                                                 <Tooltip title="查看拓扑">
                                                     <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
@@ -316,6 +375,14 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                     title={`实例拓扑：${selectedScenarioName}`}
                     topology={selectedTopology}
                     instanceId={selectedInstanceId || ''}
+                />
+            )}
+            {ingestOpen && selectedIndex && (
+                <IngestControlDialog
+                    open={ingestOpen}
+                    index={selectedIndex}
+                    onClose={() => setIngestOpen(false)}
+                    onSaved={(paused) => setLogStatus(prev => ({ ...prev, [selectedIndex]: paused }))}
                 />
             )}
 

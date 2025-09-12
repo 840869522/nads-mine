@@ -41,13 +41,16 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import ScreenShareIcon from '@mui/icons-material/ScreenShare';
+import TuneIcon from '@mui/icons-material/Tune';
+import PauseIcon from '@mui/icons-material/Pause';
 
 // 假设的自定义钩子和类型，请确保路径正确
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {TopologyData} from "@/types";
 import {useAuth} from "@/hooks/useAuth";
-import { customFetch } from "@/utils/fetch"
+import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
+import IngestControlDialog from '@/components/IngestControlDialog';
 
 // --- 类型定义 ---
 interface User {
@@ -120,6 +123,30 @@ const AdManagementPage: React.FC = () => {
     const [totalAdConfigs, setTotalAdConfigs] = useState(0);
     const API_BASE_URL = '/back/api';
 
+    const [logStatus, setLogStatus] = useState<Record<string, boolean>>({});
+    const [ingestOpen, setIngestOpen] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState<string | null>(null);
+
+    const getIndexName = (ad: AdConfig) => `${ad.c_scene_instance_id || ''}_${ad.c_drill_name}`.toLowerCase();
+
+    const fetchLogStatuses = useCallback(async (list: AdConfig[]) => {
+        const status: Record<string, boolean> = {};
+        await Promise.all(
+            list.map(async (ad) => {
+                const idx = getIndexName(ad);
+                if (!idx) return;
+                try {
+                    const res = await customFetch(`/api/ingest-control?index=${idx}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        status[idx] = data.pause || false;
+                    }
+                } catch { /* ignore */ }
+            })
+        );
+        setLogStatus(status);
+    }, []);
+
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
         const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
@@ -163,6 +190,7 @@ const AdManagementPage: React.FC = () => {
 
             setAdConfigs(adConfigsData.data || []);
             setTotalAdConfigs(adConfigsData.meta?.total || 0);
+            fetchLogStatuses(adConfigsData.data || []);
 
             setTeams(teamsData.data || []);
             setUsers(usersData.data.data || []);
@@ -179,7 +207,30 @@ const AdManagementPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchQuery, page, rowsPerPage]);
+    }, [debouncedSearchQuery, page, rowsPerPage, fetchLogStatuses]);
+
+    const handleOpenIngestDialog = (ad: AdConfig) => {
+        const idx = getIndexName(ad);
+        if (!idx) return;
+        setSelectedIndex(idx);
+        setIngestOpen(true);
+    };
+
+    const handleToggleLogging = async (ad: AdConfig) => {
+        const idx = getIndexName(ad);
+        if (!idx) return;
+        const paused = logStatus[idx] ?? false;
+        try {
+            await customFetch('/api/ingest-control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: idx, pause: !paused }),
+            });
+            setLogStatus(prev => ({ ...prev, [idx]: !paused }));
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -458,6 +509,16 @@ const AdManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </TableCell>
                                                 <TableCell align="right">
+                                                    <Tooltip title="日志收集规则">
+                                                        <IconButton color="info" onClick={() => handleOpenIngestDialog(adConfig)}>
+                                                            <TuneIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title={logStatus[getIndexName(adConfig)] ? '启动日志收集' : '停止日志收集'}>
+                                                        <IconButton color="secondary" onClick={() => handleToggleLogging(adConfig)}>
+                                                            {logStatus[getIndexName(adConfig)] ? <PlayArrowIcon /> : <PauseIcon />}
+                                                        </IconButton>
+                                                    </Tooltip>
                                                     {['pending', 'finished', 'archived'].includes(adConfig.c_status) && (
                                                         <Tooltip title="开始/重新开始演练">
                                                             <span>
@@ -568,6 +629,14 @@ const AdManagementPage: React.FC = () => {
                     onClose={handleCloseDetails}
                     instanceId={selectedInstanceId}
                     scenarioName={selectedScenarioName}
+                />
+            )}
+            {ingestOpen && selectedIndex && (
+                <IngestControlDialog
+                    open={ingestOpen}
+                    index={selectedIndex}
+                    onClose={() => setIngestOpen(false)}
+                    onSaved={(paused) => setLogStatus(prev => ({ ...prev, [selectedIndex]: paused }))}
                 />
             )}
         </Box>
