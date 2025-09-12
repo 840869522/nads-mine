@@ -11,7 +11,7 @@ import magic
 import os
 from uuid import uuid4
 
-
+import asyncio
 from . import vector_store
 
 
