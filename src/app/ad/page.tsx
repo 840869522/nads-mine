@@ -393,6 +393,7 @@ const AdManagementPage: React.FC = () => {
         //     setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' });
         //     return;
         // }
+        localStorage.setItem('instance_id', c_scene_instance_id ? c_scene_instance_id : "");
         window.open('/visualization', '_blank');
     }
 

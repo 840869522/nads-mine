@@ -29,6 +29,7 @@ SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
 SESSION_PYTHON="nads_project_python"
 SESSION_WEBSOCKET="nads_project_websocket"
+SESSION_REDIS="nads_project_redis"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
 WEBSOCKET_PORT=8080     # WebSocket 服务端口
@@ -41,6 +42,7 @@ FRONTEND_LOG="$FRONTEND_DIR/front.log"
 BACKEND_LOG="$BACKEND_DIR/back.log"
 WEBSOCKET_LOG="$BACKEND_DIR/websocket.log"
 CHAT_LOG="$BACKEND_DIR/chat.log"
+REDIS_LOG="$BACKEND_DIR/redis.log"
 
 # ====== 检测并终止单个服务函数 ======
 confirm_and_kill() {
@@ -175,6 +177,10 @@ start_services() {
         session_name="$SESSION_PYTHON"
         command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
         log_file="$CHAT_LOG"
+    elif [ "$service_name" = "REDIS" ]; then
+        session_name="$SESSION_REDIS"
+        command="cd $BACKEND_DIR && php artisan redis:subscribe >> $REDIS_LOG"
+        log_file="$REDIS_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
         return 1
@@ -249,6 +255,7 @@ if [ "$command_choice" = "start" ]; then
     NODE_NEW=false
     WEBSOCKET_NEW=false
     PYTHON_NEW=false
+    REDIS_NEW=false
 
     # 检查并停止现有服务
     confirm_and_kill $FRONTEND_PORT "Node"
@@ -283,6 +290,14 @@ if [ "$command_choice" = "start" ]; then
         echo -e "${ICON_WARN} WebSocket 服务未终止，跳过启动"
     fi
 
+    # 检查 redis:subscribe 是否已有 screen
+    if check_screen_session "$SESSION_REDIS"; then
+        echo -e "${ICON_WARN} Redis 订阅服务已在运行，跳过启动"
+    else
+        echo -e "${ICON_CHECK} Redis 订阅服务未运行，准备启动新服务"
+        REDIS_NEW=true
+    fi
+
     # 按顺序启动服务
     if [ "$PHP_NEW" = "true" ]; then
         echo -e "${ICON_INFO} 步骤 1/3: 启动 Laravel 后端服务..."
@@ -293,6 +308,12 @@ if [ "$command_choice" = "start" ]; then
     if [ "$WEBSOCKET_NEW" = "true" ]; then
         echo -e "${ICON_INFO} 步骤 2/3: 启动 WebSocket 服务..."
         start_services "WEBSOCKET"
+        sleep 3
+    fi
+
+    if [ "$REDIS_NEW" = "true" ]; then
+        echo -e "${ICON_INFO} 步骤 3/4: 启动 Redis 订阅服务..."
+        start_services "REDIS"
         sleep 3
     fi
 
@@ -327,11 +348,20 @@ elif [ "$command_choice" = "stop" ]; then
         cleanup_screen_session "$SESSION_FRONT"
     fi
 
+    # 停止 redis:subscribe
+    cleanup_screen_session "nads_project_redis"
+
     echo -e "${ICON_HAPPY} Happy! 停止流程已结束！"
 elif [ "$command_choice" = "test" ]; then
     test_services "PHP"
     test_services "WebSocket"
     test_services "Node"
+    if check_screen_session "nads_project_redis"; then
+        echo -e "${ICON_CHECK} Redis 订阅服务正在运行"
+    else
+        echo -e "${ICON_WARN} Redis 订阅服务未运行"
+    fi
+
 else
     show_help
     echo -e "${ICON_SAD} 无效输入，默认取消操作! Crying!"
