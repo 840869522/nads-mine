@@ -8,6 +8,11 @@ const es = new Client({
     process.env.ES_USERNAME && process.env.ES_PASSWORD
       ? { username: process.env.ES_USERNAME, password: process.env.ES_PASSWORD }
       : undefined,
+  // Force compatibility headers so that a v9 client can talk to older ES servers
+  headers: {
+    accept: "application/vnd.elasticsearch+json; compatible-with=8",
+    "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+  },
 });
 
 const DEFAULT_INCLUDE_FIELDS: Record<string, string[]> = {

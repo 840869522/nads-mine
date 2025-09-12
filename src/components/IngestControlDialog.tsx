@@ -10,6 +10,8 @@ import {
   CircularProgress,
   FormControlLabel,
   Checkbox,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
@@ -92,6 +94,11 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
     Record<string, Record<string, string[]>>
   >({});
   const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error",
+  });
 
   useEffect(() => {
     if (!open || !sceneInstanceId) return;
@@ -140,103 +147,148 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
   };
 
   const handleApply = async (index: string) => {
-    await fetch("/api/ingest-control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ index, include: include[index] }),
-    });
+    try {
+      const res = await fetch("/api/ingest-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index, include: include[index] }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || res.statusText);
+      }
+      setSnackbar({ open: true, message: "规则已应用", severity: "success" });
+    } catch (err: any) {
+      setSnackbar({
+        open: true,
+        message: err.message || "操作失败",
+        severity: "error",
+      });
+    }
   };
 
   const handlePause = async (index: string, pause: boolean) => {
-    const body = pause
-      ? { index, pause: true }
-      : { index, include: include[index] };
-    await fetch("/api/ingest-control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const body = pause
+        ? { index, pause: true }
+        : { index, include: include[index] };
+      const res = await fetch("/api/ingest-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || res.statusText);
+      }
+      setSnackbar({
+        open: true,
+        message: pause ? "已停止收集" : "已启动收集",
+        severity: "success",
+      });
+    } catch (err: any) {
+      setSnackbar({
+        open: true,
+        message: err.message || "操作失败",
+        severity: "error",
+      });
+    }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>日志收集控制</DialogTitle>
-      <DialogContent dividers>
-        {loading ? (
-          <CircularProgress />
-        ) : instances.length > 0 ? (
-          <SimpleTreeView
-            slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }}
-            defaultExpanded={instances.flatMap((inst) => [
-              inst.index,
-              ...Object.keys(DEFAULT_FIELDS).map((src) => `${inst.index}-${src}`),
-            ])}
-          >
-            {instances.map((inst) => (
-              <TreeItem
-                key={inst.index}
-                itemId={inst.index}
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {inst.name}
-                    <Button
-                      size="small"
-                      onClick={() => handlePause(inst.index, false)}
+    <>
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>日志收集控制</DialogTitle>
+        <DialogContent dividers>
+          {loading ? (
+            <CircularProgress />
+          ) : instances.length > 0 ? (
+            <SimpleTreeView
+              slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }}
+              defaultExpanded={instances.flatMap((inst) => [
+                inst.index,
+                ...Object.keys(DEFAULT_FIELDS).map((src) => `${inst.index}-${src}`),
+              ])}
+            >
+              {instances.map((inst) => (
+                <TreeItem
+                  key={inst.index}
+                  itemId={inst.index}
+                  label={
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      {inst.name}
+                      <Button
+                        size="small"
+                        onClick={() => handlePause(inst.index, false)}
+                      >
+                        启动收集
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => handlePause(inst.index, true)}
+                      >
+                        停止收集
+                      </Button>
+                      <Button size="small" onClick={() => handleApply(inst.index)}>
+                        应用规则
+                      </Button>
+                    </Box>
+                  }
+                >
+                  {Object.entries(DEFAULT_FIELDS).map(([src, fields]) => (
+                    <TreeItem
+                      key={`${inst.index}-${src}`}
+                      itemId={`${inst.index}-${src}`}
+                      label={src}
                     >
-                      启动收集
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => handlePause(inst.index, true)}
-                    >
-                      停止收集
-                    </Button>
-                    <Button size="small" onClick={() => handleApply(inst.index)}>
-                      应用规则
-                    </Button>
-                  </Box>
-                }
-              >
-                {Object.entries(DEFAULT_FIELDS).map(([src, fields]) => (
-                  <TreeItem
-                    key={`${inst.index}-${src}`}
-                    itemId={`${inst.index}-${src}`}
-                    label={src}
-                  >
-                    {fields.map((f) => (
-                      <TreeItem
-                        key={`${inst.index}-${src}-${f}`}
-                        itemId={`${inst.index}-${src}-${f}`}
-                        label={
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={
-                                  include[inst.index]?.[src]?.includes(f) || false
-                                }
-                                onChange={() =>
-                                  handleFieldToggle(inst.index, src, f)
-                                }
-                              />
-                            }
-                            label={f}
-                          />
-                        }
-                      />
-                    ))}
-                  </TreeItem>
-                ))}
-              </TreeItem>
-            ))}
-          </SimpleTreeView>
-        ) : (
-          <Box sx={{ color: "text.secondary" }}>暂无实例可配置</Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>关闭</Button>
-      </DialogActions>
-    </Dialog>
+                      {fields.map((f) => (
+                        <TreeItem
+                          key={`${inst.index}-${src}-${f}`}
+                          itemId={`${inst.index}-${src}-${f}`}
+                          label={
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={
+                                    include[inst.index]?.[src]?.includes(f) || false
+                                  }
+                                  onChange={() =>
+                                    handleFieldToggle(inst.index, src, f)
+                                  }
+                                />
+                              }
+                              label={f}
+                            />
+                          }
+                        />
+                      ))}
+                    </TreeItem>
+                  ))}
+                </TreeItem>
+              ))}
+            </SimpleTreeView>
+          ) : (
+            <Box sx={{ color: "text.secondary" }}>暂无实例可配置</Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>关闭</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 
