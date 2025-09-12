@@ -19,7 +19,6 @@ import ContainerInstancesTab from './ContainerInstancesTab'; // 替换旧的 doc
 import VmInstancesTab from './VmInstancesTab';
 import SwitchInstancesTab from './SwitchInstancesTab';
 import InstanceFlagHistory from './InstanceFlagHistory';
-import IngestControlDialog from '@/components/scenario/IngestControlDialog';
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -56,7 +55,6 @@ interface InstanceDetailsDialogProps {
 
 const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onClose, scenarioName, instanceId }) => {
     const [tabValue, setTabValue] = useState(0);
-    const [ingestOpen, setIngestOpen] = useState(false);
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
@@ -102,10 +100,8 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             </DialogContent>
 
             <DialogActions>
-                <Button onClick={() => setIngestOpen(true)}>日志收集控制</Button>
                 <Button onClick={handleClose}>关闭</Button>
             </DialogActions>
-            <IngestControlDialog open={ingestOpen} onClose={() => setIngestOpen(false)} instanceId={instanceId} />
         </Dialog>
     );
 };

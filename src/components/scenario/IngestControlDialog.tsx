@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Typography,
 } from "@mui/material";
-import { SimpleTreeView, TreeItem } from "@mui/x-tree-view";
+import { RichTreeView } from "@mui/x-tree-view/RichTreeView";
 import { PlayArrow, Stop } from "@mui/icons-material";
 import { customFetch } from "@/utils/fetch";
 import { RunningInstance } from "@/types";
@@ -207,6 +207,78 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({ open, onClose
     await sendRequest({ index: idx, pause: true });
   };
 
+  const treeItems = useMemo(() => {
+    return instances.map((inst) => ({
+      id: inst.index,
+      label: (
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isInstanceChecked(inst.index)}
+                indeterminate={isInstanceIndeterminate(inst.index)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => toggleInstance(inst.index, e.target.checked)}
+              />
+            }
+            label={inst.name}
+          />
+          <Button
+            size="small"
+            startIcon={<PlayArrow />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStart(inst.index);
+            }}
+          >
+            启动
+          </Button>
+          <Button
+            size="small"
+            startIcon={<Stop />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStop(inst.index);
+            }}
+          >
+            停止
+          </Button>
+        </Box>
+      ),
+      children: SOURCES.map((src) => ({
+        id: `${inst.index}-${src}`,
+        label: (
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isSourceChecked(inst.index, src)}
+                indeterminate={isSourceIndeterminate(inst.index, src)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => toggleSource(inst.index, src, e.target.checked)}
+              />
+            }
+            label={src}
+          />
+        ),
+        children: FIELD_SPECS[src].map((f) => ({
+          id: `${inst.index}-${src}-${f}`,
+          label: (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={selected[inst.index]?.[src]?.has(f) || false}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => toggleField(inst.index, src, f, e.target.checked)}
+                />
+              }
+              label={f}
+            />
+          ),
+        })),
+      })),
+    }));
+  }, [instances, selected]);
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>日志收集控制</DialogTitle>
@@ -218,88 +290,7 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({ open, onClose
         ) : instances.length === 0 ? (
           <Typography>暂无实例</Typography>
         ) : (
-          <SimpleTreeView>
-            {instances.map((inst) => (
-              <TreeItem
-                key={inst.index}
-                itemId={inst.index}
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={isInstanceChecked(inst.index)}
-                          indeterminate={isInstanceIndeterminate(inst.index)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => toggleInstance(inst.index, e.target.checked)}
-                        />
-                      }
-                      label={inst.name}
-                    />
-                    <Button
-                      size="small"
-                      startIcon={<PlayArrow />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStart(inst.index);
-                      }}
-                    >
-                      启动
-                    </Button>
-                    <Button
-                      size="small"
-                      startIcon={<Stop />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStop(inst.index);
-                      }}
-                    >
-                      停止
-                    </Button>
-                  </Box>
-                }
-              >
-                {SOURCES.map((src) => (
-                  <TreeItem
-                    key={`${inst.index}-${src}`}
-                    itemId={`${inst.index}-${src}`}
-                    label={
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={isSourceChecked(inst.index, src)}
-                            indeterminate={isSourceIndeterminate(inst.index, src)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => toggleSource(inst.index, src, e.target.checked)}
-                          />
-                        }
-                        label={src}
-                      />
-                    }
-                  >
-                    {FIELD_SPECS[src].map((f) => (
-                      <TreeItem
-                        key={`${inst.index}-${src}-${f}`}
-                        itemId={`${inst.index}-${src}-${f}`}
-                        label={
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={selected[inst.index]?.[src]?.has(f) || false}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => toggleField(inst.index, src, f, e.target.checked)}
-                              />
-                            }
-                            label={f}
-                          />
-                        }
-                      />
-                    ))}
-                  </TreeItem>
-                ))}
-              </TreeItem>
-            ))}
-          </SimpleTreeView>
+          <RichTreeView items={treeItems} />
         )}
       </DialogContent>
       <DialogActions>

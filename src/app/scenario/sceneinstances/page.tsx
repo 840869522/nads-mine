@@ -15,12 +15,14 @@ import {
     Stop as StopIcon,
     AccountTree as TopologyIcon,
     Security as SecurityIcon, // iptables 管理入口图标
+    ListAlt as LogIcon,
 
 } from '@mui/icons-material';
 // import Link from 'next/link';
 import IptablesDialog from './IptablesDialog';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import InstanceTopologyDialog from './InstanceTopologyDialog';
+import IngestControlDialog from '@/components/scenario/IngestControlDialog';
 import { customFetch } from '@/utils/fetch';
 
 interface ScenarioInstance {
@@ -58,6 +60,8 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedTopology, setSelectedTopology] = useState<any>(null);
+    const [ingestOpen, setIngestOpen] = useState(false);
+    const [ingestInstanceId, setIngestInstanceId] = useState<string | null>(null);
 
     // 查看拓扑功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -94,6 +98,11 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         setSelectedInstanceId(instance.instance_id);
         setSelectedScenarioName(instance.scenario_name);
         setIsDetailsModalOpen(true);
+    };
+
+    const handleIngestControl = (instance: ScenarioInstance) => {
+        setIngestInstanceId(instance.instance_id);
+        setIngestOpen(true);
     };
 
     const handleViewTopology = (instance: ScenarioInstance) => {
@@ -262,6 +271,11 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
+                                            <Tooltip title="日志收集控制">
+                                                <IconButton color="info" size="small" onClick={() => handleIngestControl(instance)}>
+                                                    <LogIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {isTopologyEnabled && (
                                                 <Tooltip title="查看拓扑">
                                                     <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
@@ -322,6 +336,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
 
 
         <IptablesDialog open={iptablesOpen} onClose={() => setIptablesOpen(false)} />
+        <IngestControlDialog open={ingestOpen} onClose={() => setIngestOpen(false)} instanceId={ingestInstanceId} />
 
         </Paper>
     );
