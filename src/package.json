@@ -25,6 +25,8 @@
     "@mui/x-date-pickers": "^8.9.2",
     "@mui/x-tree-view": "^8.6.0",
     "@prisma/client": "^5.11.0",
+    "@elastic/elasticsearch": "^8.15.0",
+    "zod": "^3.23.8",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "axios": "^1.10.0",
