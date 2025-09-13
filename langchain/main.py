@@ -27,5 +27,11 @@ register_router(app)
 
 if __name__ == "__main__":
     import uvicorn
+    import os 
+    import nltk
+    
+    os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data'
+    
+    nltk.data.path.append('/home/ubunut/nltk_data')
 
     uvicorn.run(app, host=config['server']['ip'],  port=config['server']['port'])

@@ -3,7 +3,8 @@ from qdrant_client.models import VectorParams, Distance
 from app import config
 from .CustomEmbeddings import CustomEmbeddings
 from langchain_qdrant import QdrantVectorStore
-
+import os
+os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data'
 
 try:
     qdrant = QdrantClient(

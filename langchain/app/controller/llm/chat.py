@@ -21,6 +21,9 @@ async def chatController(message: ChatMessage):
 @chat_route.post("/parse")
 async def parseFileController(message: FileParseMessage):
     code = await parseFile(message.file_path,message.file_type)
-    return JSONResponse(content={"code": 200, "message": "Success", "data": result})
+    if code:
+        return JSONResponse(content={"code": 200, "message": "Success", "data": result})
+    else:
+        return JSONResponse(content={"code": 200, "message": "Failed", "data": result})
 
     
