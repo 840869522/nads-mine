@@ -41,6 +41,15 @@ const canDirectlyLinkNodes = (a?: TopologyNode, b?: TopologyNode): boolean => {
     return !!(a && b && (a.type === 'switch' || b.type === 'switch'));
 };
 
+// 新增：限制规则 - 同一个容器或虚拟机只能连接一个交换机（即仅允许一条边）
+const isContainerOrVM = (n?: TopologyNode): boolean => !!n && (n.type === 'container' || n.type === 'virtual_machine');
+const wouldViolateSingleSwitchRule = (a: TopologyNode | undefined, b: TopologyNode | undefined, edges: TopologyEdge[]): boolean => {
+    if (!a || !b) return true;
+    const aHasEdge = isContainerOrVM(a) && edges.some(e => e.source === a.id || e.target === a.id);
+    const bHasEdge = isContainerOrVM(b) && edges.some(e => e.source === b.id || e.target === b.id);
+    return aHasEdge || bHasEdge;
+};
+
 // 函数: 这是一个纯函数，是状态管理的核心。它接收当前的状态 (state)
 // 和一个动作 (action)，然后根据动作的类型（如 'ADD_NODE', 'MOVE_NODE'）
 // 返回一个全新的状态对象。这种模式使得状态变更的逻辑被集中管理，非常清晰且易于调试。
@@ -57,6 +66,10 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
                 // 非法边：不添加
                 return { ...state, linkingState: null, selectedElement: null };
             }
+            // 限制：同一容器/虚拟机仅允许一条到交换机的连接
+            if (wouldViolateSingleSwitchRule(src, tgt, state.edges)) {
+                return { ...state, linkingState: null, selectedElement: null };
+            }
             return { ...state, edges: [...state.edges, newEdge], linkingState: null, selectedElement: null };
         }
         case 'UPDATE_EDGE_CONFIG': { const { edgeId, newConfig } = action.payload; return { ...state, edges: state.edges.map(e => e.id === edgeId ? { ...e, config: newConfig } : e), }; }
@@ -69,11 +82,17 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'START_LINKING': return { ...state, linkingState: { startNodeId: action.payload.startNodeId } };
         case 'LOAD_TOPOLOGY': {
             const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData;
-            const filtered = loadedEdges.filter(e => {
+            // 顺序过滤：先满足“至少一端为交换机”，再确保每个容器/虚拟机最多仅保留一条边
+            const filtered: TopologyEdge[] = [];
+            for (const e of loadedEdges) {
                 const s = loadedNodes.find(n => n.id === e.source);
                 const t = loadedNodes.find(n => n.id === e.target);
-                return canDirectlyLinkNodes(s, t);
-            });
+                if (!canDirectlyLinkNodes(s, t)) continue;
+                const violates = (isContainerOrVM(s) && filtered.some(x => x.source === s!.id || x.target === s!.id))
+                              || (isContainerOrVM(t) && filtered.some(x => x.source === t!.id || x.target === t!.id));
+                if (violates) continue;
+                filtered.push(e);
+            }
             return { ...initialTopologyState, nodes: loadedNodes, edges: filtered };
         }
         default: return state;
@@ -211,6 +230,11 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 const targetNode = nodes.find(n => n.id === nodeId);
                 if (sourceNode && targetNode) {
                     if (!canDirectlyLink(sourceNode, targetNode)) {
+                        return;
+                    }
+
+                    // 前置限制：容器/虚拟机仅能连接一个交换机
+                    if (wouldViolateSingleSwitchRule(sourceNode, targetNode, edges)) {
                         return;
                     }
 
