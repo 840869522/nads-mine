@@ -23,7 +23,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 // 确保从 types 文件中导入新增的 IptablesRule 类型
 import { TopologyNode, NodeConfig, IptablesRule } from '../../../types';
-
+import { customFetch } from '@/utils/fetch';
 // 假设 ManagedImage 类型已定义或从其他地方导入
 interface ManagedImage {
   id: string;
@@ -91,7 +91,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
 
       // 获取镜像列表 (容器)
       if (COMPUTE_RESOURCE_TYPES.includes(node.config.deviceName)) {
-        fetch('/back/api/images')
+        customFetch('/back/api/images')
             .then(res => res.json())
             .then(data => setImages(data))
             .catch(err => console.error("获取镜像列表失败:", err));

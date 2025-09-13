@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
+import { websocketClient } from "@/utils/websocket";
 
 function createSpaceship(
     scene: THREE.Scene,
@@ -27,7 +28,15 @@ function createSpaceship(
             const segments = positions.length / 3;
 
             // 随机选择圆环上的一个顶点
-            const vertexIndex = Math.floor(Math.random() * segments);
+            let vertexIndex: number;
+
+            if (idx === 1) {
+                // 取前半段 [0, Math.floor(segments / 2))
+                vertexIndex = Math.floor(Math.random() * Math.floor(segments / 2));
+            } else {
+                // 取后半段 [Math.floor(segments / 2), segments)
+                vertexIndex = Math.floor(Math.random() * Math.ceil(segments / 2)) + Math.floor(segments / 2);
+            }
 
             const x = positions[vertexIndex * 3];
             const y = positions[vertexIndex * 3 + 1];
@@ -38,10 +47,6 @@ function createSpaceship(
             // 朝向圆心
             spaceship.lookAt(0, 0, 0);
 
-            // 模型修正方向
-            if(idx == 1)
-                spaceship.rotateY(Math.PI);
-
             // 将飞船添加到场景中
             scene.add(spaceship);
 
@@ -51,9 +56,39 @@ function createSpaceship(
     });
 }
 
-export default function ThreeDimensional(){
+interface VMItem {
+    name: string;
+    ip: string;
+}
+
+interface VMResult {
+    trueTargetList: VMItem[];
+    falseTargetList: VMItem[];
+}
+
+/**
+ * 获取 VM 列表并拆分 trueList / falseList
+ */
+async function fetchVMs(instanceId: string): Promise<VMResult> {
+    try {
+        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
+
+        const json = await res.json();
+        // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
+        return json.data as VMResult;
+    } catch (err) {
+        console.error("请求接口出错:", err);
+        // 异常时返回空列表，保证类型安全
+        return { trueTargetList: [], falseTargetList: [] };
+    }
+}
+
+export default function ThreeDimensional({ id }: { id: string }){
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
+    const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
+
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
@@ -231,19 +266,26 @@ export default function ThreeDimensional(){
 
         scene.add(rings);  // 将所有圆环添加到场景中
 
-        const redSpaceships: THREE.Object3D[] = [];
-        const blueSpaceships: THREE.Object3D[] = [];
+        const redSpaceships: { ip: string; object: THREE.Object3D }[] = [];
+        const blueSpaceships: { ip: string; object: THREE.Object3D }[] = [];
 
-        for (let i = 0; i < 3; i++) {
-            createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2).then((spaceship) => {
-                redSpaceships.push(spaceship);
-            });
+        async function fetchData() {
+            const result = await fetchVMs(id);
+            setVms(result);
+            for (let i = 0; i < result.trueTargetList.length; i++) {
+                createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
+                    redSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                });
+            }
+
+            for (let i = 0; i < result.falseTargetList.length; i++) {
+                createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
+                    blueSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
+                });
+            }
         }
-
-        for (let i = 0; i < 4; i++) {
-            createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                blueSpaceships.push(spaceship);
-            });
+        if(id !== ""){
+             fetchData();
         }
 
         // ---------- 动画 ----------
@@ -278,13 +320,48 @@ export default function ThreeDimensional(){
         };
         animate();
 
+        const handleMessage = (data: any) => {
+            try {
+                const msg = typeof data === "string" ? JSON.parse(data) : data;
+                if (msg.type === "flag-log" && msg.data.scene_instance_id === id) {
+                    const now = new Date();
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+
+                    let newLog: LogInfo = {
+                        logId: Date.now(),
+                        logTime: `${hours}:${minutes}:${seconds}`,
+                        logContent: msg.data.message
+                    };
+
+                    if(msg.data.success){
+                        setRedTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }else{
+                        setBlueTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }
+                }
+            } catch (e) {
+            console.error("解析 WebSocket 数据失败:", e, data);
+            }
+        };
+
+        websocketClient.onMessage(handleMessage);
+
         return () => {
             renderer.dispose();
             if (containerRef.current?.contains(renderer.domElement)) {
                 containerRef.current.removeChild(renderer.domElement);
             }
+            websocketClient.offMessage(handleMessage);
         };
-    }, []);
+    }, [id]);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
@@ -327,16 +404,16 @@ const blueTeamInfos: TeamInfo[] = [
 ]
 
 const blueLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:45:01',
-        logContent: '检测到异常网络流量，已启动深度分析'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:33',
-        logContent: '成功阻止针对Web服务器的SQL注入攻击'
-    },
+    // {
+    //     logId: 1,
+    //     logTime: '12:45:01',
+    //     logContent: '检测到异常网络流量，已启动深度分析'
+    // },
+    // {
+    //     logId: 2,
+    //     logTime: '12:42:33',
+    //     logContent: '成功阻止针对Web服务器的SQL注入攻击'
+    // },
 ]
 
 const redTeamInfos: TeamInfo[] = [
@@ -363,34 +440,34 @@ const redTeamInfos: TeamInfo[] = [
 ]
 
 const redLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 3,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 4,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 5,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 6,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
+    // {
+    //     logId: 1,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 2,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
+    // {
+    //     logId: 3,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 4,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
+    // {
+    //     logId: 5,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 6,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
 ]

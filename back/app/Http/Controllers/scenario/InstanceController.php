@@ -56,32 +56,83 @@ class InstanceController extends Controller
         }
     }
 
-    /**
-     * ★ 替换：此方法的内部实现被完全替换，以集成“可见但不可操作”的权限控制
-     */
+    // /**
+    //  * ★ 替换：此方法的内部实现被完全替换，以集成“可见但不可操作”的权限控制
+    //  */
+    // public function show(SceneInstance $instance)
+    // {
+    //     try {
+    //         // ★ 修改：不再进行权限过滤，获取此场景下的所有容器
+    //         $containersFromDb = $instance->containers()->get();
+
+    //         $runningInstances = [];
+    //         $instance->loadMissing('sceneConfig');
+
+    //         foreach ($containersFromDb as $containerInstance) {
+    //             $containerId = $containerInstance->c_container_id;
+    //             try {
+    //                 $details = $this->docker->containerInspect($containerId);
+    //                 $stats = $this->docker->containerStats($containerId);
+    //                 // ... (CPU, memory, port calculation logic) ...
+
+    //                 $runningInstances[] = [
+    //                     // ... (all other fields from your original code)
+    //                     'is_target' => !empty($containerInstance->c_flag),
+    //                     // ★ 修改：调用权限判断方法，动态生成 can_operate 字段
+    //                     'can_operate' => $containerInstance->canBeOperatedByUser(),
+    //                 ];
+    //             } catch (\Exception $e) { /* ... (error handling as in your original code) ... */ }
+    //         }
+    //         return response()->json($runningInstances);
+    //     } catch (\Exception $e) {
+    //         Log::error("获取实例详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
+    //         return response()->json(['message' => '获取实例详情失败。'], 500);
+    //     }
+    // }
+    
     public function show(SceneInstance $instance)
     {
         try {
-            // ★ 修改：不再进行权限过滤，获取此场景下的所有容器
-            $containersFromDb = $instance->containers()->get();
-
+            $instance->load('containers', 'vms', 'switches', 'sceneConfig');
             $runningInstances = [];
-            $instance->loadMissing('sceneConfig');
-
-            foreach ($containersFromDb as $containerInstance) {
+            foreach ($instance->containers as $containerInstance) {
                 $containerId = $containerInstance->c_container_id;
                 try {
                     $details = $this->docker->containerInspect($containerId);
                     $stats = $this->docker->containerStats($containerId);
-                    // ... (CPU, memory, port calculation logic) ...
+                    $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
+                    $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
+                    $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
+                    $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
+                    $memUsage = $stats->memory_stats->usage ?? 0;
+                    $memLimit = $stats->memory_stats->limit ?? 0;
+
+                    $ports = [];
+                    foreach ($details->getHostConfig()->getPortBindings() ?? [] as $portKey => $bindingList) {
+                        foreach ($bindingList ?? [] as $b) {
+                            $ports[] = "{$b->getHostPort()}:" . strtok($portKey, '/');
+                        }
+                    }
 
                     $runningInstances[] = [
-                        // ... (all other fields from your original code)
+                        'id' => $details->getId(),
+                        'name' => ltrim($details->getName() ?? '', '/'),
+                        'type' => 'container',
+                        'ipAddress' => $containerInstance->c_ip,
+                        'scene_instance_id' => $containerInstance->c_scene_instances_id,
+                        'scene_name' => $instance->sceneConfig->c_name ?? null,
+                        'status' => $this->mapStatus($details->getState()->getStatus()),
+                        'ports' => implode(', ', $ports),
+                        'imageName' => $details->getConfig()->getImage(),
+                        'cpuUsage' => sprintf('%.1f%%', $cpuPercent),
+                        'memoryUsage' => sprintf('%.1fMB / %.1fMB', $memUsage / 1048576, $memLimit / 1048576),
+                        'uptime' => $details->getState()->getStartedAt(),
+                        'createdAt' => $details->getCreated(),
                         'is_target' => !empty($containerInstance->c_flag),
-                        // ★ 修改：调用权限判断方法，动态生成 can_operate 字段
-                        'can_operate' => $containerInstance->canBeOperatedByUser(),
                     ];
-                } catch (\Exception $e) { /* ... (error handling as in your original code) ... */ }
+                } catch (\Exception $e) {
+                    Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());
+                }
             }
             return response()->json($runningInstances);
         } catch (\Exception $e) {
@@ -213,61 +264,61 @@ class InstanceController extends Controller
         }
     }
 
-    /**
-     * --- 新增方法 ---
-     * 获取单个演练实例及其所有关联的资源详情 (VMs, 容器, 交换机)。
-     * 这是一个专门为前端弹窗设计的、聚合了所有信息的 API 端点。
-     *
-     * @param  \App\Models\scenario\SceneInstance $instance
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getDetails(SceneInstance $instance)
-    {
-        try {
-            // 使用 Eloquent 的预加载功能，一次性查询出所有关联的资源。
-            // 我们只选择前端展示所需要的字段，以保持 API 响应的轻量化。
-            $instance->load([
-                'vms:c_vm_name,c_scene_instances_id,c_ip,c_flag',
-                'containers:c_container_id,c_scene_instances_id,c_ip,c_flag',
-                'switches:c_switch_name,c_scene_instances_id',
-                'sceneConfig:c_config_id,c_name' // 同时加载场景模板信息
-            ]);
+    // /**
+    //  * --- 新增方法 ---
+    //  * 获取单个演练实例及其所有关联的资源详情 (VMs, 容器, 交换机)。
+    //  * 这是一个专门为前端弹窗设计的、聚合了所有信息的 API 端点。
+    //  *
+    //  * @param  \App\Models\scenario\SceneInstance $instance
+    //  * @return \Illuminate\Http\JsonResponse
+    //  */
+    // public function getDetails(SceneInstance $instance)
+    // {
+    //     try {
+    //         // 使用 Eloquent 的预加载功能，一次性查询出所有关联的资源。
+    //         // 我们只选择前端展示所需要的字段，以保持 API 响应的轻量化。
+    //         $instance->load([
+    //             'vms:c_vm_name,c_scene_instances_id,c_ip,c_flag',
+    //             'containers:c_container_id,c_scene_instances_id,c_ip,c_flag',
+    //             'switches:c_switch_name,c_scene_instances_id',
+    //             'sceneConfig:c_config_id,c_name' // 同时加载场景模板信息
+    //         ]);
 
-            // 将数据格式化为前端友好的结构
-            $data = [
-                'instance_id'   => $instance->c_scene_instances_id,
-                'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
-                'status'        => $instance->c_status,
-                'resources'     => [
-                    'vms' => $instance->vms->map(function ($vm) {
-                        return [
-                            'name'      => $vm->c_vm_name,
-                            'ip'        => $vm->c_ip,
-                            'is_target' => !empty($vm->c_flag),
-                        ];
-                    }),
-                    'containers' => $instance->containers->map(function ($container) {
-                        return [
-                            'id'        => substr($container->c_container_id, 0, 12), // 返回短ID即可
-                            'ip'        => $container->c_ip,
-                            'is_target' => !empty($container->c_flag),
-                        ];
-                    }),
-                    'switches' => $instance->switches->map(function ($switch) {
-                        return [
-                            'name' => $switch->c_switch_name,
-                        ];
-                    }),
-                ]
-            ];
+    //         // 将数据格式化为前端友好的结构
+    //         $data = [
+    //             'instance_id'   => $instance->c_scene_instances_id,
+    //             'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+    //             'status'        => $instance->c_status,
+    //             'resources'     => [
+    //                 'vms' => $instance->vms->map(function ($vm) {
+    //                     return [
+    //                         'name'      => $vm->c_vm_name,
+    //                         'ip'        => $vm->c_ip,
+    //                         'is_target' => !empty($vm->c_flag),
+    //                     ];
+    //                 }),
+    //                 'containers' => $instance->containers->map(function ($container) {
+    //                     return [
+    //                         'id'        => substr($container->c_container_id, 0, 12), // 返回短ID即可
+    //                         'ip'        => $container->c_ip,
+    //                         'is_target' => !empty($container->c_flag),
+    //                     ];
+    //                 }),
+    //                 'switches' => $instance->switches->map(function ($switch) {
+    //                     return [
+    //                         'name' => $switch->c_switch_name,
+    //                     ];
+    //                 }),
+    //             ]
+    //         ];
 
-            return response()->json(['status' => 'success', 'data' => $data]);
+    //         return response()->json(['status' => 'success', 'data' => $data]);
 
-        } catch (\Exception $e) {
-            Log::error("获取实例聚合详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
-            return response()->json(['message' => '获取实例详情失败。'], 500);
-        }
-    }
+    //     } catch (\Exception $e) {
+    //         Log::error("获取实例聚合详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
+    //         return response()->json(['message' => '获取实例详情失败。'], 500);
+    //     }
+    // }
 
     /**
      * 步骤 3: 修改此函数以使用新的 runCommand 方法

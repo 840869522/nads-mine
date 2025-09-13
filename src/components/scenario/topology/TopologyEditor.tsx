@@ -18,7 +18,7 @@ import VirtualMachineEditModal from './VirtualMachineEditModal'; // 新增：导
 import Card from '../../ui/Card';
 import { Backdrop, CircularProgress } from '@mui/material';
 import SaveScenarioModal from './SaveScenarioModal';//
-
+import { customFetch } from '@/utils/fetch';
 // ... generateId, TopologyState, Reducer, initial state 等代码保持不变 ...
 const generateId = (prefix: string = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
@@ -324,7 +324,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         const method = isEditing ? 'PUT' : 'POST';
 
         try {
-            const response = await fetch(url, {
+            const response = await customFetch(url, {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -359,7 +359,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         try {
             setIsSaving(true);
             const topologyData: TopologyData = { nodes, edges };
-            const response = await fetch(`/back/api/scenariosinstances/${sceneInstanceId}/scene-config`, {
+            const response = await customFetch(`/back/api/scenariosinstances/${sceneInstanceId}/scene-config`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

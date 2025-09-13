@@ -30,6 +30,7 @@ use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
 use App\Http\Controllers\Test1\TestControllerNew;
 use App\Http\Controllers\ad\GuidanceController;
 use App\Http\Controllers\ad\OperationsController;
+use App\Http\Controllers\visualization\VisualizationController;
 
 /*
     |--------------------------------------------------------------------------
@@ -395,5 +396,9 @@ Route::prefix('flag')->middleware('jwtcheck')->group(function () {
 
     // 临时调试接口
     //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
+});
+
+Route::prefix('visualization')->group(function() {
+    Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
 });
 
