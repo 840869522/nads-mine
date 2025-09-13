@@ -42,6 +42,19 @@ class SceneContainerInstanceModel extends Model
     public $timestamps = true;
 
     /**
+     * 可以批量赋值的属性。
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'c_container_id',
+        'c_scene_instances_id',
+        'c_container_name',
+        'c_ip',
+        'c_flag'
+    ];
+
+    /**
      * 获取此容器实例所属的场景实例。
      */
     public function sceneInstance()

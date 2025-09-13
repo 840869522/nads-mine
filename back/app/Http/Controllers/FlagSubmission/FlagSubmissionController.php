@@ -469,7 +469,7 @@ class FlagSubmissionController extends BaseController
         $instanceId = $request->input('instance_id');
 
         try {
-            // 3. 动态构建查询
+            // 3. 动态构建查询 - 明确指定需要加载的字段
             $query = FlagSubmissionModel::query()
                 ->select([
                     'c_submission_id',
@@ -481,7 +481,10 @@ class FlagSubmissionController extends BaseController
                     'c_container_instance_id',
                     'c_vm_instance_id',
                 ])
-                ->with(['containerInstance', 'vmInstance'])
+                ->with([
+                    'containerInstance:c_container_id,c_container_name,c_ip,c_scene_instances_id',
+                    'vmInstance:c_vm_id,c_vm_name,c_ip,c_scene_instances_id'
+                ])
                 ->orderBy('c_submitted_at', 'desc');
 
             // 根据提交者范围筛选
@@ -523,10 +526,26 @@ class FlagSubmissionController extends BaseController
                     $instanceIp = $record->containerInstance->c_ip ?? 'Unknown IP';
                     $instanceName = $record->containerInstance->c_container_name ?? 'Unknown Container';
                     $sceneId = $record->containerInstance->c_scene_instances_id;
+                    
+                    // 调试日志
+                    Log::info('Container Instance Debug', [
+                        'container_id' => $record->c_container_instance_id,
+                        'container_data' => $record->containerInstance ? $record->containerInstance->toArray() : 'null',
+                        'extracted_ip' => $instanceIp,
+                        'extracted_name' => $instanceName
+                    ]);
                 } elseif ($record->vmInstance) {
                     $instanceIp = $record->vmInstance->c_ip ?? 'Unknown IP';
                     $instanceName = $record->vmInstance->c_vm_name ?? 'Unknown VM';
                     $sceneId = $record->vmInstance->c_scene_instances_id;
+                    
+                    // 调试日志
+                    Log::info('VM Instance Debug', [
+                        'vm_id' => $record->c_vm_instance_id,
+                        'vm_data' => $record->vmInstance ? $record->vmInstance->toArray() : 'null',
+                        'extracted_ip' => $instanceIp,
+                        'extracted_name' => $instanceName
+                    ]);
                 }
 
                 return [
