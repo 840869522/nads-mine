@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -26,7 +26,7 @@ const DEFAULT_FIELDS: Record<string, string[]> = {
     "timestamp",
     "unixtime",
     "scene_id",
-    "log_type",
+    "from",
     "user",
     "session_id",
     "working_dir",
@@ -99,6 +99,12 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
     message: "",
     severity: "success" as "success" | "error",
   });
+
+  const defaultExpandedItems = useMemo(() => {
+      return instances.flatMap((inst) => [
+          inst.index, ...Object.keys(DEFAULT_FIELDS).map((src) => `${inst.index}-${src}`)
+      ]);
+  }, [instances]);
 
   useEffect(() => {
     if (!open || !sceneInstanceId) return;
@@ -205,10 +211,7 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
           ) : instances.length > 0 ? (
             <SimpleTreeView
               slots={{ collapseIcon: ExpandMoreIcon, expandIcon: ChevronRightIcon }}
-              defaultExpanded={instances.flatMap((inst) => [
-                inst.index,
-                ...Object.keys(DEFAULT_FIELDS).map((src) => `${inst.index}-${src}`),
-              ])}
+              defaultExpandedItems={defaultExpandedItems}
             >
               {instances.map((inst) => (
                 <TreeItem

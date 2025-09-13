@@ -19,7 +19,7 @@ const DEFAULT_INCLUDE_FIELDS: Record<string, string[]> = {
         "timestamp",
         "unixtime",
         "scene_id",
-        "log_type",
+        "from",
         "user",
         "session_id",
         "working_dir",
