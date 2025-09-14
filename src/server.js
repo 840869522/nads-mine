@@ -39,7 +39,8 @@ app.prepare().then(() => {
 
     // PHP 服务的代理
     const phpProxy = createProxyMiddleware({
-        target: PHP_TARGET_URL,
+        target: // PHP_TARGET_URL
+        "http://10.12.0.101:13000/back",
         changeOrigin: true,
         pathRewrite: { 
             '^/back/': '/', 
@@ -50,7 +51,8 @@ app.prepare().then(() => {
 
     // AI CHAT SERVER PROXY
     const aiChatProxy = createProxyMiddleware({
-        target: AI_CHAT_URL,
+        target: // AI_CHAT_URL
+        "http://10.12.0.101:13000/chat",
         changeOrigin: true,
         pathRewrite : {"^/chat/" : "/"},
         ws: true,
