@@ -298,14 +298,24 @@ const RunningInstancesPage: React.FC = () => {
     };
 
     const sortedAndFilteredInstances = React.useMemo(() => {
-        let processedInstances = [...instances].filter(instance =>
-            instance.name.toLowerCase().includes(searchTerm) ||
-            instance.id.includes(searchTerm) ||
-            instance.imageName.toLowerCase().includes(searchTerm) ||
-            (instance.ipAddress ?? '').includes(searchTerm)
-        );
+        const term = (searchTerm ?? '').toLowerCase();
+
+        let processedInstances = (instances ?? []).filter((instance) => {
+            const name = (instance?.name ?? '').toLowerCase();
+            const id = (instance?.id ?? '');
+            const imageName = (instance?.imageName ?? '').toLowerCase();
+            const ip = (instance?.ipAddress ?? '');
+
+            return (
+                name.includes(term) ||
+                id.includes(term) ||
+                imageName.includes(term) ||
+                ip.includes(term)
+            );
+        });
+
         if (showRunningOnly) {
-            processedInstances = processedInstances.filter(i => i.status === 'running');
+            processedInstances = processedInstances.filter((i) => i.status === 'running');
         }
         return processedInstances;
     }, [instances, searchTerm, showRunningOnly]);
