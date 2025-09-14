@@ -30,8 +30,8 @@ def auto_detect_file_type(file_path: str):
     else:
         raise ValueError(f"Unsupported file type: {mime_type}")
 
-def _add_single_document(chunk, metadata, doc_ids):
-    vector_store.add_documents(documents=chunk,metadatas=metadata,ids=doc_ids)
+def _add_single_document(chunk,  doc_ids):
+    vector_store.add_documents(documents=chunk,ids=doc_ids)
 
 async def parseFile(file_path: str,file_type1: str):
     try:

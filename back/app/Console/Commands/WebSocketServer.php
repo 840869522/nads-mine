@@ -130,32 +130,33 @@ class WebSocketServer extends Command
         $this->ws->onWorkerStart = function ($worker) {
             // 获取外部作用域的引用
             $uidConnections = &$this->uidConnections;
-            
+
             // 开启一个内部端口，方便内部系统推送数据，Text协议格式 文本+换行符
+            if ($worker->id ===0){
             $inner_text_worker = new Worker("text://0.0.0.0:2347");
             $inner_text_worker->onMessage = function ($connection, $buffer) use (&$uidConnections) {
                 echo "[Internal] 接收到内部消息: " . $buffer . "\n";
-                
+
                 // $data数组格式，里面有uid，表示向那个uid的页面推送数据
                 $data = json_decode($buffer, true);
                 if (!$data) {
                     echo "[Internal] 无效的JSON数据: " . $buffer . "\n";
                     return;
                 }
-                
+
                 // 广播消息给所有连接
                 $jsonMessage = is_string($data) ? $data : json_encode($data);
                 $sentCount = 0;
-                
+
                 foreach($uidConnections as $connectionId => $wsConnection) {
                     // 向所有连接发送消息
                     $wsConnection->send($jsonMessage);
                     $sentCount++;
                 }
-                
+
                 echo "[Internal] 消息广播完成，发送给 {$sentCount} 个客户端\n";
             };
-            $inner_text_worker->listen();
+            $inner_text_worker->listen();}
             Timer::add(10, function()use($worker){
                 $time_now = time();
                 foreach($worker->connections as $connection) {

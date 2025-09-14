@@ -60,18 +60,23 @@ function Fps() {
 }
 
 const ADPage: React.FC = () => {
-    let id:string|null = localStorage.getItem('instance_id');
-        if (id !== null) {
-            sessionStorage.setItem('instance_id', id); // 存到每个标签页独立的 sessionStorage
-            localStorage.removeItem('instance_id');           // 用完就删
+    const [id, setId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const storedId = localStorage.getItem('instance_id');
+            if (storedId !== null) {
+                sessionStorage.setItem('instance_id', storedId);
+                localStorage.removeItem('instance_id');
+            }
+            const sessionId = sessionStorage.getItem('instance_id');
+            setId(sessionId);
+            websocketClient.connect();
         }
-    id = sessionStorage.getItem('instance_id') ;
-    useEffect(()=>{
-        websocketClient.connect();
     })
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
-            <Header/>
+            <Header />
             {/* <Battlefield/> */}
             <ThreeDimensional id={id ?? ''}/>
             <Fps />
