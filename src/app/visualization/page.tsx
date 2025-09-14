@@ -73,7 +73,7 @@ const ADPage: React.FC = () => {
             setId(sessionId);
             websocketClient.connect();
         }
-    })
+    },[]);
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
             <Header />

@@ -63,7 +63,7 @@ class WebSocketServer extends Command
     private function configureServer()
     {
         // 启动4个进程（根据CPU核心数调整）
-        $this->ws->count = 4;
+        $this->ws->count = 1;
 
         // 服务名称（方便进程管理）
         $this->ws->name = 'LaravelWebSocket';
