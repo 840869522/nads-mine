@@ -13,7 +13,7 @@ import {
 import MuiLink from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import { getCookie } from '@/utils/cookie';
+import { deleteCookie, getCookie, setCookie } from '@/utils/cookie';
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -60,6 +60,7 @@ const DashboardPage: React.FC = () => {
       router.replace('/login');
     }
   }, [ router]);
+
   useEffect(() => {
     features.forEach((f) => router.prefetch(f.path));
   }, [router]);
