@@ -63,6 +63,7 @@ class RedisSubscribe extends Command
                         // 转发给 Workerman
                         $data = [
                             'type' => 'flag-log',
+                            'timer' => (string) (int)(microtime(true) * 1000),
                             'data' => $redisData
                         ];
 
@@ -83,7 +84,6 @@ class RedisSubscribe extends Command
                 } catch (\Throwable $e) {
                     $this->error("[" . now() . "] [ERROR] Redis 心跳失败: " . $e->getMessage());
                 }
-                sleep(3);
             }
         }
 

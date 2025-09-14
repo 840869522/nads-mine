@@ -320,10 +320,13 @@ export default function ThreeDimensional({ id }: { id: string }){
         };
         animate();
 
+        let timer = "";
+
         const handleMessage = (data: any) => {
             try {
                 const msg = typeof data === "string" ? JSON.parse(data) : data;
-                if (msg.type === "flag-log" && msg.data.scene_instance_id === id) {
+                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === id) {
+                    timer = msg.timer;
                     const now = new Date();
                     const hours = now.getHours().toString().padStart(2, '0');
                     const minutes = now.getMinutes().toString().padStart(2, '0');
