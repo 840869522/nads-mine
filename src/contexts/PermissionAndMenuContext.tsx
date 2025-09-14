@@ -1,21 +1,29 @@
-import {  PermissionFormData } from "@/components/admin/PermissionModal";
+import { PermissionFormData } from "@/components/admin/PermissionModal";
 import { useAuth } from "@/hooks/useAuth";
 import { AppPermission, NavItemType } from "@/types";
 import { apiClient } from "@/utils/axios";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 
-interface PermissionAndMenuContextType {
-    appAllPermission: AppPermission[] | [],
-    userSiderMenu: NavItemType[] | [],
-    id2nameMap ,
-    updateData: (add: boolean, data?: PermissionFormData) => void
+type Route_Permission = {
+    prefix: string,
+    key: string
 }
 
 type PerData = {
     label: string,
     key: string,
-    children : PerData[] | null
+    children: PerData[] | null
 }
+
+interface PermissionAndMenuContextType {
+    appAllPermission: AppPermission[] | [],
+    userSiderMenu: NavItemType[] | [],
+    id2nameMap: { string: string },
+    routeAndPermission: Route_Permission[],
+    updateData: (add: boolean, data?: PermissionFormData) => void
+}
+
+
 
 const PermissionAndMenuContext = createContext<PermissionAndMenuContextType | undefined>(undefined);
 
@@ -29,29 +37,48 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
     const { user } = useAuth();
     const [appAllPermission, setAppAllPermission] = useState<AppPermission[] | []>([]);
     const [userSiderMenu, setUserSiderMenu] = useState<NavItemType[] | []>([]);
-    const [id2nameMap, setId2NameMap] = useState<{string: string} | {}>({});
+    const [id2nameMap, setId2NameMap] = useState<{ string: string } | {}>({});
+    const [routeAndPermission, SetRouteAndPermission] = useState<Route_Permission[] | []>([]);
 
-    const mapId2Name = (data, per:PerData[])=>{
+    const mapId2Name = (data, per: PerData[]) => {
         per.map(item => {
             data[item.key] = item.label;
             if (item.children) {
-                mapId2Name(data,item.children)
+                mapId2Name(data, item.children)
             }
         })
+    }
+
+
+    const mapRouteAndPmerission = (data: Route_Permission[], per: NavItemType[]) => {
+        per.map(item => {
+            if (item.to?.trim()) {
+                data.push({ prefix: item.to, key: item.requiredPermission || "" })
+            }
+            if (item.children) {
+                mapRouteAndPmerission(data, item.children)
+            }
+        })
+
     }
 
 
     const getPermissionLabelAndMenuData = () => {
         if (user) {
             apiClient.post("/back/api/support/permission/all_menu").then((res) => {
-                if (res.data.code === 200)
+                if (res.data.code === 200) {
                     setUserSiderMenu(res.data.data);
+                    var routeApermission = []
+                    mapRouteAndPmerission(routeApermission, res.data.data);
+                    routeApermission = routeApermission.filter(Boolean);
+                    SetRouteAndPermission(routeApermission);
+                }
             })
             apiClient.post("/back/api/support/permission/all_permission").then((res) => {
-                if (res.data.code === 200){
+                if (res.data.code === 200) {
                     setAppAllPermission(res.data.data);
-                    var map = {'0': '顶级权限'}
-                    mapId2Name(map,res.data.data);
+                    var map = { '0': '顶级权限' }
+                    mapId2Name(map, res.data.data);
                     setId2NameMap(map);
                 }
             })
@@ -63,12 +90,12 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
             getPermissionLabelAndMenuData();
         else {
             const newPerm = appAllPermission.map(item => item.key == data?.id ? {
-                 ...item, 
-                 key: data?.id, 
-                 label: data?.label 
+                ...item,
+                key: data?.id,
+                label: data?.label
             } : item).filter(Boolean);
             setAppAllPermission(newPerm);
-            if (data?.is_menu){
+            if (data?.is_menu) {
                 apiClient.post("/back/api/support/permission/all_menu").then((res) => {
                     if (res.data.code === 200)
                         setUserSiderMenu(res.data.data);
@@ -80,7 +107,7 @@ const PermissionAndMenuContextProvider: React.FC<PermissionAndMenuContextProvide
     useEffect(() => {
         getPermissionLabelAndMenuData();
     }, [user]);
-    return <PermissionAndMenuContext.Provider value={{ appAllPermission, userSiderMenu, id2nameMap,updateData }}>
+    return <PermissionAndMenuContext.Provider value={{ appAllPermission, userSiderMenu, id2nameMap, routeAndPermission, updateData }}>
         {children}
     </PermissionAndMenuContext.Provider>
 };

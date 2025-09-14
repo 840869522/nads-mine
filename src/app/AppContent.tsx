@@ -10,30 +10,14 @@ import { UserRole } from '@/types';
 import { getCookie } from '@/utils/cookie';
 import { AffixedFabWrapper } from '@/components/layout/AffixedFab';
 import ChatPage from "@/components/chat/page";
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 const DRAWER_WIDTH = 250;
 
-const ROUTE_PERMISSIONS = [
-  { prefix: '/', key: 'databoard_view' },
-  { prefix: '/learn/quiz', key: 'study_test' },
-  { prefix: '/learn/cases', key: 'study_case' },
-  { prefix: '/learn/docs', key: 'study_questions' },
-  { prefix: "/learn/learn", key: "study_learn" },
-  { prefix: '/scenario/envirments', key: 'SCENARIO_ENVIRONMENTS_CONFIG' },
-  { prefix: '/scenario/manage', key: 'scene_setting' },
-  { prefix: '/ad', key: 'ad_test' },
-  { prefix: '/ad/team', key: 'ad' },
-  { prefix: '/admin/users', key: 'support_user' },
-  { prefix: '/admin/roles', key: 'support_role' },
-  { prefix: '/scenario/images', key: 'support_images_manage' },
-  { prefix: '/scenario/instances', key: 'support_instances_manage' },
-  { prefix: '/scenario/vm-images', key: 'support_scenario_images_manage' },
-  { prefix: '/scenario/vm-instances', key: 'support_scenario_instances_manage' },
-  { prefix: '/visualization', key: 'visualization' },
-];
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const { routeAndPermission } = userPermissionContext();
   const router = useRouter();
   const pathname = usePathname();
   const [chatOpen, setChatOpen] = useState<boolean>(false);
@@ -47,8 +31,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       if (pathname !== '/login' && !isGuac) {
         router.replace('/login');
       }
-    } else {
-      const match = ROUTE_PERMISSIONS.find(r => pathname === r.prefix);
+    }else {
+      const match = routeAndPermission.find(r => pathname === r.prefix);
       if (match) {
         if (!roleData.includes(UserRole.ADMIN))
           if (!permissionsData.includes(match.key) && !pathname.startsWith('/visualization')) {
