@@ -14,6 +14,10 @@ class VisualizationController extends Controller{
                 ->select('c_vm_name as name', 'c_ip as ip', 'c_flag')
                 ->where('c_scene_instances_id', $instance_id)
                 ->get();
+            $containers = DB::table('c_scene_container_instances')
+                ->select('c_container_name as name', 'c_ip as ip', 'c_flag')
+                ->where('c_scene_instances_id', $instance_id)
+                ->get();
 
             $trueTargetList = [];
             $falseTargetList = [];
@@ -26,6 +30,20 @@ class VisualizationController extends Controller{
                 ];
 
                 if (!empty($vm->c_flag)) {
+                    $trueTargetList[] = $item;
+                } else {
+                    $falseTargetList[] = $item;
+                }
+            }
+
+            foreach ($containers as $container) {
+                $ip = explode('/', $container->ip)[0];
+                $item = [
+                    'name' => $container->name,
+                    'ip'   => $ip,
+                ];
+
+                if (!empty($container->c_flag)) {
                     $trueTargetList[] = $item;
                 } else {
                     $falseTargetList[] = $item;

@@ -272,15 +272,15 @@ export default function ThreeDimensional({ id }: { id: string }){
         async function fetchData() {
             const result = await fetchVMs(id);
             setVms(result);
-            for (let i = 0; i < result.trueTargetList.length; i++) {
+            for (let i = 0; i < result.falseTargetList.length; i++) {
                 createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
-                    redSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                    redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
                 });
             }
 
-            for (let i = 0; i < result.falseTargetList.length; i++) {
+            for (let i = 0; i < result.trueTargetList.length; i++) {
                 createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                    blueSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
+                    blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
                 });
             }
         }
