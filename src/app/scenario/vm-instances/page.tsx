@@ -276,10 +276,10 @@ export default function VmPage() {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    {/*<IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
                                         <PauseIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
+                                    {/*<IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
                                         <StopIcon fontSize="small" color="error" />
                                     </IconButton>*/}
                                     <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
@@ -504,14 +504,14 @@ export default function VmPage() {
                 open={Boolean(actionAnchor.anchor)}
                 onClose={() => setActionAnchor({ anchor: null, id: null })}
             >
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
+                {/*<MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
                     <SshIcon fontSize="small" sx={{ mr: 1 }} />
                     SSH
                 </MenuItem>
                 <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'rdp'); setActionAnchor({ anchor: null, id: null }); }}>
                     <RdpIcon fontSize="small" sx={{ mr: 1 }} />
                     RDP
-                </MenuItem>
+                </MenuItem>*/}
                 <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'vnc'); setActionAnchor({ anchor: null, id: null }); }}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
                     VNC 控制台

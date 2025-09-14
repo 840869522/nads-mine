@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
-import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
+import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { websocketClient } from "@/utils/websocket";
 
