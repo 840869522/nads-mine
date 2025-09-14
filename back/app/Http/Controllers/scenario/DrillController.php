@@ -43,7 +43,7 @@ class DrillController extends Controller
             // .. -> /var/www/nads
             // 最终路径 -> /var/www/nads/src/data/vmImageOverrides.json
             $path = base_path('../src/data/vmImageOverrides.json');
-            
+
             Log::info("正在尝试从以下路径加载虚拟机镜像操作系统映射: {$path}");
 
             if (File::exists($path)) {
@@ -121,7 +121,7 @@ class DrillController extends Controller
         if ($resourceCheckResponse !== null) {
             return $resourceCheckResponse;
         }
-        
+
         $validator = Validator::make($request->all(), ['username' => 'required|string|max:50']);
         if ($validator->fails()) {
             return response()->json(['message' => '请求中必须包含用户名。', 'errors' => $validator->errors()], 422);
@@ -131,9 +131,9 @@ class DrillController extends Controller
 
         $parsedTopology = TopologyParser::parse($topologyJson);
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
-        
+
         $connections = &$parsedTopology['connections'];
-        
+
         $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
         $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
         $createdSwitchesInfo = [];
@@ -166,7 +166,7 @@ class DrillController extends Controller
                 'c_scene_config'  => $topologyJson,
             ]);
             Log::info("创建场景实例记录成功", ['instance_id' => $sceneInstance->c_scene_instances_id]);
-            
+
             $instanceShortId = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -8);
             $switchIdSuffix = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -5);
 
@@ -179,17 +179,17 @@ class DrillController extends Controller
                     'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                 ]);
             }
-            
+
             foreach ($parsedTopology['containers'] as $containerData) {
                  $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
                  $options = [
-                    'image' => $containerData['image'], 
+                    'image' => $containerData['image'],
                     'name'  => $containerName,
-                    'ports' => $containerData['portMappings'], 
+                    'ports' => $containerData['portMappings'],
                     'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
-                
+
                 $flagUuid = null;
                 if ($containerData['isTarget']) {
                     $flagUuid = Str::uuid()->toString();
@@ -211,11 +211,11 @@ class DrillController extends Controller
             }
 
             Log::info("================== 开始创建虚拟机并建立连接 ==================");
-            
+
             $baseDir = $this->_get_global_directory();
             $imageDir = $baseDir . '/virsh/images';
             $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
-            
+
             foreach ($connections as $conn) {
                 $itemNode = null; $switchNode = null; $ip = null;
 
@@ -230,12 +230,12 @@ class DrillController extends Controller
                 }
 
                 if (!$itemNode || !$switchNode) continue;
-                
+
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
                 $correctImageName = $parsedVmNode['image'];
-                
+
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
-                    $correctImageName = 'v_att_tcpScanning'; 
+                    $correctImageName = 'v_att_tcpScanning';
                     Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
                 }
 
@@ -247,14 +247,14 @@ class DrillController extends Controller
                     'found_data' => $osData,
                     'determined_os_type' => $osType
                 ]);
-                
+
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
-                
+
                 $flagUuid = null;
                 if ($parsedVmNode['isTarget'] ?? false) {
                     $flagUuid = Str::uuid()->toString();
                 }
-                
+
                 $vmInstance = SceneVmInstance::create([
                     'c_vm_name'            => $vmName,
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
@@ -269,7 +269,7 @@ class DrillController extends Controller
                 if ($osType === 'win7') {
                     $this->cliService->createVmWin7([
                         'id'                  => $vmDbId,
-                        'vm_name'             => $vmName, 
+                        'vm_name'             => $vmName,
                         'image'               => $correctImageName,
                         'ip'                  => $ip,
                         'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
@@ -281,7 +281,7 @@ class DrillController extends Controller
                 } elseif ($osType === 'win7_1') {
                     $this->cliService->createVmWin7_1([
                         'id'                  => $vmDbId,
-                        'vm_name'             => $vmName, 
+                        'vm_name'             => $vmName,
                         'image'               => $correctImageName,
                         'switch_name'         => $actualSwitchName,
                         'image_dir'           => $imageDir,
@@ -290,7 +290,7 @@ class DrillController extends Controller
                 } elseif ($osType === 'win2003') {
                     $this->cliService->createVmWin2003([
                         'id'                  => $vmDbId,
-                        'vm_name'             => $vmName, 
+                        'vm_name'             => $vmName,
                         'image'               => $correctImageName,
                         'switch_name'         => $actualSwitchName,
                         'image_dir'           => $imageDir,
@@ -299,7 +299,7 @@ class DrillController extends Controller
                 } elseif ($osType === 'win10') {
                     $this->cliService->createVmWin10([
                         'id'                  => $vmDbId,
-                        'vm_name'             => $vmName, 
+                        'vm_name'             => $vmName,
                         'image'               => $correctImageName,
                         'switch_name'         => $actualSwitchName,
                         'image_dir'           => $imageDir,
@@ -308,7 +308,7 @@ class DrillController extends Controller
                 } else { // 默认为 ubuntu
                     $this->cliService->createVm([
                         'id'                  => $vmDbId,
-                        'vm_name'             => $vmName, 
+                        'vm_name'             => $vmName,
                         'image'               => $correctImageName,
                         'ip'                  => $ip,
                         'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
@@ -318,12 +318,12 @@ class DrillController extends Controller
                         'instance_base_dir'   => $instanceBaseDir,
                     ]);
                 }
-                
+
                 $createdItemsInfo[$itemNode['id']] = [
                     'id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'
                 ];
             }
-            
+
             Log::info("================== 开始建立剩余网络连接 ==================");
             foreach ($connections as $conn) {
                 $source = $conn['source'];
@@ -334,11 +334,11 @@ class DrillController extends Controller
                         $createdSwitchesInfo[$source['id']]['actual_name'],
                         $createdSwitchesInfo[$target['id']]['actual_name']
                     );
-                } 
+                }
                 elseif (($source['type'] === 'container' && $target['type'] === 'switch') || ($source['type'] === 'switch' && $target['type'] === 'container')) {
                     $containerNode = $source['type'] === 'container' ? $source : $target;
                     $switchNode = $source['type'] === 'switch' ? $source : $target;
-                    
+
                     $this->cliService->connectContainerToSwitch(
                         $createdSwitchesInfo[$switchNode['id']]['actual_name'],
                         $createdItemsInfo[$containerNode['id']]['actual_name'],
@@ -351,7 +351,7 @@ class DrillController extends Controller
 
                     $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
                     $bridgeName = $bridgeNode['label'];
-                    
+
                     Log::info("正在连接 OVS 交换机 '{$actualSwitchName}' 到 Linux Bridge '{$bridgeName}'");
 
                     $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
@@ -426,7 +426,7 @@ class DrillController extends Controller
         $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
             return explode('/', $ip)[0];
         })->unique()->flip();
-        
+
         Log::info('Found existing IPs in DB', $existingIps->keys()->toArray());
 
         $octet3 = 0;
@@ -450,7 +450,7 @@ class DrillController extends Controller
             } while (isset($existingIps[$newIp]));
 
             $existingIps[$newIp] = true;
-            
+
             Log::info("Assigned new IP: {$newIp}");
             return $newIp . "/16";
         };

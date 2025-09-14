@@ -14,7 +14,10 @@ import {
   TrashIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
-  DocumentCheckIcon // 新增：用于保存按钮的图标
+  DocumentCheckIcon, // 新增：用于保存按钮的图标
+  ClipboardDocumentListIcon,
+  BeakerIcon,
+  ArrowsRightLeftIcon
 } from '@heroicons/react/24/outline';
 
 // 1. 更新组件的 Props 接口
@@ -27,6 +30,9 @@ interface TopologyToolbarProps {
   canRedo: boolean;
   onSave: () => void; // 新增：保存功能的回调函数
   isSaving?: boolean; // 新增：保存中状态，用于禁用按钮/显示加载
+  onOpenCollectionPolicy: () => void; // 采集策略
+  onOpenTrafficSimulationPolicy: () => void; // 流量模拟策略
+  onOpenTrafficMirroringPolicy: () => void; // 流量镜像策略
 }
 
 const DeviceIcon: React.FC<{ type: DeviceType }> = ({ type }) => {
@@ -56,6 +62,9 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                            canRedo,
                                                            onSave, // 新增
                                                            isSaving = false,
+                                                           onOpenCollectionPolicy,
+                                                           onOpenTrafficSimulationPolicy,
+                                                           onOpenTrafficMirroringPolicy,
                                                          }) => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, deviceType: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', deviceType);
@@ -84,6 +93,37 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
           ))}
           <div className="flex-grow"></div> {/* Spacer */}
           <div className="flex items-center gap-2">
+            {/* 策略分组 */}
+            <div className="flex items-center gap-2 pr-3 mr-2 border-r border-neutral-200 dark:border-neutral-700">
+              <span className="text-sm text-neutral-600 dark:text-neutral-400">策略:</span>
+              <Button
+                onClick={onOpenCollectionPolicy}
+                disabled={isSaving}
+                variant="outline"
+                size="sm"
+                leftIcon={<ClipboardDocumentListIcon className="h-4 w-4"/>}
+                aria-label="采集策略"
+                title="采集策略"
+              >采集</Button>
+              <Button
+                onClick={onOpenTrafficSimulationPolicy}
+                disabled={isSaving}
+                variant="outline"
+                size="sm"
+                leftIcon={<BeakerIcon className="h-4 w-4"/>}
+                aria-label="流量模拟策略"
+                title="流量模拟策略"
+              >模拟</Button>
+              <Button
+                onClick={onOpenTrafficMirroringPolicy}
+                disabled={isSaving}
+                variant="outline"
+                size="sm"
+                leftIcon={<ArrowsRightLeftIcon className="h-4 w-4"/>}
+                aria-label="流量镜像策略"
+                title="流量镜像策略"
+              >镜像</Button>
+            </div>
             <Button onClick={onDeleteSelected} disabled={isSaving} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
             <Button onClick={onUndo} disabled={!canUndo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
             <Button onClick={onRedo} disabled={!canRedo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnRightIcon className="h-4 w-4"/>} aria-label="重做">重做</Button>

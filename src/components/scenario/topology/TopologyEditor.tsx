@@ -303,6 +303,34 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     const handleUndo = () => { const lastAction = undoStack[undoStack.length - 1]; if (!lastAction) return; switch (lastAction.type) { case 'ADD_NODE': const addedNode = lastAction.payload.node as TopologyNode; dispatch({ type: 'DELETE_NODE', payload: { nodeId: addedNode.id } }); onDeleteNode(addedNode.id); break; case 'DELETE_NODE': const deletedNode = lastAction.payload.deletedNode as TopologyNode; dispatch({ type: 'ADD_NODE', payload: { node: deletedNode } }); onAddNode(deletedNode); lastAction.payload.deletedEdges.forEach((edge: TopologyEdge) => dispatch({ type: 'ADD_EDGE', payload: { edge } })); break; case 'MOVE_NODE': dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastAction.payload.nodeId, newX: lastAction.payload.oldX, newY: lastAction.payload.oldY } }); break; case 'UPDATE_NODE_CONFIG': const oldNodeConfig = nodes.find(n => n.id === lastAction.payload.nodeId); if (oldNodeConfig) { dispatch({ type: 'UPDATE_NODE_CONFIG', payload: { nodeId: lastAction.payload.nodeId, newConfig: lastAction.payload.oldConfig, newLabel: lastAction.payload.oldLabel } }); onUpdateNode({ ...oldNodeConfig, config: lastAction.payload.oldConfig, label: lastAction.payload.oldLabel }); } break; case 'ADD_EDGE': dispatch({ type: 'DELETE_EDGE', payload: { edgeId: (lastAction.payload.edge as TopologyEdge).id } }); break; case 'DELETE_EDGE': dispatch({ type: 'ADD_EDGE', payload: { edge: lastAction.payload.deletedEdge } }); break; case 'UPDATE_EDGE_CONFIG': dispatch({ type: 'UPDATE_EDGE_CONFIG', payload: { edgeId: lastAction.payload.edgeId, newConfig: lastAction.payload.oldConfig } }); break; default: return; } setUndoStack(prev => prev.slice(0, -1)); setRedoStack(prev => [lastAction, ...prev]); };
     const handleRedo = () => { const lastRedoAction = redoStack[0]; if (!lastRedoAction) return; if (lastRedoAction.type === 'MOVE_NODE') { dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastRedoAction.payload.nodeId, newX: lastRedoAction.payload.newX, newY: lastRedoAction.payload.newY } }); } else { dispatch(lastRedoAction); } if (lastRedoAction.type === 'ADD_NODE') onAddNode(lastRedoAction.payload.node); else if (lastRedoAction.type === 'DELETE_NODE') onDeleteNode(lastRedoAction.payload.nodeId); else if (lastRedoAction.type === 'UPDATE_NODE_CONFIG') { const updatedNode = nodes.find(n => n.id === lastRedoAction.payload.nodeId); if (updatedNode) onUpdateNode({ ...updatedNode, config: lastRedoAction.payload.newConfig, label: lastRedoAction.payload.newLabel }); } setRedoStack(prev => prev.slice(1)); setUndoStack(prev => [...prev, lastRedoAction]); };
 
+    // 策略按钮占位处理
+    const handleOpenCollectionPolicy = useCallback(() => {
+        if (!selectedElement) {
+            alert('请先选择一个容器或虚拟机节点以配置采集策略');
+            return;
+        }
+        if (selectedElement.type === 'edge') {
+            alert('采集策略仅适用于节点，请选择容器或虚拟机节点');
+            return;
+        }
+        const node = nodes.find(n => n.id === selectedElement.id);
+        if (!node) {
+            alert('未找到所选节点');
+            return;
+        }
+        if (node.type !== 'container' && node.type !== 'virtual_machine') {
+            alert('采集策略仅适用于容器或虚拟机节点');
+            return;
+        }
+        alert(`将为 ${node.label} 配置采集策略`);
+    }, [selectedElement, nodes]);
+    const handleOpenTrafficSimulationPolicy = useCallback(() => {
+        alert('流量模拟策略：仅展示按钮，功能待接入');
+    }, []);
+    const handleOpenTrafficMirroringPolicy = useCallback(() => {
+        alert('流量镜像策略：仅展示按钮，功能待接入');
+    }, []);
+
     // 3. 原来的 handleSave 现在只负责打开弹窗
     const handleSave = () => {
         // 如果是实例模式，直接提交到实例更新接口；否则打开保存场景弹窗
@@ -446,6 +474,9 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 canRedo={redoStack.length > 0}
                 onSave={handleSave} // 在实例模式下直接保存并展示等待动画
                 isSaving={isSaving}
+                onOpenCollectionPolicy={handleOpenCollectionPolicy}
+                onOpenTrafficSimulationPolicy={handleOpenTrafficSimulationPolicy}
+                onOpenTrafficMirroringPolicy={handleOpenTrafficMirroringPolicy}
                 // onExport={handleExport}
                 // onImport={handleImport}
                 onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}
