@@ -56,6 +56,64 @@ function createSpaceship(
     });
 }
 
+function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Object3D) {
+    const start = startNode.position.clone();
+    const end = endNode.position.clone();
+
+    const steps = 100; // 分段数
+    const height = 80 + Math.random() * 50; // 抛物线顶点高度
+
+    // 二次贝塞尔控制点
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    mid.y += height;
+
+    // 生成完整轨迹数组
+    const trajectory: THREE.Vector3[] = [];
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const point = start.clone().multiplyScalar((1 - t) ** 2)
+            .add(mid.clone().multiplyScalar(2 * (1 - t) * t))
+            .add(end.clone().multiplyScalar(t ** 2));
+        trajectory.push(point);
+    }
+
+    // 初始化 geometry，把所有点放进去
+    const geometry = new THREE.BufferGeometry().setFromPoints(trajectory);
+    geometry.setDrawRange(0, 2);
+
+    const material = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 1,
+    });
+
+    const line = new THREE.Line(geometry, material);
+    scene.add(line);
+
+    const startTime = performance.now();
+    const duration = 1000; // 2s 发射完成
+
+    function animate() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1); // 0 ~ 1
+        const progress = Math.floor(t * steps);
+
+        geometry.setDrawRange(0, progress + 1);
+
+        if (t < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            setTimeout(() => {
+                scene.remove(line);
+                geometry.dispose();
+                material.dispose();
+            }, 1000);
+        }
+    }
+
+    animate();
+}
+
 interface VMItem {
     name: string;
     ip: string;
@@ -288,6 +346,29 @@ export default function ThreeDimensional({ id }: { id: string }){
              fetchData();
         }
 
+        let shootingPaused = false;
+
+        document.addEventListener("visibilitychange", () => {
+            shootingPaused = document.hidden;
+        });
+
+
+        setTimeout(function shootLoop() {
+            if(redSpaceships.length > 0 && blueSpaceships.length > 0){
+                const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
+                const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+
+                if (red && blue && !shootingPaused) {
+                    shootRay(scene, red.object, blue.object);
+                }
+
+                // 下次间隔：5~10 秒
+                const nextDelay = (5 + Math.random() * 5) * 1000;
+                setTimeout(shootLoop, nextDelay);
+            }
+        }, (5 + Math.random() * 10) * 1000);
+
+
         // ---------- 动画 ----------
         const clock = new THREE.Clock();
         const animate = () => {
@@ -332,10 +413,14 @@ export default function ThreeDimensional({ id }: { id: string }){
                     const minutes = now.getMinutes().toString().padStart(2, '0');
                     const seconds = now.getSeconds().toString().padStart(2, '0');
 
+                    let logMessage : string;
+                    logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+
                     let newLog: LogInfo = {
                         logId: Date.now(),
                         logTime: `${hours}:${minutes}:${seconds}`,
-                        logContent: msg.data.message
+                        logContent: logMessage
                     };
 
                     if(msg.data.success){
