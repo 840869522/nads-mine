@@ -264,7 +264,7 @@ export default function VmPage() {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 160,
+                width: 200,
                 renderCell: (params) => {
                     const vm = params.row as VmInstance;
                     const { data } = useVmInfo(vm.id);
