@@ -48,7 +48,7 @@ interface Test {
   test_id: string;
   c_name?: string;
   test_name: string;
-  c_test_type: '理论测试' | '实践操作';
+  c_test_type: '理论测试' | '实验';
   c_type: '考试' | '练习';
   c_description: string;
   test_start: string;
@@ -281,7 +281,7 @@ const TestManagement_user = () => {
 
           // 提取后端返回的c_paper_id（用户专属试卷ID）
           const userPaperId = test.test_users_id || test.c_paper_id || test.paper_id || '';
-          const testType = test.c_test_type === '实践操作' ? '实践操作' : '理论测试';
+          const testType = test.c_test_type === '实验' ? '实验' : '理论测试';
 
           acc.push({
             test_id: test.c_id.trim(),
@@ -425,7 +425,7 @@ const TestManagement_user = () => {
   });
 
   // 测试分类与分页
-  const practicalTests = filteredTests.filter(t => t.c_test_type === '实践操作');
+  const practicalTests = filteredTests.filter(t => t.c_test_type === '实验');
   const theoreticalTests = filteredTests.filter(t => t.c_test_type === '理论测试');
   const practicalPageCount = Math.ceil(practicalTests.length / rowsPerPage);
   const theoreticalPageCount = Math.ceil(theoreticalTests.length / rowsPerPage);
@@ -521,7 +521,7 @@ const TestManagement_user = () => {
 
       // 9. 切换到对应测试页面
       setCurrentTest(updatedTest);
-      setCurrentView(updatedTest.c_test_type === '实践操作' ? 'practical' : 'theoretical');
+      setCurrentView(updatedTest.c_test_type === '实验' ? 'practical' : 'theoretical');
 
     } catch (err: any) {
       console.error('进入测试失败:', err);
@@ -721,7 +721,7 @@ const TestManagement_user = () => {
     );
   };
 
-  // 视图渲染 - 实践测试页
+  // 视图渲染 - 实验页
   if (currentView === 'practical' && currentTest && username) {
     return <PracticalTestPage
       testId={currentTest.test_id}
@@ -847,7 +847,7 @@ const TestManagement_user = () => {
         >
           <Tab
             value="practical"
-            label={<Box display="flex" alignItems="center"><CodeIcon sx={{ mr: 1, fontSize: 18 }} />实践操作</Box>}
+            label={<Box display="flex" alignItems="center"><CodeIcon sx={{ mr: 1, fontSize: 18 }} />实验</Box>}
           />
           <Tab
             value="theoretical"

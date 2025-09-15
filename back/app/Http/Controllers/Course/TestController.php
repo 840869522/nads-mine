@@ -22,6 +22,7 @@ use App\Utils\GlobalResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use App\Models\Experiment\ExperimentModel;
 use Illuminate\Support\Facades\Redis;
 
 use Illuminate\Support\Facades\Cache;
@@ -716,6 +717,8 @@ public function test_update(Request $request)
                     'start_time' => $user->c_start ? date('Y-m-d H:i:s', strtotime($user->c_start)) : null,
                     'end_time' => $user->c_end ? date('Y-m-d H:i:s', strtotime($user->c_end)) : null,
                     'submit_time' => $user->c_submit ? date('Y-m-d H:i:s', strtotime($user->c_submit)) : null,
+                    'c_objective_score' => $user->c_objective_score ?? 0,
+                    'c_subjective_score' => $user->c_subjective_score ?? 0,
                     'score' => $user->c_score ?? 0,
                     'correct_status' => $user->c_correct,
                     'correct_status_text' => $user->c_correct_text,
@@ -2675,18 +2678,18 @@ public function submit_papers(Request $request)
             'test_type' => $testType
         ]);
 
-        return response()->json([
-            'code' => 200,
-            'message' => '交卷成功',
-            'data' => [
-                'objective_score' => $objective_score,
-                'total_score' => $total_score,
-                'correct_count' => $correct_count,
-                'has_subjective_questions' => $hasSubjectiveQuestions,
-                'correct_status' => $correct_status,
-                'test_type' => $testType
-            ]
-        ]);
+        return $this->_response(
+    GlobalResponse::$HTTP_STATUS_OK_CODE,
+    '交卷成功',
+    [
+        'objective_score' => $objective_score,
+        'total_score' => $total_score,
+        'correct_count' => $correct_count,
+        'has_subjective_questions' => $hasSubjectiveQuestions,
+        'correct_status' => $correct_status,
+        'test_type' => $testType
+    ]
+);
     } catch (ValidationException $e) {
         Log::error('验证异常', ['errors' => $e->errors(), 'input' => $request->all()]);
         return response()->json([
@@ -3258,5 +3261,17 @@ public function batch_answers_name(Request $request)
         $hq = $redis->get('test');//获取
         $del = $redis->delete('test');//删除
     }
+
+// 修复后的代码
+public function _response($code = '', $message = 0, $data = [])
+{
+    // 保持原有的方法逻辑不变
+    return response()->json([
+        'code' => $code,
+        'message' => $message,
+        'data' => $data
+    ])->header('X-Content-Type-Options', 'nosniff');
+}
+
 
 }

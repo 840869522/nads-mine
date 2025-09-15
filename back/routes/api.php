@@ -129,8 +129,9 @@ Route::prefix("study")->group(function () {
         Route::delete('/{id}', [ResourceController::class, 'destroy']);
     });
 
-    Route::prefix('courses/{courseId}/experiments')->group(function () {
+    Route::prefix('experiments')->group(function () {
         Route::get('/', [ExperimentController::class, 'index']);
+        Route::get('/{experimentId}', [ExperimentController::class, 'show']);
         Route::post('/', [ExperimentController::class, 'store']);
         Route::put('/{experimentId}', [ExperimentController::class, 'update']);
         Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
@@ -138,6 +139,7 @@ Route::prefix("study")->group(function () {
             Route::get('/', [ExperimentResourceController::class, 'index']);
             Route::post('/', [ExperimentResourceController::class, 'store']);
             Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+            Route::post('/upload-multiple', [ExperimentResourceController::class, 'uploadMultiple']);
             Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
         });
     });
@@ -149,6 +151,8 @@ Route::prefix("study")->group(function () {
     // 新增资源查看路由
     Route::get('/view-resources/{c_resource_id}', [ResourceController::class, 'viewResource']);
     Route::get('/view-experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'viewResource']);
+    // 新增Office文档在线预览路由
+    Route::get('/experiment-resources/{c_resource_id}/office-preview', [ExperimentResourceController::class, 'officePreview']);
 });
 
 /**
@@ -381,4 +385,3 @@ Route::prefix('flag')->group(function () {
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
 });
-
