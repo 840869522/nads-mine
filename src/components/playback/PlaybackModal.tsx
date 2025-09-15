@@ -38,6 +38,36 @@ interface ApiResponse {
   [indexName: string]: HostData;
 }
 
+// --- Helper Functions ---
+function formatDuration(ms: number): string {
+  if (ms < 0) return "0s";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (seconds > 0 || parts.length === 0) {
+    // Show seconds if it's the only unit or if there are other units
+    if (parts.length > 0) {
+      parts.push(`${seconds}s`);
+    } else {
+      // For values less than a minute, show decimals
+      return `${(ms/1000).toFixed(2)}s`;
+    }
+  }
+
+  return parts.join(' ');
+}
+
+
 // --- Constants ---
 const MODAL_STYLE = {
   position: 'absolute' as 'absolute',
@@ -118,10 +148,8 @@ const PlaybackTerminal = ({ commands, timeMode, interval }: { commands: Command[
         };
 
         const prevCommand = commands[currentIndex - 1];
-        let delay = interval * 1000;
-        if (timeMode === 'real' && prevCommand.sleep_until_next_ms !== undefined) {
-            delay = prevCommand.sleep_until_next_ms;
-        }
+        // The delay is always determined by the previous command's sleep time.
+        const delay = prevCommand.sleep_until_next_ms ?? 0;
 
         timeoutRef.current = setTimeout(() => {
             const currentCommand = commands[currentIndex];
@@ -191,21 +219,19 @@ const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: st
                   <TableCell>时间戳</TableCell>
                   <TableCell>工作目录</TableCell>
                   <TableCell>命令</TableCell>
-                  <TableCell align="right">下一条延时 (s)</TableCell>
+                  <TableCell align="right">下一条延时</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.groups[groupName].map((cmd, idx) => {
-                  const intervalSeconds = cmd.sleep_until_next_ms !== undefined
-                    ? cmd.sleep_until_next_ms / 1000
-                    : 0;
+                  const interval = cmd.sleep_until_next_ms ?? 0;
 
                   return (
                     <TableRow key={idx}>
                       <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
                       <TableCell>{cmd.cwd}</TableCell>
                       <TableCell><code>{cmd.command}</code></TableCell>
-                      <TableCell align="right">{intervalSeconds.toFixed(2)}</TableCell>
+                      <TableCell align="right">{formatDuration(interval)}</TableCell>
                     </TableRow>
                   );
                 })}

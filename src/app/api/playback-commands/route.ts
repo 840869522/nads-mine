@@ -13,6 +13,8 @@ const PlaybackRequestSchema = z.object({
   fixedIntervalSeconds: z.number().default(1),
 });
 
+type PlaybackRequest = z.infer<typeof PlaybackRequestSchema>;
+
 // Schema for parsing logs from Elasticsearch
 const SnoopyLogSchema = z.object({
   timestamp: z.string(),
@@ -98,9 +100,9 @@ function filterNoiseCommands(logs: SnoopyLog[]): SnoopyLog[] {
 
 function groupAndProcessLogs(
   logs: SnoopyLog[],
-  groupBy: 'user' | 'session',
-  timeMode: 'fixed' | 'real'
+  requestBody: PlaybackRequest
 ) {
+  const { groupBy, timeMode, fixedIntervalSeconds } = requestBody;
   logs.sort((a, b) => a.ts.getTime() - b.ts.getTime());
 
   const groupingKey = groupBy === 'user' ? 'user' : 'sid';
@@ -123,15 +125,21 @@ function groupAndProcessLogs(
         command: log.command,
       };
 
-      if (timeMode === 'real' && index < groupLogs.length - 1) {
-        const nextLog = groupLogs[index + 1];
-        processedLog.sleep_until_next_ms = nextLog.ts.getTime() - log.ts.getTime();
+      let sleepMs = 0; // Default to 0 for the last command
+      if (index < groupLogs.length - 1) { // If not the last command
+        if (timeMode === 'real') {
+          const nextLog = groupLogs[index + 1];
+          sleepMs = nextLog.ts.getTime() - log.ts.getTime();
+        } else { // timeMode === 'fixed'
+          sleepMs = fixedIntervalSeconds * 1000;
+        }
       }
+      processedLog.sleep_until_next_ms = sleepMs;
 
       return processedLog;
     });
 
-    // Per user feedback, ensure the first command's delay is 0 for a better UX.
+    // Per user feedback, ensure the first command's delay is 0 for a better UX in real-time mode.
     if (timeMode === 'real' && processedGroups[key].length > 0) {
         processedGroups[key][0].sleep_until_next_ms = 0;
     }
@@ -152,7 +160,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body", details: validation.error.flatten() }, { status: 400 });
     }
 
-    const { indexNames, groupBy, filterNoise, timeMode } = validation.data;
+    const requestBody = validation.data;
 
     // Use the exact client options provided by the user for compatibility.
     const client = new Client({
@@ -169,7 +177,7 @@ export async function POST(request: Request) {
 
     const responseData: Record<string, any> = {};
 
-    for (const indexName of indexNames) {
+    for (const indexName of requestBody.indexNames) {
       try {
         const rawLogs = await fetchAllLogs(client, indexName);
 
@@ -178,7 +186,7 @@ export async function POST(request: Request) {
           .filter(result => result.success)
           .map(result => (result as { success: true; data: SnoopyLog }).data);
 
-        if (filterNoise) {
+        if (requestBody.filterNoise) {
           validatedLogs = filterNoiseCommands(validatedLogs);
         }
 
@@ -187,7 +195,7 @@ export async function POST(request: Request) {
             continue;
         }
 
-        const processedGroups = groupAndProcessLogs(validatedLogs, groupBy, timeMode);
+        const processedGroups = groupAndProcessLogs(validatedLogs, requestBody);
 
         responseData[indexName] = { status: 'success', groups: processedGroups };
 
