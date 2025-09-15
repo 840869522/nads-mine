@@ -135,4 +135,34 @@ class ContainersController extends Controller
             'createdAt' => date('c', $detail->getCreated() ? strtotime($detail->getCreated()) : time()),
         ]);
     }
+//    /**
+//     * ★ 新增的方法 ★
+//     * 检查当前认证的用户是否有权操作指定的容器。
+//     *
+//     * @param string $containerId 容器的 UUID
+//     * @param Request $request
+//     * @return \Illuminate\Http\JsonResponse
+//     */
+//    public function checkPermission(string $containerId, Request $request)
+//    {
+//        // 查找容器实例
+//        $containerInstance = SceneContainerInstance::where('c_container_id', $containerId)->first();
+//
+//        if (!$containerInstance) {
+//            return response()->json(['error' => '容器未找到'], 404);
+//        }
+//
+//        // 从请求中获取用户信息 (JWT)
+//        $auth = $request->header("Authorization", null);
+//        $jwtRes = JWTControll::decodeJWT($auth);
+//        $tokenData = $jwtRes["data"] ?? null;
+//
+//        // 调用模型方法来进行权限判断
+//        $canOperate = $containerInstance->canBeOperatedByUser((object)["token_data" => $tokenData]);
+//
+//        // 返回一个简单的布尔值结果
+//        return response()->json([
+//            'can_operate' => $canOperate
+//        ]);
+//    }
 }
