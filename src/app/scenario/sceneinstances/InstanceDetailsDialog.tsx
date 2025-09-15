@@ -11,9 +11,13 @@ import {
     IconButton,
     Tabs,
     Tab,
+    CircularProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import IngestControlDialog from '@/components/IngestControlDialog';
+import { PlaybackModal } from '@/components/playback/PlaybackModal';
+import { customFetch } from '@/utils/fetch';
+import { RunningInstance, VmInstance } from '@/types'; // Assuming types are in @/types
 
 // 导入新的标签页组件
 import ContainerInstancesTab from './ContainerInstancesTab'; // 替换旧的 docker.tsx
@@ -57,11 +61,50 @@ interface InstanceDetailsDialogProps {
 const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onClose, scenarioName, instanceId }) => {
     const [tabValue, setTabValue] = useState(0);
     const [ingestOpen, setIngestOpen] = useState(false);
+    const [isPlaybackModalOpen, setPlaybackModalOpen] = useState(false);
+    const [playbackHosts, setPlaybackHosts] = useState<{ name: string; indexName: string }[]>([]);
+    const [isFetchingHosts, setIsFetchingHosts] = useState(false);
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
     };
     
+    const handleOpenPlaybackModal = async () => {
+        if (!instanceId) return;
+        setIsFetchingHosts(true);
+        try {
+            const [containersRes, vmsRes] = await Promise.all([
+                customFetch(`/back/api/scenariosinstances/${instanceId}`),
+                customFetch(`/back/api/scenariosinstances/${instanceId}/vms`)
+            ]);
+
+            if (!containersRes.ok || !vmsRes.ok) {
+                throw new Error('Failed to fetch host details');
+            }
+
+            const containers: RunningInstance[] = await containersRes.json();
+            const vms: VmInstance[] = await vmsRes.json();
+
+            const containerHosts = containers.map(instance => ({
+                name: instance.name,
+                indexName: `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase()
+            }));
+
+            const vmHosts = vms.map(vm => ({
+                name: vm.name,
+                indexName: `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase()
+            }));
+
+            setPlaybackHosts([...containerHosts, ...vmHosts]);
+            setPlaybackModalOpen(true);
+        } catch (error) {
+            console.error("Error fetching hosts for playback:", error);
+            // Optionally, show an error to the user
+        } finally {
+            setIsFetchingHosts(false);
+        }
+    };
+
     // 当弹窗关闭时，重置回第一个标签页
     const handleClose = () => {
         onClose();
@@ -73,6 +116,15 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 场景实例详情: {scenarioName}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button
+                        size="small"
+                        variant="contained"
+                        onClick={handleOpenPlaybackModal}
+                        disabled={isFetchingHosts}
+                        startIcon={isFetchingHosts ? <CircularProgress size={14} color="inherit" /> : null}
+                    >
+                        指令回放
+                    </Button>
                     <Button size="small" variant="outlined" onClick={() => setIngestOpen(true)}>日志收集</Button>
                     <IconButton onClick={handleClose}><CloseIcon /></IconButton>
                 </Box>
@@ -108,6 +160,13 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 <Button onClick={handleClose}>关闭</Button>
             </DialogActions>
             <IngestControlDialog open={ingestOpen} onClose={() => setIngestOpen(false)} sceneInstanceId={instanceId} />
+            {isPlaybackModalOpen && (
+                <PlaybackModal
+                    open={isPlaybackModalOpen}
+                    onClose={() => setPlaybackModalOpen(false)}
+                    hosts={playbackHosts}
+                />
+            )}
         </Dialog>
     );
 };
