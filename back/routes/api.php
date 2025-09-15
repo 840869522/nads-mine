@@ -28,8 +28,7 @@ use App\Http\Controllers\Experiment\ExperimentResourceController;
 use App\Http\Controllers\Course\CoursePermissionController;
 use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
 use App\Http\Controllers\Test1\TestControllerNew;
-use App\Http\Controllers\ad\GuidanceController;
-use App\Http\Controllers\ad\OperationsController;
+use App\Http\Controllers\ad\VmController as AdVmController;
 use App\Http\Controllers\visualization\VisualizationController;
 
 /*
@@ -130,8 +129,9 @@ Route::prefix("study")->group(function () {
         Route::delete('/{id}', [ResourceController::class, 'destroy']);
     });
 
-    Route::prefix('courses/{courseId}/experiments')->group(function () {
+    Route::prefix('experiments')->group(function () {
         Route::get('/', [ExperimentController::class, 'index']);
+        Route::get('/{experimentId}', [ExperimentController::class, 'show']);
         Route::post('/', [ExperimentController::class, 'store']);
         Route::put('/{experimentId}', [ExperimentController::class, 'update']);
         Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
@@ -139,6 +139,7 @@ Route::prefix("study")->group(function () {
             Route::get('/', [ExperimentResourceController::class, 'index']);
             Route::post('/', [ExperimentResourceController::class, 'store']);
             Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+            Route::post('/upload-multiple', [ExperimentResourceController::class, 'uploadMultiple']);
             Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
         });
     });
@@ -150,6 +151,8 @@ Route::prefix("study")->group(function () {
     // 新增资源查看路由
     Route::get('/view-resources/{c_resource_id}', [ResourceController::class, 'viewResource']);
     Route::get('/view-experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'viewResource']);
+    // 新增Office文档在线预览路由
+    Route::get('/experiment-resources/{c_resource_id}/office-preview', [ExperimentResourceController::class, 'officePreview']);
 });
 
 /**
@@ -221,6 +224,8 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/inspect', [ContainersController::class, 'inspect']);
     Route::get('/{id}/binds', [ContainersController::class, 'binds']);
     Route::get('/{id}/info', [ContainersController::class, 'info']);
+    // 新增路由：检查容器操作权限
+    Route::get('/{containerId}/can-operate', [ContainersController::class, 'checkPermission']);
 });
 
 
@@ -296,16 +301,23 @@ Route::prefix('study')->group(function () {
  * 对应 AdConfigController 的 CRUD 操作。
  * URL: /api/ad-configs
  */
-// 获取演练配置列表 (GET /api/ad-configs)
+// 获取演练配置列表
 Route::get('/ad-configs', [AdConfigController::class, 'index']);
-// 创建一个新的演练配置 (POST /api/ad-configs)
+
+// 创建一个新的演练配置
 Route::post('/ad-configs', [AdConfigController::class, 'store']);
-// 获取单个演练配置的详情 (GET /api/ad-configs/{config})
-Route::get('/ad-configs/{config}', [AdConfigController::class, 'show']);
-// 更新一个演练配置 (PUT /api/ad-configs/{config})
-Route::put('/ad-configs/{config}', [AdConfigController::class, 'update']);
-// 删除一个演练配置 (DELETE /api/ad-configs/{config})
-Route::delete('/ad-configs/{config}', [AdConfigController::class, 'destroy']);
+
+// ★★★ 修复点 1 ★★★
+// 获取单个演练配置的详情 (将 {config} -> {adConfig})
+Route::get('/ad-configs/{adConfig}', [AdConfigController::class, 'show']);
+
+// ★★★ 修复点 2 ★★★
+// 更新一个演练配置 (将 {config} -> {adConfig})
+Route::put('/ad-configs/{adConfig}', [AdConfigController::class, 'update']);
+
+// ★★★ 修复点 3 ★★★
+// 删除一个演练配置 (将 {adconfig} -> {adConfig})
+Route::delete('/ad-configs/{adConfig}', [AdConfigController::class, 'destroy']);
 
 
 /**
@@ -314,7 +326,7 @@ Route::delete('/ad-configs/{config}', [AdConfigController::class, 'destroy']);
 // 启动演练 (简单状态变更)
 Route::post('/ad-configs/{adConfig}/start', [AdConfigController::class, 'start']);
 // 停止演练 (简单状态变更)
-Route::post('/ad-configs/{config}/stop', [AdConfigController::class, 'stop']);
+Route::post('/ad-configs/{adConfig}/stop', [AdConfigController::class, 'stop']);
 
 
 /**
@@ -325,80 +337,51 @@ Route::post('/ad-configs/{config}/stop', [AdConfigController::class, 'stop']);
 Route::prefix('ad')->group(function () {
 
     // --- 队伍管理 (team) ---
-    // 获取队伍列表 (GET /api/ad/team)
-    Route::get('/team', [TeamController::class, 'index']);
-    // 创建一个新队伍 (POST /api/ad/team)
-    Route::post('/team', [TeamController::class, 'store']);
-    // 获取单个队伍详情 (GET /api/ad/team/{team})
-    Route::get('/team/{team}', [TeamController::class, 'show']);
-    // 更新一个队伍 (PUT /api/ad/team/{team})
-    Route::put('/team/{team}', [TeamController::class, 'update']);
-    // 删除一个队伍 (DELETE /api/ad/team/{team})
-    Route::delete('/team/{team}', [TeamController::class, 'destroy']);
-    // 获取指定队伍参与的所有演练
-    Route::get('/team/{team}/drills', [TeamController::class, 'getDrills']);
+    // 所有与 /team 相关的路由都放在这个组内
+    Route::prefix('team')->group(function () {
+        Route::get('/', [TeamController::class, 'index']);
+        Route::post('/', [TeamController::class, 'store']);
+        Route::get('/{team}', [TeamController::class, 'show']);
+        Route::put('/{team}', [TeamController::class, 'update']);
+        Route::delete('/{team}', [TeamController::class, 'destroy']);
+        Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
+        Route::post('/{team}/users/{user:c_username}/toggle-ban', [TeamController::class, 'toggleUserBanStatus']);
+    }); // <-- team 路由组在这里结束
+        // --- 裁判管理 (referees) ---
+        Route::get('/referees', [RefereeController::class, 'index']);
+        Route::get('/available-referees', [RefereeController::class, 'availableUsers']);
 
-    // --- 裁判管理 (referees) ---
-    Route::get('/referees', [RefereeController::class, 'index']);
-    Route::get('/available-referees', [RefereeController::class, 'availableUsers']);
+        // --- 演练环境构建 ---
+        Route::post('/drills/{scenario}/start', [AdController::class, 'startDrill']);
 
-    // --- 演练环境构建 ---
-    Route::post('/ad/drills/{scenario}/start', [AdController::class, 'startDrill']);
+        // --- 辅助路由 ---
+        Route::get('/users', [UserController::class, 'getAllUser']);
 
-    // --- 辅助路由 ---
-    Route::get('/users', [UserController::class, 'getAllUser']);
-});
-//导调相关接口
-Route::prefix('guidance')->middleware('jwtcheck')->group(function () {
-    // 获取事件注入列表 (GET /api/guidance/injects)
-    Route::get('/injects', [GuidanceController::class, 'index']);
+        Route::prefix('vms')->group(function () {
+            $c = AdVmController::class; // 使用我们刚才定义的别名
 
-    // 创建一个新的事件注入 (POST /api/guidance/injects)
-    Route::post('/injects', [GuidanceController::class, 'store']);
+            // 示例：获取演练场景下的虚拟机列表（新逻辑）
+            // 最终 URL: GET /api/ad/vms/scene/{instance_id}
+            Route::get('/scene/{instance_id}', [$c, 'listVmsBySceneInstance']);
 
-    // 获取单个事件注入的详情 (GET /api/guidance/injects/{inject})
-    Route::get('/injects/{inject}', [GuidanceController::class, 'show']);
+            // 示例：对演练中的虚拟机执行操作（新逻辑）
+            // 最终 URL: POST /api/ad/vms/{vm_name}/actions/{action}
+            Route::post('/{vm_name}/actions/{action}', [$c, 'manageVmLifecycle']);
 
-    // 更新一个事件注入 (PUT /api/guidance/injects/{inject})
-    Route::put('/injects/{inject}', [GuidanceController::class, 'update']);
+            // 示例：获取演练中虚拟机的 Guacamole 连接信息（新逻辑）
+            // 最终 URL: GET /api/ad/vms/{vm_name}/guac
+            Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
 
-    // 删除一个事件注入 (DELETE /api/guidance/injects/{inject})
-    Route::delete('/injects/{inject}', [GuidanceController::class, 'destroy']);
-
-    // 执行一个事件注入 (POST /api/guidance/injects/{inject}/execute)
-    Route::post('/injects/{inject}/execute', [GuidanceController::class, 'execute']);
-});
-//运维相关接口
-Route::prefix('operations')->middleware('jwtcheck')->group(function () {
-    // 获取系统日志列表 (GET /api/operations/logs)
-    Route::get('/logs', [OperationsController::class, 'index']);
-
-    // 确认一条日志 (POST /api/operations/logs/{log}/acknowledge)
-    Route::post('/logs/{log}/acknowledge', [OperationsController::class, 'acknowledge']);
-
-    // 解决一条日志 (POST /api/operations/logs/{log}/resolve)
-    Route::post('/logs/{log}/resolve', [OperationsController::class, 'resolve']);
-});
-// Flag 相关接口路由组，添加JWT认证保护
-Route::prefix('flag')->middleware('jwtcheck')->group(function () {
-    // Flag 提交接口，添加限流保护
+        });
+    });
+// Flag 相关接口路由组
+Route::prefix('flag')->group(function () {
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
-
-    // 历史记录查询接口
     Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
-
-
-    // 获取场景实例列表接口
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
-
-    // 获取靶机实例列表接口
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
-
-    // 临时调试接口
-    //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
 });
 
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
 });
-
