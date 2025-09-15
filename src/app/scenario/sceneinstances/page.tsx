@@ -61,7 +61,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
 
     // 查看拓扑功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isTopologyEnabled = false; // 设置为 false 可以禁用查看拓扑功能
+    const isTopologyEnabled = true; // 设置为 false 可以禁用查看拓扑功能
 
     const fetchInstances = useCallback(async () => {
         setIsLoading(true);

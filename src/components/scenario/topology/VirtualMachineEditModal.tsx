@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import SearchableSelect from './SearchableSelect';
 import { TopologyNode, NodeConfig } from '../../../types';
-
+import { customFetch } from '@/utils/fetch';
 // 假设 VMImage 类型
 interface VMImage {
   id: string;
@@ -50,7 +50,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       setErrors({});
 
       // 获取虚拟机镜像列表
-      fetch("/back/api/vms/images")
+      customFetch("/back/api/vms/images")
         .then(res => res.json())
         .then(data => {
             if (Array.isArray(data)) {

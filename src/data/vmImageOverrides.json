@@ -291,5 +291,18 @@
   "v_tar_RDPAttack.qcow2": {
     "osType": "win7",
     "description": "RDP远程溢出漏洞攻击靶机镜像"
+  },
+  "SecurityOnion.qcow2": {},
+  "v_att_IPCremote_2.qcow2": {
+    "osType": "win7_1",
+    "description": "IPC植入远控攻击镜像"
+  },
+  "v_tar_IPCremote_2.qcow2": {
+    "osType": "win2003",
+    "description": "IPC植入远控靶机镜像"
+  },
+  "v_tar_rpcRemote.qcow2": {
+    "osType": "win2003",
+    "description": "WindowsRPC溢出漏洞探测靶机镜像"
   }
 }

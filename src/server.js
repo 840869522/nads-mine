@@ -155,9 +155,6 @@ app.prepare().then(() => {
             // WebSocket 代理到 Workerman 服务器
             console.log('[upgrade] WebSocket proxy to Workerman:', req.url);
             websocketProxy.upgrade(req, socket, head);
-        } else {
-            // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
-            console.log('[upgrade] non-guac ws →', req.url);
         }
     });
     const io = new Server(mainHttpServer, { path: '/api/terminal' });

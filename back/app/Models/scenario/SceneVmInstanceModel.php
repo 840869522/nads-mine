@@ -42,6 +42,19 @@ class SceneVmInstanceModel extends Model
     public $timestamps = true;
 
     /**
+     * 可以批量赋值的属性。
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'c_vm_id',
+        'c_scene_instances_id',
+        'c_vm_name',
+        'c_ip',
+        'c_flag'
+    ];
+
+    /**
      * 获取此虚拟机实例所属的场景实例。
      */
     public function sceneInstance()

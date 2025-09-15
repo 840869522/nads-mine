@@ -18,7 +18,7 @@ import VirtualMachineEditModal from './VirtualMachineEditModal'; // 新增：导
 import Card from '../../ui/Card';
 import { Backdrop, CircularProgress } from '@mui/material';
 import SaveScenarioModal from './SaveScenarioModal';//
-
+import { customFetch } from '@/utils/fetch';
 // ... generateId, TopologyState, Reducer, initial state 等代码保持不变 ...
 const generateId = (prefix: string = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
@@ -41,6 +41,15 @@ const canDirectlyLinkNodes = (a?: TopologyNode, b?: TopologyNode): boolean => {
     return !!(a && b && (a.type === 'switch' || b.type === 'switch'));
 };
 
+// 新增：限制规则 - 同一个容器或虚拟机只能连接一个交换机（即仅允许一条边）
+const isContainerOrVM = (n?: TopologyNode): boolean => !!n && (n.type === 'container' || n.type === 'virtual_machine');
+const wouldViolateSingleSwitchRule = (a: TopologyNode | undefined, b: TopologyNode | undefined, edges: TopologyEdge[]): boolean => {
+    if (!a || !b) return true;
+    const aHasEdge = isContainerOrVM(a) && edges.some(e => e.source === a.id || e.target === a.id);
+    const bHasEdge = isContainerOrVM(b) && edges.some(e => e.source === b.id || e.target === b.id);
+    return aHasEdge || bHasEdge;
+};
+
 // 函数: 这是一个纯函数，是状态管理的核心。它接收当前的状态 (state)
 // 和一个动作 (action)，然后根据动作的类型（如 'ADD_NODE', 'MOVE_NODE'）
 // 返回一个全新的状态对象。这种模式使得状态变更的逻辑被集中管理，非常清晰且易于调试。
@@ -57,6 +66,10 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
                 // 非法边：不添加
                 return { ...state, linkingState: null, selectedElement: null };
             }
+            // 限制：同一容器/虚拟机仅允许一条到交换机的连接
+            if (wouldViolateSingleSwitchRule(src, tgt, state.edges)) {
+                return { ...state, linkingState: null, selectedElement: null };
+            }
             return { ...state, edges: [...state.edges, newEdge], linkingState: null, selectedElement: null };
         }
         case 'UPDATE_EDGE_CONFIG': { const { edgeId, newConfig } = action.payload; return { ...state, edges: state.edges.map(e => e.id === edgeId ? { ...e, config: newConfig } : e), }; }
@@ -69,11 +82,17 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'START_LINKING': return { ...state, linkingState: { startNodeId: action.payload.startNodeId } };
         case 'LOAD_TOPOLOGY': {
             const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData;
-            const filtered = loadedEdges.filter(e => {
+            // 顺序过滤：先满足“至少一端为交换机”，再确保每个容器/虚拟机最多仅保留一条边
+            const filtered: TopologyEdge[] = [];
+            for (const e of loadedEdges) {
                 const s = loadedNodes.find(n => n.id === e.source);
                 const t = loadedNodes.find(n => n.id === e.target);
-                return canDirectlyLinkNodes(s, t);
-            });
+                if (!canDirectlyLinkNodes(s, t)) continue;
+                const violates = (isContainerOrVM(s) && filtered.some(x => x.source === s!.id || x.target === s!.id))
+                              || (isContainerOrVM(t) && filtered.some(x => x.source === t!.id || x.target === t!.id));
+                if (violates) continue;
+                filtered.push(e);
+            }
             return { ...initialTopologyState, nodes: loadedNodes, edges: filtered };
         }
         default: return state;
@@ -214,6 +233,11 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                         return;
                     }
 
+                    // 前置限制：容器/虚拟机仅能连接一个交换机
+                    if (wouldViolateSingleSwitchRule(sourceNode, targetNode, edges)) {
+                        return;
+                    }
+
                     const edgeExists = edges.some(edge =>
                         (edge.source === sourceNode.id && edge.target === targetNode.id) ||
                         (edge.source === targetNode.id && edge.target === sourceNode.id)
@@ -279,6 +303,21 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     const handleUndo = () => { const lastAction = undoStack[undoStack.length - 1]; if (!lastAction) return; switch (lastAction.type) { case 'ADD_NODE': const addedNode = lastAction.payload.node as TopologyNode; dispatch({ type: 'DELETE_NODE', payload: { nodeId: addedNode.id } }); onDeleteNode(addedNode.id); break; case 'DELETE_NODE': const deletedNode = lastAction.payload.deletedNode as TopologyNode; dispatch({ type: 'ADD_NODE', payload: { node: deletedNode } }); onAddNode(deletedNode); lastAction.payload.deletedEdges.forEach((edge: TopologyEdge) => dispatch({ type: 'ADD_EDGE', payload: { edge } })); break; case 'MOVE_NODE': dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastAction.payload.nodeId, newX: lastAction.payload.oldX, newY: lastAction.payload.oldY } }); break; case 'UPDATE_NODE_CONFIG': const oldNodeConfig = nodes.find(n => n.id === lastAction.payload.nodeId); if (oldNodeConfig) { dispatch({ type: 'UPDATE_NODE_CONFIG', payload: { nodeId: lastAction.payload.nodeId, newConfig: lastAction.payload.oldConfig, newLabel: lastAction.payload.oldLabel } }); onUpdateNode({ ...oldNodeConfig, config: lastAction.payload.oldConfig, label: lastAction.payload.oldLabel }); } break; case 'ADD_EDGE': dispatch({ type: 'DELETE_EDGE', payload: { edgeId: (lastAction.payload.edge as TopologyEdge).id } }); break; case 'DELETE_EDGE': dispatch({ type: 'ADD_EDGE', payload: { edge: lastAction.payload.deletedEdge } }); break; case 'UPDATE_EDGE_CONFIG': dispatch({ type: 'UPDATE_EDGE_CONFIG', payload: { edgeId: lastAction.payload.edgeId, newConfig: lastAction.payload.oldConfig } }); break; default: return; } setUndoStack(prev => prev.slice(0, -1)); setRedoStack(prev => [lastAction, ...prev]); };
     const handleRedo = () => { const lastRedoAction = redoStack[0]; if (!lastRedoAction) return; if (lastRedoAction.type === 'MOVE_NODE') { dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastRedoAction.payload.nodeId, newX: lastRedoAction.payload.newX, newY: lastRedoAction.payload.newY } }); } else { dispatch(lastRedoAction); } if (lastRedoAction.type === 'ADD_NODE') onAddNode(lastRedoAction.payload.node); else if (lastRedoAction.type === 'DELETE_NODE') onDeleteNode(lastRedoAction.payload.nodeId); else if (lastRedoAction.type === 'UPDATE_NODE_CONFIG') { const updatedNode = nodes.find(n => n.id === lastRedoAction.payload.nodeId); if (updatedNode) onUpdateNode({ ...updatedNode, config: lastRedoAction.payload.newConfig, label: lastRedoAction.payload.newLabel }); } setRedoStack(prev => prev.slice(1)); setUndoStack(prev => [...prev, lastRedoAction]); };
 
+    // 场景级策略开关
+    const [collectionEnabled, setCollectionEnabled] = useState(false);
+    const [simulationEnabled, setSimulationEnabled] = useState(false);
+    const [mirroringEnabled, setMirroringEnabled] = useState(false);
+
+    const handleToggleCollection = useCallback(() => {
+        setCollectionEnabled(prev => !prev);
+    }, []);
+    const handleToggleSimulation = useCallback(() => {
+        setSimulationEnabled(prev => !prev);
+    }, []);
+    const handleToggleMirroring = useCallback(() => {
+        setMirroringEnabled(prev => !prev);
+    }, []);
+
     // 3. 原来的 handleSave 现在只负责打开弹窗
     const handleSave = () => {
         // 如果是实例模式，直接提交到实例更新接口；否则打开保存场景弹窗
@@ -324,7 +363,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         const method = isEditing ? 'PUT' : 'POST';
 
         try {
-            const response = await fetch(url, {
+            const response = await customFetch(url, {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -359,7 +398,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         try {
             setIsSaving(true);
             const topologyData: TopologyData = { nodes, edges };
-            const response = await fetch(`/back/api/scenariosinstances/${sceneInstanceId}/scene-config`, {
+            const response = await customFetch(`/back/api/scenariosinstances/${sceneInstanceId}/scene-config`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -422,6 +461,12 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 canRedo={redoStack.length > 0}
                 onSave={handleSave} // 在实例模式下直接保存并展示等待动画
                 isSaving={isSaving}
+                collectionEnabled={collectionEnabled}
+                onToggleCollection={handleToggleCollection}
+                simulationEnabled={simulationEnabled}
+                onToggleSimulation={handleToggleSimulation}
+                mirroringEnabled={mirroringEnabled}
+                onToggleMirroring={handleToggleMirroring}
                 // onExport={handleExport}
                 // onImport={handleImport}
                 onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}

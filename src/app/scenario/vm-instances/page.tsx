@@ -236,7 +236,7 @@ export default function VmPage() {
                 headerName: 'vCPU',
                 width: 80,
                 renderCell: (p) => (
-                    <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu.count}</VmInfoCell>
+                    <VmInfoCell id={p.row.id} width={30}>{d => d.vcpu?.count ?? '-'}</VmInfoCell>
                 ),
             },
             {
@@ -244,7 +244,7 @@ export default function VmPage() {
                 headerName: '内存(MB)',
                 width: 100,
                 renderCell: (p) => (
-                    <VmInfoCell id={p.row.id} width={40}>{d => d.vram.total_mb}</VmInfoCell>
+                    <VmInfoCell id={p.row.id} width={40}>{d => d.vram?.total_mb ?? '-'}</VmInfoCell>
                 ),
             },
             {
@@ -264,7 +264,7 @@ export default function VmPage() {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 160,
+                width: 200,
                 renderCell: (params) => {
                     const vm = params.row as VmInstance;
                     const { data } = useVmInfo(vm.id);
@@ -276,10 +276,10 @@ export default function VmPage() {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    {/*<IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
+                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading}>
                                         <PauseIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
+                                    {/*<IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading}>
                                         <StopIcon fontSize="small" color="error" />
                                     </IconButton>*/}
                                     <IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading}>
@@ -504,14 +504,14 @@ export default function VmPage() {
                 open={Boolean(actionAnchor.anchor)}
                 onClose={() => setActionAnchor({ anchor: null, id: null })}
             >
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
+                {/*<MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
                     <SshIcon fontSize="small" sx={{ mr: 1 }} />
                     SSH
                 </MenuItem>
                 <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'rdp'); setActionAnchor({ anchor: null, id: null }); }}>
                     <RdpIcon fontSize="small" sx={{ mr: 1 }} />
                     RDP
-                </MenuItem>
+                </MenuItem>*/}
                 <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'vnc'); setActionAnchor({ anchor: null, id: null }); }}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
                     VNC 控制台

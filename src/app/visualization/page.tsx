@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Header from "@/app/visualization/header";
 // import Battlefield from "./battlefield";
 
@@ -13,37 +13,73 @@ if (typeof window !== 'undefined') {
     ;(window as any).CESIUM_BASE_URL = '/mapdata/cesium/';
 }
 
-// async function getVmsByAdConfigId(adConfigId: string) {
-//   try {
-//     const response = await axios.post('back/api/ad/vms', { adConfigId });
-//     if (response.data.status === 'success') {
-//       return response.data.data; // 直接返回数组
-//     } else {
-//       console.error('Error fetching VMs:', response.data.message);
-//       return [];
-//     }
-//   } catch (err) {
-//     console.error('Request failed:', err);
-//     return [];
-//   }
-// }
+// FPS 组件
+function Fps() {
+  const [fps, setFps] = useState(0);
+  const frameCount = useRef(0);
+  const lastFpsUpdate = useRef(performance.now());
+
+  useEffect(() => {
+    let animationId: number;
+
+    const update = (time: number) => {
+      frameCount.current += 1;
+      const delta = time - lastFpsUpdate.current;
+
+      if (delta >= 1000) {
+        setFps(Math.round((frameCount.current * 1000) / delta));
+        frameCount.current = 0;
+        lastFpsUpdate.current = time;
+      }
+
+      animationId = requestAnimationFrame(update);
+    };
+
+    animationId = requestAnimationFrame(update);
+
+    return () => cancelAnimationFrame(animationId);
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 10,
+        right: 10,
+        padding: '5px 10px',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        color: '#fff',
+        fontFamily: 'monospace',
+        borderRadius: 4,
+        zIndex: 9999,
+      }}
+    >
+      FPS: {fps}
+    </div>
+  );
+}
 
 const ADPage: React.FC = () => {
-    let id:string = localStorage.getItem('instance_id');
-        if (id !== null) {
-            sessionStorage.setItem('instance_id', id); // 存到每个标签页独立的 sessionStorage
-            localStorage.removeItem('instance_id');           // 用完就删
+    const [id, setId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const storedId = localStorage.getItem('instance_id');
+            if (storedId !== null) {
+                sessionStorage.setItem('instance_id', storedId);
+                localStorage.removeItem('instance_id');
+            }
+            const sessionId = sessionStorage.getItem('instance_id');
+            setId(sessionId);
+            websocketClient.connect();
         }
-    id = sessionStorage.getItem('instance_id') ;
-    useEffect(()=>{
-        websocketClient.connect();
-        
-    })
+    },[]);
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
-            <Header/>
+            <Header />
             {/* <Battlefield/> */}
             <ThreeDimensional id={id ?? ''}/>
+            <Fps />
         </div>
     );
 }

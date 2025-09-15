@@ -548,7 +548,11 @@ XML;
         }
         
         // d. 设置网络模式为 none，这是后续手动连接的关键
-        // $command[] = '--network=none';
+        // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
+        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1'];
+        if (!in_array($options['image'], $skipNetworkImages)) {
+            $command[] = '--network=none';
+        }
 
         // e. 添加镜像名称（必须是命令的最后一部分）
         if (empty($options['image'])) {
@@ -697,6 +701,32 @@ XML;
     $process->mustRun(); // 如果失败则抛出异常
 
     Log::info("Windows VM creation script (win2003) for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+}
+
+    public function createVmWin10(array $options): void
+{
+    // 指向新的 win10 脚本
+    $scriptPath = app_path('RunTool/vmscript/newvm_win10.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'], 
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Windows VM creation shell script (win10): ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
+    $process->mustRun(); // 如果失败则抛出异常
+
+    Log::info("Windows VM creation script (win10) for vm '{$options['vm_name']}' executed successfully.", [
         'output' => $process->getOutput()
     ]);
 }

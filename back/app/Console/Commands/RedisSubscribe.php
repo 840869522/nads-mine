@@ -38,33 +38,52 @@ class RedisSubscribe extends Command
      */
     public function handle()
     {
-        $this->info("开始订阅 Redis 消息...");
+        $this->info("[" . now() . "] [INFO] 开始订阅 Redis 消息...");
+
+        // 开启一个定时心跳，避免空闲断开
+        // pcntl_async_signals(true);
+        // pcntl_signal(SIGALRM, function () {
+        //     try {
+        //         Redis::connection()->ping();
+        //         logger()->debug("Redis 心跳 PING 成功");
+        //     } catch (\Throwable $e) {
+        //         logger()->warning("Redis 心跳失败: " . $e->getMessage());
+        //     }
+        //     pcntl_alarm(30); // 30 秒后再触发一次
+        // });
+        // pcntl_alarm(30);
 
         while (true) {
             try {
                 Redis::psubscribe(['flag_submissions_channel'], function ($message, $channel) {
                     try {
-                        $this->info("收到 {$channel} 消息: {$message}");
+                        $this->info("[" . now() . "] [INFO] 收到 {$channel} 消息: {$message}");
 
+                        $redisData = json_decode($message, true);
                         // 转发给 Workerman
                         $data = [
-                            'type'    => 'flag-log',
-                            'message' => $message
+                            'type' => 'flag-log',
+                            'timer' => (string) (int)(microtime(true) * 1000),
+                            'data' => $redisData
                         ];
 
                         $this->workermanService->send($data);
 
-                        logger()->info("消息处理成功", $data);
+                        $this->info("[" . now() . "] [INFO] 消息处理成功", $data);
                     } catch (Throwable $e) {
-                        logger()->error("处理消息失败: " . $e->getMessage(), [
+                        $this->error("[" . now() . "] [ERROR] 处理消息失败: " . $e->getMessage(), [
                             'channel' => $channel,
                             'message' => $message,
                         ]);
                     }
                 });
             } catch (Throwable $e) {
-                logger()->warning("Redis订阅异常，3秒后重连", ['message' => $e->getMessage()]);
-                sleep(3);
+                try {
+                    Redis::connection()->ping();
+                    // $this->info("[" . now() . "] [INFO] Redis 心跳 PING 成功");
+                } catch (\Throwable $e) {
+                    $this->error("[" . now() . "] [ERROR] Redis 心跳失败: " . $e->getMessage());
+                }
             }
         }
 

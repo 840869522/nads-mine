@@ -469,7 +469,7 @@ class FlagSubmissionController extends BaseController
         $instanceId = $request->input('instance_id');
 
         try {
-            // 3. 动态构建查询
+            // 3. 动态构建查询 - 明确指定需要加载的字段
             $query = FlagSubmissionModel::query()
                 ->select([
                     'c_submission_id',
@@ -481,7 +481,10 @@ class FlagSubmissionController extends BaseController
                     'c_container_instance_id',
                     'c_vm_instance_id',
                 ])
-                ->with(['containerInstance', 'vmInstance'])
+                ->with([
+                    'containerInstance:c_container_id,c_container_name,c_ip,c_scene_instances_id',
+                    'vmInstance:c_vm_id,c_vm_name,c_ip,c_scene_instances_id'
+                ])
                 ->orderBy('c_submitted_at', 'desc');
 
             // 根据提交者范围筛选
@@ -509,16 +512,40 @@ class FlagSubmissionController extends BaseController
 
             $history = $query->get();
 
-            // 4. 数据格式化
+            // 4. 数据格式化 - 显示靶机IP而不是ID
             $formattedHistory = $history->map(function ($record) {
                 $instanceId = $record->c_container_instance_id ?? $record->c_vm_instance_id;
                 $instanceType = $record->c_container_instance_id ? 'docker' : 'vm';
-
+                
+                // 获取靶机IP地址和名称
+                $instanceIp = 'Unknown IP';
+                $instanceName = 'Unknown Instance';
                 $sceneId = null;
+                
                 if ($record->containerInstance) {
+                    $instanceIp = $record->containerInstance->c_ip ?? 'Unknown IP';
+                    $instanceName = $record->containerInstance->c_container_name ?? 'Unknown Container';
                     $sceneId = $record->containerInstance->c_scene_instances_id;
+                    
+                    // 调试日志
+                    Log::info('Container Instance Debug', [
+                        'container_id' => $record->c_container_instance_id,
+                        'container_data' => $record->containerInstance ? $record->containerInstance->toArray() : 'null',
+                        'extracted_ip' => $instanceIp,
+                        'extracted_name' => $instanceName
+                    ]);
                 } elseif ($record->vmInstance) {
+                    $instanceIp = $record->vmInstance->c_ip ?? 'Unknown IP';
+                    $instanceName = $record->vmInstance->c_vm_name ?? 'Unknown VM';
                     $sceneId = $record->vmInstance->c_scene_instances_id;
+                    
+                    // 调试日志
+                    Log::info('VM Instance Debug', [
+                        'vm_id' => $record->c_vm_instance_id,
+                        'vm_data' => $record->vmInstance ? $record->vmInstance->toArray() : 'null',
+                        'extracted_ip' => $instanceIp,
+                        'extracted_name' => $instanceName
+                    ]);
                 }
 
                 return [
@@ -528,7 +555,9 @@ class FlagSubmissionController extends BaseController
                     'c_is_correct' => $record->c_is_correct,
                     'c_attempt_count' => $record->c_attempt_count,
                     'c_points_earned' => $record->c_points_earned,
-                    'instance_id' => $instanceId,
+                    'instance_id' => $instanceId, // 保留ID用于内部逻辑
+                    'instance_ip' => $instanceIp, // 新增：显示IP地址
+                    'instance_name' => $instanceName, // 新增：显示实例名称
                     'instance_type' => $instanceType,
                     'c_scene_instances_id' => $sceneId,
                 ];
@@ -617,12 +646,13 @@ class FlagSubmissionController extends BaseController
             // 3. 获取Docker容器实例（只返回有flag的目标靶机）
             $containerInstances = SceneContainerInstanceModel::where('c_scene_instances_id', $sceneId)
                 ->whereNotNull('c_flag') // 只返回有flag的目标靶机
-                ->select('c_container_id as id', 'c_container_name as name', 'c_flag')
+                ->select('c_container_id as id', 'c_container_name as name', 'c_flag', 'c_ip')
                 ->get()
                 ->map(function ($instance) {
                     return [
                         'id' => $instance->id,
                         'name' => $instance->name,
+                        'ip' => $instance->c_ip ?? 'Unknown IP', // 新增：显示IP地址
                         'type' => 'docker',
                         'has_flag' => !empty($instance->c_flag)
                     ];
@@ -631,12 +661,13 @@ class FlagSubmissionController extends BaseController
             // 4. 获取VM实例（只返回有flag的目标靶机）
             $vmInstances = SceneVmInstanceModel::where('c_scene_instances_id', $sceneId)
                 ->whereNotNull('c_flag') // 只返回有flag的目标靶机
-                ->select('c_vm_id as id', 'c_vm_name as name', 'c_flag')
+                ->select('c_vm_id as id', 'c_vm_name as name', 'c_flag', 'c_ip')
                 ->get()
                 ->map(function ($instance) {
                     return [
                         'id' => (string)$instance->id,
                         'name' => $instance->name,
+                        'ip' => $instance->c_ip ?? 'Unknown IP', // 新增：显示IP地址
                         'type' => 'vm',
                         'has_flag' => !empty($instance->c_flag)
                     ];
@@ -683,10 +714,10 @@ class FlagSubmissionController extends BaseController
                     ->select('c_scene_instances_id', 'c_status', 'c_username', 'created_at')
                     ->first(),
                 'containers' => SceneContainerInstanceModel::where('c_scene_instances_id', $sceneId)
-                    ->select('c_container_id', 'c_scene_instances_id', 'c_flag', 'c_container_name')
+                    ->select('c_container_id', 'c_scene_instances_id', 'c_flag', 'c_container_name', 'c_ip')
                     ->get(),
                 'vms' => SceneVmInstanceModel::where('c_scene_instances_id', $sceneId)
-                    ->select('c_vm_id', 'c_scene_instances_id', 'c_flag', 'c_vm_name')
+                    ->select('c_vm_id', 'c_scene_instances_id', 'c_flag', 'c_vm_name', 'c_ip')
                     ->get(),
                 'all_scenes' => SceneInstanceModel::select('c_scene_instances_id', 'c_status', 'c_username', 'created_at')
                     ->orderBy('created_at', 'desc')

@@ -82,12 +82,22 @@ echo "FOREGROUND: Creating differential image using backing file..."
 qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 "$DESTINATION_IMAGE_PATH" 50G
 echo "FOREGROUND: Differential image created."
 
+# 根据镜像类型设置内存大小
+# SecurityOnion镜像使用8GB内存，其他镜像使用4GB内存
+if [[ "$IMAGE_BASE_NAME" == *"SecurityOnion"* ]]; then
+    RAM_SIZE=8192
+    echo "DEBUG: SecurityOnion image detected, setting RAM to 8GB"
+else
+    RAM_SIZE=4096
+    echo "DEBUG: Standard image detected, setting RAM to 4GB"
+fi
+
 # 執行 virt-install 命令
 echo "FOREGROUND: Starting virt-install..."
 virt-install --virt-type kvm \
   --network network=$6,model=virtio \
   --name "$7" \
-  --ram=4096 \
+  --ram=$RAM_SIZE \
   --vcpus=4 \
   --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
   --disk path="$INSTANCE_DIR/config.iso",device=cdrom \

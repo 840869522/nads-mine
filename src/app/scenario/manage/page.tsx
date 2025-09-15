@@ -203,7 +203,7 @@ const ScenarioManagementPage: React.FC = () => {
             }
 
             // 调用 Next.js API 路由将场景保存为预置场景文件
-            const response = await fetch(`/api/scenarios/${scenario.id}/export`, {
+            const response = await customFetch(`/api/scenarios/${scenario.id}/export`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
-import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
+import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { websocketClient } from "@/utils/websocket";
 
@@ -28,7 +28,15 @@ function createSpaceship(
             const segments = positions.length / 3;
 
             // 随机选择圆环上的一个顶点
-            const vertexIndex = Math.floor(Math.random() * segments);
+            let vertexIndex: number;
+
+            if (idx === 1) {
+                // 取前半段 [0, Math.floor(segments / 2))
+                vertexIndex = Math.floor(Math.random() * Math.floor(segments / 2));
+            } else {
+                // 取后半段 [Math.floor(segments / 2), segments)
+                vertexIndex = Math.floor(Math.random() * Math.ceil(segments / 2)) + Math.floor(segments / 2);
+            }
 
             const x = positions[vertexIndex * 3];
             const y = positions[vertexIndex * 3 + 1];
@@ -39,10 +47,6 @@ function createSpaceship(
             // 朝向圆心
             spaceship.lookAt(0, 0, 0);
 
-            // 模型修正方向
-            if(idx == 1)
-                spaceship.rotateY(Math.PI);
-
             // 将飞船添加到场景中
             scene.add(spaceship);
 
@@ -52,9 +56,97 @@ function createSpaceship(
     });
 }
 
+function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Object3D) {
+    const start = startNode.position.clone();
+    const end = endNode.position.clone();
+
+    const steps = 100; // 分段数
+    const height = 80 + Math.random() * 50; // 抛物线顶点高度
+
+    // 二次贝塞尔控制点
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    mid.y += height;
+
+    // 生成完整轨迹数组
+    const trajectory: THREE.Vector3[] = [];
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const point = start.clone().multiplyScalar((1 - t) ** 2)
+            .add(mid.clone().multiplyScalar(2 * (1 - t) * t))
+            .add(end.clone().multiplyScalar(t ** 2));
+        trajectory.push(point);
+    }
+
+    // 初始化 geometry，把所有点放进去
+    const geometry = new THREE.BufferGeometry().setFromPoints(trajectory);
+    geometry.setDrawRange(0, 2);
+
+    const material = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 1,
+    });
+
+    const line = new THREE.Line(geometry, material);
+    scene.add(line);
+
+    const startTime = performance.now();
+    const duration = 1000; // 2s 发射完成
+
+    function animate() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1); // 0 ~ 1
+        const progress = Math.floor(t * steps);
+
+        geometry.setDrawRange(0, progress + 1);
+
+        if (t < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            setTimeout(() => {
+                scene.remove(line);
+                geometry.dispose();
+                material.dispose();
+            }, 1000);
+        }
+    }
+
+    animate();
+}
+
+interface VMItem {
+    name: string;
+    ip: string;
+}
+
+interface VMResult {
+    trueTargetList: VMItem[];
+    falseTargetList: VMItem[];
+}
+
+/**
+ * 获取 VM 列表并拆分 trueList / falseList
+ */
+async function fetchVMs(instanceId: string): Promise<VMResult> {
+    try {
+        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
+
+        const json = await res.json();
+        // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
+        return json.data as VMResult;
+    } catch (err) {
+        console.error("请求接口出错:", err);
+        // 异常时返回空列表，保证类型安全
+        return { trueTargetList: [], falseTargetList: [] };
+    }
+}
+
 export default function ThreeDimensional({ id }: { id: string }){
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
+    const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
+
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
@@ -73,7 +165,6 @@ export default function ThreeDimensional({ id }: { id: string }){
 
     useEffect(() => {
         if (!containerRef.current) return;
-        console.log(id);
         
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
@@ -233,20 +324,50 @@ export default function ThreeDimensional({ id }: { id: string }){
 
         scene.add(rings);  // 将所有圆环添加到场景中
 
-        const redSpaceships: THREE.Object3D[] = [];
-        const blueSpaceships: THREE.Object3D[] = [];
+        const redSpaceships: { ip: string; object: THREE.Object3D }[] = [];
+        const blueSpaceships: { ip: string; object: THREE.Object3D }[] = [];
 
-        for (let i = 0; i < 3; i++) {
-            createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2).then((spaceship) => {
-                redSpaceships.push(spaceship);
-            });
+        async function fetchData() {
+            const result = await fetchVMs(id);
+            setVms(result);
+            for (let i = 0; i < result.falseTargetList.length; i++) {
+                createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
+                    redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
+                });
+            }
+
+            for (let i = 0; i < result.trueTargetList.length; i++) {
+                createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
+                    blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                });
+            }
+        }
+        if(id !== ""){
+             fetchData();
         }
 
-        for (let i = 0; i < 4; i++) {
-            createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                blueSpaceships.push(spaceship);
-            });
-        }
+        let shootingPaused = false;
+
+        document.addEventListener("visibilitychange", () => {
+            shootingPaused = document.hidden;
+        });
+
+
+        setTimeout(function shootLoop() {
+            if(redSpaceships.length > 0 && blueSpaceships.length > 0){
+                const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
+                const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+
+                if (red && blue && !shootingPaused) {
+                    shootRay(scene, red.object, blue.object);
+                }
+
+                // 下次间隔：5~10 秒
+                const nextDelay = (5 + Math.random() * 5) * 1000;
+                setTimeout(shootLoop, nextDelay);
+            }
+        }, (5 + Math.random() * 10) * 1000);
+
 
         // ---------- 动画 ----------
         const clock = new THREE.Clock();
@@ -280,22 +401,29 @@ export default function ThreeDimensional({ id }: { id: string }){
         };
         animate();
 
+        let timer = "";
+
         const handleMessage = (data: any) => {
             try {
                 const msg = typeof data === "string" ? JSON.parse(data) : data;
-                if (msg.type === "flag-log" && msg.message.scene_instance_id === id) {
+                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === id) {
+                    timer = msg.timer;
                     const now = new Date();
                     const hours = now.getHours().toString().padStart(2, '0');
                     const minutes = now.getMinutes().toString().padStart(2, '0');
                     const seconds = now.getSeconds().toString().padStart(2, '0');
 
+                    let logMessage : string;
+                    logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+
                     let newLog: LogInfo = {
                         logId: Date.now(),
                         logTime: `${hours}:${minutes}:${seconds}`,
-                        logContent: msg.message.message
+                        logContent: logMessage
                     };
 
-                    if(msg.message.success){
+                    if(msg.data.success){
                         setRedTeamState(prev => ({
                             ...prev,
                             logInfo: [...prev.logInfo, newLog]
@@ -321,7 +449,7 @@ export default function ThreeDimensional({ id }: { id: string }){
             }
             websocketClient.offMessage(handleMessage);
         };
-    }, []);
+    }, [id]);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
@@ -364,16 +492,16 @@ const blueTeamInfos: TeamInfo[] = [
 ]
 
 const blueLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:45:01',
-        logContent: '检测到异常网络流量，已启动深度分析'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:33',
-        logContent: '成功阻止针对Web服务器的SQL注入攻击'
-    },
+    // {
+    //     logId: 1,
+    //     logTime: '12:45:01',
+    //     logContent: '检测到异常网络流量，已启动深度分析'
+    // },
+    // {
+    //     logId: 2,
+    //     logTime: '12:42:33',
+    //     logContent: '成功阻止针对Web服务器的SQL注入攻击'
+    // },
 ]
 
 const redTeamInfos: TeamInfo[] = [
@@ -400,34 +528,34 @@ const redTeamInfos: TeamInfo[] = [
 ]
 
 const redLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 3,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 4,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 5,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 6,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
+    // {
+    //     logId: 1,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 2,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
+    // {
+    //     logId: 3,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 4,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
+    // {
+    //     logId: 5,
+    //     logTime: '12:44:50',
+    //     logContent: '成功渗透目标数据库，提取敏感数据'
+    // },
+    // {
+    //     logId: 6,
+    //     logTime: '12:42:10',
+    //     logContent: '绕过WAF防护，发起SQL注入攻击'
+    // },
 ]

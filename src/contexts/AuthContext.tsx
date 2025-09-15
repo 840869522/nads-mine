@@ -6,7 +6,7 @@ import { deleteCookie, setCookie } from '@/utils/cookie';
 
 
 interface AuthContextType {
-  user: { user: {}, role: [] } | null;
+  user: { user: {}, role: [], permission: [] } | null;
   login: (username: string, Np: string) => Promise<void>; // Np to avoid password keyword for simple demo
   logout: () => void;
 }
