@@ -10,53 +10,53 @@ import { websocketClient } from "@/utils/websocket";
 const Battlefield = dynamic(() => import('./battlefield'), { ssr: false });
 
 if (typeof window !== 'undefined') {
-    ;(window as any).CESIUM_BASE_URL = '/mapdata/cesium/';
+    (window as any).CESIUM_BASE_URL = '/mapdata/cesium/';
 }
 
 // FPS 组件
 function Fps() {
-  const [fps, setFps] = useState(0);
-  const frameCount = useRef(0);
-  const lastFpsUpdate = useRef(performance.now());
+  	const [fps, setFps] = useState(0);
+  	const frameCount = useRef(0);
+  	const lastFpsUpdate = useRef(performance.now());
 
-  useEffect(() => {
-    let animationId: number;
+  	useEffect(() => {
+    	let animationId: number;
 
-    const update = (time: number) => {
-      frameCount.current += 1;
-      const delta = time - lastFpsUpdate.current;
+    	const update = (time: number) => {
+      		frameCount.current += 1;
+      		const delta = time - lastFpsUpdate.current;
 
-      if (delta >= 1000) {
-        setFps(Math.round((frameCount.current * 1000) / delta));
-        frameCount.current = 0;
-        lastFpsUpdate.current = time;
-      }
+      		if (delta >= 1000) {
+        		setFps(Math.round((frameCount.current * 1000) / delta));
+        		frameCount.current = 0;
+        		lastFpsUpdate.current = time;
+      		}
 
-      animationId = requestAnimationFrame(update);
-    };
+      		animationId = requestAnimationFrame(update);
+    	};
 
-    animationId = requestAnimationFrame(update);
+    	animationId = requestAnimationFrame(update);
 
-    return () => cancelAnimationFrame(animationId);
-  }, []);
+    	return () => cancelAnimationFrame(animationId);
+  	}, []);
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 10,
-        right: 10,
-        padding: '5px 10px',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        color: '#fff',
-        fontFamily: 'monospace',
-        borderRadius: 4,
-        zIndex: 9999,
-      }}
-    >
-      FPS: {fps}
-    </div>
-  );
+ 	return (
+    	<div
+      		style={{
+        	position: 'fixed',
+        	bottom: 10,
+        	right: 10,
+        	padding: '5px 10px',
+        	backgroundColor: 'rgba(0,0,0,0.6)',
+        	color: '#fff',
+        	fontFamily: 'monospace',
+        	borderRadius: 4,
+        	zIndex: 9999,
+      		}}
+    	>
+      		FPS: {fps}
+    	</div>
+  	);
 }
 
 const ADPage: React.FC = () => {
