@@ -62,7 +62,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
     const [tabValue, setTabValue] = useState(0);
     const [ingestOpen, setIngestOpen] = useState(false);
     const [isPlaybackModalOpen, setPlaybackModalOpen] = useState(false);
-    const [playbackHosts, setPlaybackHosts] = useState<{ name: string; indexName: string }[]>([]);
+    const [playbackHosts, setPlaybackHosts] = useState<{ name: string; indexName: string; ipAddress: string }[]>([]);
     const [isFetchingHosts, setIsFetchingHosts] = useState(false);
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -89,12 +89,14 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
 
             const containerHosts = containers.map(instance => ({
                 name: instance.name,
-                indexName: `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase()
+                indexName: `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase(),
+                ipAddress: instance.ipAddress || ''
             }));
 
             const vmHosts = vms.map(vm => ({
                 name: vm.name,
-                indexName: `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase()
+                indexName: `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase(),
+                ipAddress: vm.ip || ''
             }));
 
             setPlaybackHosts([...containerHosts, ...vmHosts]);

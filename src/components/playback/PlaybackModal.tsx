@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Modal, Box, Typography, CircularProgress, Alert,
   Select, MenuItem, FormControl, InputLabel, Button,
@@ -7,12 +7,19 @@ import {
   LinearProgress, SelectChangeEvent,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 // --- Types ---
+interface Host {
+  name: string;
+  indexName: string;
+  ipAddress: string;
+}
+
 interface PlaybackModalProps {
   open: boolean;
   onClose: () => void;
-  hosts: { name: string; indexName: string }[];
+  hosts: Host[];
 }
 
 type TimeMode = 'fixed' | 'real';
@@ -37,6 +44,36 @@ interface HostData {
 interface ApiResponse {
   [indexName: string]: HostData;
 }
+
+type PlayStatus = 'stopped' | 'playing' | 'paused' | 'finished';
+
+interface PlaybackState {
+    status: PlayStatus;
+    currentIndex: number;
+    log: string[];
+}
+
+// --- Helper Functions ---
+function formatDuration(ms: number): string {
+  if (ms < 0) return "0s";
+  if (ms === 0) return "0s";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0) parts.push(`${seconds}s`);
+
+  if (parts.length > 0) return parts.join(' ');
+
+  return `${ms}ms`;
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- Constants ---
 const MODAL_STYLE = {
@@ -70,98 +107,67 @@ const TERMINAL_STYLE = {
 
 // --- Sub-Components ---
 
-const PlaybackTerminal = ({ commands, timeMode, interval }: { commands: Command[], timeMode: TimeMode, interval: number }) => {
-    const [hasStarted, setHasStarted] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [logOutput, setLogOutput] = useState<string[]>([]);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+const PlaybackTerminal = ({
+    playbackState,
+    onPlay,
+    onPause,
+    onStop,
+    onClose,
+    totalCommands
+}: {
+    playbackState: PlaybackState,
+    onPlay: () => void,
+    onPause: () => void,
+    onStop: () => void,
+    onClose: () => void,
+    totalCommands: number
+}) => {
 
-    const cleanupTimeout = () => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-    };
-
-    const handlePlay = () => {
-        cleanupTimeout();
-        setLogOutput([`$ [${new Date(commands[0].ts).toLocaleString()}] cd ${commands[0].cwd} && ${commands[0].command}`]);
-        setCurrentIndex(1); // Start with the second command
-        setIsPaused(false);
-        setIsPlaying(true);
-        setHasStarted(true);
-    };
-
-    const handlePause = () => setIsPaused(!isPaused);
-
-    const handleStop = () => {
-        cleanupTimeout();
-        setIsPlaying(false);
-        setIsPaused(false);
-    };
-
-    const handleClose = () => {
-        handleStop();
-        setHasStarted(false);
-        setCurrentIndex(0);
-        setLogOutput([]);
-    };
-
-    useEffect(() => {
-        if (!isPlaying || isPaused || currentIndex >= commands.length) {
-            if (isPlaying && currentIndex >= commands.length) {
-                setIsPlaying(false); // Finished
-            }
-            return cleanupTimeout;
-        };
-
-        const prevCommand = commands[currentIndex - 1];
-        let delay = interval * 1000;
-        if (timeMode === 'real' && prevCommand.sleep_until_next_ms !== undefined) {
-            delay = prevCommand.sleep_until_next_ms;
-        }
-
-        timeoutRef.current = setTimeout(() => {
-            const currentCommand = commands[currentIndex];
-            setLogOutput(prev => [...prev, `$ [${new Date(currentCommand.ts).toLocaleString()}] cd ${currentCommand.cwd} && ${currentCommand.command}`]);
-            setCurrentIndex(prev => prev + 1);
-        }, delay);
-
-        return cleanupTimeout;
-    }, [isPlaying, isPaused, currentIndex, commands, timeMode, interval]);
-
-    if (!hasStarted) {
-        return <Button onClick={handlePlay} variant="contained" sx={{ mt: 1 }}>开始回放</Button>;
+    if (playbackState.status === 'stopped') {
+        return <Button onClick={onPlay} variant="contained" sx={{ mt: 1 }}>开始回放</Button>;
     }
 
-    const isFinished = !isPlaying && hasStarted && currentIndex >= commands.length;
-    const progress = currentIndex >= commands.length ? 100 : (currentIndex / commands.length) * 100;
+    const { status, currentIndex, log } = playbackState;
+    const isPlaying = status === 'playing';
+    const isPaused = status === 'paused';
+    const isFinished = status === 'finished';
+
+    const progress = totalCommands > 0 ? ((currentIndex) / totalCommands) * 100 : 0;
 
     return (
         <Box sx={{ mt: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="body2">
-                    进度: {Math.min(currentIndex, commands.length)} / {commands.length}
+                    进度: {currentIndex} / {totalCommands}
                 </Typography>
                 <LinearProgress variant="determinate" value={progress} sx={{ flexGrow: 1 }} />
             </Box>
             <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                 {isPlaying && <Button onClick={handlePause} variant="outlined">{isPaused ? '继续' : '暂停'}</Button>}
-                 {hasStarted && !isFinished && <Button onClick={handleStop} variant="outlined" color="error">中止</Button>}
+                 {isPlaying && <Button onClick={onPause} variant="outlined">暂停</Button>}
+                 {isPaused && <Button onClick={onPlay} variant="outlined">继续</Button>}
+                 {!isFinished && <Button onClick={onStop} variant="outlined" color="error">中止</Button>}
             </Box>
             <Paper sx={TERMINAL_STYLE}>
-                {logOutput.join('\n')}
+                {log.join('\n')}
                 {isFinished && '\n\n[--- 回放结束 ---]'}
             </Paper>
-             {isFinished && <Button onClick={handleClose} sx={{mt: 1}}>关闭</Button>}
+             {isFinished && <Button onClick={onClose} sx={{mt: 1}}>关闭</Button>}
         </Box>
     );
 };
 
 
-const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: string }, data: HostData, timeMode: TimeMode, fixedInterval: number }) => {
+const HostDisplay = ({
+    host,
+    data,
+    playbackStates,
+    onPlaybackAction
+}: {
+    host: Host,
+    data: HostData,
+    playbackStates: Record<string, PlaybackState>,
+    onPlaybackAction: (key: string, action: 'play' | 'pause' | 'stop' | 'close') => void
+}) => {
   const [activeTab, setActiveTab] = useState(0);
 
   if (data.status === 'error') {
@@ -177,44 +183,53 @@ const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: st
     setActiveTab(newValue);
   };
 
+  const getGroupKey = (groupName: string) => `${host.indexName}__${groupName}`;
+
   return (
     <Box>
       <Tabs value={activeTab} onChange={handleTabChange}>
         {groupNames.map(name => <Tab label={name} key={name} />)}
       </Tabs>
-      {groupNames.map((groupName, index) => (
-        <Box role="tabpanel" hidden={activeTab !== index} key={groupName} sx={{ pt: 2 }}>
-          <Paper variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>时间戳</TableCell>
-                  <TableCell>工作目录</TableCell>
-                  <TableCell>命令</TableCell>
-                  <TableCell align="right">下一条延时 (s)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.groups[groupName].map((cmd, idx) => {
-                  const intervalSeconds = cmd.sleep_until_next_ms !== undefined
-                    ? cmd.sleep_until_next_ms / 1000
-                    : 0;
+      {groupNames.map((groupName, index) => {
+        const groupKey = getGroupKey(groupName);
+        const commands = data.groups[groupName];
+        const state = playbackStates[groupKey] || { status: 'stopped', currentIndex: 0, log: [] };
 
-                  return (
-                    <TableRow key={idx}>
-                      <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
-                      <TableCell>{cmd.cwd}</TableCell>
-                      <TableCell><code>{cmd.command}</code></TableCell>
-                      <TableCell align="right">{intervalSeconds.toFixed(2)}</TableCell>
+        return (
+            <Box role="tabpanel" hidden={activeTab !== index} key={groupKey} sx={{ pt: 2 }}>
+            <Paper variant="outlined">
+                <Table size="small">
+                <TableHead>
+                    <TableRow>
+                    <TableCell>时间戳</TableCell>
+                    <TableCell>工作目录</TableCell>
+                    <TableCell>命令</TableCell>
+                    <TableCell align="right">下一条延时</TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Paper>
-          <PlaybackTerminal commands={data.groups[groupName]} timeMode={timeMode} interval={fixedInterval} />
-        </Box>
-      ))}
+                </TableHead>
+                <TableBody>
+                    {commands.map((cmd, idx) => (
+                    <TableRow key={idx}>
+                        <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
+                        <TableCell>{cmd.cwd}</TableCell>
+                        <TableCell><code>{cmd.command}</code></TableCell>
+                        <TableCell align="right">{formatDuration(cmd.sleep_until_next_ms ?? 0)}</TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+            </Paper>
+            <PlaybackTerminal
+                playbackState={state}
+                totalCommands={commands.length}
+                onPlay={() => onPlaybackAction(groupKey, 'play')}
+                onPause={() => onPlaybackAction(groupKey, 'pause')}
+                onStop={() => onPlaybackAction(groupKey, 'stop')}
+                onClose={() => onPlaybackAction(groupKey, 'close')}
+            />
+            </Box>
+        )
+      })}
     </Box>
   );
 };
@@ -231,53 +246,158 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
+  const [playbackStates, setPlaybackStates] = useState<Record<string, PlaybackState>>({});
 
-  const indexNames = useMemo(() => hosts.map(h => h.indexName), [hosts]);
+  const hostMap = useMemo(() => hosts.reduce((acc, h) => ({...acc, [h.indexName]: h }), {} as Record<string, Host>), [hosts]);
 
-  useEffect(() => {
-    if (!open || hosts.length === 0) {
-      return;
+  // Ref to track the status of each playback loop to avoid multiple loops for the same key
+  const loopStatusRef = useRef<Record<string, boolean>>({});
+
+  const executeRemoteCommand = async (host: Host, command: Command) => {
+    try {
+        const res = await fetch('/api/execute-command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targetHost: host.ipAddress,
+                targetPort: 8000, // Default agent port
+                cwd: command.cwd,
+                command: command.command,
+                indexName: host.indexName // Pass indexName for fallback logging
+            })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            return `Error: ${result.detail || result.error || 'Unknown error'}`;
+        }
+        return result.stdout || result.stderr;
+    } catch (e: any) {
+        return `Failed to execute command: ${e.message}`;
+    }
+  }
+
+  const runPlaybackLoop = useCallback(async (key: string) => {
+    if (loopStatusRef.current[key]) return; // Prevent multiple loops for the same key
+    loopStatusRef.current[key] = true;
+
+    const [indexName, groupName] = key.split('__');
+    const host = hostMap[indexName];
+    const commands = data?.[indexName]?.groups[groupName];
+
+    if (!commands || !host) {
+        loopStatusRef.current[key] = false;
+        return;
     }
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      setData(null);
-      try {
-        const response = await fetch('/api/playback-commands', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            indexNames,
-            groupBy,
-            filterNoise,
-            timeMode,
-            fixedIntervalSeconds: fixedInterval,
-          }),
-        });
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`API 请求失败: ${response.status} ${errText}`);
+    while(true) {
+        const state = playbackStates[key];
+        if (!state || state.status !== 'playing') {
+            break; // Exit loop if stopped or paused
         }
-        const result: ApiResponse = await response.json();
-        setData(result);
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
+        if (state.currentIndex >= commands.length) {
+            setPlaybackStates(s => ({ ...s, [key]: { ...s[key], status: 'finished' } }));
+            break;
+        }
+
+        const commandToExecute = commands[state.currentIndex];
+        const output = await executeRemoteCommand(host, commandToExecute);
+
+        const delay = commandToExecute.sleep_until_next_ms ?? fixedInterval * 1000;
+
+        setPlaybackStates(s => {
+            const currentLog = s[key]?.log || [];
+            const newLog = [...currentLog, `$ ${commandToExecute.command}`, output];
+            return { ...s, [key]: { ...s[key], log: newLog, currentIndex: s[key].currentIndex + 1 } };
+        });
+
+        await sleep(delay);
+    }
+
+    loopStatusRef.current[key] = false;
+  }, [playbackStates, data, hostMap, fixedInterval]);
+
+
+  const handlePlaybackAction = (key: string, action: 'play' | 'pause' | 'stop' | 'close') => {
+    const currentState = playbackStates[key] || { status: 'stopped', currentIndex: 0, log: [] };
+
+    switch (action) {
+        case 'play':
+            const newState = { ...currentState, status: 'playing' as PlayStatus };
+             // If starting from the beginning, reset log
+            if (currentState.status === 'stopped' || currentState.status === 'finished') {
+                newState.currentIndex = 0;
+                newState.log = [];
+            }
+            setPlaybackStates(s => ({ ...s, [key]: newState }));
+            runPlaybackLoop(key);
+            break;
+        case 'pause':
+            setPlaybackStates(s => ({ ...s, [key]: { ...s[key], status: 'paused' } }));
+            break;
+        case 'stop':
+            setPlaybackStates(s => ({ ...s, [key]: { ...s[key], status: 'finished' } }));
+            break;
+        case 'close':
+            setPlaybackStates(s => ({ ...s, [key]: { status: 'stopped', currentIndex: 0, log: [] } }));
+            break;
+    }
+  };
+
+  const handlePlayAll = () => {
+    if (!data) return;
+    const newStates: Record<string, PlaybackState> = {};
+    const keysToPlay: string[] = [];
+    for (const host of hosts) {
+        const hostData = data[host.indexName];
+        if (hostData?.groups) {
+            for (const groupName in hostData.groups) {
+                const key = `${host.indexName}__${groupName}`;
+                newStates[key] = { status: 'playing', currentIndex: 0, log: [] };
+                keysToPlay.push(key);
+            }
+        }
+    }
+    setPlaybackStates(newStates);
+    // Use a timeout to ensure state is set before starting the loops
+    setTimeout(() => {
+        keysToPlay.forEach(key => runPlaybackLoop(key));
+    }, 0);
+  };
+
+  const fetchData = useCallback(async () => {
+    if (!open || hosts.length === 0) return;
+    setIsLoading(true);
+    setError(null);
+    setData(null);
+    setPlaybackStates({});
+    try {
+      const response = await fetch('/api/playback-commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indexNames: hosts.map(h=>h.indexName), groupBy, filterNoise, timeMode, fixedIntervalSeconds: fixedInterval }),
+      });
+      if (!response.ok) throw new Error(`API 请求失败: ${response.status}`);
+      const result: ApiResponse = await response.json();
+      setData(result);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [open, hosts, groupBy, filterNoise, timeMode, fixedInterval]);
+
+  useEffect(() => {
     fetchData();
-  }, [open, hosts, indexNames, groupBy, filterNoise, timeMode, fixedInterval]);
+  }, [fetchData]);
 
   return (
     <Modal open={open} onClose={onClose}>
       <Box sx={MODAL_STYLE}>
         <Typography variant="h6" component="h2">指令回放</Typography>
 
-        {/* Controls */}
-        <Box sx={{ display: 'flex', gap: 2, my: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 2, my: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button onClick={handlePlayAll} variant="contained" color="primary" startIcon={<PlayArrowIcon />}>全部回放</Button>
           <FormControl size="small">
             <InputLabel>分组方式</InputLabel>
             <Select value={groupBy} label="分组方式" onChange={(e: SelectChangeEvent<'user' | 'session'>) => setGroupBy(e.target.value as any)}>
@@ -311,22 +431,21 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
           )}
         </Box>
 
-        {/* Content */}
         <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
           {isLoading && <CircularProgress />}
           {error && <Alert severity="error">{error}</Alert>}
           {data && hosts.map(host => (
-            <Accordion key={host.indexName}>
+            <Accordion key={host.indexName} TransitionProps={{ unmountOnExit: true }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography>{host.name}</Typography>
+                <Typography>{host.name} ({host.ipAddress})</Typography>
               </AccordionSummary>
               <AccordionDetails>
                 {data[host.indexName] ? (
                   <HostDisplay
                     host={host}
                     data={data[host.indexName]}
-                    timeMode={timeMode}
-                    fixedInterval={fixedInterval}
+                    playbackStates={playbackStates}
+                    onPlaybackAction={handlePlaybackAction}
                   />
                 ) : <CircularProgress size={20} />}
               </AccordionDetails>
