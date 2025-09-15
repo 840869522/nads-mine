@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ad\AdConfig;
 use App\Models\ad\Team;
 use App\Models\scenario\SceneInstance; // <-- 修复点 (1/3): 使用正确的单数类名
+use App\Models\Users\UserModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -83,6 +84,39 @@ class TeamController extends Controller
         $teamName = $team->c_name;
         $team->delete();
         return response()->json(['status' => 'success', 'message' => '队伍 "' . $teamName . '" 已成功删除。']);
+    }
+    /**
+     * ★★★ 新增方法 ★★★
+     * 切换指定队伍中用户的禁用状态。
+     */
+    public function toggleUserBanStatus(Team $team, UserModel $user)
+    {
+        $pivot = DB::table('c_teams_users')
+            ->where('team_id', $team->c_id)
+            ->where('user_id', $user->c_username)
+            ->first();
+
+        if (!$pivot) {
+            return response()->json(['message' => '用户 ' . $user->c_username . ' 不属于队伍 ' . $team->c_name], 404);
+        }
+
+        $newStatus = !$pivot->is_banned;
+
+        DB::table('c_teams_users')
+            ->where('team_id', $team->c_id)
+            ->where('user_id', $user->c_username)
+            ->update(['is_banned' => $newStatus]);
+
+        $actionText = $newStatus ? "禁用" : "解除禁用";
+        $message = "已成功{$actionText}用户 '{$user->c_username}'。";
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $message,
+            'data' => [
+                'is_banned' => $newStatus,
+            ]
+        ]);
     }
 
     /**

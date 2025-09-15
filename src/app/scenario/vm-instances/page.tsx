@@ -317,10 +317,9 @@ export default function VmPage() {
 
     /* ---- 行过滤 ---- */
     const filteredRows = React.useMemo(() => {
-        let rows = (data ?? []).filter((r) =>
-            r.name.toLowerCase().includes(search.toLowerCase())
-        );
-        if (showRunningOnly) rows = rows.filter((r) => r.state === 'running');
+        const list = Array.isArray(data) ? data : (data as any)?.data ?? [];
+        let rows = list.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
+        if (showRunningOnly) rows = rows.filter(r => r.state === 'running');
         return rows;
     }, [data, search, showRunningOnly]);
 

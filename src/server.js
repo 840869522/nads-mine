@@ -6,6 +6,7 @@ import GuacamoleLite from 'guacamole-lite';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import process from 'process';
+import axios from 'axios'; // ★ 新增
 
 const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
 
