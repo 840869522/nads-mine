@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import IngestControlDialog from '@/components/IngestControlDialog';
+import CommandPlaybackDialog from '@/components/CommandPlaybackDialog';
 
 // 导入新的标签页组件
 import ContainerInstancesTab from './ContainerInstancesTab'; // 替换旧的 docker.tsx
@@ -57,6 +58,7 @@ interface InstanceDetailsDialogProps {
 const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onClose, scenarioName, instanceId }) => {
     const [tabValue, setTabValue] = useState(0);
     const [ingestOpen, setIngestOpen] = useState(false);
+    const [playbackOpen, setPlaybackOpen] = useState(false);
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
@@ -73,6 +75,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 场景实例详情: {scenarioName}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button size="small" variant="outlined" onClick={() => setPlaybackOpen(true)}>指令回放</Button>
                     <Button size="small" variant="outlined" onClick={() => setIngestOpen(true)}>日志收集</Button>
                     <IconButton onClick={handleClose}><CloseIcon /></IconButton>
                 </Box>
@@ -108,6 +111,7 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                 <Button onClick={handleClose}>关闭</Button>
             </DialogActions>
             <IngestControlDialog open={ingestOpen} onClose={() => setIngestOpen(false)} sceneInstanceId={instanceId} />
+            <CommandPlaybackDialog open={playbackOpen} onClose={() => setPlaybackOpen(false)} sceneInstanceId={instanceId} />
         </Dialog>
     );
 };
