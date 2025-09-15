@@ -15,6 +15,8 @@ interface PlaybackModalProps {
   hosts: { name: string; indexName: string }[];
 }
 
+type TimeMode = 'fixed' | 'real';
+
 interface Command {
   ts: string;
   cwd: string;
@@ -68,7 +70,8 @@ const TERMINAL_STYLE = {
 
 // --- Sub-Components ---
 
-const PlaybackTerminal = ({ commands, interval }: { commands: Command[], interval: number }) => {
+const PlaybackTerminal = ({ commands, timeMode, interval }: { commands: Command[], timeMode: TimeMode, interval: number }) => {
+    const [hasStarted, setHasStarted] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -84,10 +87,11 @@ const PlaybackTerminal = ({ commands, interval }: { commands: Command[], interva
 
     const handlePlay = () => {
         cleanupTimeout();
-        setLogOutput([]);
-        setCurrentIndex(0);
+        setLogOutput([`$ [${new Date(commands[0].ts).toLocaleString()}] cd ${commands[0].cwd} && ${commands[0].command}`]);
+        setCurrentIndex(1); // Start with the second command
         setIsPaused(false);
         setIsPlaying(true);
+        setHasStarted(true);
     };
 
     const handlePause = () => setIsPaused(!isPaused);
@@ -96,58 +100,68 @@ const PlaybackTerminal = ({ commands, interval }: { commands: Command[], interva
         cleanupTimeout();
         setIsPlaying(false);
         setIsPaused(false);
+    };
+
+    const handleClose = () => {
+        handleStop();
+        setHasStarted(false);
         setCurrentIndex(0);
+        setLogOutput([]);
     };
 
     useEffect(() => {
         if (!isPlaying || isPaused || currentIndex >= commands.length) {
             if (isPlaying && currentIndex >= commands.length) {
-                setIsPlaying(false);
+                setIsPlaying(false); // Finished
             }
             return cleanupTimeout;
         };
 
-        const currentCommand = commands[currentIndex];
-        const delay = currentCommand.sleep_until_next_ms ?? interval * 1000;
+        const prevCommand = commands[currentIndex - 1];
+        let delay = interval * 1000;
+        if (timeMode === 'real' && prevCommand.sleep_until_next_ms !== undefined) {
+            delay = prevCommand.sleep_until_next_ms;
+        }
 
         timeoutRef.current = setTimeout(() => {
+            const currentCommand = commands[currentIndex];
             setLogOutput(prev => [...prev, `$ [${new Date(currentCommand.ts).toLocaleString()}] cd ${currentCommand.cwd} && ${currentCommand.command}`]);
             setCurrentIndex(prev => prev + 1);
         }, delay);
 
         return cleanupTimeout;
-    }, [isPlaying, isPaused, currentIndex, commands, interval]);
+    }, [isPlaying, isPaused, currentIndex, commands, timeMode, interval]);
 
-
-    if (!isPlaying) {
+    if (!hasStarted) {
         return <Button onClick={handlePlay} variant="contained" sx={{ mt: 1 }}>开始回放</Button>;
     }
 
-    const isFinished = currentIndex >= commands.length;
+    const isFinished = !isPlaying && hasStarted && currentIndex >= commands.length;
+    const progress = currentIndex >= commands.length ? 100 : (currentIndex / commands.length) * 100;
 
     return (
         <Box sx={{ mt: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="body2">
-                    进度: {currentIndex} / {commands.length}
+                    进度: {Math.min(currentIndex, commands.length)} / {commands.length}
                 </Typography>
-                <LinearProgress variant="determinate" value={(currentIndex / commands.length) * 100} sx={{ flexGrow: 1 }} />
+                <LinearProgress variant="determinate" value={progress} sx={{ flexGrow: 1 }} />
             </Box>
             <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                 {!isFinished && <Button onClick={handlePause} variant="outlined">{isPaused ? '继续' : '暂停'}</Button>}
-                 <Button onClick={handleStop} variant="outlined" color="error">中止</Button>
+                 {isPlaying && <Button onClick={handlePause} variant="outlined">{isPaused ? '继续' : '暂停'}</Button>}
+                 {hasStarted && !isFinished && <Button onClick={handleStop} variant="outlined" color="error">中止</Button>}
             </Box>
             <Paper sx={TERMINAL_STYLE}>
                 {logOutput.join('\n')}
                 {isFinished && '\n\n[--- 回放结束 ---]'}
             </Paper>
-             {isFinished && <Button onClick={handleStop} sx={{mt: 1}}>关闭</Button>}
+             {isFinished && <Button onClick={handleClose} sx={{mt: 1}}>关闭</Button>}
         </Box>
     );
 };
 
 
-const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: string }, data: HostData, timeMode: 'fixed' | 'real', fixedInterval: number }) => {
+const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: string }, data: HostData, timeMode: TimeMode, fixedInterval: number }) => {
   const [activeTab, setActiveTab] = useState(0);
 
   if (data.status === 'error') {
@@ -177,20 +191,28 @@ const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: st
                   <TableCell>时间戳</TableCell>
                   <TableCell>工作目录</TableCell>
                   <TableCell>命令</TableCell>
+                  <TableCell align="right">下一条延时 (s)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.groups[groupName].map((cmd, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
-                    <TableCell>{cmd.cwd}</TableCell>
-                    <TableCell><code>{cmd.command}</code></TableCell>
-                  </TableRow>
-                ))}
+                {data.groups[groupName].map((cmd, idx) => {
+                  const intervalSeconds = cmd.sleep_until_next_ms !== undefined
+                    ? cmd.sleep_until_next_ms / 1000
+                    : 0;
+
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
+                      <TableCell>{cmd.cwd}</TableCell>
+                      <TableCell><code>{cmd.command}</code></TableCell>
+                      <TableCell align="right">{intervalSeconds.toFixed(2)}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </Paper>
-          <PlaybackTerminal commands={data.groups[groupName]} interval={fixedInterval} />
+          <PlaybackTerminal commands={data.groups[groupName]} timeMode={timeMode} interval={fixedInterval} />
         </Box>
       ))}
     </Box>
@@ -203,7 +225,7 @@ const HostDisplay = ({ host, data, timeMode, fixedInterval }: { host: { name: st
 export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
   const [groupBy, setGroupBy] = useState<'user' | 'session'>('user');
   const [filterNoise, setFilterNoise] = useState(true);
-  const [timeMode, setTimeMode] = useState<'fixed' | 'real'>('fixed');
+  const [timeMode, setTimeMode] = useState<TimeMode>('fixed');
   const [fixedInterval, setFixedInterval] = useState(1);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -234,7 +256,8 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
           }),
         });
         if (!response.ok) {
-          throw new Error(`API 请求失败，状态码: ${response.status}`);
+          const errText = await response.text();
+          throw new Error(`API 请求失败: ${response.status} ${errText}`);
         }
         const result: ApiResponse = await response.json();
         setData(result);
@@ -271,7 +294,7 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
           </FormControl>
           <FormControl size="small">
             <InputLabel>回放模式</InputLabel>
-            <Select value={timeMode} label="回放模式" onChange={(e: SelectChangeEvent<'fixed' | 'real'>) => setTimeMode(e.target.value as any)}>
+            <Select value={timeMode} label="回放模式" onChange={(e: SelectChangeEvent<TimeMode>) => setTimeMode(e.target.value as any)}>
               <MenuItem value="fixed">固定间隔</MenuItem>
               <MenuItem value="real">真实时间</MenuItem>
             </Select>
@@ -280,9 +303,9 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
              <FormControl size="small" sx={{minWidth: 120}}>
                 <InputLabel>间隔(秒)</InputLabel>
                 <Select value={String(fixedInterval)} label="间隔(秒)" onChange={e => setFixedInterval(Number(e.target.value))}>
-                    <MenuItem value="1">1s</MenuItem>
-                    <MenuItem value="2">2s</MenuItem>
-                    <MenuItem value="5">5s</MenuItem>
+                    <MenuItem value={1}>1s</MenuItem>
+                    <MenuItem value={2}>2s</MenuItem>
+                    <MenuItem value={5}>5s</MenuItem>
                 </Select>
              </FormControl>
           )}

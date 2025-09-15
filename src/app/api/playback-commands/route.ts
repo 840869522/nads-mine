@@ -35,7 +35,6 @@ const SnoopyLogSchema = z.object({
 type SnoopyLog = z.infer<typeof SnoopyLogSchema>;
 
 // --- Configuration ---
-const ELASTICSEARCH_NODE = process.env.ELASTICSEARCH_NODE || 'http://localhost:9200';
 const NOISE_COMMAND_PATTERNS = [
   /^uname/,
   /^file -b/,
@@ -131,6 +130,11 @@ function groupAndProcessLogs(
 
       return processedLog;
     });
+
+    // Per user feedback, ensure the first command's delay is 0 for a better UX.
+    if (timeMode === 'real' && processedGroups[key].length > 0) {
+        processedGroups[key][0].sleep_until_next_ms = 0;
+    }
   }
 
   return processedGroups;
@@ -149,13 +153,20 @@ export async function POST(request: Request) {
     }
 
     const { indexNames, groupBy, filterNoise, timeMode } = validation.data;
+
+    // Use the exact client options provided by the user for compatibility.
     const client = new Client({
-        node: ELASTICSEARCH_NODE,
+        node: process.env.ES_NODE || "http://127.0.0.1:9200",
+        auth:
+            process.env.ES_USERNAME && process.env.ES_PASSWORD
+                ? { username: process.env.ES_USERNAME, password: process.env.ES_PASSWORD }
+                : undefined,
         headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
+            accept: "application/vnd.elasticsearch+json; compatible-with=8",
+            "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+        },
     });
+
     const responseData: Record<string, any> = {};
 
     for (const indexName of indexNames) {
