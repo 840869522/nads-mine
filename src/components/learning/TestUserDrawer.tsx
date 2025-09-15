@@ -115,6 +115,9 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
     user.name.toLowerCase().includes(addUserSearchText.toLowerCase())
   );
 
+  // 判断是否为实验类型
+  const isExperiment = test?.c_type === '实验';
+
   // 计算可用用户
   useEffect(() => {
     if (open && test) {
@@ -126,14 +129,17 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
       setSelectedUsers([]);
       setIsSelectAll(false);
       
-      if (papers.length > 0) {
+      if (!isExperiment && papers.length > 0) {
         setSelectedPaperId(papers[0].paperId);
+      } else if (isExperiment) {
+        // 实验类型不需要选择试卷，使用默认值
+        setSelectedPaperId('experiment_default');
       }
     }
     setAddUserSearchText('');
     setAssociatedUserSearchText('');
     setTempTestUsers([]);
-  }, [open, test, testUsers, allUsers, papers]);
+  }, [open, test, testUsers, allUsers, papers, isExperiment]);
 
   // 全选状态管理
   useEffect(() => {
@@ -178,7 +184,12 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
 
   // 批量添加用户到测试
   const handleAddSelectedUsers = () => {
-    if (selectedUsers.length === 0 || !selectedPaperId || !test?.c_id) {
+    if (selectedUsers.length === 0 || !test?.c_id) {
+      return;
+    }
+    
+    // 实验类型不需要验证selectedPaperId，理论测试需要
+    if (!isExperiment && !selectedPaperId) {
       return;
     }
     
@@ -189,7 +200,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
         username,
         name: userInfo?.name || username,
         c_test_id: test.c_id,
-        c_paper_id: selectedPaperId,
+        c_paper_id: isExperiment ? 'experiment_default' : selectedPaperId,
         c_answers: [],
         start_time: new Date().toISOString(),
         end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -294,28 +305,30 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             添加用户到测试
           </Typography>
           
-          {/* 试卷选择下拉框 */}
-          <FormControl fullWidth sx={{ mb: 2, minWidth: 180 }}>
-            <InputLabel sx={{ color: getSecondaryTextColor() }}>选择试卷</InputLabel>
-            <Select
-              value={selectedPaperId}
-              onChange={(e) => setSelectedPaperId(e.target.value as string)}
-              label="选择试卷"
-              disabled={papers.length === 0 || loading}
-              sx={{ color: getTextColor() }}
-            >
-              {papers.map(paper => (
-                <MenuItem key={paper.paperId} value={paper.paperId} sx={{ color: getTextColor() }}>
-                  {paper.paperName} (题目数: {paper.questionCount}, 总分: {paper.totalScore})
-                </MenuItem>
-              ))}
-              {papers.length === 0 && (
-                <MenuItem disabled sx={{ color: getSecondaryTextColor() }}>
-                  {loading ? '加载试卷中...' : '无可用试卷'}
-                </MenuItem>
-              )}
-            </Select>
-          </FormControl>
+          {/* 试卷选择下拉框 - 仅在非实验类型时显示 */}
+          {!isExperiment && (
+            <FormControl fullWidth sx={{ mb: 2, minWidth: 180 }}>
+              <InputLabel sx={{ color: getSecondaryTextColor() }}>选择试卷</InputLabel>
+              <Select
+                value={selectedPaperId}
+                onChange={(e) => setSelectedPaperId(e.target.value as string)}
+                label="选择试卷"
+                disabled={papers.length === 0 || loading}
+                sx={{ color: getTextColor() }}
+              >
+                {papers.map(paper => (
+                  <MenuItem key={paper.paperId} value={paper.paperId} sx={{ color: getTextColor() }}>
+                    {paper.paperName} (题目数: {paper.questionCount}, 总分: {paper.totalScore})
+                  </MenuItem>
+                ))}
+                {papers.length === 0 && (
+                  <MenuItem disabled sx={{ color: getSecondaryTextColor() }}>
+                    {loading ? '加载试卷中...' : '无可用试卷'}
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          )}
           
           {/* 搜索可用用户（添加用户区域专用） */}
           <TextField
@@ -426,7 +439,11 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             startIcon={<AddIcon />}
             endIcon={<ArrowRightIcon />}
             onClick={handleAddSelectedUsers}
-            disabled={selectedUsers.length === 0 || !selectedPaperId || papers.length === 0 || loading}
+            disabled={
+              selectedUsers.length === 0 || 
+              loading || 
+              (!isExperiment && (!selectedPaperId || papers.length === 0))
+            }
             sx={{ 
               mb: 3,
               backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
@@ -455,7 +472,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                 {tempTestUsers.map(user => (
                   <MuiChip
                     key={user.username}
-                    label={`${user.name} (${papers.find(p => p.paperId === user.c_paper_id)?.paperName})`}
+                    label={`${user.name}${!isExperiment ? ` (${papers.find(p => p.paperId === user.c_paper_id)?.paperName})` : ''}`}
                     onDelete={() => {
                       setTempTestUsers(tempTestUsers.filter(u => u.username !== user.username));
                       setSelectedUsers(prev => [...prev, user.username]);
@@ -581,9 +598,11 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                           <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
                             用户名: {user.username}
                           </Typography>
-                          <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
-                            试卷: {paper?.paperName || user.c_paper_id}
-                          </Typography>
+                          {!isExperiment && (
+                            <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
+                              试卷: {paper?.paperName || user.c_paper_id}
+                            </Typography>
+                          )}
                         </>
                       }
                     />
@@ -728,7 +747,41 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    得分
+                    客观题得分
+                  </Typography>
+                  {selectedUser.correct_status === 2 ? (
+                    <Typography 
+                      variant="body1" 
+                      color={getTextColor()}
+                    >
+                      {selectedUser.c_objective_score || 0} 分
+                    </Typography>
+                  ) : (
+                    <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
+                      未完成
+                    </Typography>
+                  )}
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                    主观题得分
+                  </Typography>
+                  {selectedUser.correct_status === 2 ? (
+                    <Typography 
+                      variant="body1" 
+                      color={getTextColor()}
+                    >
+                      {selectedUser.c_subjective_score || 0} 分
+                    </Typography>
+                  ) : (
+                    <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
+                      未完成
+                    </Typography>
+                  )}
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                    总得分
                   </Typography>
                   {selectedUser.correct_status === 2 ? (
                     <Typography 

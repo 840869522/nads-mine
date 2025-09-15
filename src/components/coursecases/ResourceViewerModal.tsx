@@ -29,7 +29,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                 ? `/back/api/study/experiment-resources/${resource.c_resource_id}?disposition=attachment`
                 : `/back/api/study/resources/${resource.c_resource_id}?disposition=attachment`;
             const response = await apiClientWithToken.get(downloadUrl, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: ` ${token}` },
                 responseType: 'blob',
             });
 
@@ -72,7 +72,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                 if (isWord) {
                     // 获取 DOCX 并转换为 HTML，在模态框显示（优化错误处理）
                     const response = await fetch(viewUrl, {
-                        headers: { Authorization: `Bearer ${token}` },
+                        headers: { Authorization: ` ${token}` },
                     });
                     if (!response.ok) {
                         throw new Error(`无法加载文件: ${response.statusText}`);
