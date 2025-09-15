@@ -95,7 +95,7 @@ function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefOb
         isValidating,
         mutate,
     } = useSWR<VmInstance[]>(
-        instanceId ? `/back/api/scenariosinstances/${instanceId}/vms` : null,
+        instanceId ? `/back/api/ad/vms/scene/${instanceId}` : null,
         fetcher,
         {
             dedupingInterval: 10_000,
@@ -165,7 +165,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
         try {
-            const res = await customFetch(`/back/api/vms/${vm.id}/actions/${action}`, { method: "POST" });
+            const res = await customFetch(`/back/api/ad/vms/${vm.name}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.detail || res.statusText);
@@ -198,7 +198,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
-            const res = await customFetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
+            const res = await customFetch(`/back/api/ad/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
             if (!res.ok) throw new Error('Guacamole info request failed');
             const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;

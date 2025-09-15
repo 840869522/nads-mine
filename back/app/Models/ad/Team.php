@@ -29,8 +29,16 @@ class Team extends Model
             UserModel::class,
             'c_teams_users',
             'team_id',
-            'user_id'
-        );
+            'user_id',
+            'c_id',          // 当前模型 (Team) 在中间表的外键对应的本地主键
+            'c_username'     // 关联模型 (UserModel) 在中间表的外键对应的本地主键
+        )
+            // ★★★ 核心修改点 ★★★
+            // withPivot() 告诉 Eloquent 在加载这个关系时，
+            // 也要从中间表 c_teams_users 中获取 is_banned 和 role 这两个额外字段。
+            // 这样，在访问 $team->users 时，每个 user 对象上都会有一个 pivot 属性，
+            // 可以通过 $user->pivot->is_banned 来访问。
+            ->withPivot('is_banned', 'role');
     }
 
     /**

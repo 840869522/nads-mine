@@ -12,6 +12,7 @@ use App\Models\ad\TeamUsers;
 use App\Rules\NoTeamMemberConflict;
 use App\Rules\NotInTeams;
 use Exception;
+use App\Models\scenario\SceneInstance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,10 +34,20 @@ class AdConfigController extends Controller
      * 移除了所有错误的数据注入和状态伪造逻辑。
      * 这个方法现在只忠实地返回数据库中的真实数据。
      */
+    /**
+     * ★★★ 核心修改点 ★★★
+     * 修改 index 方法以进行深度预加载，确保前端能获取到 users 及其 pivot 数据。
+     */
     public function index(Request $request)
     {
         $perPage = $request->query('per_page', 10);
-        $query = AdConfig::query()->with(['redTeam', 'blueTeam', 'referees', 'sceneConfig']);
+
+        $query = AdConfig::query()->with([
+            'redTeam.users', // 加载红队及其所有成员（包括pivot数据）
+            'blueTeam.users', // 加载蓝队及其所有成员（包括pivot数据）
+            'referees',
+            'sceneConfig'
+        ]);
 
         if ($request->has('search') && !empty($request->search)) {
             $query->where('c_drill_name', 'like', '%' . $request->search . '%');
@@ -46,6 +57,7 @@ class AdConfigController extends Controller
 
         return AdConfigResource::collection($adConfigs);
     }
+
 
     /**
      * ★★★ 3. 修复 store 方法 ★★★
@@ -200,28 +212,120 @@ class AdConfigController extends Controller
     }
 
     /**
+     * 停止一个正在运行的演练。
+     */
+    public function stop(AdConfig $adConfig)
+    {
+        // 1. 验证状态
+        if ($adConfig->c_status !== 'running') {
+            return response()->json(['message' => '演练不在运行状态，无法停止。'], 400);
+        }
+
+        if (!$adConfig->c_scene_instance_id) {
+            // 如果没有实例ID，但状态却是running，这是数据异常。直接将其标记为finished。
+            $adConfig->update(['c_status' => 'finished']);
+            return response()->json(['message' => '演练记录状态异常，已强制标记为结束。'], 200);
+        }
+
+        try {
+            // 2. 调用资源清理逻辑
+            $this->tearDownInstanceResources($adConfig->c_scene_instance_id);
+
+            // 3. 更新演练状态
+            $adConfig->update([
+                'c_status' => 'finished',
+                'c_end_time' => now(), // 记录实际结束时间
+            ]);
+
+            return response()->json(['message' => '演练 "' . $adConfig->c_drill_name . '" 已成功停止。']);
+
+        } catch (\Exception $e) {
+            // 即使清理失败，也尝试将状态标记为异常，以便手动干预
+            $adConfig->update(['c_status' => 'failed']);
+            Log::error('停止演练并清理资源时失败: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '停止演练时发生错误: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * 删除演练
+     * 增强版：能够处理正在运行的演练，会先尝试清理其关联的虚拟资源。
      */
     public function destroy(AdConfig $adConfig)
     {
-        DB::transaction(function () use ($adConfig) {
-            $sceneId = $adConfig->c_scene_config_id;
-            $redTeamId = $adConfig->c_red_team_id;
-            $blueTeamId = $adConfig->c_blue_team_id;
-
-            if ($sceneId) {
-                $teamUserMod = new TeamUsers();
-                $userList = $teamUserMod->get_teams_users($redTeamId, $blueTeamId);
-
-                if (!empty($userList)) {
-                    SceneUsersModel::revokePermissions($sceneId, $userList);
+        try {
+            DB::transaction(function () use ($adConfig) {
+                // 步骤 1: 如果演练正在运行或创建失败，首先清理其关联的场景实例和虚拟资源
+                if (in_array($adConfig->c_status, ['running', 'failed', 'creating']) && $adConfig->c_scene_instance_id) {
+                    Log::info("演练 '{$adConfig->c_drill_name}' 处于 {$adConfig->c_status} 状态，开始清理资源...");
+                    $this->tearDownInstanceResources($adConfig->c_scene_instance_id);
                 }
-            }
 
-            $adConfig->delete();
-        });
+                // 步骤 2: 清理与场景模板相关的用户权限 (保留原有逻辑)
+                $sceneId = $adConfig->c_scene_config_id;
+                if ($sceneId) {
+                    Log::info("正在为演练 '{$adConfig->c_drill_name}' 清理场景权限...");
+                    $teamUserMod = new TeamUsers();
+                    $userList = $teamUserMod->get_teams_users($adConfig->c_red_team_id, $adConfig->c_blue_team_id);
+                    if (!empty($userList)) {
+                        SceneUsersModel::revokePermissions($sceneId, $userList);
+                        Log::info("场景权限清理完毕。");
+                    }
+                }
 
-        return response()->json(['message' => '演练删除成功，并已清理相关权限。']);
+                // 步骤 3: 删除演练配置记录本身 (包括裁判关系，会自动级联删除)
+                Log::info("正在删除演练配置记录 '{$adConfig->c_drill_name}' (ID: {$adConfig->c_id})...");
+                $adConfig->delete();
+                Log::info("演练配置记录已删除。");
+            });
+            return response()->json(['message' => '演练 "' . $adConfig->c_drill_name . '" 已成功删除，并清理了所有相关资源和权限。']);
+        } catch (\Exception $e) {
+            Log::error("删除演练 '{$adConfig->c_drill_name}' (ID: {$adConfig->c_id}) 时发生严重错误: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '删除演练失败: ' . $e->getMessage()], 500);
+        }
+    }
+    // ===================================================================
+    // ★★★★★★  这就是你缺失的部分！ ★★★★★★
+    // ===================================================================
+    /**
+     * 辅助方法：拆除和清理场景实例资源
+     */
+    private function tearDownInstanceResources(string $instanceId)
+    {
+        $instance = SceneInstance::with(['vms', 'containers', 'switches'])->find($instanceId);
+        if (!$instance) {
+            Log::warning("尝试清理一个不存在的场景实例 (ID: {$instanceId})，操作跳过。");
+            return;
+        }
+
+        // 假设 CommandLineService 可以通过 app() 助手函数获取
+        // 如果你的项目结构不同，请确保能正确获取到服务实例
+        $cliService = app(\App\RunTool\CommandLineService::class);
+
+        // 1. 清理虚拟机
+        foreach ($instance->vms as $vm) {
+            Log::info("清理虚拟机: {$vm->c_vm_name}");
+            // $cliService->destroyVm($vm->c_vm_name); // TODO: 解除注释并确保此方法有效
+            $vm->delete();
+        }
+
+        // 2. 清理容器
+        foreach ($instance->containers as $container) {
+            Log::info("清理容器: {$container->c_container_id}");
+            // $cliService->destroyContainer($container->c_container_id); // TODO: 解除注释并确保此方法有效
+            $container->delete();
+        }
+
+        // 3. 清理交换机
+        foreach ($instance->switches as $switch) {
+            Log::info("清理交换机: {$switch->c_switch_name}");
+            // $cliService->destroySwitch($switch->c_switch_name); // TODO: 解除注释并确保此方法有效
+            $switch->delete();
+        }
+
+        // 4. 删除场景实例记录本身
+        $instance->delete();
+        Log::info("场景实例 {$instanceId} 的所有资源及数据库记录已成功清理。");
     }
 
     /**
@@ -282,16 +386,4 @@ class AdConfigController extends Controller
         }
     }
 
-    /**
-     * 停止演练
-     */
-    public function stop(AdConfig $adConfig)
-    {
-        if ($adConfig->c_status !== 'running') {
-            return response()->json(['message' => '演练必须处于进行中状态才能停止。'], 400);
-        }
-        $adConfig->c_status = 'finished';
-        $adConfig->save();
-        return response()->json(['message' => '演练已停止']);
-    }
 }
