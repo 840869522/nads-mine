@@ -305,6 +305,15 @@ class DrillController extends Controller
                         'image_dir'           => $imageDir,
                         'instance_base_dir'   => $instanceBaseDir,
                     ]);
+                } elseif ($osType === 'kylin' || $osType === 'kylin10' || $osType === 'kylin_v10') {
+                    $this->cliService->createVmKylin([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName,
+                        'image'               => $correctImageName,
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
                 } else { // 默认为 ubuntu
                     $this->cliService->createVm([
                         'id'                  => $vmDbId,

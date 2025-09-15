@@ -1,0 +1,90 @@
+#!/bin/bash
+
+set -e
+
+# 使用方式（与 newvm_win7_1.sh 一致）：
+#   newvm_ql <num> <base_image_name> <network_name> <vm_name> <image_dir> <instance_base_dir>
+# 示例：
+#   newvm_ql 98 kylin2-new ovs-network ns98 /home/ubuntu/virsh/images /home/ubuntu/virsh/instances
+
+if [ $# -ne 6 ]; then
+  echo "Usage: $0 num base_image_name network_name vm_name image_dir instance_base_dir"
+  echo "Example: $0 98 kylin2-new ovs-network ns98 /home/ubuntu/virsh/images /home/ubuntu/virsh/instances"
+  exit 1
+fi
+
+INSTANCE_NUM=$1
+BASE_IMAGE_NAME=$2
+NETWORK=$3
+VM_NAME=$4
+IMAGE_DIR=$5
+INSTANCE_BASE_DIR=$6
+
+INSTANCE_DIR="${INSTANCE_BASE_DIR}/${VM_NAME}"
+
+# 去掉传入基础镜像名的扩展名后缀，统一使用 qcow2
+IMAGE_BASE_NAME=$(echo "${BASE_IMAGE_NAME}" | sed 's/\.[^.]*$//')
+SOURCE_IMAGE_PATH="${IMAGE_DIR}/${IMAGE_BASE_NAME}.qcow2"
+
+if [ ! -f "${SOURCE_IMAGE_PATH}" ]; then
+  echo "[ERROR] 基础镜像未找到: ${SOURCE_IMAGE_PATH}"
+  exit 1
+fi
+
+# 资源与设备参数（可通过环境变量覆盖）
+MEMORY_SIZE=${MEMORY_SIZE:-4096}
+CPU_CORES=${CPU_CORES:-4}
+GRAPHICS=${GRAPHICS:-"vnc,listen=0.0.0.0"}
+DISK_BUS=${DISK_BUS:-virtio}
+DISK_FORMAT=${DISK_FORMAT:-qcow2}
+OSINFO=${OSINFO:-debian10} # 麒麟兼容常见 Linux 发行版，按需调整为 ubuntu20.04/generic 等
+
+echo "--- [INFO] 开始创建虚拟机: ${VM_NAME} ---"
+echo "[SETUP] 实例目录: ${INSTANCE_DIR}"
+echo "[SETUP] 基础镜像: ${SOURCE_IMAGE_PATH}"
+echo "[SETUP] 网络: ${NETWORK}"
+echo "[SETUP] 资源: ${CPU_CORES} vCPU, ${MEMORY_SIZE} MB RAM"
+
+# 准备实例目录
+rm -rf "${INSTANCE_DIR}"
+mkdir -p "${INSTANCE_DIR}"
+
+# 创建差分镜像（硬编码关键 qcow2 选项，与输出含义一致）
+echo "[IMAGE] 正在创建差分镜像..."
+# 关键参数说明：
+# - cluster_size=65536       每个 L2 映射簇大小（提升 I/O 表现与元数据效率）
+# - refcount_bits=16         引用计数字段位宽（快照/回收效率的平衡选择）
+# - lazy_refcounts=off       关闭懒引用计数，保证崩溃后一致性（更安全）
+# - extended_l2=off          关闭扩展L2表（兼容性优先）
+# - size=60G                 可见逻辑容量（差分盘不会立即占满）
+qemu-img create -f qcow2 -F qcow2 \
+    -o backing_file="${SOURCE_IMAGE_PATH}" \
+    -o cluster_size=65536 \
+    -o refcount_bits=16 \
+    -o lazy_refcounts=off \
+    -o extended_l2=off \
+    -o size=60G \
+    "${INSTANCE_DIR}/disk.qcow2"
+echo "[IMAGE] 差分镜像创建成功。"
+
+# 创建虚拟机
+echo "[VIRT] 正在执行 virt-install 命令..."
+virt-install \
+  --connect qemu:///system \
+  --virt-type kvm \
+  --name "${VM_NAME}" \
+  --ram "${MEMORY_SIZE}" \
+  --vcpus "${CPU_CORES}" \
+  --disk path="${INSTANCE_DIR}/disk.qcow2",format=${DISK_FORMAT},bus=${DISK_BUS} \
+  --network network="${NETWORK}",model=virtio \
+  --graphics "${GRAPHICS}" \
+  --osinfo "${OSINFO}" \
+  --noautoconsole \
+  --import
+
+echo "[VIRT] virt-install 命令执行完毕。"
+echo "--- [SUCCESS] 虚拟机 ${VM_NAME} 已成功启动 ---"
+
+# 输出 VNC 连接信息
+echo "VNC 连接信息:"
+virsh domdisplay "${VM_NAME}"

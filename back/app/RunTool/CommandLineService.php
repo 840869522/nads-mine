@@ -729,7 +729,33 @@ XML;
     Log::info("Windows VM creation script (win10) for vm '{$options['vm_name']}' executed successfully.", [
         'output' => $process->getOutput()
     ]);
-}
+    }
+
+    public function createVmKylin(array $options): void
+    {
+    // 指向麒麟脚本（与 win7_1 一致的6参数顺序）
+    $scriptPath = app_path('RunTool/vmscript/newvm_ql');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'],
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Kylin VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360);
+    $process->mustRun();
+
+    Log::info("Kylin VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+    }
 }
 
 // // ```json

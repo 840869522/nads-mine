@@ -304,5 +304,8 @@
   "v_tar_rpcRemote.qcow2": {
     "osType": "win2003",
     "description": "WindowsRPC溢出漏洞探测靶机镜像"
+  },
+  "kylin2-new.qcow2": {
+    "osType": "kylin"
   }
 }
