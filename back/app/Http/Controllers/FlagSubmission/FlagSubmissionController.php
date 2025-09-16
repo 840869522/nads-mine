@@ -50,24 +50,49 @@ class FlagSubmissionController extends BaseController
      */
     public function submitFlag(Request $request)
     {
-        // 1. 简化用户信息获取，使用请求参数或默认用户
+        // 1. 严格的用户身份验证 - 要求必须登录
         $token_data = $request->input("token_data");
         
-        // 修复数组访问错误：检查token_data是否存在且为数组
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            // 如果token_data无效，尝试从其他地方获取用户信息
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
-            }
-            
-            Log::warning("Token data无效，使用备用用户名", [
+        // 检查token_data是否存在且为数组，且包含有效的用户ID
+        if (!is_array($token_data) || !isset($token_data['id']) || empty($token_data['id'])) {
+            Log::warning("Flag提交失败：用户未登录或token无效", [
                 'token_data' => $token_data,
-                'fallback_username' => $username,
-                'request_all' => $request->all()
+                'request_ip' => $request->ip(),
+                'request_headers' => $request->headers->all()
             ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE, 
+                '请先登录后再提交Flag。如果已登录，请刷新页面重试。'
+            );
+        }
+        
+        $username = $token_data['id'];
+        
+        // 验证用户是否在数据库中存在
+        try {
+            $userExists = \App\Models\Users\UserModel::getUserById($username);
+            if ($userExists['code'] !== \App\Utils\GlobalResponse::$DATABASE_SUCCESS_CODE || !$userExists['data']) {
+                Log::error("Flag提交失败：用户不存在", [
+                    'username' => $username,
+                    'user_check_result' => $userExists
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    '用户账户验证失败，请联系管理员。'
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error("Flag提交失败：用户验证异常", [
+                'username' => $username,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '系统错误，请稍后重试。'
+            );
         }
 
         // 2. 参数校验 - 简化正则表达式验证防止语法错误
@@ -430,22 +455,22 @@ class FlagSubmissionController extends BaseController
      */
     public function getSubmissionHistory(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查
+        // 1. 严格的用户身份验证 - 要求必须登录
         $token_data = $request->input("token_data");
         
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
-            }
-            
-            Log::warning("getSubmissionHistory: Token data无效", [
+        if (!is_array($token_data) || !isset($token_data['id']) || empty($token_data['id'])) {
+            Log::warning("获取Flag历史记录失败：用户未登录或token无效", [
                 'token_data' => $token_data,
-                'fallback_username' => $username
+                'request_ip' => $request->ip()
             ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '请先登录后再查看历史记录。'
+            );
         }
+        
+        $username = $token_data['id'];
 
         // 2. 参数校验
         $validator = Validator::make($request->all(), [
@@ -579,16 +604,17 @@ class FlagSubmissionController extends BaseController
      */
     public function getSceneInstances(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查（可选）
+        // 1. 用户身份验证（可选）
         $token_data = $request->input("token_data");
         
-        if (is_array($token_data) && isset($token_data['id'])) {
+        if (is_array($token_data) && isset($token_data['id']) && !empty($token_data['id'])) {
             $username = $token_data['id'];
         } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
-            }
+            // 场景实例列表可以允许匿名访问，但记录日志
+            $username = 'anonymous';
+            Log::info("匿名用户访问场景实例列表", [
+                'request_ip' => $request->ip()
+            ]);
         }
 
         try {
@@ -617,16 +643,17 @@ class FlagSubmissionController extends BaseController
      */
     public function getTargetInstances(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查（可选）
+        // 1. 用户身份验证
         $token_data = $request->input("token_data");
         
-        if (is_array($token_data) && isset($token_data['id'])) {
+        if (is_array($token_data) && isset($token_data['id']) && !empty($token_data['id'])) {
             $username = $token_data['id'];
         } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
-            }
+            // 靠机列表可以允许匿名访问，但记录日志
+            $username = 'anonymous';
+            Log::info("匿名用户访问靰机实例列表", [
+                'request_ip' => $request->ip()
+            ]);
         }
 
         // 2. 参数校验
