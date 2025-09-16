@@ -50,24 +50,65 @@ class FlagSubmissionController extends BaseController
      */
     public function submitFlag(Request $request)
     {
-        // 1. 严格的用户身份验证 - 要求必须登录
-        $token_data = $request->input("token_data");
+        // 1. 直接从请求头中验证JWT token
+        $authHeader = $request->header('Authorization');
         
-        // 检查token_data是否存在且为数组，且包含有效的用户ID
-        if (!is_array($token_data) || !isset($token_data['id']) || empty($token_data['id'])) {
-            Log::warning("Flag提交失败：用户未登录或token无效", [
-                'token_data' => $token_data,
+        if (!$authHeader) {
+            Log::warning("Flag提交失败：Authorization头缺失", [
                 'request_ip' => $request->ip(),
-                'request_headers' => $request->headers->all()
+                'all_headers' => $request->headers->all()
             ]);
             
             return $this->_response(
-                GlobalResponse::$HTTP_STATUS_ERROR_CODE, 
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 '请先登录后再提交Flag。如果已登录，请刷新页面重试。'
             );
         }
         
-        $username = $token_data['id'];
+        // 直接使用Authorization头作为token（项目原有逻辑）
+        $token = $authHeader;
+        
+        // 解码JWT token
+        try {
+            $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+            
+            if ($jwtResult['err'] !== null) {
+                Log::warning("Flag提交失败：JWT token无效", [
+                    'jwt_error' => $jwtResult['err'],
+                    'request_ip' => $request->ip()
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                    'Token已过期或无效，请重新登录。'
+                );
+            }
+            
+            $tokenData = $jwtResult['data'];
+            if (!isset($tokenData['id']) || empty($tokenData['id'])) {
+                Log::error("Flag提交失败：JWT token中缺少用户ID", [
+                    'token_data' => $tokenData
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'Token数据异常，请重新登录。'
+                );
+            }
+            
+            $username = $tokenData['id'];
+            
+        } catch (\Exception $e) {
+            Log::error("Flag提交失败：JWT解码异常", [
+                'error' => $e->getMessage(),
+                'auth_header' => substr($authHeader, 0, 20) . '...'
+            ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                'Token解码失败，请重新登录。'
+            );
+        }
         
         // 验证用户是否在数据库中存在
         try {
@@ -80,7 +121,7 @@ class FlagSubmissionController extends BaseController
                 
                 return $this->_response(
                     GlobalResponse::$HTTP_STATUS_ERROR_CODE,
-                    '用户账户验证失败，请联系管理员。'
+                    '用户账户不存在或已被禁用，请联系管理员。'
                 );
             }
         } catch (\Exception $e) {
@@ -455,22 +496,35 @@ class FlagSubmissionController extends BaseController
      */
     public function getSubmissionHistory(Request $request)
     {
-        // 1. 严格的用户身份验证 - 要求必须登录
-        $token_data = $request->input("token_data");
+        // 1. 直接从请求头中验证JWT token
+        $authHeader = $request->header('Authorization');
         
-        if (!is_array($token_data) || !isset($token_data['id']) || empty($token_data['id'])) {
-            Log::warning("获取Flag历史记录失败：用户未登录或token无效", [
-                'token_data' => $token_data,
-                'request_ip' => $request->ip()
-            ]);
-            
+        if (!$authHeader) {
             return $this->_response(
                 GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 '请先登录后再查看历史记录。'
             );
         }
         
-        $username = $token_data['id'];
+        // 直接使用Authorization头作为token（项目原有逻辑）
+        $token = $authHeader;
+        
+        // 解码JWT token
+        try {
+            $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+            if ($jwtResult['err'] !== null || !isset($jwtResult['data']['id'])) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'Token已过期，请重新登录。'
+                );
+            }
+            $username = $jwtResult['data']['id'];
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '身份验证失败，请重新登录。'
+            );
+        }
 
         // 2. 参数校验
         $validator = Validator::make($request->all(), [
@@ -604,13 +658,24 @@ class FlagSubmissionController extends BaseController
      */
     public function getSceneInstances(Request $request)
     {
-        // 1. 用户身份验证（可选）
-        $token_data = $request->input("token_data");
+        // 1. 用户身份验证（可选，允许匿名访问）
+        $authHeader = $request->header('Authorization');
         
-        if (is_array($token_data) && isset($token_data['id']) && !empty($token_data['id'])) {
-            $username = $token_data['id'];
+        if ($authHeader) {
+            // 直接使用Authorization头作为token（项目原有逻辑）
+            $token = $authHeader;
+            
+            try {
+                $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+                if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {
+                    $username = $jwtResult['data']['id'];
+                } else {
+                    $username = 'anonymous';
+                }
+            } catch (\Exception $e) {
+                $username = 'anonymous';
+            }
         } else {
-            // 场景实例列表可以允许匿名访问，但记录日志
             $username = 'anonymous';
             Log::info("匿名用户访问场景实例列表", [
                 'request_ip' => $request->ip()
@@ -643,15 +708,26 @@ class FlagSubmissionController extends BaseController
      */
     public function getTargetInstances(Request $request)
     {
-        // 1. 用户身份验证
-        $token_data = $request->input("token_data");
+        // 1. 用户身份验证（可选，允许匿名访问）
+        $authHeader = $request->header('Authorization');
         
-        if (is_array($token_data) && isset($token_data['id']) && !empty($token_data['id'])) {
-            $username = $token_data['id'];
+        if ($authHeader) {
+            // 直接使用Authorization头作为token（项目原有逻辑）
+            $token = $authHeader;
+            
+            try {
+                $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+                if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {
+                    $username = $jwtResult['data']['id'];
+                } else {
+                    $username = 'anonymous';
+                }
+            } catch (\Exception $e) {
+                $username = 'anonymous';
+            }
         } else {
-            // 靠机列表可以允许匿名访问，但记录日志
             $username = 'anonymous';
-            Log::info("匿名用户访问靰机实例列表", [
+            Log::info("匿名用户访问鼠机实例列表", [
                 'request_ip' => $request->ip()
             ]);
         }
