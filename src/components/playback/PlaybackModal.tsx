@@ -164,7 +164,7 @@ const HostDisplay = ({
     host: Host,
     data: HostData,
     playbackStates: Record<string, PlaybackState>,
-    onPlaybackAction: (key: string, action: 'play' | 'pause' | 'stop' | 'close') => void
+    onPlaybackAction: (key: string, action: 'play' | 'pause' | 'stop' | 'close') => Promise<void>
 }) => {
     const [activeTab, setActiveTab] = useState(0);
 
@@ -255,29 +255,40 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    targetHost: host.ipAddress,
+                    targetHost: host.ipAddress.split('/')[0],
                     targetPort: 8000,
                     cwd: command.cwd,
                     command: command.command,
                     indexName: indexName
                 })
             });
-            const result = await res.json();
-            if (!res.ok && result.status !== 'fallback') {
-                return `Error: ${result.detail || result.error || 'Unknown error'}`;
+
+            const responseText = await res.text();
+            try {
+                const result = JSON.parse(responseText);
+                if (result.status === 'fallback') {
+                    return result.stdout;
+                }
+                if (res.ok) {
+                    return result.stdout || result.stderr || "";
+                }
+                return `Error: ${result.detail || result.error || responseText}`;
+            } catch (e) {
+                // This catches JSON.parse errors, meaning the response was not JSON (e.g., HTML 404 page)
+                return `[Error] Received invalid response from server:\n${responseText}`;
             }
-            return result.stdout || result.stderr || (result.status === 'fallback' ? result.message : '');
         } catch (e: any) {
-            return `Failed to execute command: ${e.message}`;
+            // This catches network errors (e.g., fetch failed to connect)
+            return `[Error] Failed to execute command: ${e.message}`;
         }
     }
 
-    // Correct, state-driven playback engine
+    // State-driven playback engine
     useEffect(() => {
         const activeKeys = Object.keys(playbackStates).filter(k => playbackStates[k].status === 'playing');
 
         activeKeys.forEach(key => {
-            if (timeoutRef.current[key]) return; // A timeout is already scheduled for this key
+            if (timeoutRef.current[key]) return;
 
             const state = playbackStates[key];
             const [indexName, groupName] = key.split('__');
@@ -285,7 +296,7 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
             const commands = data?.[indexName]?.groups[groupName];
 
             if (!commands || !host || state.currentIndex >= commands.length) {
-                handlePlaybackAction(key, 'stop'); // Mark as finished
+                handlePlaybackAction(key, 'stop');
                 return;
             }
 
@@ -296,81 +307,76 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                 const output = await executeRemoteCommand(host, commandToExecute, indexName);
 
                 setPlaybackStates(s => {
-                    // Check status again *before* setting state to avoid updates after pausing/stopping
                     if (s[key]?.status !== 'playing') {
                         delete timeoutRef.current[key];
                         return s;
                     }
-
                     const currentLog = s[key]?.log || [];
-                    const newLog = [...currentLog, `$ ${commandToExecute.command}`, output];
-
+                    const newLog = output ? [...currentLog, `$ ${commandToExecute.command}`, output] : [...currentLog, `$ ${commandToExecute.command}`];
                     delete timeoutRef.current[key];
-
                     return { ...s, [key]: { ...s[key], log: newLog, currentIndex: s[key].currentIndex + 1 } };
                 });
             }, delay);
         });
 
-        // Cleanup on unmount
         return () => {
             Object.values(timeoutRef.current).forEach(clearTimeout);
         }
     }, [playbackStates, data, hostMap, fixedInterval]);
 
 
-    const handlePlaybackAction = (key: string, action: 'play' | 'pause' | 'stop' | 'close') => {
-        setPlaybackStates(s => {
-            const current = s[key] || { status: 'stopped', currentIndex: 0, log: [] };
-            let newState = { ...current };
+    const handlePlaybackAction = async (key: string, action: 'play' | 'pause' | 'stop' | 'close') => {
+        const currentState = playbackStates[key] || { status: 'stopped', currentIndex: 0, log: [] };
 
-            switch (action) {
-                case 'play':
-                    if (current.status === 'stopped' || current.status === 'finished') {
-                        newState = { status: 'playing', currentIndex: 0, log: [] };
-                    } else { // Resuming from paused
-                        newState.status = 'playing';
-                    }
-                    break;
-                case 'pause':
-                    if (timeoutRef.current[key]) {
-                        clearTimeout(timeoutRef.current[key]);
-                        delete timeoutRef.current[key];
-                    }
-                    newState.status = 'paused';
-                    break;
-                case 'stop':
-                    if (timeoutRef.current[key]) {
-                        clearTimeout(timeoutRef.current[key]);
-                        delete timeoutRef.current[key];
-                    }
-                    newState.status = 'finished';
-                    break;
-                case 'close':
-                    if (timeoutRef.current[key]) {
-                        clearTimeout(timeoutRef.current[key]);
-                        delete timeoutRef.current[key];
-                    }
-                    newState = { status: 'stopped', currentIndex: 0, log: [] };
-                    break;
+        if (action === 'play') {
+            let newState = { ...currentState, status: 'playing' as PlayStatus };
+            // If starting from the beginning, execute the first command immediately
+            if (currentState.status === 'stopped' || currentState.status === 'finished') {
+                const [indexName, groupName] = key.split('__');
+                const host = hostMap[indexName];
+                const commands = data?.[indexName]?.groups[groupName];
+                if (commands && commands.length > 0 && host) {
+                    const firstCommand = commands[0];
+                    const output = await executeRemoteCommand(host, firstCommand, indexName);
+                    newState = {
+                        status: 'playing',
+                        currentIndex: 1,
+                        log: [`$ ${firstCommand.command}`, output]
+                    };
+                } else {
+                    newState = { status: 'playing', currentIndex: 0, log: [] };
+                }
             }
-            return { ...s, [key]: newState };
-        });
+            setPlaybackStates(s => ({ ...s, [key]: newState }));
+        } else {
+            // Handle pause, stop, close
+            if (timeoutRef.current[key]) {
+                clearTimeout(timeoutRef.current[key]);
+                delete timeoutRef.current[key];
+            }
+            let newStatus: PlayStatus = 'paused';
+            if (action === 'stop') newStatus = 'finished';
+            if (action === 'close') newStatus = 'stopped';
+
+            let finalState = { ...currentState, status: newStatus };
+            if (action === 'close') {
+                finalState = { status: 'stopped', currentIndex: 0, log: [] };
+            }
+            setPlaybackStates(s => ({ ...s, [key]: finalState }));
+        }
     };
 
     const handlePlayAll = () => {
         if (!data) return;
-        const newStates: Record<string, PlaybackState> = {};
         for (const host of hosts) {
             const hostData = data[host.indexName];
             if (hostData?.groups) {
                 for (const groupName in hostData.groups) {
                     const key = `${host.indexName}__${groupName}`;
-                    newStates[key] = { status: 'playing', currentIndex: 0, log: [] };
+                    handlePlaybackAction(key, 'play');
                 }
             }
         }
-        setPlaybackStates(newStates);
     };
 
     const fetchData = useCallback(async () => {
