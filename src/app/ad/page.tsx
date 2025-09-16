@@ -53,12 +53,14 @@ import GroupIcon from '@mui/icons-material/Group';
 import ShieldIcon from '@mui/icons-material/Shield';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import PersonIcon from '@mui/icons-material/Person';
+import FlagIcon from '@mui/icons-material/Flag';
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {useAuth} from "@/hooks/useAuth";
 import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
+import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; }
@@ -121,6 +123,10 @@ const AdManagementPage: React.FC = () => {
 
     const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
     const [selectedAdForTeamDetails, setSelectedAdForTeamDetails] = useState<AdConfig | null>(null);
+    
+    // Flag历史相关状态
+    const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
+    const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
 
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
@@ -391,6 +397,20 @@ const AdManagementPage: React.FC = () => {
         setTimeout(() => setSelectedAdForTeamDetails(null), 300);
     };
 
+    const handleOpenFlagHistory = (adConfig: AdConfig) => {
+        if (adConfig.c_scene_instance_id) {
+            setSelectedAdForFlagHistory(adConfig);
+            setIsFlagHistoryOpen(true);
+        } else {
+            setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看Flag历史。' });
+        }
+    };
+
+    const handleCloseFlagHistory = () => {
+        setIsFlagHistoryOpen(false);
+        setTimeout(() => setSelectedAdForFlagHistory(null), 300);
+    };
+
     const handleToggleUserBan = async (teamId: number, username: string) => {
         if (!selectedAdForTeamDetails) return;
         try {
@@ -473,9 +493,14 @@ const AdManagementPage: React.FC = () => {
                                                         </Tooltip>
                                                     )}
                                                     {adConfig.c_status === 'running' && (
-                                                        <Tooltip title="停止演练">
-                                                            <IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}><StopCircleIcon /></IconButton>
-                                                        </Tooltip>
+                                                        <>
+                                                            <Tooltip title="Flag历史">
+                                                                <IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}><FlagIcon /></IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="停止演练">
+                                                                <IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}><StopCircleIcon /></IconButton>
+                                                            </Tooltip>
+                                                        </>
                                                     )}
                                                     <Tooltip title="查看队伍成员">
                                                         <IconButton color="secondary" onClick={() => handleOpenTeamDetails(adConfig)}><GroupIcon /></IconButton>
@@ -576,6 +601,15 @@ const AdManagementPage: React.FC = () => {
 
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog open={isDetailsModalOpen} onClose={handleCloseDetails} instanceId={selectedInstanceId} scenarioName={selectedScenarioName} />
+            )}
+
+            {isFlagHistoryOpen && selectedAdForFlagHistory && selectedAdForFlagHistory.c_scene_instance_id && (
+                <FlagHistoryModal
+                    open={isFlagHistoryOpen}
+                    onClose={handleCloseFlagHistory}
+                    sceneInstanceId={selectedAdForFlagHistory.c_scene_instance_id}
+                    title={`Flag提交历史 - ${selectedAdForFlagHistory.c_drill_name}`}
+                />
             )}
 
             <Dialog open={isTeamDetailsOpen} onClose={handleCloseTeamDetails} fullWidth maxWidth="xs">
