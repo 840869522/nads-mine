@@ -159,6 +159,10 @@ class CommandLineService
     {
         // 1. 为 Linux Bridge 配置 IP 地址
         $gatewayIpOnly = explode('/', $gatewayIp)[0];
+        $networkCidr = explode('/', $gatewayIp)[1] ?? '16';
+        $networkBase = substr($gatewayIpOnly, 0, strrpos($gatewayIpOnly, '.'));
+        $networkCidrFull = $networkBase . '.0/' . $networkCidr;
+        
         // $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
         // Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
 
@@ -169,13 +173,94 @@ class CommandLineService
         //     throw new ProcessFailedException($processConfigBridge);
         // }
 
-        // 2. 循环为每个容器配置默认路由（使用 replace 避免 File exists 错误，保证幂等）
+        // 2. 配置NAT转发规则，让容器能够访问外网
+        $this->configureNatRules($networkCidrFull, $bridgeName);
+
+        // 3. 循环为每个容器配置默认路由（使用 replace 避免 File exists 错误，保证幂等）
         foreach ($containers as $container) {
             $containerName = $container['name'];
             // 使用 ip route replace，若不存在则新增，存在则覆盖，避免重复添加报错
             $commandReplaceRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'replace', 'default', 'via', $gatewayIpOnly];
             Log::info("Executing [IP-Config]: Replacing default route for container {$containerName} via {$gatewayIpOnly}");
             (new Process($commandReplaceRoute))->mustRun();
+        }
+    }
+
+    /**
+     * 配置NAT转发规则，让指定网段的容器能够访问外网
+     *
+     * @param string $networkCidr 网络CIDR (e.g., '10.100.0.0/16')
+     * @param string $bridgeName 网桥名称 (e.g., 'br0')
+     * @return void
+     */
+    private function configureNatRules(string $networkCidr, string $bridgeName): void
+    {
+        try {
+            // 1. 添加MASQUERADE规则，让容器网段的流量能够通过NAT访问外网
+            $masqueradeCommand = [
+                'sudo', 'iptables', '-t', 'nat', '-A', 'POSTROUTING',
+                '-s', $networkCidr,
+                '-o', $bridgeName,
+                '-j', 'MASQUERADE'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding MASQUERADE rule for {$networkCidr} via {$bridgeName}: " . implode(' ', $masqueradeCommand));
+            
+            $process = new Process($masqueradeCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                // 如果规则已存在，忽略错误
+                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
+                    Log::warning("MASQUERADE rule may already exist or failed to add: " . $process->getErrorOutput());
+                }
+            } else {
+                Log::info("Successfully added MASQUERADE rule for {$networkCidr}");
+            }
+
+            // 2. 确保FORWARD链允许转发
+            $forwardCommand = [
+                'sudo', 'iptables', '-A', 'FORWARD',
+                '-s', $networkCidr,
+                '-j', 'ACCEPT'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding FORWARD rule for {$networkCidr}: " . implode(' ', $forwardCommand));
+            
+            $process = new Process($forwardCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
+                    Log::warning("FORWARD rule may already exist or failed to add: " . $process->getErrorOutput());
+                }
+            } else {
+                Log::info("Successfully added FORWARD rule for {$networkCidr}");
+            }
+
+            // 3. 允许返回流量
+            $returnCommand = [
+                'sudo', 'iptables', '-A', 'FORWARD',
+                '-d', $networkCidr,
+                '-j', 'ACCEPT'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding return FORWARD rule for {$networkCidr}: " . implode(' ', $returnCommand));
+            
+            $process = new Process($returnCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
+                    Log::warning("Return FORWARD rule may already exist or failed to add: " . $process->getErrorOutput());
+                }
+            } else {
+                Log::info("Successfully added return FORWARD rule for {$networkCidr}");
+            }
+
+        } catch (\Exception $e) {
+            Log::error("Failed to configure NAT rules: " . $e->getMessage());
+            throw $e;
         }
     }
     //交换机和br0连接

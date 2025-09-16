@@ -307,5 +307,11 @@
   },
   "kylin2-new.qcow2": {
     "osType": "kylin"
+  },
+  "v_att_TPCimplant.qcow2": {
+    "osType": "ubuntu"
+  },
+  "v_tar_TPCimplant.qcow2": {
+    "osType": "ubuntu"
   }
 }
