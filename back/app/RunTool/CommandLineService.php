@@ -196,6 +196,12 @@ class CommandLineService
     private function configureNatRules(string $networkCidr, string $bridgeName): void
     {
         try {
+            // 检查规则是否已存在，避免重复添加
+            if ($this->isNatRuleExists($networkCidr, $bridgeName)) {
+                Log::info("NAT rules for {$networkCidr} already exist, skipping configuration");
+                return;
+            }
+
             // 1. 添加MASQUERADE规则，让容器网段的流量能够通过NAT访问外网
             $masqueradeCommand = [
                 'sudo', 'iptables', '-t', 'nat', '-A', 'POSTROUTING',
@@ -210,10 +216,7 @@ class CommandLineService
             $process->run();
             
             if (!$process->isSuccessful()) {
-                // 如果规则已存在，忽略错误
-                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
-                    Log::warning("MASQUERADE rule may already exist or failed to add: " . $process->getErrorOutput());
-                }
+                Log::warning("Failed to add MASQUERADE rule: " . $process->getErrorOutput());
             } else {
                 Log::info("Successfully added MASQUERADE rule for {$networkCidr}");
             }
@@ -231,9 +234,7 @@ class CommandLineService
             $process->run();
             
             if (!$process->isSuccessful()) {
-                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
-                    Log::warning("FORWARD rule may already exist or failed to add: " . $process->getErrorOutput());
-                }
+                Log::warning("Failed to add FORWARD rule: " . $process->getErrorOutput());
             } else {
                 Log::info("Successfully added FORWARD rule for {$networkCidr}");
             }
@@ -251,9 +252,7 @@ class CommandLineService
             $process->run();
             
             if (!$process->isSuccessful()) {
-                if (!str_contains($process->getErrorOutput(), 'iptables: Resource temporarily unavailable')) {
-                    Log::warning("Return FORWARD rule may already exist or failed to add: " . $process->getErrorOutput());
-                }
+                Log::warning("Failed to add return FORWARD rule: " . $process->getErrorOutput());
             } else {
                 Log::info("Successfully added return FORWARD rule for {$networkCidr}");
             }
@@ -261,6 +260,36 @@ class CommandLineService
         } catch (\Exception $e) {
             Log::error("Failed to configure NAT rules: " . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * 检查NAT规则是否已存在
+     *
+     * @param string $networkCidr 网络CIDR (e.g., '10.100.0.0/16')
+     * @param string $bridgeName 网桥名称 (e.g., 'br0')
+     * @return bool
+     */
+    private function isNatRuleExists(string $networkCidr, string $bridgeName): bool
+    {
+        try {
+            // 检查MASQUERADE规则是否存在
+            $checkCommand = [
+                'sudo', 'iptables', '-t', 'nat', '-C', 'POSTROUTING',
+                '-s', $networkCidr,
+                '-o', $bridgeName,
+                '-j', 'MASQUERADE'
+            ];
+            
+            $process = new Process($checkCommand);
+            $process->run();
+            
+            // 如果命令成功执行（退出码0），说明规则已存在
+            return $process->isSuccessful();
+            
+        } catch (\Exception $e) {
+            Log::warning("Failed to check NAT rule existence: " . $e->getMessage());
+            return false; // 如果检查失败，假设规则不存在，继续添加
         }
     }
     //交换机和br0连接
