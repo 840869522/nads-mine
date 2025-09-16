@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  * 封装所有通过命令行与系统（如 Docker, OVS）交互的逻辑。
  */
 class CommandLineService
-{   
+{
        /**
      * Applies DNAT rules for port forwarding using iptables.
      *
@@ -161,7 +161,7 @@ class CommandLineService
         $gatewayIpOnly = explode('/', $gatewayIp)[0];
         // $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
         // Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
-        
+
         // $processConfigBridge = new Process($commandConfigBridge);
         // $processConfigBridge->run();
         // // 如果IP已存在，忽略错误，否则抛出异常
@@ -243,7 +243,7 @@ class CommandLineService
     {
         // 1. 使用 app_path() 生成脚本的绝对路径
         $scriptPath = app_path('RunTool/vmscript/newvm_switch.sh');
-        
+
         // 2. 准备9个命令行参数
         $args = [
             $options['id'],
@@ -253,14 +253,14 @@ class CommandLineService
             $options['flag'] ?? 'NULL',
             $options['switch_name'],
             $options['vm_name'],
-            $options['image_dir'], 
-            $options['instance_base_dir'], 
+            $options['image_dir'],
+            $options['instance_base_dir'],
         ];
-        
+
         // 3. 准备并执行命令
         $command = array_merge([$scriptPath], $args);
         Log::info('Executing VM creation shell script (9-param version): ' . implode(' ', $command));
-        
+
         $process = new Process($command);
         $process->setTimeout(360);
         $process->run();
@@ -272,17 +272,17 @@ class CommandLineService
             ]);
             throw new ProcessFailedException($process);
         }
-        
+
         Log::info("VM creation script for vm '{$options['id']}' executed successfully.", [
             'output' => $process->getOutput()
         ]);
     }
-    
+
 
 
 
     /**
-     * 
+     *
      * 使用veth pair连接两个OVS交换机。
      *
      * @param string $switch1Name 第一个交换机的名称
@@ -330,9 +330,9 @@ class CommandLineService
         Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp2));
         (new Process($commandLinkUp2))->mustRun();
     }
-    
+
     /**
-     * 
+     *
      * 将一个容器连接到一个OVS交换机上，严格最新的命名规则。
      *
      * @param string      $switchName      参数1: 交换机的名称
@@ -357,7 +357,7 @@ class CommandLineService
         $containerPrefix = substr($baseContainerName, 0, 2); // 容器前两个字符
         $containerSuffix = substr($baseContainerName, -2);   // 容器最后一个字符
         $containerPart = $containerPrefix . $containerSuffix;
-        
+
         // 3. 交换机唯一哈希部分
         $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
 
@@ -393,9 +393,9 @@ class CommandLineService
         }
     }
 
-    
+
     /**
-     * 
+     *
      * 删除一个 OVS 网桥。
      *
      * @param string $switchName 要删除的网桥的名称。
@@ -546,10 +546,10 @@ XML;
             $command[] = '-p';
             $command[] = "{$port['hostPort']}:{$port['containerPort']}";
         }
-        
+
         // d. 设置网络模式为 none，这是后续手动连接的关键
         // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
-        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1'];
+        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1','px4-image','px4pro2-image','px4pro-image','mavlink-px4'];
         if (!in_array($options['image'], $skipNetworkImages)) {
             $command[] = '--network=none';
         }
@@ -588,7 +588,7 @@ XML;
      */
     public function getContainerPid(string $containerId): int
     {
-        
+
         $command = ['sudo', 'docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
         $process = new Process($command);
         $process->run();
@@ -604,7 +604,7 @@ XML;
         return $pid;
     }
     /**
-     * 
+     *
      * 列出系统上所有的 OVS 网桥。
      *
      * @return array 返回一个包含所有网桥名称的数组。
@@ -637,8 +637,8 @@ XML;
         $options['flag'] ?? 'NULL',
         $options['switch_name'],
         $options['vm_name'],
-        $options['image_dir'], 
-        $options['instance_base_dir'], 
+        $options['image_dir'],
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -664,7 +664,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -690,7 +690,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -716,7 +716,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
