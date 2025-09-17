@@ -6,7 +6,7 @@ import GuacamoleLite from 'guacamole-lite';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import process from 'process';
-import axios from 'axios'; // ★ 新增
+import axios from 'axios'; // （未使用，仅保留）
 
 const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
 
@@ -27,7 +27,6 @@ const PHP_TARGET_URL = `http://127.0.0.1:${PHP_API_PORT}`;
 const AI_CHAT_URL = `http://127.0.0.1:${AI_CHAT_PORT}`;
 const WEBSOCKET_TARGET_URL = `http://127.0.0.1:${WEBSOCKET_PORT}`; // WebSocket 目标URL
 
-
 let mainHttpServer;
 let guacServer;
 
@@ -42,48 +41,72 @@ app.prepare().then(() => {
     const phpProxy = createProxyMiddleware({
         target: PHP_TARGET_URL,
         changeOrigin: true,
-        pathRewrite: { 
-            '^/back/': '/', 
+        pathRewrite: {
+            '^/back/': '/',
             // '^/api/': '/'
         },
         logLevel: dev ? 'debug' : 'info',
     });
 
-    // AI CHAT SERVER PROXY
+    // AI CHAT SERVER PROXY（SSE）
     const aiChatProxy = createProxyMiddleware({
         target: AI_CHAT_URL,
         changeOrigin: true,
-        pathRewrite : {"^/chat/" : "/"},
+        pathRewrite: { '^/chat/': '/' },
         ws: true,
         logLevel: dev ? 'debug' : 'info',
-        onProxyRes(proxyRes, req, res) {
+        onProxyRes(proxyRes) {
             proxyRes.headers['Content-Type'] = 'text/event-stream';
-        }
+        },
     });
 
-    // 为 Guacamole 服务创建一个新的代理
-    // 这个代理会将发往主服务器 /connect-guac 的请求转发到内部的 Guacamole 服务器
+    // Guacamole 服务代理（WebSocket）
     const guacProxy = createProxyMiddleware({
         target: GUAC_TARGET_URL,
         changeOrigin: true,
-        ws: true, // 这是最关键的一步: 开启 WebSocket 代理
+        ws: true,
         logLevel: dev ? 'debug' : 'info',
+        // ★ 关键：避免长连被动超时或在升级后注入错误页
+        timeout: 0,
+        proxyTimeout: 0,
+        onError(err, req, res) {
+            console.error('[WS proxy error][guac]:', err.message);
+            if (res && !res.headersSent) {
+                res.writeHead(502, { 'Content-Type': 'text/plain' });
+                res.end('WS proxy error');
+            }
+        },
+        onProxyReqWs(proxyReq, req, socket) {
+            proxyReq.setHeader('Connection', 'Upgrade');
+            proxyReq.setHeader('Upgrade', 'websocket');
+            socket.setKeepAlive?.(true, 30_000);
+            socket.setNoDelay?.(true);
+        },
     });
 
     // WebSocket 代理 - 将 WebSocket 请求代理到 Workerman 服务器
     const websocketProxy = createProxyMiddleware({
         target: WEBSOCKET_TARGET_URL,
         changeOrigin: true,
-        ws: true, // 开启 WebSocket 代理
+        ws: true,
         logLevel: dev ? 'debug' : 'info',
+        timeout: 0,
+        proxyTimeout: 0,
         onError: (err, req, res) => {
-            console.error('WebSocket 代理错误:', err.message);
+            console.error('[WS proxy error][/ws]:', err.message);
+            if (res && !res.headersSent) {
+                res.writeHead(502, { 'Content-Type': 'text/plain' });
+                res.end('WS proxy error');
+            }
         },
         onProxyReqWs: (proxyReq, req, socket) => {
             console.log('WebSocket 代理请求:', req.url);
-        }
+            proxyReq.setHeader('Connection', 'Upgrade');
+            proxyReq.setHeader('Upgrade', 'websocket');
+            socket.setKeepAlive?.(true, 30_000);
+            socket.setNoDelay?.(true);
+        },
     });
-
 
     /* =================================================================
        2. HTTP SERVER SETUP
@@ -92,20 +115,21 @@ app.prepare().then(() => {
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer((req, res) => {
         const url = req.url || '';
-        // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
-        // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+
+        // ★ 关键：让 Socket.IO 自己处理 /api/terminal 的握手/轮询/升级，避免被 Next 误处理
+        if (url.startsWith('/api/terminal')) {
+            return; // 不写响应，交给 Socket.IO 挂在同一 server 上的监听器
+        }
+
         if (url.startsWith('/connect-guac')) {
-            console.log("find guac req！！！！！！！！！！！！！")
+            console.log('find guac req！！！！！！！！！！！！！');
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
             return phpProxy(req, res);
         }
-        // if (url.startsWith('/api/')) {
-        //     return phpProxy(req, res);
-        // }
         if (url.startsWith('/chat/')) {
-            return aiChatProxy(req,res);
+            return aiChatProxy(req, res);
         }
         if (url.startsWith('/ws')) {
             return websocketProxy(req, res);
@@ -115,6 +139,10 @@ app.prepare().then(() => {
         return handle(req, res);
     });
 
+    // ★ 放大/关闭可能影响升级/长连的超时
+    mainHttpServer.requestTimeout = 0; // 不对请求总时长限时
+    mainHttpServer.headersTimeout = 0; // 不对 header 限时（避免偶发影响升级）
+
     // 独立的 Guacamole 服务器 (作为内部服务运行，不对外暴露)
     const guacHttpServer = createServer();
     guacServer = new GuacamoleLite(
@@ -123,20 +151,21 @@ app.prepare().then(() => {
         {
             crypt: { cypher: 'AES-256-CBC', key: GUAC_KEY },
             connectionDefaultSettings: {
-                rdp: { 'audio': ['audio/L16'] }
+                rdp: { audio: ['audio/L16'] },
             },
             allowedUnencryptedConnectionSettings: {
                 rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
                 ssh: ['hostname', 'port', 'username', 'password'],
                 vnc: ['hostname', 'port', 'password'],
-                join: ['id','width','height','dpi']
+                join: ['id', 'width', 'height', 'dpi'],
             },
             log: { level: 'NORMAL' },
         }
     );
-    guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
-    guacServer.on('error', (c,e) => console.error('[Guac ERR]', e));
-    guacServer.on('close', (c) =>   console.log('[Guac END]', c.connectionId));
+    guacServer.on('open', (c) => console.log('[Guac OPEN]', c.connectionId));
+    guacServer.on('error', (c, e) => console.error('[Guac ERR]', e));
+    guacServer.on('close', (c) => console.log('[Guac END]', c.connectionId));
+
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
@@ -145,19 +174,34 @@ app.prepare().then(() => {
         sockets.add(socket);
         socket.on('close', () => sockets.delete(socket));
     });
+
     mainHttpServer.on('upgrade', (req, socket, head) => {
         console.log('[upgrade] url=', req.url);
+        socket.setKeepAlive?.(true, 30_000);
+        socket.setNoDelay?.(true);
+
         if (req.url.startsWith('/connect-guac')) {
-            // 把升级请求交给同一个 guacProxy 实例处理
-            console.log("find guac req！！！！！！！！！！！！！")
+            // 把升级请求交给 guacProxy 处理
+            console.log('find guac req！！！！！！！！！！！！！');
             guacProxy.upgrade(req, socket, head);
         } else if (req.url.startsWith('/ws')) {
             // WebSocket 代理到 Workerman 服务器
             console.log('[upgrade] WebSocket proxy to Workerman:', req.url);
             websocketProxy.upgrade(req, socket, head);
         }
+        // /api/terminal 的 upgrade 让 Socket.IO 自己接手
     });
-    const io = new Server(mainHttpServer, { path: '/api/terminal' });
+
+    // ★ Socket.IO（仅 WebSocket、稳定心跳、关闭压缩）
+    const io = new Server(mainHttpServer, {
+        path: '/api/terminal',
+        transports: ['websocket'],
+        pingInterval: 25_000,
+        pingTimeout: 20_000,
+        perMessageDeflate: false,
+        maxHttpBufferSize: 1e6,
+        cors: { origin: true, credentials: true },
+    });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
@@ -166,14 +210,17 @@ app.prepare().then(() => {
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/sh'], {
-            name: 'xterm-color', cols: 80, rows: 24, cwd: process.env.HOME, env: process.env,
+            name: 'xterm-color',
+            cols: 80,
+            rows: 24,
+            cwd: process.env.HOME,
+            env: process.env,
         });
         shell.onData((d) => socket.emit('output', d));
         socket.on('input', (d) => shell.write(d));
         socket.on('resize', ({ cols, rows }) => shell.resize(cols, rows));
         socket.on('disconnect', () => shell.kill());
     });
-
 
     /* =================================================================
        4. SHUTDOWN
@@ -206,7 +253,6 @@ app.prepare().then(() => {
         shutdown().catch(console.error);
         setTimeout(forceExit, FORCE_TIMEOUT).unref();
     });
-
 
     /* =================================================================
        5. START SERVERS
