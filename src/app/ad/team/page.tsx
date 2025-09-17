@@ -147,19 +147,23 @@ const Page: React.FC = () => {
         }
     }, [debouncedSearchQuery, page, rowsPerPage]);
 
-    const fetchUsers = useCallback(async () => {
-        if (allUsers.length > 0) return;
+    const fetchUsers = async () => {
+        if (allUsers.length > 0) {
+            return;
+        }
+
         setIsUsersLoading(true);
         try {
             const response = await customFetch(`${API_BASE_URL}/ad/users`);
-            if (!response.ok) throw new Error('获取用户列表失败');
+            if (!response.ok) {
+                throw new Error('获取用户列表失败');
+            }
             const result = await response.json();
+
             if (result && result.status === 'success' && Array.isArray(result.data)) {
-                const rawUsers = result.data;
-                const formattedUsers: User[] = rawUsers.map((user: any) => ({ u_id: user.c_username, u_name: user.c_name }));
-                setAllUsers(formattedUsers);
+                setAllUsers(result.data);
             } else {
-                setAllUsers([]);
+                throw new Error('返回的用户数据格式不正确');
             }
         } catch (err) {
             setStatusMessage({ type: 'error', message: `无法加载用户列表: ${(err as Error).message}` });
@@ -167,7 +171,7 @@ const Page: React.FC = () => {
         } finally {
             setIsUsersLoading(false);
         }
-    }, [allUsers.length]);
+    };
 
     useEffect(() => { fetchTeams(); }, [fetchTeams]);
     useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
@@ -245,7 +249,6 @@ const Page: React.FC = () => {
         setIsDrillsLoading(true);
         setTeamDrills([]);
         try {
-            // 后端需要确保返回 c_scene_instance_id
             const response = await customFetch(`${API_BASE_URL}/ad/team/${team.c_id}/drills`);
             if (!response.ok) {
                 throw new Error('获取演练列表失败');
@@ -376,15 +379,25 @@ const Page: React.FC = () => {
                     <DialogContent>
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" id="name" name="name" label="队伍名称" type="text" fullWidth variant="outlined" defaultValue={editingTeam?.c_name || ''} required />
+
                         <Autocomplete
-                            multiple id="team-members" options={allUsers}
+                            multiple
+                            id="team-members"
+                            options={allUsers}
                             getOptionLabel={(option) => option.u_name ? `${option.u_id}(${option.u_name})` : option.u_id}
                             value={allUsers.filter(user => selectedMemberIds.includes(user.u_id))}
-                            onChange={(_, newValue) => { setSelectedMemberIds(newValue.map(user => user.u_id)); }}
+                            onChange={(_, newValue) => {
+                                setSelectedMemberIds(newValue.map(user => user.u_id));
+                            }}
                             isOptionEqualToValue={(option, value) => option.u_id === value.u_id}
-                            loading={isUsersLoading} noOptionsText="没有可用选项"
+                            loading={isUsersLoading}
+                            noOptionsText={isUsersLoading ? "正在加载用户..." : "没有可用用户"}
                             renderInput={(params) => (
                                 <TextField {...params} variant="outlined" label="添加队员 (可选)" placeholder="搜索并选择用户..."
+                                    // =========================================================================
+                                    // ★★★★★★★★★★★★★★★★★★★ 核心修复点 ★★★★★★★★★★★★★★★★★★★
+                                    // =========================================================================
+                                    // 将 ...params.Input-props 修正为正确的驼峰命名 ...params.InputProps
                                            InputProps={{ ...params.InputProps, endAdornment: (<>{isUsersLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps.endAdornment}</>), }}
                                 />
                             )}

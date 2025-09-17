@@ -53,12 +53,14 @@ import GroupIcon from '@mui/icons-material/Group';
 import ShieldIcon from '@mui/icons-material/Shield';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import PersonIcon from '@mui/icons-material/Person';
+import FlagIcon from '@mui/icons-material/Flag';
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
 import {useAuth} from "@/hooks/useAuth";
 import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
+import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; }
@@ -122,6 +124,10 @@ const AdManagementPage: React.FC = () => {
     const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
     const [selectedAdForTeamDetails, setSelectedAdForTeamDetails] = useState<AdConfig | null>(null);
 
+    // Flag历史相关状态
+    const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
+    const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
+
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
         const redTeam = teams.find(t => t.c_id === selectedRedTeamId);
@@ -155,21 +161,11 @@ const AdManagementPage: React.FC = () => {
             const teamsData = await teamsRes.json();
             const usersData = await usersRes.json();
             const scenesData = await scenesRes.json();
-            // ★★★ 核心修复 ★★★
-            // 对每个 API 响应进行安全的、防御性的数据提取
 
-            // ad-configs 是分页的，数据在 .data
             setAdConfigs(adConfigsData.data || []);
             setTotalAdConfigs(adConfigsData.meta?.total || 0);
-
-            // teams 可能是分页或非分页，我们检查两种情况
-            // 如果 teamsData.data 是数组，直接用；否则假设数据就是 teamsData 本身
             setTeams(Array.isArray(teamsData.data) ? teamsData.data : (Array.isArray(teamsData) ? teamsData : []));
-
-            // users 结构是 { data: { data: [...] } }
             setUsers(usersData?.data?.data || []);
-
-            // scenes 结构可能是 { data: [...] } 或直接是 [...]
             const formattedScenes = (Array.isArray(scenesData.data) ? scenesData.data : (Array.isArray(scenesData) ? scenesData : [])).map((scene: any) => ({
                 c_config_id: scene.id,
                 c_name: scene.name,
@@ -353,7 +349,20 @@ const AdManagementPage: React.FC = () => {
     };
 
     const findTeamNameById = (id: number | null) => teams.find(i => i.c_id === id)?.c_name || `未知 (ID: ${id})`;
-    const findSceneNameById = (id: number | null) => sceneConfigs.find(i => i.c_config_id === id)?.c_name || `未关联`;
+
+    // ★★★ 核心修复 ★★★: 增强此函数以处理数据不一致的情况
+    const findSceneNameById = (id: number | null): string | null => {
+        if (id === null || id === undefined) {
+            return '未关联';
+        }
+        const scene = sceneConfigs.find(i => i.c_config_id === id);
+        if (scene) {
+            return scene.c_name;
+        }
+        // 如果在已加载的场景列表中找不到，返回 null 作为特殊标记
+        return null;
+    };
+
     const findUserNameById = (id: string | null) => users.find(u => u.c_username === id)?.c_username || `未知 (${id})`;
 
     const renderStatusChip = (status: AdConfig['c_status']) => {
@@ -391,6 +400,20 @@ const AdManagementPage: React.FC = () => {
         setTimeout(() => setSelectedAdForTeamDetails(null), 300);
     };
 
+    const handleOpenFlagHistory = (adConfig: AdConfig) => {
+        if (adConfig.c_scene_instance_id) {
+            setSelectedAdForFlagHistory(adConfig);
+            setIsFlagHistoryOpen(true);
+        } else {
+            setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看Flag历史。' });
+        }
+    };
+
+    const handleCloseFlagHistory = () => {
+        setIsFlagHistoryOpen(false);
+        setTimeout(() => setSelectedAdForFlagHistory(null), 300);
+    };
+
     const handleToggleUserBan = async (teamId: number, username: string) => {
         if (!selectedAdForTeamDetails) return;
         try {
@@ -401,7 +424,6 @@ const AdManagementPage: React.FC = () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || '操作失败');
 
-            // 使用深拷贝来安全地更新状态，避免直接修改
             const updatedAdConfig = JSON.parse(JSON.stringify(selectedAdForTeamDetails));
 
             const updateTeamUsers = (team: Team | undefined) => {
@@ -414,7 +436,6 @@ const AdManagementPage: React.FC = () => {
             updateTeamUsers(updatedAdConfig.redTeam);
             updateTeamUsers(updatedAdConfig.blueTeam);
 
-            // 立即更新弹窗内容和主列表数据，提供即时反馈
             setSelectedAdForTeamDetails(updatedAdConfig);
             setAdConfigs(prev => prev.map(ad => ad.c_id === updatedAdConfig.c_id ? updatedAdConfig : ad));
 
@@ -463,7 +484,20 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findTeamNameById(adConfig.c_red_team_id)}</TableCell>
                                                 <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
                                                 <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{adConfig.referees.map(ref => (<Chip key={ref.c_user_id} label={`${findUserNameById(ref.c_user_id)} (${ref.c_level})`} size="small" />))}</Stack></TableCell>
-                                                <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
+                                                {/* ★★★ 核心修复 ★★★: 使用新的渲染逻辑来优雅地处理数据不一致 */}
+                                                <TableCell>
+                                                    {(() => {
+                                                        const sceneName = findSceneNameById(adConfig.c_scene_config_id);
+                                                        if (sceneName === null) {
+                                                            return (
+                                                                <Tooltip title={`场景模板 ID: ${adConfig.c_scene_config_id} (已失效或被删除)`}>
+                                                                    <Chip label="模板丢失" color="error" size="small" variant="outlined" />
+                                                                </Tooltip>
+                                                            );
+                                                        }
+                                                        return sceneName;
+                                                    })()}
+                                                </TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id)}><ScreenShareIcon /></IconButton></TableCell>
                                                 <TableCell align="right">
@@ -473,9 +507,14 @@ const AdManagementPage: React.FC = () => {
                                                         </Tooltip>
                                                     )}
                                                     {adConfig.c_status === 'running' && (
-                                                        <Tooltip title="停止演练">
-                                                            <IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}><StopCircleIcon /></IconButton>
-                                                        </Tooltip>
+                                                        <>
+                                                            <Tooltip title="Flag历史">
+                                                                <IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}><FlagIcon /></IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="停止演练">
+                                                                <IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}><StopCircleIcon /></IconButton>
+                                                            </Tooltip>
+                                                        </>
                                                     )}
                                                     <Tooltip title="查看队伍成员">
                                                         <IconButton color="secondary" onClick={() => handleOpenTeamDetails(adConfig)}><GroupIcon /></IconButton>
@@ -578,6 +617,15 @@ const AdManagementPage: React.FC = () => {
                 <InstanceDetailsDialog open={isDetailsModalOpen} onClose={handleCloseDetails} instanceId={selectedInstanceId} scenarioName={selectedScenarioName} />
             )}
 
+            {isFlagHistoryOpen && selectedAdForFlagHistory && selectedAdForFlagHistory.c_scene_instance_id && (
+                <FlagHistoryModal
+                    open={isFlagHistoryOpen}
+                    onClose={handleCloseFlagHistory}
+                    sceneInstanceId={selectedAdForFlagHistory.c_scene_instance_id}
+                    title={`Flag提交历史 - ${selectedAdForFlagHistory.c_drill_name}`}
+                />
+            )}
+
             <Dialog open={isTeamDetailsOpen} onClose={handleCloseTeamDetails} fullWidth maxWidth="xs">
                 <DialogTitle>队伍成员详情</DialogTitle>
                 <DialogContent dividers>
@@ -592,7 +640,6 @@ const AdManagementPage: React.FC = () => {
                                     {selectedAdForTeamDetails.redTeam.users.map(user => (
                                         <ListItem key={user.c_username}
                                                   sx={{
-                                                      // ★ 修复 1: 使用可选链 ?. 来安全地访问 is_banned
                                                       backgroundColor: user.pivot?.is_banned ? 'rgba(255, 0, 0, 0.08)' : 'transparent',
                                                       textDecoration: user.pivot?.is_banned ? 'line-through' : 'none',
                                                       opacity: user.pivot?.is_banned ? 0.6 : 1,
@@ -602,8 +649,7 @@ const AdManagementPage: React.FC = () => {
                                             <ListItemText primary={user.c_username} secondary={user.pivot?.is_banned ? "已禁用 (作弊)" : ""} />
                                             <Switch
                                                 edge="end"
-                                                // ★ 修复 2: 同样使用可选链，并提供一个默认值
-                                                checked={!user.pivot?.is_banned} // 如果 pivot 不存在，默认是启用状态
+                                                checked={!user.pivot?.is_banned}
                                                 onChange={() => handleToggleUserBan(selectedAdForTeamDetails.redTeam!.c_id, user.c_username)}
                                                 inputProps={{ 'aria-label': `toggle ban for ${user.c_username}` }}
                                                 color="success"

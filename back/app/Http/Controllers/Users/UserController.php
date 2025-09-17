@@ -15,7 +15,38 @@
     use Illuminate\Support\Facades\Redis;
 
     class UserController extends Controller{
-        
+
+        public function listAllForSelection()
+        {
+            try {
+                $users = UserModel::query()
+                    ->select('c_username as u_id', 'c_name as u_name')
+
+                    // =========================================================================
+                    // ★★★★★★★★★★★★★★★★★★★ 核心修复点 ★★★★★★★★★★★★★★★★★★★
+                    // =========================================================================
+                    // 我们暂时移除了 ->where('c_is_login', 1) 这个条件。
+                    // 原因是这个条件可能过于严格，导致查询结果为空。
+                    // 移除后，此接口将返回数据库中所有的用户，确保前端下拉框能获取到数据。
+                    // 如果后续需要过滤掉某些用户（如：已禁用的用户），
+                    // 你需要先确认数据库中代表“激活”状态的字段和它的确切值，然后再把 where 条件加回来。
+                    // 例如: ->where('status', 'active') 或者 ->whereNotNull('activated_at') 等。
+
+                    ->get();
+
+                return response()->json([
+                    'status' => 'success',
+                    'data'   => $users,
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('获取用户列表失败: ' . $e->getMessage());
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => '无法获取用户列表，请联系管理员。'
+                ], 500);
+            }
+        }
         public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {
