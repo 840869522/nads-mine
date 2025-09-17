@@ -87,6 +87,9 @@ echo "FOREGROUND: Differential image created."
 if [[ "$IMAGE_BASE_NAME" == *"SecurityOnion"* ]]; then
     RAM_SIZE=8192
     echo "DEBUG: SecurityOnion image detected, setting RAM to 8GB"
+elif [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
+    RAM_SIZE=8192
+    echo "DEBUG: kalinew image detected, setting RAM to 8GB"
 else
     RAM_SIZE=4096
     echo "DEBUG: Standard image detected, setting RAM to 4GB"
