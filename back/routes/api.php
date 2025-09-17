@@ -129,8 +129,9 @@ Route::prefix("study")->group(function () {
         Route::delete('/{id}', [ResourceController::class, 'destroy']);
     });
 
-    Route::prefix('courses/{courseId}/experiments')->group(function () {
+    Route::prefix('experiments')->group(function () {
         Route::get('/', [ExperimentController::class, 'index']);
+        Route::get('/{experimentId}', [ExperimentController::class, 'show']);
         Route::post('/', [ExperimentController::class, 'store']);
         Route::put('/{experimentId}', [ExperimentController::class, 'update']);
         Route::delete('/{experimentId}', [ExperimentController::class, 'destroy']);
@@ -138,6 +139,7 @@ Route::prefix("study")->group(function () {
             Route::get('/', [ExperimentResourceController::class, 'index']);
             Route::post('/', [ExperimentResourceController::class, 'store']);
             Route::post('/upload', [ExperimentResourceController::class, 'upload']);
+            Route::post('/upload-multiple', [ExperimentResourceController::class, 'uploadMultiple']);
             Route::delete('/{resourceId}', [ExperimentResourceController::class, 'destroy']);
         });
     });
@@ -149,6 +151,8 @@ Route::prefix("study")->group(function () {
     // 新增资源查看路由
     Route::get('/view-resources/{c_resource_id}', [ResourceController::class, 'viewResource']);
     Route::get('/view-experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'viewResource']);
+    // 新增Office文档在线预览路由
+    Route::get('/experiment-resources/{c_resource_id}/office-preview', [ExperimentResourceController::class, 'officePreview']);
 });
 
 /**
@@ -335,6 +339,7 @@ Route::prefix('ad')->group(function () {
     Route::get('/users', [UserController::class, 'listAllForSelection']);
 
     // --- 队伍管理 (team) ---
+    // 所有与 /team 相关的路由都放在这个组内
     Route::prefix('team')->group(function () {
         Route::get('/', [TeamController::class, 'index']);
         Route::post('/', [TeamController::class, 'store']);
@@ -342,18 +347,14 @@ Route::prefix('ad')->group(function () {
         Route::put('/{team}', [TeamController::class, 'update']);
         Route::delete('/{team}', [TeamController::class, 'destroy']);
         Route::get('/{team}/drills', [TeamController::class, 'getDrills']);
-
-        // ★★★ 核心修复 ★★★
-        // 将此路由从外部移动到 prefix('team') 组内部。
-        // 现在的 URL 将正确地生成为: POST /api/ad/team/{team}/users/{user:c_username}/toggle-ban
         Route::post('/{team}/users/{user:c_username}/toggle-ban', [TeamController::class, 'toggleUserBanStatus']);
-
+    }); // <-- team 路由组在这里结束
         // --- 裁判管理 (referees) ---
         Route::get('/referees', [RefereeController::class, 'index']);
         Route::get('/available-referees', [RefereeController::class, 'availableUsers']);
 
         // --- 演练环境构建 ---
-        Route::post('/ad/drills/{scenario}/start', [AdController::class, 'startDrill']);
+        Route::post('/drills/{scenario}/start', [AdController::class, 'startDrill']);
 
         // --- 辅助路由 ---
         Route::get('/users', [UserController::class, 'getAllUser']);
@@ -375,27 +376,14 @@ Route::prefix('ad')->group(function () {
 
         });
     });
-// Flag 相关接口路由组，去掉JWT认证简化使用
-    Route::prefix('flag')->group(function () {
-        // Flag 提交接口，添加限流保护
-        Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
-
-        // 历史记录查询接口
-        Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
-
-
-        // 获取场景实例列表接口
-        Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
-
-        // 获取靶机实例列表接口
-        Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
-
-        // 临时调试接口
-        //Route::get('/debug-scene-data', [FlagSubmissionController::class, 'debugSceneData']);
-    });
+// Flag 相关接口路由组
+Route::prefix('flag')->group(function () {
+    Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
+    Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
+    Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
 });
 
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
 });
-

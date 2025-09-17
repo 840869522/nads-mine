@@ -89,7 +89,6 @@ class InstanceController extends Controller
     //         return response()->json(['message' => '获取实例详情失败。'], 500);
     //     }
     // }
-    
     public function show(SceneInstance $instance)
     {
         try {

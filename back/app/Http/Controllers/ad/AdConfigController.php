@@ -288,45 +288,47 @@ class AdConfigController extends Controller
     // ★★★★★★  这就是你缺失的部分！ ★★★★★★
     // ===================================================================
     /**
-     * 辅助方法：拆除和清理场景实例资源
-     */
-    private function tearDownInstanceResources(string $instanceId)
-    {
-        $instance = SceneInstance::with(['vms', 'containers', 'switches'])->find($instanceId);
-        if (!$instance) {
-            Log::warning("尝试清理一个不存在的场景实例 (ID: {$instanceId})，操作跳过。");
-            return;
+         * 辅助方法：拆除和清理场景实例资源
+         */
+        private function tearDownInstanceResources(string $instanceId)
+        {
+            $instance = SceneInstance::with(['vms', 'containers', 'switches'])->find($instanceId);
+            if (!$instance) {
+                Log::warning("尝试清理一个不存在的场景实例 (ID: {$instanceId})，操作跳过。");
+                return;
+            }
+
+            // 假设 CommandLineService 可以通过 app() 助手函数获取
+            // $cliService = app(\App\RunTool\CommandLineService::class);
+
+            // 清理虚拟机 (这些模型有单一主键，可以安全地使用 $model->delete())
+            foreach ($instance->vms as $vm) {
+                Log::info("清理虚拟机: {$vm->c_vm_name}");
+                // $cliService->destroyVm($vm->c_vm_name);
+                $vm->delete();
+            }
+
+            // 清理容器 (这些模型有单一主键，可以安全地使用 $model->delete())
+            foreach ($instance->containers as $container) {
+                Log::info("清理容器: {$container->c_container_id}");
+                // $cliService->destroyContainer($container->c_container_id);
+                $container->delete();
+            }
+
+            // 清理交换机 (使用 Query Builder 处理复合主键)
+            foreach ($instance->switches as $switch) {
+                Log::info("清理交换机: {$switch->c_switch_name}");
+                // $cliService->destroySwitch($switch->c_switch_name);
+                DB::table('c_scene_switch_instances')
+                    ->where('c_switch_name', $switch->c_switch_name)
+                    ->where('c_scene_instances_id', $switch->c_scene_instances_id)
+                    ->delete();
+            }
+
+            // 删除场景实例记录本身
+            $instance->delete();
+            Log::info("场景实例 {$instanceId} 的所有资源及数据库记录已成功清理。");
         }
-
-        // 假设 CommandLineService 可以通过 app() 助手函数获取
-        // 如果你的项目结构不同，请确保能正确获取到服务实例
-        $cliService = app(\App\RunTool\CommandLineService::class);
-
-        // 1. 清理虚拟机
-        foreach ($instance->vms as $vm) {
-            Log::info("清理虚拟机: {$vm->c_vm_name}");
-            // $cliService->destroyVm($vm->c_vm_name); // TODO: 解除注释并确保此方法有效
-            $vm->delete();
-        }
-
-        // 2. 清理容器
-        foreach ($instance->containers as $container) {
-            Log::info("清理容器: {$container->c_container_id}");
-            // $cliService->destroyContainer($container->c_container_id); // TODO: 解除注释并确保此方法有效
-            $container->delete();
-        }
-
-        // 3. 清理交换机
-        foreach ($instance->switches as $switch) {
-            Log::info("清理交换机: {$switch->c_switch_name}");
-            // $cliService->destroySwitch($switch->c_switch_name); // TODO: 解除注释并确保此方法有效
-            $switch->delete();
-        }
-
-        // 4. 删除场景实例记录本身
-        $instance->delete();
-        Log::info("场景实例 {$instanceId} 的所有资源及数据库记录已成功清理。");
-    }
 
     /**
      * 启动演练

@@ -60,7 +60,7 @@ const ScenarioManagementPage: React.FC = () => {
     
     // 导出功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isExportEnabled = true; // 设置为 true 启用导出功能
+    const isExportEnabled = false; // 设置为 false 禁用导出功能
 
 
 

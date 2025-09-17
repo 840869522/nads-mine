@@ -7,22 +7,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+
 class ExperimentController extends Controller
 {
-    public function index($courseId)
+    public function index()
     {
         try {
-            if (!DB::table('c_courses')->where('c_course_id', $courseId)->exists()) {
-                return response()->json([
-                    'code' => 404,
-                    'message' => 'Course not found.',
-                ], 404);
-            }
-
+            // 1. 补充查询 c_start、c_end、c_duration 字段
             $experiments = DB::table('c_course_experiments')
-                ->where('c_course_id', $courseId)
                 ->leftJoin('c_scene_configs', 'c_course_experiments.c_config_id', '=', 'c_scene_configs.c_config_id')
                 ->select(
                     'c_course_experiments.c_experiment_id',
@@ -30,6 +23,9 @@ class ExperimentController extends Controller
                     'c_course_experiments.c_experiment_name',
                     'c_course_experiments.c_description',
                     'c_course_experiments.c_config_id',
+                    'c_course_experiments.c_start', // 新增：实验开始时间
+                    'c_course_experiments.c_end',   // 新增：实验结束时间
+                    'c_course_experiments.c_duration', // 新增：实验时长
                     'c_scene_configs.c_name',
                     'c_course_experiments.created_at'
                 )
@@ -52,6 +48,9 @@ class ExperimentController extends Controller
                         'c_experiment_name' => $exp->c_experiment_name,
                         'c_description' => $exp->c_description,
                         'c_config_id' => $exp->c_config_id,
+                        'c_start' => $exp->c_start, // 新增：返回开始时间
+                        'c_end' => $exp->c_end,     // 新增：返回结束时间
+                        'c_duration' => $exp->c_duration, // 新增：返回实验时长
                         'c_name' => $exp->c_name,
                         'created_at' => $exp->created_at,
                         'resources' => $resources,
@@ -60,7 +59,7 @@ class ExperimentController extends Controller
 
             return response()->json([
                 'code' => 200,
-                'message' => 'Experiments retrieved successfully.',
+                'message' => 'All experiments retrieved successfully.',
                 'data' => ['experiments' => $experiments],
             ], 200);
         } catch (\Exception $e) {
@@ -74,13 +73,26 @@ class ExperimentController extends Controller
         }
     }
 
-    public function store(Request $request, $courseId)
+    public function store(Request $request)
     {
         Log::info('Experiment store request:', $request->json()->all());
+        // 2. 补充 c_start、c_end、c_duration 的验证规则
         $validator = Validator::make($request->json()->all(), [
-            'c_experiment_name' => 'required|string|max:100|unique:c_course_experiments,c_experiment_name,NULL,c_experiment_id,c_course_id,' . $courseId,
+            'c_course_id' => 'required|string|exists:c_courses,c_course_id|max:5', // 匹配表字段 varchar(5)
+            'c_experiment_name' => 'required|string|max:100',
             'c_description' => 'nullable|string',
             'c_config_id' => 'required|integer|exists:c_scene_configs,c_config_id',
+            // 新增：时间字段验证（格式+逻辑约束）
+            'c_start' => 'required|date_format:Y-m-d H:i:s|after:now', // 开始时间需晚于当前
+            'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start', // 结束时间需晚于开始时间
+            'c_duration' => 'required|integer|min:1' // 时长需为正整数（单位：分钟）
+        ], [
+            // 自定义错误提示（可选，增强可读性）
+            'c_course_id.max' => '课程ID长度不能超过5个字符',
+            'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
+            'c_start.after' => '开始时间必须晚于当前时间',
+            'c_end.after' => '结束时间必须晚于开始时间',
+            'c_duration.min' => '实验时长至少为1分钟'
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -91,9 +103,34 @@ class ExperimentController extends Controller
         }
 
         $data = $request->json()->all();
+        $courseId = $data['c_course_id'];
+
+        // 补充：验证时长 ≤ 起止时间差值（核心业务约束）
+        $startTime = strtotime($data['c_start']);
+        $endTime = strtotime($data['c_end']);
+        $maxAllowedDuration = round(($endTime - $startTime) / 60); // 计算最大允许时长（分钟）
+        if ($data['c_duration'] > $maxAllowedDuration) {
+            return response()->json([
+                'code' => 422,
+                'message' => "实验时长不能超过起止时间差值（最大允许{$maxAllowedDuration}分钟）",
+            ], 422);
+        }
+
+        // 实验名称唯一性验证（同课程下不重复）
+        $nameValidator = Validator::make(['c_experiment_name' => $data['c_experiment_name']], [
+            'c_experiment_name' => 'unique:c_course_experiments,c_experiment_name,NULL,c_experiment_id,c_course_id,' . $courseId,
+        ]);
+        if ($nameValidator->fails()) {
+            return response()->json([
+                'code' => 422,
+                'message' => $nameValidator->errors()->first(),
+            ], 422);
+        }
+
+        // 3. 数据传入模型（包含新增的3个字段）
         $modelRes = ExperimentModel::createExperiment($courseId, $data);
 
-        // 如果实验创建成功，同步用户权限
+        // 实验创建成功后同步用户权限
         if ($modelRes['code'] == 201) {
             $this->syncSceneUsers($courseId, $data['c_config_id']);
         }
@@ -142,13 +179,24 @@ class ExperimentController extends Controller
         }
     }
 
-    public function update(Request $request, $courseId, $experimentId)
+    public function update(Request $request, $experimentId)
     {
-        Log::info('Experiment update request:', ['courseId' => $courseId, 'experimentId' => $experimentId, 'data' => $request->json()->all()]);
+        Log::info('Experiment update request:', ['experimentId' => $experimentId, 'data' => $request->json()->all()]);
+        // 4. 补充更新接口的 c_start、c_end、c_duration 验证
         $validator = Validator::make($request->json()->all(), [
-            'c_experiment_name' => 'required|string|max:100|unique:c_course_experiments,c_experiment_name,' . $experimentId . ',c_experiment_id,c_course_id,' . $courseId,
+            'c_experiment_name' => 'required|string|max:100',
             'c_description' => 'nullable|string',
             'c_config_id' => 'required|integer|exists:c_scene_configs,c_config_id',
+            // 新增：同store的时间字段验证
+            'c_start' => 'required|date_format:Y-m-d H:i:s|after:now',
+            'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start',
+            'c_duration' => 'required|integer|min:1'
+        ], [
+            // 自定义错误提示
+            'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
+            'c_start.after' => '开始时间必须晚于当前时间',
+            'c_end.after' => '结束时间必须晚于开始时间',
+            'c_duration.min' => '实验时长至少为1分钟'
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -158,27 +206,123 @@ class ExperimentController extends Controller
             ], 422);
         }
 
+        // 获取实验所属课程ID（验证实验存在）
+        $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->first();
+        if (!$experiment) {
+            return response()->json([
+                'code' => 404,
+                'message' => 'Experiment not found.',
+            ], 404);
+        }
+        $courseId = $experiment->c_course_id;
+
+        // 实验名称唯一性验证（排除当前实验）
+        $nameValidator = Validator::make(['c_experiment_name' => $request->json('c_experiment_name')], [
+            'c_experiment_name' => 'unique:c_course_experiments,c_experiment_name,' . $experimentId . ',c_experiment_id,c_course_id,' . $courseId,
+        ]);
+        if ($nameValidator->fails()) {
+            return response()->json([
+                'code' => 422,
+                'message' => $nameValidator->errors()->first(),
+            ], 422);
+        }
+
         $data = $request->json()->all();
+        // 补充：更新时同样验证时长 ≤ 起止时间差值
+        $startTime = strtotime($data['c_start']);
+        $endTime = strtotime($data['c_end']);
+        $maxAllowedDuration = round(($endTime - $startTime) / 60);
+        if ($data['c_duration'] > $maxAllowedDuration) {
+            return response()->json([
+                'code' => 422,
+                'message' => "实验时长不能超过起止时间差值（最大允许{$maxAllowedDuration}分钟）",
+            ], 422);
+        }
+
+        // 5. 数据传入模型（包含新增的3个字段）
         $modelRes = ExperimentModel::updateExperiment($courseId, $experimentId, $data);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 500);
     }
 
-    public function destroy($courseId, $experimentId)
+    public function show($experimentId)
     {
         try {
-            if (!DB::table('c_courses')->where('c_course_id', $courseId)->exists()) {
-                return response()->json([
-                    'code' => 404,
-                    'message' => 'Course not found.',
-                ], 404);
-            }
+            // 获取单个实验详情
+            $experiment = DB::table('c_course_experiments')
+                ->leftJoin('c_scene_configs', 'c_course_experiments.c_config_id', '=', 'c_scene_configs.c_config_id')
+                ->select(
+                    'c_course_experiments.c_experiment_id',
+                    'c_course_experiments.c_course_id',
+                    'c_course_experiments.c_experiment_name as c_name',
+                    'c_course_experiments.c_description',
+                    'c_course_experiments.c_config_id',
+                    'c_course_experiments.c_start',
+                    'c_course_experiments.c_end',
+                    'c_course_experiments.c_duration',
+                    'c_scene_configs.c_name as c_scene_name'
+                )
+                ->where('c_course_experiments.c_experiment_id', $experimentId)
+                ->first();
 
-            if (!DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->where('c_course_id', $courseId)->exists()) {
+            if (!$experiment) {
                 return response()->json([
                     'code' => 404,
                     'message' => 'Experiment not found.',
                 ], 404);
             }
+
+            // 获取实验资源
+            $resources = DB::table('c_experiment_resources')
+                ->where('c_experiment_id', $experimentId)
+                ->select(
+                    'c_resource_id',
+                    'c_resource_name',
+                    'c_resource_path',
+                    'c_type',
+                    'c_size'
+                )
+                ->get()
+                ->toArray();
+
+            return response()->json([
+                'code' => 200,
+                'message' => 'Experiment retrieved successfully.',
+                'data' => [
+                    'c_experiment_id' => $experiment->c_experiment_id,
+                    'c_course_id' => $experiment->c_course_id,
+                    'c_name' => $experiment->c_name,
+                    'c_description' => $experiment->c_description,
+                    'c_config_id' => $experiment->c_config_id,
+                    'c_start' => $experiment->c_start,
+                    'c_end' => $experiment->c_end,
+                    'c_duration' => $experiment->c_duration,
+                    'c_scene_name' => $experiment->c_scene_name,
+                    'resources' => $resources,
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('[GENERAL] getExperiment: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code' => 500,
+                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function destroy($experimentId)
+    {
+        try {
+            // 获取实验所属课程ID（验证实验存在）
+            $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->first();
+            if (!$experiment) {
+                return response()->json([
+                    'code' => 404,
+                    'message' => 'Experiment not found.',
+                ], 404);
+            }
+            $courseId = $experiment->c_course_id;
 
             DB::beginTransaction();
             // 删除关联资源
@@ -199,10 +343,9 @@ class ExperimentController extends Controller
                 Storage::disk('local_resources')->deleteDirectory($experimentFolder);
             }
 
-            // 删除实验记录
+            // 删除实验记录（包含新增字段的表数据）
             $result = DB::table('c_course_experiments')
                 ->where('c_experiment_id', $experimentId)
-                ->where('c_course_id', $courseId)
                 ->delete();
 
             if (!$result) {

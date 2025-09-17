@@ -123,6 +123,10 @@ const AdManagementPage: React.FC = () => {
 
     const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
     const [selectedAdForTeamDetails, setSelectedAdForTeamDetails] = useState<AdConfig | null>(null);
+    
+    // Flag历史相关状态
+    const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
+    const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
 
     // Flag历史相关状态
     const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);

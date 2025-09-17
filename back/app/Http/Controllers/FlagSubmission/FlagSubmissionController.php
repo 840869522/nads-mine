@@ -50,24 +50,90 @@ class FlagSubmissionController extends BaseController
      */
     public function submitFlag(Request $request)
     {
-        // 1. 简化用户信息获取，使用请求参数或默认用户
-        $token_data = $request->input("token_data");
+        // 1. 直接从请求头中验证JWT token
+        $authHeader = $request->header('Authorization');
         
-        // 修复数组访问错误：检查token_data是否存在且为数组
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            // 如果token_data无效，尝试从其他地方获取用户信息
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
+        if (!$authHeader) {
+            Log::warning("Flag提交失败：Authorization头缺失", [
+                'request_ip' => $request->ip(),
+                'all_headers' => $request->headers->all()
+            ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '请先登录后再提交Flag。如果已登录，请刷新页面重试。'
+            );
+        }
+        
+        // 直接使用Authorization头作为token（项目原有逻辑）
+        $token = $authHeader;
+        
+        // 解码JWT token
+        try {
+            $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+            
+            if ($jwtResult['err'] !== null) {
+                Log::warning("Flag提交失败：JWT token无效", [
+                    'jwt_error' => $jwtResult['err'],
+                    'request_ip' => $request->ip()
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                    'Token已过期或无效，请重新登录。'
+                );
             }
             
-            Log::warning("Token data无效，使用备用用户名", [
-                'token_data' => $token_data,
-                'fallback_username' => $username,
-                'request_all' => $request->all()
+            $tokenData = $jwtResult['data'];
+            if (!isset($tokenData['id']) || empty($tokenData['id'])) {
+                Log::error("Flag提交失败：JWT token中缺少用户ID", [
+                    'token_data' => $tokenData
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'Token数据异常，请重新登录。'
+                );
+            }
+            
+            $username = $tokenData['id'];
+            
+        } catch (\Exception $e) {
+            Log::error("Flag提交失败：JWT解码异常", [
+                'error' => $e->getMessage(),
+                'auth_header' => substr($authHeader, 0, 20) . '...'
             ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                'Token解码失败，请重新登录。'
+            );
+        }
+        
+        // 验证用户是否在数据库中存在
+        try {
+            $userExists = \App\Models\Users\UserModel::getUserById($username);
+            if ($userExists['code'] !== \App\Utils\GlobalResponse::$DATABASE_SUCCESS_CODE || !$userExists['data']) {
+                Log::error("Flag提交失败：用户不存在", [
+                    'username' => $username,
+                    'user_check_result' => $userExists
+                ]);
+                
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    '用户账户不存在或已被禁用，请联系管理员。'
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error("Flag提交失败：用户验证异常", [
+                'username' => $username,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '系统错误，请稍后重试。'
+            );
         }
 
         // 2. 参数校验 - 简化正则表达式验证防止语法错误
@@ -430,21 +496,34 @@ class FlagSubmissionController extends BaseController
      */
     public function getSubmissionHistory(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查
-        $token_data = $request->input("token_data");
+        // 1. 直接从请求头中验证JWT token
+        $authHeader = $request->header('Authorization');
         
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
-                $username = 'anonymous';
+        if (!$authHeader) {
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '请先登录后再查看历史记录。'
+            );
+        }
+        
+        // 直接使用Authorization头作为token（项目原有逻辑）
+        $token = $authHeader;
+        
+        // 解码JWT token
+        try {
+            $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+            if ($jwtResult['err'] !== null || !isset($jwtResult['data']['id'])) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'Token已过期，请重新登录。'
+                );
             }
-            
-            Log::warning("getSubmissionHistory: Token data无效", [
-                'token_data' => $token_data,
-                'fallback_username' => $username
-            ]);
+            $username = $jwtResult['data']['id'];
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '身份验证失败，请重新登录。'
+            );
         }
 
         // 2. 参数校验
@@ -579,16 +658,28 @@ class FlagSubmissionController extends BaseController
      */
     public function getSceneInstances(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查（可选）
-        $token_data = $request->input("token_data");
+        // 1. 用户身份验证（可选，允许匿名访问）
+        $authHeader = $request->header('Authorization');
         
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
+        if ($authHeader) {
+            // 直接使用Authorization头作为token（项目原有逻辑）
+            $token = $authHeader;
+            
+            try {
+                $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+                if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {
+                    $username = $jwtResult['data']['id'];
+                } else {
+                    $username = 'anonymous';
+                }
+            } catch (\Exception $e) {
                 $username = 'anonymous';
             }
+        } else {
+            $username = 'anonymous';
+            Log::info("匿名用户访问场景实例列表", [
+                'request_ip' => $request->ip()
+            ]);
         }
 
         try {
@@ -617,16 +708,28 @@ class FlagSubmissionController extends BaseController
      */
     public function getTargetInstances(Request $request)
     {
-        // 1. 简化用户信息获取及安全检查（可选）
-        $token_data = $request->input("token_data");
+        // 1. 用户身份验证（可选，允许匿名访问）
+        $authHeader = $request->header('Authorization');
         
-        if (is_array($token_data) && isset($token_data['id'])) {
-            $username = $token_data['id'];
-        } else {
-            $username = $request->input('username', 'anonymous');
-            if (empty($username)) {
+        if ($authHeader) {
+            // 直接使用Authorization头作为token（项目原有逻辑）
+            $token = $authHeader;
+            
+            try {
+                $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+                if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {
+                    $username = $jwtResult['data']['id'];
+                } else {
+                    $username = 'anonymous';
+                }
+            } catch (\Exception $e) {
                 $username = 'anonymous';
             }
+        } else {
+            $username = 'anonymous';
+            Log::info("匿名用户访问鼠机实例列表", [
+                'request_ip' => $request->ip()
+            ]);
         }
 
         // 2. 参数校验

@@ -160,9 +160,22 @@ const Page: React.FC = () => {
             }
             const result = await response.json();
 
-            if (result && result.status === 'success' && Array.isArray(result.data)) {
-                setAllUsers(result.data);
+            // 新的、更具兼容性的检查逻辑
+            // 检查 result.data 是否存在，并且 result.data.data 是否是一个数组
+            if (result && result.data && Array.isArray(result.data.data)) {
+                // 从更深的层级取出真正的用户数组
+                const rawUsers = result.data.data;
+
+                // 确保字段名与前端 interface 匹配
+                // 后端返回的是 c_username 和 c_name，我们需要转换成 u_id 和 u_name
+                const formattedUsers: User[] = rawUsers.map((user: any) => ({
+                    u_id: user.c_username,
+                    u_name: user.c_name
+                }));
+
+                setAllUsers(formattedUsers);
             } else {
+                // 如果格式不正确，抛出错误
                 throw new Error('返回的用户数据格式不正确');
             }
         } catch (err) {
@@ -379,25 +392,15 @@ const Page: React.FC = () => {
                     <DialogContent>
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" id="name" name="name" label="队伍名称" type="text" fullWidth variant="outlined" defaultValue={editingTeam?.c_name || ''} required />
-
                         <Autocomplete
-                            multiple
-                            id="team-members"
-                            options={allUsers}
+                            multiple id="team-members" options={allUsers}
                             getOptionLabel={(option) => option.u_name ? `${option.u_id}(${option.u_name})` : option.u_id}
                             value={allUsers.filter(user => selectedMemberIds.includes(user.u_id))}
-                            onChange={(_, newValue) => {
-                                setSelectedMemberIds(newValue.map(user => user.u_id));
-                            }}
+                            onChange={(_, newValue) => { setSelectedMemberIds(newValue.map(user => user.u_id)); }}
                             isOptionEqualToValue={(option, value) => option.u_id === value.u_id}
-                            loading={isUsersLoading}
-                            noOptionsText={isUsersLoading ? "正在加载用户..." : "没有可用用户"}
+                            loading={isUsersLoading} noOptionsText="没有可用选项"
                             renderInput={(params) => (
                                 <TextField {...params} variant="outlined" label="添加队员 (可选)" placeholder="搜索并选择用户..."
-                                    // =========================================================================
-                                    // ★★★★★★★★★★★★★★★★★★★ 核心修复点 ★★★★★★★★★★★★★★★★★★★
-                                    // =========================================================================
-                                    // 将 ...params.Input-props 修正为正确的驼峰命名 ...params.InputProps
                                            InputProps={{ ...params.InputProps, endAdornment: (<>{isUsersLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps.endAdornment}</>), }}
                                 />
                             )}
@@ -405,7 +408,7 @@ const Page: React.FC = () => {
                         />
                         <TextField margin="dense" id="description" name="description" label="队伍描述 (可选)" type="text" fullWidth multiline rows={3} variant="outlined" defaultValue={editingTeam?.c_description || ''} sx={{ mt: 2 }} />
                     </DialogContent>
-                    <DialogActions sx={{ p: '0 24px 20px' }}>
+                    <DialogActions sx={{ p: 'o 24px 20px' }}>
                         <Button onClick={handleCloseForm} variant="outlined" disabled={isSubmitting}>取消</Button>
                         <Button type="submit" variant="contained" disabled={isSubmitting}>
                             {isSubmitting ? <CircularProgress size={24} /> : (editingTeam ? '保存更改' : '确认创建')}

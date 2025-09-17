@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  * 封装所有通过命令行与系统（如 Docker, OVS）交互的逻辑。
  */
 class CommandLineService
-{   
+{
        /**
      * Applies DNAT rules for port forwarding using iptables.
      *
@@ -159,9 +159,13 @@ class CommandLineService
     {
         // 1. 为 Linux Bridge 配置 IP 地址
         $gatewayIpOnly = explode('/', $gatewayIp)[0];
+        $networkCidr = explode('/', $gatewayIp)[1] ?? '16';
+        $networkBase = substr($gatewayIpOnly, 0, strrpos($gatewayIpOnly, '.'));
+        $networkCidrFull = $networkBase . '.0/' . $networkCidr;
+        
         // $commandConfigBridge = ['sudo', 'ip', 'addr', 'add', $gatewayIp, 'dev', $bridgeName];
         // Log::info("Executing [IP-Config]: Configuring gateway IP for {$bridgeName}: " . implode(' ', $commandConfigBridge));
-        
+
         // $processConfigBridge = new Process($commandConfigBridge);
         // $processConfigBridge->run();
         // // 如果IP已存在，忽略错误，否则抛出异常
@@ -169,13 +173,123 @@ class CommandLineService
         //     throw new ProcessFailedException($processConfigBridge);
         // }
 
-        // 2. 循环为每个容器配置默认路由（使用 replace 避免 File exists 错误，保证幂等）
+        // 2. 配置NAT转发规则，让容器能够访问外网
+        $this->configureNatRules($networkCidrFull, $bridgeName);
+
+        // 3. 循环为每个容器配置默认路由（使用 replace 避免 File exists 错误，保证幂等）
         foreach ($containers as $container) {
             $containerName = $container['name'];
             // 使用 ip route replace，若不存在则新增，存在则覆盖，避免重复添加报错
             $commandReplaceRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'replace', 'default', 'via', $gatewayIpOnly];
             Log::info("Executing [IP-Config]: Replacing default route for container {$containerName} via {$gatewayIpOnly}");
             (new Process($commandReplaceRoute))->mustRun();
+        }
+    }
+
+    /**
+     * 配置NAT转发规则，让指定网段的容器能够访问外网
+     *
+     * @param string $networkCidr 网络CIDR (e.g., '10.100.0.0/16')
+     * @param string $bridgeName 网桥名称 (e.g., 'br0')
+     * @return void
+     */
+    private function configureNatRules(string $networkCidr, string $bridgeName): void
+    {
+        try {
+            // 检查规则是否已存在，避免重复添加
+            if ($this->isNatRuleExists($networkCidr, $bridgeName)) {
+                Log::info("NAT rules for {$networkCidr} already exist, skipping configuration");
+                return;
+            }
+
+            // 1. 添加MASQUERADE规则，让容器网段的流量能够通过NAT访问外网
+            $masqueradeCommand = [
+                'sudo', 'iptables', '-t', 'nat', '-A', 'POSTROUTING',
+                '-s', $networkCidr,
+                '-o', $bridgeName,
+                '-j', 'MASQUERADE'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding MASQUERADE rule for {$networkCidr} via {$bridgeName}: " . implode(' ', $masqueradeCommand));
+            
+            $process = new Process($masqueradeCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                Log::warning("Failed to add MASQUERADE rule: " . $process->getErrorOutput());
+            } else {
+                Log::info("Successfully added MASQUERADE rule for {$networkCidr}");
+            }
+
+            // 2. 确保FORWARD链允许转发
+            $forwardCommand = [
+                'sudo', 'iptables', '-A', 'FORWARD',
+                '-s', $networkCidr,
+                '-j', 'ACCEPT'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding FORWARD rule for {$networkCidr}: " . implode(' ', $forwardCommand));
+            
+            $process = new Process($forwardCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                Log::warning("Failed to add FORWARD rule: " . $process->getErrorOutput());
+            } else {
+                Log::info("Successfully added FORWARD rule for {$networkCidr}");
+            }
+
+            // 3. 允许返回流量
+            $returnCommand = [
+                'sudo', 'iptables', '-A', 'FORWARD',
+                '-d', $networkCidr,
+                '-j', 'ACCEPT'
+            ];
+            
+            Log::info("Executing [NAT-Config]: Adding return FORWARD rule for {$networkCidr}: " . implode(' ', $returnCommand));
+            
+            $process = new Process($returnCommand);
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                Log::warning("Failed to add return FORWARD rule: " . $process->getErrorOutput());
+            } else {
+                Log::info("Successfully added return FORWARD rule for {$networkCidr}");
+            }
+
+        } catch (\Exception $e) {
+            Log::error("Failed to configure NAT rules: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * 检查NAT规则是否已存在
+     *
+     * @param string $networkCidr 网络CIDR (e.g., '10.100.0.0/16')
+     * @param string $bridgeName 网桥名称 (e.g., 'br0')
+     * @return bool
+     */
+    private function isNatRuleExists(string $networkCidr, string $bridgeName): bool
+    {
+        try {
+            // 检查MASQUERADE规则是否存在
+            $checkCommand = [
+                'sudo', 'iptables', '-t', 'nat', '-C', 'POSTROUTING',
+                '-s', $networkCidr,
+                '-o', $bridgeName,
+                '-j', 'MASQUERADE'
+            ];
+            
+            $process = new Process($checkCommand);
+            $process->run();
+            
+            // 如果命令成功执行（退出码0），说明规则已存在
+            return $process->isSuccessful();
+            
+        } catch (\Exception $e) {
+            Log::warning("Failed to check NAT rule existence: " . $e->getMessage());
+            return false; // 如果检查失败，假设规则不存在，继续添加
         }
     }
     //交换机和br0连接
@@ -243,7 +357,7 @@ class CommandLineService
     {
         // 1. 使用 app_path() 生成脚本的绝对路径
         $scriptPath = app_path('RunTool/vmscript/newvm_switch.sh');
-        
+
         // 2. 准备9个命令行参数
         $args = [
             $options['id'],
@@ -253,14 +367,14 @@ class CommandLineService
             $options['flag'] ?? 'NULL',
             $options['switch_name'],
             $options['vm_name'],
-            $options['image_dir'], 
-            $options['instance_base_dir'], 
+            $options['image_dir'],
+            $options['instance_base_dir'],
         ];
-        
+
         // 3. 准备并执行命令
         $command = array_merge([$scriptPath], $args);
         Log::info('Executing VM creation shell script (9-param version): ' . implode(' ', $command));
-        
+
         $process = new Process($command);
         $process->setTimeout(360);
         $process->run();
@@ -272,17 +386,17 @@ class CommandLineService
             ]);
             throw new ProcessFailedException($process);
         }
-        
+
         Log::info("VM creation script for vm '{$options['id']}' executed successfully.", [
             'output' => $process->getOutput()
         ]);
     }
-    
+
 
 
 
     /**
-     * 
+     *
      * 使用veth pair连接两个OVS交换机。
      *
      * @param string $switch1Name 第一个交换机的名称
@@ -330,9 +444,9 @@ class CommandLineService
         Log::info('Executing [Switch-to-Switch]: ' . implode(' ', $commandLinkUp2));
         (new Process($commandLinkUp2))->mustRun();
     }
-    
+
     /**
-     * 
+     *
      * 将一个容器连接到一个OVS交换机上，严格最新的命名规则。
      *
      * @param string      $switchName      参数1: 交换机的名称
@@ -357,7 +471,7 @@ class CommandLineService
         $containerPrefix = substr($baseContainerName, 0, 2); // 容器前两个字符
         $containerSuffix = substr($baseContainerName, -2);   // 容器最后一个字符
         $containerPart = $containerPrefix . $containerSuffix;
-        
+
         // 3. 交换机唯一哈希部分
         $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
 
@@ -393,9 +507,9 @@ class CommandLineService
         }
     }
 
-    
+
     /**
-     * 
+     *
      * 删除一个 OVS 网桥。
      *
      * @param string $switchName 要删除的网桥的名称。
@@ -546,10 +660,10 @@ XML;
             $command[] = '-p';
             $command[] = "{$port['hostPort']}:{$port['containerPort']}";
         }
-        
+
         // d. 设置网络模式为 none，这是后续手动连接的关键
         // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
-        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1'];
+        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1','px4-image:latest','px4pro2-image:latest','px4pro-image:latest','px4-image1:latest','px4-image1:v1'];
         if (!in_array($options['image'], $skipNetworkImages)) {
             $command[] = '--network=none';
         }
@@ -588,7 +702,7 @@ XML;
      */
     public function getContainerPid(string $containerId): int
     {
-        
+
         $command = ['sudo', 'docker', 'inspect', '-f', '{{.State.Pid}}', $containerId];
         $process = new Process($command);
         $process->run();
@@ -604,7 +718,7 @@ XML;
         return $pid;
     }
     /**
-     * 
+     *
      * 列出系统上所有的 OVS 网桥。
      *
      * @return array 返回一个包含所有网桥名称的数组。
@@ -637,8 +751,8 @@ XML;
         $options['flag'] ?? 'NULL',
         $options['switch_name'],
         $options['vm_name'],
-        $options['image_dir'], 
-        $options['instance_base_dir'], 
+        $options['image_dir'],
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -664,7 +778,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -690,7 +804,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -716,7 +830,7 @@ XML;
         $options['switch_name'],
         $options['vm_name'],
         $options['image_dir'],
-        $options['instance_base_dir'], 
+        $options['instance_base_dir'],
     ];
 
     $command = array_merge([$scriptPath], $args);
@@ -729,7 +843,33 @@ XML;
     Log::info("Windows VM creation script (win10) for vm '{$options['vm_name']}' executed successfully.", [
         'output' => $process->getOutput()
     ]);
-}
+    }
+
+    public function createVmKylin(array $options): void
+    {
+    // 指向麒麟脚本（与 win7_1 一致的6参数顺序）
+    $scriptPath = app_path('RunTool/vmscript/newvm_ql');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'],
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Kylin VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360);
+    $process->mustRun();
+
+    Log::info("Kylin VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+    }
 }
 
 // // ```json
