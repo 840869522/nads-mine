@@ -15,7 +15,6 @@
     use Illuminate\Support\Facades\Redis;
 
     class UserController extends Controller{
-        
         public function getAllUser(Request $req){
             $reqData =  $req->json()->all();
             try {

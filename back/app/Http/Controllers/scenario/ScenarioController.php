@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ScenarioController extends Controller
 {
-   
+
     // --- 您其他的 index, store, destroy, update 方法放在这里 ---
     public function index()
     {
@@ -103,10 +103,8 @@ class ScenarioController extends Controller
         try {
             // Find the scenario by its primary key or fail with a 404 error.
             $scenario = SceneConfig::findOrFail($scenarioId);
-            
             // Delete the model instance.
             $scenario->delete();
-            
             Log::info('场景已从数据库删除', ['id' => $scenarioId]);
             return response()->json(['message' => '场景删除成功'], 200);
 
