@@ -1,3 +1,4 @@
+// src/app/ad/management/page.tsx (或者你的 AdManagementPage 组件所在路径)
 "use client";
 
 import React, {useState, useEffect, useCallback, FormEvent, useMemo, MouseEvent} from 'react';
@@ -54,6 +55,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import PersonIcon from '@mui/icons-material/Person';
 import FlagIcon from '@mui/icons-material/Flag';
+import AccountTreeIcon from '@mui/icons-material/AccountTree'; // ★ 1. 引入拓扑图标
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -61,6 +63,8 @@ import {useAuth} from "@/hooks/useAuth";
 import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
+import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog'; // ★ 2. 引入拓扑弹窗组件 (请确认路径正确)
+
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; }
@@ -76,6 +80,14 @@ interface Team {
     }[];
 }
 interface AdReferee { c_user_id: string; c_level: string; user?: User; }
+
+// ★ 3. 新增/修改类型定义以包含拓扑数据
+interface SceneConfigForAd {
+    c_config_id: number;
+    c_name: string;
+    topology_json?: any; // 拓扑数据
+}
+
 interface AdConfig {
     c_id: string;
     c_drill_name: string;
@@ -90,8 +102,8 @@ interface AdConfig {
     referees: AdReferee[];
     redTeam?: Team;
     blueTeam?: Team;
+    sceneConfig?: SceneConfigForAd | null; // <-- ★ 包含场景配置
 }
-interface SceneConfig { c_config_id: number; c_name: string; }
 
 const AdManagementPage: React.FC = () => {
     // === 状态管理 ===
@@ -102,7 +114,7 @@ const AdManagementPage: React.FC = () => {
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [sceneConfigs, setSceneConfigs] = useState<SceneConfig[]>([]);
+    const [sceneConfigs, setSceneConfigs] = useState<SceneConfigForAd[]>([]); // 使用新类型
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; message: string | { [key: string]: string[] } } | null>(null);
@@ -123,14 +135,16 @@ const AdManagementPage: React.FC = () => {
 
     const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
     const [selectedAdForTeamDetails, setSelectedAdForTeamDetails] = useState<AdConfig | null>(null);
-    
-    // Flag历史相关状态
+
     const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
     const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
 
-    // Flag历史相关状态
-    const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
-    const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
+    // ★ 4. 添加拓扑弹窗所需的状态
+    const [isTopologyOpen, setIsTopologyOpen] = useState(false);
+    const [selectedTopology, setSelectedTopology] = useState<any>(null);
+    const [selectedInstanceIdForTopology, setSelectedInstanceIdForTopology] = useState<string | null>(null);
+    const [selectedDrillNameForTopology, setSelectedDrillNameForTopology] = useState<string>('');
+
 
     const teamMemberUsernames = useMemo(() => {
         if (!selectedRedTeamId && !selectedBlueTeamId) { return new Set<string>(); }
@@ -175,7 +189,6 @@ const AdManagementPage: React.FC = () => {
                 c_name: scene.name,
             }));
             setSceneConfigs(formattedScenes);
-
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
         } finally {
@@ -230,6 +243,19 @@ const AdManagementPage: React.FC = () => {
         }
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
+
+    // ★ 5. 添加打开拓扑弹窗的处理函数
+    const handleViewTopology = (adConfig: AdConfig) => {
+        if (!adConfig.sceneConfig || !adConfig.sceneConfig.topology_json) {
+            setStatusMessage({ type: 'warning', message: '此演练未关联有效的场景拓扑。' });
+            return;
+        }
+        setSelectedDrillNameForTopology(adConfig.c_drill_name);
+        setSelectedTopology(adConfig.sceneConfig.topology_json);
+        setSelectedInstanceIdForTopology(adConfig.c_scene_instance_id || null);
+        setIsTopologyOpen(true);
+    };
+
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -353,20 +379,7 @@ const AdManagementPage: React.FC = () => {
     };
 
     const findTeamNameById = (id: number | null) => teams.find(i => i.c_id === id)?.c_name || `未知 (ID: ${id})`;
-
-    // ★★★ 核心修复 ★★★: 增强此函数以处理数据不一致的情况
-    const findSceneNameById = (id: number | null): string | null => {
-        if (id === null || id === undefined) {
-            return '未关联';
-        }
-        const scene = sceneConfigs.find(i => i.c_config_id === id);
-        if (scene) {
-            return scene.c_name;
-        }
-        // 如果在已加载的场景列表中找不到，返回 null 作为特殊标记
-        return null;
-    };
-
+    const findSceneNameById = (id: number | null) => sceneConfigs.find(i => i.c_config_id === id)?.c_name || `未关联`;
     const findUserNameById = (id: string | null) => users.find(u => u.c_username === id)?.c_username || `未知 (${id})`;
 
     const renderStatusChip = (status: AdConfig['c_status']) => {
@@ -427,22 +440,17 @@ const AdManagementPage: React.FC = () => {
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || '操作失败');
-
             const updatedAdConfig = JSON.parse(JSON.stringify(selectedAdForTeamDetails));
-
             const updateTeamUsers = (team: Team | undefined) => {
                 if (!team) return;
                 team.users = team.users.map(u =>
                     u.c_username === username ? { ...u, pivot: { ...u.pivot, is_banned: result.data.is_banned } } : u
                 );
             };
-
             updateTeamUsers(updatedAdConfig.redTeam);
             updateTeamUsers(updatedAdConfig.blueTeam);
-
             setSelectedAdForTeamDetails(updatedAdConfig);
             setAdConfigs(prev => prev.map(ad => ad.c_id === updatedAdConfig.c_id ? updatedAdConfig : ad));
-
             setStatusMessage({ type: 'success', message: result.message });
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
@@ -488,20 +496,7 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findTeamNameById(adConfig.c_red_team_id)}</TableCell>
                                                 <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
                                                 <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{adConfig.referees.map(ref => (<Chip key={ref.c_user_id} label={`${findUserNameById(ref.c_user_id)} (${ref.c_level})`} size="small" />))}</Stack></TableCell>
-                                                {/* ★★★ 核心修复 ★★★: 使用新的渲染逻辑来优雅地处理数据不一致 */}
-                                                <TableCell>
-                                                    {(() => {
-                                                        const sceneName = findSceneNameById(adConfig.c_scene_config_id);
-                                                        if (sceneName === null) {
-                                                            return (
-                                                                <Tooltip title={`场景模板 ID: ${adConfig.c_scene_config_id} (已失效或被删除)`}>
-                                                                    <Chip label="模板丢失" color="error" size="small" variant="outlined" />
-                                                                </Tooltip>
-                                                            );
-                                                        }
-                                                        return sceneName;
-                                                    })()}
-                                                </TableCell>
+                                                <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id)}><ScreenShareIcon /></IconButton></TableCell>
                                                 <TableCell align="right">
@@ -523,6 +518,20 @@ const AdManagementPage: React.FC = () => {
                                                     <Tooltip title="查看队伍成员">
                                                         <IconButton color="secondary" onClick={() => handleOpenTeamDetails(adConfig)}><GroupIcon /></IconButton>
                                                     </Tooltip>
+
+                                                    {/* ★ 6. 添加拓扑按钮 */}
+                                                    <Tooltip title="查看拓扑">
+                                                        <span>
+                                                            <IconButton
+                                                                color="secondary"
+                                                                onClick={() => handleViewTopology(adConfig)}
+                                                                disabled={!adConfig.sceneConfig}
+                                                            >
+                                                                <AccountTreeIcon />
+                                                            </IconButton>
+                                                        </span>
+                                                    </Tooltip>
+
                                                     <Tooltip title="查看实例详情">
                                                         <IconButton color="info" onClick={() => handleViewDetails(adConfig)} disabled={adConfig.c_status !== 'running' || !adConfig.c_scene_instance_id}><VisibilityIcon /></IconButton>
                                                     </Tooltip>
@@ -559,15 +568,12 @@ const AdManagementPage: React.FC = () => {
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" name="c_drill_name" label="演练名称" type="text" fullWidth required defaultValue={editingAdConfig?.c_drill_name || ''} />
                         <TextField margin="dense" name="c_description" label="演练描述 (可选)" type="text" fullWidth multiline rows={3} defaultValue={editingAdConfig?.c_description || ''} />
-
                         <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
                             <FormControl fullWidth margin="dense" required error={!!teamConflictError}><InputLabel id="red-team-select-label">红队</InputLabel><Select labelId="red-team-select-label" label="红队" value={selectedRedTeamId} onChange={(e: SelectChangeEvent<number|''>) => setSelectedRedTeamId(e.target.value as number)}>{teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}</Select></FormControl>
                             <FormControl fullWidth margin="dense" required error={!!teamConflictError}><InputLabel id="blue-team-select-label">蓝队</InputLabel><Select labelId="blue-team-select-label" label="蓝队" value={selectedBlueTeamId} onChange={(e: SelectChangeEvent<number|''>) => setSelectedBlueTeamId(e.target.value as number)}>{teams.map(team => <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>)}</Select></FormControl>
                         </Stack>
                         {teamConflictError && (<FormHelperText error sx={{ ml: '14px' }}>{teamConflictError}</FormHelperText>)}
-
                         <TextField select fullWidth margin="dense" label="场景模板 (可选)" name="c_scene_config_id" defaultValue={editingAdConfig?.c_scene_config_id || ''}><MenuItem value=""><em>不选择场景</em></MenuItem>{sceneConfigs.map(sc => <MenuItem key={sc.c_config_id} value={sc.c_config_id}>{sc.c_name}</MenuItem>)}</TextField>
-
                         <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
                             <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判</Typography>
                             <Autocomplete multiple id="referee-autocomplete" options={users} getOptionLabel={(option) => option.c_username} value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]} isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
@@ -582,7 +588,6 @@ const AdManagementPage: React.FC = () => {
                                           renderInput={(params) => (
                                               <TextField {...params} variant="standard" label="选择用户作为裁判" placeholder="添加裁判..." helperText={teamMemberUsernames.size > 0 ? "已经是红/蓝队成员的用户将被禁用" : ""}/>
                                           )}/>
-
                             {selectedReferees.length > 0 && (
                                 <Stack spacing={2} sx={{ mt: 3 }}>
                                     {selectedReferees.map((referee) => (
@@ -627,6 +632,17 @@ const AdManagementPage: React.FC = () => {
                     onClose={handleCloseFlagHistory}
                     sceneInstanceId={selectedAdForFlagHistory.c_scene_instance_id}
                     title={`Flag提交历史 - ${selectedAdForFlagHistory.c_drill_name}`}
+                />
+            )}
+
+            {/* ★ 7. 添加拓扑弹窗的渲染逻辑 */}
+            {isTopologyOpen && (
+                <InstanceTopologyDialog
+                    open={isTopologyOpen}
+                    onClose={() => setIsTopologyOpen(false)}
+                    title={`演练拓扑: ${selectedDrillNameForTopology}`}
+                    topology={selectedTopology}
+                    instanceId={selectedInstanceIdForTopology || ''}
                 />
             )}
 

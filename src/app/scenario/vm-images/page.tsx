@@ -38,6 +38,9 @@ import { customFetch } from "@/utils/fetch"
 import axios from 'axios'
 import { v4 as uuidv4 } from 'uuid'
 
+// 硬编码布尔值，用于控制“启动”按钮隐藏
+const HIDE_START_BUTTON = true
+
 interface VmImage {
     id: string
     name: string
@@ -283,11 +286,13 @@ const VmImageManagementPage: React.FC = () => {
             width: 140,
             renderCell: params => (
                 <Box>
-                    <Tooltip title="启动">
-                        <IconButton size="small" onClick={() => handleStart(params.row)}>
-                            <StartIcon color="success" />
-                        </IconButton>
-                    </Tooltip>
+                    {!HIDE_START_BUTTON && (
+                        <Tooltip title="启动">
+                            <IconButton size="small" onClick={() => handleStart(params.row)}>
+                                <StartIcon color="success" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     <Tooltip title="导出">
                         <IconButton size="small" onClick={() => handleExport(params.row)}>
                             <DownloadIcon />

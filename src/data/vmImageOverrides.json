@@ -313,5 +313,12 @@
   },
   "v_tar_TPCimplant.qcow2": {
     "osType": "ubuntu"
+  },
+  "kalinew.qcow2": {
+    "osType": "ubuntu"
+  },
+  "v_tar_RPC.qcow2": {
+    "osType": "win2003",
+    "description": "WindowsRPC溢出漏洞探测靶机镜像"
   }
 }

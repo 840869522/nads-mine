@@ -148,6 +148,7 @@ Route::prefix("study")->group(function () {
     // 新增实验资源下载路由
     Route::get('/experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'download']);
     Route::get('/users', [CourseController::class, 'getAllUsers']);
+    Route::get('/resources/{c_resource_id}/convert-to-pdf', [ResourceController::class, 'convertToPdf']);
     // 新增资源查看路由
     Route::get('/view-resources/{c_resource_id}', [ResourceController::class, 'viewResource']);
     Route::get('/view-experiment-resources/{c_resource_id}', [ExperimentResourceController::class, 'viewResource']);

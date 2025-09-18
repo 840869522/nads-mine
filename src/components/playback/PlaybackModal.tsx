@@ -4,7 +4,7 @@ import {
     Select, MenuItem, FormControl, InputLabel, Button,
     Accordion, AccordionSummary, AccordionDetails, Tabs, Tab,
     Table, TableBody, TableCell, TableHead, TableRow, Paper,
-    LinearProgress, SelectChangeEvent,
+    LinearProgress, SelectChangeEvent,TableContainer,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -195,14 +195,33 @@ const HostDisplay = ({
 
                 return (
                     <Box role="tabpanel" hidden={activeTab !== index} key={groupKey} sx={{ pt: 2 }}>
-                        <Paper variant="outlined">
-                            <Table size="small">
+                        <TableContainer component={Paper} sx={{ maxHeight: 360, overflow: 'auto' }}>
+                            <Table
+                                size="small"
+                                stickyHeader
+                                sx={{
+                                    // 表头样式
+                                    '& .MuiTableCell-stickyHeader': {
+                                        backgroundColor: (t) =>
+                                            t.palette.mode === 'dark' ? t.palette.grey[900] : t.palette.grey[100],
+                                        color: 'text.primary',
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        py: 0.75, // 减小高度
+                                        borderBottom: (t) => `1px solid ${t.palette.divider}`,
+                                    },
+                                    // 防止表头/单元格文字竖排
+                                    '& th, & td': { whiteSpace: 'nowrap' },
+                                    // 表格整体更紧凑一些
+                                    '& td': { py: 0.5 },
+                                }}
+                            >
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell>时间戳</TableCell>
-                                        <TableCell>工作目录</TableCell>
+                                        <TableCell sx={{ width: 170 }}>时间戳</TableCell>
+                                        <TableCell sx={{ width: 140 }}>工作目录</TableCell>
                                         <TableCell>命令</TableCell>
-                                        <TableCell align="right">下一条延时</TableCell>
+                                        <TableCell sx={{ width: 100 }} align="right">下一条延时</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -210,13 +229,17 @@ const HostDisplay = ({
                                         <TableRow key={idx}>
                                             <TableCell>{new Date(cmd.ts).toLocaleString()}</TableCell>
                                             <TableCell>{cmd.cwd}</TableCell>
-                                            <TableCell><code>{cmd.command}</code></TableCell>
-                                            <TableCell align="right">{formatDuration(cmd.sleep_until_next_ms ?? 0)}</TableCell>
+                                            <TableCell>
+                                                <code style={{ wordBreak: 'break-word' }}>{cmd.command}</code>
+                                            </TableCell>
+                                            <TableCell align="right">
+                                                {formatDuration(cmd.sleep_until_next_ms ?? 0)}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
-                        </Paper>
+                        </TableContainer>
                         <PlaybackTerminal
                             playbackState={state}
                             totalCommands={commands.length}

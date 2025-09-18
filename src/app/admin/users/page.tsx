@@ -433,7 +433,7 @@ const UserManagementPage: React.FC = () => {
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
-          <Box>
+          {/* <Box>
             <Button
               variant="contained"
               startIcon={<AddCircleOutlineIcon />}
@@ -455,7 +455,7 @@ const UserManagementPage: React.FC = () => {
             onClick={handleOutputExcel}
           >
             导出数据
-          </Button>
+          </Button> */}
           <Button
             variant="contained"
             startIcon={<AddCircleOutlineIcon />}

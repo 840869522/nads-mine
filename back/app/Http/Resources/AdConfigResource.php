@@ -1,20 +1,23 @@
 <?php
-// file: app/Http-Resources/AdConfigResource.php
+// file: app/Http/Resources/AdConfigResource.php
 
 namespace App\Http\Resources;
 
-use Illuminate\Http\Request;
+// ★ 1. 移除 Illuminate\Http\Request 的 use 语句，因为方法签名中不再需要它
+// use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-// ★ 确保引入了 TeamResource ★
 use App\Http\Resources\TeamResource;
+use App\Http\Resources\UserResource;
 
 class AdConfigResource extends JsonResource
 {
     /**
      * 将资源转换为数组。
+     *
      * @param  \Illuminate\Http\Request  $request
      * @return array
      */
+    // ★★★ 2. 核心修复：移除方法签名中的类型提示 ★★★
     public function toArray($request)
     {
         return [
@@ -32,22 +35,15 @@ class AdConfigResource extends JsonResource
             'c_scene_config_id'   => $this->c_scene_config_id,
             'c_scene_instance_id' => $this->c_scene_instance_id,
 
-            // --- 裁判信息 ---
-            'referees'            => $this->referees_for_frontend,
-
-            // ★★★ 核心修复 ★★★
-            // 使用 $this->whenLoaded() 来安全地包含已加载的关联关系。
-            // 当 Controller 中的 with('redTeam') 加载了 redTeam 关系后，
-            // 这里就会使用 TeamResource 将其转换为 JSON 对象并包含进来。
-            // 如果关系没有被加载，这个键就会被自动忽略，非常安全。
+            // --- 关联关系 ---
+            'referees' => UserResource::collection($this->whenLoaded('referees')),
             'redTeam' => new TeamResource($this->whenLoaded('redTeam')),
             'blueTeam' => new TeamResource($this->whenLoaded('blueTeam')),
-
-            // 同样，为 sceneConfig 也创建一个简单的 Resource 或直接返回
             'sceneConfig' => $this->whenLoaded('sceneConfig', function () {
                 return [
-                    'c_config_id' => $this->sceneConfig->c_config_id,
-                    'c_name' => $this->sceneConfig->c_name,
+                    'c_config_id'   => $this->sceneConfig->c_config_id,
+                    'c_name'        => $this->sceneConfig->c_name,
+                    'topology_json' => $this->sceneConfig->c_scene,
                 ];
             }),
         ];

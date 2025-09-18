@@ -51,7 +51,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                 const requestOptions = {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': `${token}`,
                         'Content-Type': 'application/json'
                     }
                 };
@@ -128,7 +128,7 @@ const CoursePermissionDialog: React.FC<CoursePermissionDialogProps> = ({ open, o
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `${token}`
                 },
                 body: JSON.stringify({ users: grantedUserIds })
             });
