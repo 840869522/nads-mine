@@ -120,7 +120,7 @@ const CourseCasesPage: React.FC = () => {
 
         // Fetch categories
         const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const categoriesData = categoriesResponse.data;
         if (categoriesData.code === 200) {
@@ -134,7 +134,7 @@ const CourseCasesPage: React.FC = () => {
 
         // Fetch scene configs
         const sceneConfigsResponse = await apiClientWithToken.get(`/back/api/scenarios`, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const sceneConfigsData = sceneConfigsResponse.data;
         try {
@@ -154,7 +154,7 @@ const CourseCasesPage: React.FC = () => {
           ...(filterCategoryId && { c_category_id: filterCategoryId }),
         };
         const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
           params,
         });
         const coursesData = coursesResponse.data;
@@ -165,7 +165,7 @@ const CourseCasesPage: React.FC = () => {
                 let experiments: Experiment[] = [];
                 try {
                   const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                    headers: { Authorization: `${token}` },
+                    headers: { Authorization: `Bearer ${token}` },
                     params: {
                       page: 1,
                       pageSize: 10
@@ -187,7 +187,7 @@ const CourseCasesPage: React.FC = () => {
                 }
                 try {
                   const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                    headers: { Authorization: `${token}` },
+                    headers: { Authorization: `Bearer ${token}` },
                   });
                   const experimentsData = experimentsResponse.data;
                   if (experimentsData.code === 200) {
@@ -196,7 +196,7 @@ const CourseCasesPage: React.FC = () => {
                           let status: InstanceStatus = 'stopped';
                           try {
                             const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
-                              headers: { Authorization: `${token}` },
+                              headers: { Authorization: `Bearer ${token}` },
                             });
                             const instanceData = instanceResponse.data;
                             status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
@@ -333,7 +333,7 @@ const CourseCasesPage: React.FC = () => {
       const token = getCookie('_auth');
       const username = getCookie('username') || 'default_user';
       const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const responseData = response.data;
       if (responseData.code === 200) {
@@ -378,7 +378,7 @@ const CourseCasesPage: React.FC = () => {
       let experimentId = experiment.c_experiment_id;
       if (experiment.c_experiment_id.startsWith('temp-id-')) {
         const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments`, experimentData, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code !== 201) {
@@ -389,7 +389,7 @@ const CourseCasesPage: React.FC = () => {
         setTimeout(() => setErrorMessage(''), 3000);
       } else {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code !== 200) {
@@ -407,7 +407,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                Authorization: `${token}`,
+                Authorization: `Bearer ${token}`,
               },
             });
             const data = response.data;
@@ -420,7 +420,7 @@ const CourseCasesPage: React.FC = () => {
 
       // Refresh experiment list
       const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const experimentsData = coursesResponse.data;
       if (experimentsData.code === 200) {
@@ -472,7 +472,7 @@ const CourseCasesPage: React.FC = () => {
       let courseId = c_course_id;
       if (editingCase) {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code !== 200) {
@@ -480,7 +480,7 @@ const CourseCasesPage: React.FC = () => {
         }
       } else {
         const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code !== 201) {
@@ -498,7 +498,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                'Authorization': `${token}`,
+                'Authorization': `Bearer ${token}`,
               },
             });
             const data = response.data;
@@ -511,7 +511,7 @@ const CourseCasesPage: React.FC = () => {
 
       // 刷新课程列表
       const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
           pageSize: itemsPerPage, // 使用动态每页条数
@@ -527,7 +527,7 @@ const CourseCasesPage: React.FC = () => {
               let experiments: Experiment[] = [];
               try {
                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: `${token}` },
+                  headers: { Authorization: `Bearer ${token}` },
                 });
                 const resourcesData = resourcesResponse.data;
                 if (resourcesData.code === 200) {
@@ -544,7 +544,7 @@ const CourseCasesPage: React.FC = () => {
               }
               try {
                 const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                  headers: { Authorization: `${token}` },
+                  headers: { Authorization: `Bearer ${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
                 if (experimentsData.code === 200) {
@@ -601,7 +601,7 @@ const CourseCasesPage: React.FC = () => {
         throw new Error('未登录，请先登录');
       }
       const response = await apiClientWithToken.get(`/back/api/study/categories`, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -635,7 +635,7 @@ const CourseCasesPage: React.FC = () => {
         ...(filterCategoryId && { c_category_id: filterCategoryId }),
       };
       const response = await apiClientWithToken.get(`/back/api/study/courses`, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
         params,
       });
       const data = response.data;
@@ -646,7 +646,7 @@ const CourseCasesPage: React.FC = () => {
               let experiments: Experiment[] = [];
               try {
                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: `${token}` },
+                  headers: { Authorization: `Bearer ${token}` },
                   params: { page: 1, pageSize: 10 },
                 });
                 const resourcesData = resourcesResponse.data;
@@ -665,7 +665,7 @@ const CourseCasesPage: React.FC = () => {
               }
               try {
                 const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                  headers: { Authorization: `${token}` },
+                  headers: { Authorization: `Bearer ${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
                 if (experimentsData.code === 200) {
@@ -725,7 +725,7 @@ const CourseCasesPage: React.FC = () => {
         throw new Error('未登录，请先登录');
       }
       const response = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -783,7 +783,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.put(`/back/api/study/categories/${category.c_category_id}`, {
           c_category_name: category.c_category_name,
         }, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -795,7 +795,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.post(`/back/api/study/categories`, {
           c_category_name: category.c_category_name,
         }, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code === 201) {
@@ -819,7 +819,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error('未登录，请先登录');
         }
         const response = await apiClientWithToken.delete(`/back/api/study/categories/${categoryToDelete.c_category_id}`, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -861,7 +861,7 @@ const CourseCasesPage: React.FC = () => {
           }
         });
         const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.c_course_id}`, {
-          headers: { Authorization: `${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -889,7 +889,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.delete(
             `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
             {
-              headers: { Authorization: `${token}` },
+              headers: { Authorization: `Bearer ${token}` },
             }
         );
         const data = response.data;
@@ -936,7 +936,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       const response = await apiClientWithToken.delete(url, {
-        headers: { Authorization: `${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -977,10 +977,24 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handleOpenResourceViewer = (resource: CourseCaseResource) => {
+    const token = getCookie('_auth'); // ✅ 获取 Token
     let updatedResource = resource;
-    if (!resource.c_resource_path && resource.fileObject) {
-      updatedResource = { ...resource, c_resource_path: URL.createObjectURL(resource.fileObject) };
+
+    // 仅在资源路径为 HTTP URL 时附加 Token
+    if (resource.c_resource_path && !resource.c_resource_path.startsWith('blob:')) {
+      // 使用 URLSearchParams 避免重复参数
+      const url = new URL(resource.c_resource_path, window.location.origin);
+      url.searchParams.set('token', token);
+      updatedResource = { ...resource, c_resource_path: url.toString() };
     }
+    // 若为 Blob URL（本地文件），保留原有逻辑
+    else if (!resource.c_resource_path && resource.fileObject) {
+      updatedResource = {
+        ...resource,
+        c_resource_path: URL.createObjectURL(resource.fileObject)
+      };
+    }
+
     setViewingResource(updatedResource);
     setIsResourceViewerOpen(true);
   };
@@ -1239,7 +1253,7 @@ const CourseCasesPage: React.FC = () => {
                       </IconButton>
                       <IconButton
                           onClick={() => handleOpenResourcesDialog(course)}
-                          title="查看资源和实验"
+                          title="查看资源"
                       >
                         <VisibilityIcon />
                       </IconButton>
@@ -1282,12 +1296,11 @@ const CourseCasesPage: React.FC = () => {
         </Dialog>
         <Dialog open={isResourcesDialogOpen} onClose={handleCloseResourcesDialog} maxWidth="md" fullWidth>
           <DialogTitle>
-            {selectedCaseForResources?.c_course_name} 的资源和实验
+            {selectedCaseForResources?.c_course_name} 的资源
           </DialogTitle>
           <DialogContent>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
               <Tab label="课程资源" />
-              <Tab label="实验" />
               <Tab label="实验资源" />
             </Tabs>
             {tabValue === 0 && (
@@ -1313,12 +1326,7 @@ const CourseCasesPage: React.FC = () => {
                                   <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
                                     <VisibilityIcon />
                                   </IconButton>
-                                  <IconButton
-                                      onClick={() => handleDeleteResource(resource, false)}
-                                      title="删除"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
+
                                 </TableCell>
                               </TableRow>
                           ))}
@@ -1329,92 +1337,8 @@ const CourseCasesPage: React.FC = () => {
                   )}
                 </Box>
             )}
+
             {tabValue === 1 && (
-                <Box sx={{ mt: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="subtitle1">实验列表</Typography>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button
-                          variant="contained"
-                          startIcon={<AddIcon />}
-                          onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id)}
-                      >
-                        添加实验
-                      </Button>
-                      <Button
-                          variant="outlined"
-                          color="primary"
-                          onClick={() => handleRefreshExperiments(selectedCaseForResources!.c_course_id)}
-                          disabled={isLoading}
-                          startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
-                      >
-                        刷新实验
-                      </Button>
-                    </Box>
-                  </Box>
-                  {selectedCaseForResources?.experiments?.length ? (
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>实验名称</TableCell>
-                            <TableCell>描述</TableCell>
-                            <TableCell>场景配置</TableCell>
-                            <TableCell>创建时间</TableCell>
-                            <TableCell>操作</TableCell>
-                            <TableCell>实验状态</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(selectedCaseForResources.experiments || []).map((experiment: Experiment) => (
-                              <TableRow key={experiment.c_experiment_id}>
-                                <TableCell>{experiment.c_experiment_name}</TableCell>
-                                <TableCell>{experiment.c_description || '-'}</TableCell>
-                                <TableCell>{experiment.c_name || '-'}</TableCell>
-                                <TableCell>{formatDate(experiment.created_at)}</TableCell>
-                                <TableCell>
-                                  <IconButton
-                                      onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id, experiment)}
-                                      title="编辑"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton
-                                      onClick={() => {
-                                        setExperimentToDelete(experiment);
-                                        setIsConfirmDialogOpen(true);
-                                      }}
-                                      title="删除"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                  <IconButton
-                                      onClick={() => handleOpenResourcesDialog(selectedCaseForResources!, 2)}
-                                      title="查看实验资源"
-                                  >
-                                    <VisibilityIcon />
-                                  </IconButton>
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                      variant="contained"
-                                      size="small"
-                                      startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
-                                      onClick={() => handleStartExperiment(experiment)}
-                                      disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
-                                  >
-                                    {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                  ) : (
-                      <Typography>无实验</Typography>
-                  )}
-                </Box>
-            )}
-            {tabValue === 2 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle1">实验资源</Typography>
                   {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) ? (
@@ -1426,7 +1350,6 @@ const CourseCasesPage: React.FC = () => {
                             <TableCell>类型</TableCell>
                             <TableCell>大小</TableCell>
                             <TableCell>操作</TableCell>
-                            <TableCell>实验状态</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -1455,17 +1378,7 @@ const CourseCasesPage: React.FC = () => {
                                         <DeleteIcon />
                                       </IconButton>
                                     </TableCell>
-                                    <TableCell>
-                                      <Button
-                                        variant="contained"
-                                        size="small"
-                                        startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
-                                        onClick={() => handleStartExperiment(experiment)}
-                                        disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
-                                      >
-                                        {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
-                                      </Button>
-                                    </TableCell>
+
                                   </TableRow>
                               ))}
                         </TableBody>
