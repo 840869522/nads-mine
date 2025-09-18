@@ -349,6 +349,7 @@ HTML;
             ], 500);
         }
     }
+    
     public function convertToPdf(Request $request, $c_resource_id)
     {
         try {
@@ -380,7 +381,7 @@ HTML;
             $path = $resource['c_resource_path'];
             $fullPath = Storage::disk('local_resources')->path($path);
 
-            // 验证文件类型（仅支持PPTX）
+            // 验证文件类型（仅支持 PPTX）
             $validPptxTypes = [
                 'pptx',
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
@@ -392,7 +393,7 @@ HTML;
                 ]);
                 return response()->json([
                     'code' => 400,
-                    'message' => '仅支持PPTX文件转换为PDF',
+                    'message' => '仅支持 PPTX 文件转换为 PDF',
                 ], 400);
             }
 
@@ -409,7 +410,7 @@ HTML;
                 ], 404);
             }
 
-            // 检查文件和临时目录权限
+            // 检查文件和目标目录权限
             if (!is_readable($fullPath)) {
                 Log::error('Resource file not readable', [
                     'c_resource_id' => $c_resource_id,
@@ -420,15 +421,17 @@ HTML;
                     'message' => '文件不可读，请检查权限',
                 ], 500);
             }
-            $tempDir = sys_get_temp_dir();
-            if (!is_writable($tempDir)) {
-                Log::error('Temp directory not writable', [
+
+            // 获取 PPTX 文件所在目录
+            $targetDir = dirname($fullPath);
+            if (!is_writable($targetDir)) {
+                Log::error('Target directory not writable', [
                     'c_resource_id' => $c_resource_id,
-                    'tempDir' => $tempDir,
+                    'targetDir' => $targetDir,
                 ]);
                 return response()->json([
                     'code' => 500,
-                    'message' => '临时目录不可写，请检查权限',
+                    'message' => '目标目录不可写，请检查权限',
                 ], 500);
             }
 
@@ -436,10 +439,9 @@ HTML;
             $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
             $commandFullPath = $fullPath;
 
-            // Windows下将UTF-8路径转为GBK（解决中文路径识别问题）
+            // Windows 下将 UTF-8 路径转为 GBK（Linux 不需要）
             if ($isWindows) {
                 $commandFullPath = iconv('UTF-8', 'GBK//IGNORE', $fullPath);
-                // 转换后再次检查文件是否存在（避免编码转换导致路径错误）
                 if (!file_exists($commandFullPath)) {
                     Log::error('File not found after encoding conversion', [
                         'original_path' => $fullPath,
@@ -452,16 +454,25 @@ HTML;
                 }
             }
 
-            // 确定LibreOffice执行路径
+            // 确定 LibreOffice 执行路径
             $libreOfficePath = $isWindows
                 ? 'C:\Program Files\LibreOffice\program\soffice.exe'
                 : 'libreoffice';
 
-            // 生成PDF输出路径
-            $originalFileName = pathinfo($fullPath, PATHINFO_FILENAME);
-            $pdfPath = $tempDir . DIRECTORY_SEPARATOR . $originalFileName . '.pdf';
+            // 生成安全的 PDF 文件名（避免中文文件名问题）
+            $safeFileName = uniqid('pdf_'); // 使用唯一 ID，例如 pdf_66ea7b1234567
+            $pdfFileName = $safeFileName . '.pdf';
+            $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $pdfFileName;
 
-            // 检查LibreOffice可用性
+            // 检查是否已存在同名 PDF 文件
+            $counter = 1;
+            while (file_exists($pdfPath)) {
+                $pdfFileName = $safeFileName . '_' . $counter . '.pdf';
+                $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $pdfFileName;
+                $counter++;
+            }
+
+            // 检查 LibreOffice 可用性
             $testProcess = new Process([$libreOfficePath, '--version']);
             $testProcess->run();
             if (!$testProcess->isSuccessful()) {
@@ -482,9 +493,9 @@ HTML;
                 '--headless',
                 '--convert-to',
                 'pdf',
-                $commandFullPath,  // 使用处理后的路径
+                $commandFullPath,
                 '--outdir',
-                $tempDir,
+                $targetDir,
             ], null, ['LC_ALL' => 'C.UTF-8']);
             $process->setTimeout(60);
             Log::info('Running LibreOffice conversion', [
@@ -496,10 +507,16 @@ HTML;
             $process->run();
 
             if (!$process->isSuccessful()) {
+                Log::error('LibreOffice conversion failed', [
+                    'c_resource_id' => $c_resource_id,
+                    'command' => $process->getCommandLine(),
+                    'output' => $process->getOutput(),
+                    'error' => $process->getErrorOutput(),
+                ]);
                 throw new ProcessFailedException($process);
             }
 
-            // 验证PDF生成结果
+            // 验证 PDF 生成结果
             if (!file_exists($pdfPath)) {
                 Log::error('PDF generation failed (file not found)', [
                     'c_resource_id' => $c_resource_id,
@@ -518,7 +535,7 @@ HTML;
                 'Content-Disposition' => $request->query('disposition', 'inline') === 'inline'
                     ? 'inline'
                     : "attachment; filename*=UTF-8''{$encodedFileName}",
-            ])->deleteFileAfterSend(true);
+            ]);
 
         } catch (ProcessFailedException $e) {
             Log::error('[LibreOffice Error] PDF conversion failed', [
