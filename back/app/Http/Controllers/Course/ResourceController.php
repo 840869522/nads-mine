@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class ResourceController extends Controller
 {
@@ -343,6 +346,200 @@ HTML;
             return response()->json([
                 'code' => 500,
                 'message' => 'Unexpected error in ResourceController::download: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function convertToPdf(Request $request, $c_resource_id)
+    {
+        try {
+            // 验证资源 ID
+            $validator = Validator::make(['c_resource_id' => $c_resource_id], [
+                'c_resource_id' => 'required|string|uuid',
+            ]);
+            if ($validator->fails()) {
+                Log::error('Validation failed in ResourceController::convertToPdf', [
+                    'errors' => $validator->errors()->toArray(),
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json([
+                    'code' => 422,
+                    'message' => $validator->errors()->first(),
+                ], 422);
+            }
+
+            // 获取资源
+            $modelRes = ResourceModel::getResourceById($c_resource_id);
+            if ($modelRes['code'] != 200) {
+                Log::error('Resource not found in ResourceController::convertToPdf', [
+                    'c_resource_id' => $c_resource_id,
+                ]);
+                return response()->json($modelRes, $modelRes['code']);
+            }
+
+            $resource = $modelRes['data'];
+            $path = $resource['c_resource_path'];
+            $fullPath = Storage::disk('local_resources')->path($path);
+
+            // 验证文件类型（仅支持PPTX）
+            $validPptxTypes = [
+                'pptx',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            ];
+            if (!in_array($resource['c_type'], $validPptxTypes)) {
+                Log::error('Invalid file type in ResourceController::convertToPdf', [
+                    'c_resource_id' => $c_resource_id,
+                    'c_type' => $resource['c_type'],
+                ]);
+                return response()->json([
+                    'code' => 400,
+                    'message' => '仅支持PPTX文件转换为PDF',
+                ], 400);
+            }
+
+            // 验证源文件存在性
+            if (!file_exists($fullPath)) {
+                Log::error('Resource file not found in ResourceController::convertToPdf', [
+                    'c_resource_id' => $c_resource_id,
+                    'path' => $path,
+                    'fullPath' => $fullPath,
+                ]);
+                return response()->json([
+                    'code' => 404,
+                    'message' => '资源文件不存在',
+                ], 404);
+            }
+
+            // 检查文件和临时目录权限
+            if (!is_readable($fullPath)) {
+                Log::error('Resource file not readable', [
+                    'c_resource_id' => $c_resource_id,
+                    'fullPath' => $fullPath,
+                ]);
+                return response()->json([
+                    'code' => 500,
+                    'message' => '文件不可读，请检查权限',
+                ], 500);
+            }
+            $tempDir = sys_get_temp_dir();
+            if (!is_writable($tempDir)) {
+                Log::error('Temp directory not writable', [
+                    'c_resource_id' => $c_resource_id,
+                    'tempDir' => $tempDir,
+                ]);
+                return response()->json([
+                    'code' => 500,
+                    'message' => '临时目录不可写，请检查权限',
+                ], 500);
+            }
+
+            // 系统平台判断及路径编码处理
+            $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+            $commandFullPath = $fullPath;
+
+            // Windows下将UTF-8路径转为GBK（解决中文路径识别问题）
+            if ($isWindows) {
+                $commandFullPath = iconv('UTF-8', 'GBK//IGNORE', $fullPath);
+                // 转换后再次检查文件是否存在（避免编码转换导致路径错误）
+                if (!file_exists($commandFullPath)) {
+                    Log::error('File not found after encoding conversion', [
+                        'original_path' => $fullPath,
+                        'converted_path' => $commandFullPath,
+                    ]);
+                    return response()->json([
+                        'code' => 404,
+                        'message' => '编码转换后文件不存在',
+                    ], 404);
+                }
+            }
+
+            // 确定LibreOffice执行路径
+            $libreOfficePath = $isWindows
+                ? 'C:\Program Files\LibreOffice\program\soffice.exe'
+                : 'libreoffice';
+
+            // 生成PDF输出路径
+            $originalFileName = pathinfo($fullPath, PATHINFO_FILENAME);
+            $pdfPath = $tempDir . DIRECTORY_SEPARATOR . $originalFileName . '.pdf';
+
+            // 检查LibreOffice可用性
+            $testProcess = new Process([$libreOfficePath, '--version']);
+            $testProcess->run();
+            if (!$testProcess->isSuccessful()) {
+                Log::error('LibreOffice not installed or not accessible', [
+                    'c_resource_id' => $c_resource_id,
+                    'command' => $testProcess->getCommandLine(),
+                    'error' => $testProcess->getErrorOutput(),
+                ]);
+                return response()->json([
+                    'code' => 500,
+                    'message' => 'LibreOffice 未安装或不可用，请检查服务器配置',
+                ], 500);
+            }
+
+            // 执行转换命令
+            $process = new Process([
+                $libreOfficePath,
+                '--headless',
+                '--convert-to',
+                'pdf',
+                $commandFullPath,  // 使用处理后的路径
+                '--outdir',
+                $tempDir,
+            ], null, ['LC_ALL' => 'C.UTF-8']);
+            $process->setTimeout(60);
+            Log::info('Running LibreOffice conversion', [
+                'platform' => $isWindows ? 'Windows' : 'Linux',
+                'command' => $process->getCommandLine(),
+                'input_path' => $commandFullPath,
+                'output_pdf_path' => $pdfPath,
+            ]);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                throw new ProcessFailedException($process);
+            }
+
+            // 验证PDF生成结果
+            if (!file_exists($pdfPath)) {
+                Log::error('PDF generation failed (file not found)', [
+                    'c_resource_id' => $c_resource_id,
+                    'expected_pdf_path' => $pdfPath,
+                ]);
+                return response()->json([
+                    'code' => 500,
+                    'message' => 'PDF 文件生成失败',
+                ], 500);
+            }
+
+            // 处理下载文件名编码
+            $encodedFileName = rawurlencode($resource['c_resource_name'] . '.pdf');
+            return response()->file($pdfPath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $request->query('disposition', 'inline') === 'inline'
+                    ? 'inline'
+                    : "attachment; filename*=UTF-8''{$encodedFileName}",
+            ])->deleteFileAfterSend(true);
+
+        } catch (ProcessFailedException $e) {
+            Log::error('[LibreOffice Error] PDF conversion failed', [
+                'c_resource_id' => $c_resource_id,
+                'error' => $e->getMessage(),
+                'process_output' => $e->getProcess()->getOutput(),
+                'process_error' => $e->getProcess()->getErrorOutput(),
+            ]);
+            return response()->json([
+                'code' => 500,
+                'message' => '文件转换失败: ' . $e->getMessage(),
+            ], 500);
+        } catch (\Exception $e) {
+            Log::error('[Unexpected Error] PDF conversion failed', [
+                'c_resource_id' => $c_resource_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code' => 500,
+                'message' => '无法转换文件: ' . $e->getMessage(),
             ], 500);
         }
     }
