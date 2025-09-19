@@ -121,7 +121,7 @@ test_services() {
         fi
         return
     fi
-    if ["$app_name" = "Python"]; then
+    if [ "$app_name" = "Python"]; then
         url="$url:9009"
         port=9009
     fi

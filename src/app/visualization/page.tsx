@@ -59,26 +59,36 @@ function Fps() {
   	);
 }
 
+export interface AdData{
+	id: string;
+	blueTeamId: number;
+	redTeamId: number;
+}
+
 const ADPage: React.FC = () => {
-    const [id, setId] = useState<string | null>(null);
+    const [adData, setAdData] = useState<AdData | null>(null);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const storedId = localStorage.getItem('instance_id');
-            if (storedId !== null) {
-                sessionStorage.setItem('instance_id', storedId);
-                localStorage.removeItem('instance_id');
+            const storedData = localStorage.getItem('adData');
+            if (storedData !== null) {
+                sessionStorage.setItem('adData', storedData);
+                localStorage.removeItem('adData');
             }
-            const sessionId = sessionStorage.getItem('instance_id');
-            setId(sessionId);
+            const sessionData = sessionStorage.getItem('adData');
+			let sessionObj: AdData | null = null;
+			if(sessionData)
+				sessionObj = JSON.parse(sessionData) as AdData; 
+            setAdData(sessionObj);
+		
             websocketClient.connect();
         }
     },[]);
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
             <Header />
-            {/* <Battlefield/> */}
-            <ThreeDimensional id={id ?? ''}/>
+			{/* {adData && <Battlefield {...adData} />} */}
+            {adData && <ThreeDimensional {...adData} />}
             <Fps />
         </div>
     );

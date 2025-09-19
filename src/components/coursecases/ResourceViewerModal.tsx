@@ -19,8 +19,8 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [htmlContent, setHtmlContent] = useState<string>('');
+    const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
-    // 下载文件（不变，但添加日志）
     const handleDownload = async (resource: CourseCaseResource) => {
         try {
             const token = getCookie('_auth');
@@ -29,7 +29,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                 ? `/back/api/study/experiment-resources/${resource.c_resource_id}?disposition=attachment`
                 : `/back/api/study/resources/${resource.c_resource_id}?disposition=attachment`;
             const response = await apiClientWithToken.get(downloadUrl, {
-                headers: { Authorization: ` ${token}` },
+                headers: { Authorization: `${token}` },
                 responseType: 'blob',
             });
 
@@ -38,7 +38,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `${resource.c_resource_name}.${resource.c_type}`);  // 修改：确保下载文件名完整
+            link.setAttribute('download', `${resource.c_resource_name}.${resource.c_type}`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -49,7 +49,13 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
         }
     };
 
-    // 打开查看页面
+    const cleanupObjectUrl = () => {
+        if (objectUrl) {
+            window.URL.revokeObjectURL(objectUrl);
+            setObjectUrl(null);
+        }
+    };
+
     useEffect(() => {
         if (!open || !resource || !resource.c_resource_path) return;
 
@@ -57,24 +63,52 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
             setIsLoading(true);
             setError(null);
             setHtmlContent('');
+            cleanupObjectUrl();
 
             try {
                 const token = getCookie('_auth');
                 if (!token) throw new Error('未登录，请先登录');
 
-                const viewUrl = resource.isExperimentResource
+                const isWord = resource.c_type === 'doc' || resource.c_type === 'docx';
+                const isPptx = resource.c_type === 'pptx';
+                const isPdf = resource.c_type === 'pdf';
+                const isImage = resource.c_type === 'jpg' || resource.c_type === 'jpeg' || resource.c_type === 'png';
+                const isVideo = resource.c_type === 'mp4' || resource.c_type === 'avi';
+
+                let viewUrl = resource.isExperimentResource
                     ? `/back/api/study/experiment-resources/${resource.c_resource_id}?disposition=inline`
                     : `/back/api/study/resources/${resource.c_resource_id}?disposition=inline`;
 
-                const isWord = resource.c_type === 'doc' || resource.c_type === 'docx';  // 修改：使用扩展名匹配
-                const isPptx = resource.c_type === 'pptx';
+                if (isPptx) {
+                    // 调用 PPTX 转 PDF 端点
+                    viewUrl = resource.isExperimentResource
+                        ? `/back/api/study/experiment-resources/${resource.c_resource_id}/convert-to-pdf?disposition=inline`
+                        : `/back/api/study/resources/${resource.c_resource_id}/convert-to-pdf?disposition=inline`;
 
-                if (isWord) {
-                    // 获取 DOCX 并转换为 HTML，在模态框显示（优化错误处理）
                     const response = await fetch(viewUrl, {
-                        headers: { Authorization: ` ${token}` },
+                        headers: { Authorization: `${token}` },
                     });
                     if (!response.ok) {
+                        if (response.status === 401 || response.status === 420) {
+                            throw new Error('token失效，请重新登录');
+                        }
+                        throw new Error(`无法加载文件: ${response.statusText}`);
+                    }
+                    const blob = await response.blob();
+                    const tempUrl = URL.createObjectURL(blob);
+                    setObjectUrl(tempUrl);
+
+                    // 新标签页预览 PDF
+                    window.open(tempUrl, '_blank');
+                    onClose(); // 关闭模态框
+                } else if (isWord) {
+                    const response = await fetch(viewUrl, {
+                        headers: { Authorization: `${token}` },
+                    });
+                    if (!response.ok) {
+                        if (response.status === 401 || response.status === 420) {
+                            throw new Error('token失效，请重新登录');
+                        }
                         throw new Error(`无法加载文件: ${response.statusText}`);
                     }
                     const arrayBuffer = await response.arrayBuffer();
@@ -83,36 +117,85 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                         throw new Error('文件转换为空，请检查 DOCX 格式');
                     }
                     setHtmlContent(result.value);
-                } else if (isPptx) {
-                    setHtmlContent('<p>浏览器不支持直接查看 PPTX 文件，请下载查看。</p>');
+                } else if (isPdf || isImage || isVideo) {
+                    const response = await fetch(viewUrl, {
+                        headers: { Authorization: `${token}` },
+                    });
+                    if (!response.ok) {
+                        if (response.status === 401 || response.status === 420) {
+                            throw new Error('token失效，请重新登录');
+                        }
+                        throw new Error(`无法加载文件: ${response.statusText}`);
+                    }
+                    const blob = await response.blob();
+                    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+                    const tempUrl = URL.createObjectURL(blob);
+                    setObjectUrl(tempUrl);
+
+                    // 新标签页预览
+                    window.open(tempUrl, '_blank');
+                    onClose();
                 } else {
-                    // 其他类型（如 PDF/PNG/MP4）在新标签页打开（后端 HTML 处理 title 和下载按钮）
-                    window.open(viewUrl, '_blank');
-                    onClose();  // 关闭模态框
+                    const response = await fetch(viewUrl, {
+                        headers: { Authorization: `${token}` },
+                    });
+                    if (!response.ok) {
+                        if (response.status === 401 || response.status === 420) {
+                            throw new Error('token失效，请重新登录');
+                        }
+                        throw new Error(`无法加载文件: ${response.statusText}`);
+                    }
+                    const blob = await response.blob();
+                    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+                    const tempUrl = URL.createObjectURL(blob);
+                    setObjectUrl(tempUrl);
+
+                    setHtmlContent(`
+                        <object data="${tempUrl}" type="${contentType}" width="100%" height="100%">
+                            <p style="text-align: center; color: #555; font-size: 16px;">
+                                浏览器不支持预览此文件类型，请
+                                <a href="${tempUrl}" download="${resource.c_resource_name}.${resource.c_type}" style="color: #1976d2; text-decoration: underline;">
+                                    下载查看
+                                </a>。
+                            </p>
+                        </object>
+                    `);
                 }
             } catch (error: any) {
                 console.error('预览失败:', error);
-                setError(`无法预览文件: ${error.message}。请尝试下载。`);  // 修改：显示错误，不自动下载
+                setError(`无法预览文件: ${error.message}。请尝试下载。`);
+                if (error.message.includes('token失效')) {
+                    window.location.href = '/login';
+                }
             } finally {
                 setIsLoading(false);
             }
         };
 
         openViewer();
+
+        return () => {
+            cleanupObjectUrl();
+        };
     }, [open, resource, onClose]);
+
+    const handleClose = () => {
+        cleanupObjectUrl();
+        onClose();
+    };
 
     if (!open || !resource) return null;
 
     return (
         <Dialog
             open={open}
-            onClose={onClose}
+            onClose={handleClose}
             fullWidth
             maxWidth="lg"
             fullScreen={fullScreen}
             PaperProps={{ sx: { borderRadius: 2 } }}
         >
-            <DialogTitle>{resource?.c_resource_name || '资源查看'}</DialogTitle>  {/* 修改：模态框标题显示完整文件名 */}
+            <DialogTitle>{resource?.c_resource_name || '资源查看'}</DialogTitle>
             <DialogContent dividers sx={{ maxHeight: '80vh', overflowY: 'auto' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', py: 2 }}>
                     <Typography variant="body2" color="text.secondary">
@@ -138,7 +221,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                         </Box>
                     )}
                     {htmlContent && (
-                        <Box sx={{ width: '100%', maxHeight: 'calc(80vh - 100px)', overflowY: 'auto', p: 2, border: '1px solid #ddd' }}>  {/* 修改：添加边框以改善 DOCX 预览视觉 */}
+                        <Box sx={{ width: '100%', maxHeight: 'calc(80vh - 100px)', overflowY: 'auto', p: 2, border: '1px solid #ddd' }}>
                             <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
                         </Box>
                     )}
@@ -154,7 +237,7 @@ const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ open, onClose
                         下载文件
                     </Button>
                 )}
-                <Button onClick={onClose}>关闭</Button>
+                <Button onClick={handleClose}>关闭</Button>
             </DialogActions>
         </Dialog>
     );

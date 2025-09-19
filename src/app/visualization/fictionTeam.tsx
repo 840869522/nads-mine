@@ -31,6 +31,27 @@ const CrownIcon = ({ rank }: { rank: number }) => {
     );
 };
 
+function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
+    // 保证范围内能被5整除
+    const start = Math.ceil(min / 5)
+    const end = Math.floor(max / 5)
+
+    const rand = Math.floor(Math.random() * (end - start + 1)) + start
+    return rand * 5
+}
+
+async function fetchTeamMembers(teamId: number) {
+    const res = await fetch(`/back/api/visualization/users/${teamId}`);
+    const result = await res.json();
+
+    if (result.code !== 200) {
+        console.error(result.message);
+        return [];
+    }
+
+    return result.data; // 这里是对象数组 [{ userId, username }, ...]
+}
+
 function TeamInfoItem(props: { info: TeamInfo; index: number }) {
     return (
         <div className="flex items-center justify-between py-1 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors">
@@ -116,15 +137,32 @@ function LogList(props: {logList: LogInfo[]}){
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export default function FictionTeam(team:BattlefieldInfo) {
-    const [teamList, setTeamList] = useState<TeamInfo[]>(team.teamInfo)
+    const [teamList, setTeamList] = useState<TeamInfo[]>([])
 
     const [logList, setLogList] = useState<LogInfo[]>(team.logInfo)
 
     // 同步父组件更新
     useEffect(() => {
-        setTeamList(team.teamInfo)
-        setLogList(team.logInfo)
-    }, [team])
+        let teams: TeamInfo[] = [];
+        fetchTeamMembers(team.teamId).then(users => {
+            for(let i = 0; i < users.length; ++i){
+                let item: TeamInfo = {
+                    teamId: users[i].userId,
+                    teamName: team.type === 0 ? `蓝方席位${i+1}`: `红方席位${i+1}` ,
+                    teamScore: getRandomDivisibleBy5()
+                }
+                teams.push(item);
+
+            }  
+            setTeamList(teams);
+        });
+        
+        
+    }, [team.teamId])
+
+    useEffect(()=>{
+        setLogList(team.logInfo);
+    }, [team.logInfo])
     if(team.type === 0){
         return (
             <div className="absolute min-w-[300px] grid grid-rows-[auto_auto_1fr]

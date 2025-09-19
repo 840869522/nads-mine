@@ -147,19 +147,36 @@ const Page: React.FC = () => {
         }
     }, [debouncedSearchQuery, page, rowsPerPage]);
 
-    const fetchUsers = useCallback(async () => {
-        if (allUsers.length > 0) return;
+    const fetchUsers = async () => {
+        if (allUsers.length > 0) {
+            return;
+        }
+
         setIsUsersLoading(true);
         try {
             const response = await customFetch(`${API_BASE_URL}/ad/users`);
-            if (!response.ok) throw new Error('获取用户列表失败');
+            if (!response.ok) {
+                throw new Error('获取用户列表失败');
+            }
             const result = await response.json();
-            if (result && result.status === 'success' && Array.isArray(result.data)) {
-                const rawUsers = result.data;
-                const formattedUsers: User[] = rawUsers.map((user: any) => ({ u_id: user.c_username, u_name: user.c_name }));
+
+            // 新的、更具兼容性的检查逻辑
+            // 检查 result.data 是否存在，并且 result.data.data 是否是一个数组
+            if (result && result.data && Array.isArray(result.data.data)) {
+                // 从更深的层级取出真正的用户数组
+                const rawUsers = result.data.data;
+
+                // 确保字段名与前端 interface 匹配
+                // 后端返回的是 c_username 和 c_name，我们需要转换成 u_id 和 u_name
+                const formattedUsers: User[] = rawUsers.map((user: any) => ({
+                    u_id: user.c_username,
+                    u_name: user.c_name
+                }));
+
                 setAllUsers(formattedUsers);
             } else {
-                setAllUsers([]);
+                // 如果格式不正确，抛出错误
+                throw new Error('返回的用户数据格式不正确');
             }
         } catch (err) {
             setStatusMessage({ type: 'error', message: `无法加载用户列表: ${(err as Error).message}` });
@@ -167,7 +184,7 @@ const Page: React.FC = () => {
         } finally {
             setIsUsersLoading(false);
         }
-    }, [allUsers.length]);
+    };
 
     useEffect(() => { fetchTeams(); }, [fetchTeams]);
     useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
@@ -245,7 +262,6 @@ const Page: React.FC = () => {
         setIsDrillsLoading(true);
         setTeamDrills([]);
         try {
-            // 后端需要确保返回 c_scene_instance_id
             const response = await customFetch(`${API_BASE_URL}/ad/team/${team.c_id}/drills`);
             if (!response.ok) {
                 throw new Error('获取演练列表失败');
@@ -392,7 +408,7 @@ const Page: React.FC = () => {
                         />
                         <TextField margin="dense" id="description" name="description" label="队伍描述 (可选)" type="text" fullWidth multiline rows={3} variant="outlined" defaultValue={editingTeam?.c_description || ''} sx={{ mt: 2 }} />
                     </DialogContent>
-                    <DialogActions sx={{ p: '0 24px 20px' }}>
+                    <DialogActions sx={{ p: 'o 24px 20px' }}>
                         <Button onClick={handleCloseForm} variant="outlined" disabled={isSubmitting}>取消</Button>
                         <Button type="submit" variant="contained" disabled={isSubmitting}>
                             {isSubmitting ? <CircularProgress size={24} /> : (editingTeam ? '保存更改' : '确认创建')}

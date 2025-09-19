@@ -15,24 +15,64 @@ const PlaybackRequestSchema = z.object({
 
 type PlaybackRequest = z.infer<typeof PlaybackRequestSchema>;
 
-// Schema for parsing logs from Elasticsearch
 const SnoopyLogSchema = z.object({
-  timestamp: z.string(),
-  cwd: z.string().optional().nullable(),
-  working_dir: z.string().optional().nullable(),
-  command: z.string().optional().nullable(),
-  full_command: z.string().optional().nullable(),
-  user: z.string().optional().nullable(),
-  uid: z.string().optional().nullable(),
-  sid: z.string().optional().nullable(),
-  session_id: z.string().optional().nullable(),
-}).transform((data) => ({
-  ts: new Date(data.timestamp),
-  user: data.user || data.uid || 'unknown_user',
-  command: data.command || data.full_command || 'echo "UNKNOWN COMMAND"',
-  cwd: data.cwd || data.working_dir || '/',
-  sid: data.sid || data.session_id || 'unknown_session',
-}));
+    timestamp: z.string(),
+    cwd: z.string().optional().nullable(),
+    working_dir: z.string().optional().nullable(),
+    command: z.string().optional().nullable(),
+    full_command: z.string().optional().nullable(),
+    user: z.string().optional().nullable(),
+    uid: z.string().optional().nullable(),
+    sid: z.string().optional().nullable(),
+    session_id: z.string().optional().nullable(),
+}).transform((data, ctx) => { // 使用 ctx 来添加自定义错误
+                              // 防御性检查：确保 timestamp 是一个非空字符串
+    if (typeof data.timestamp !== 'string' || data.timestamp.trim() === '') {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Timestamp is not a valid string or is empty.",
+        });
+        return z.NEVER; // 告诉 Zod 停止处理此条目
+    }
+
+    let date;
+    const originalTimestamp = data.timestamp;
+
+    // 尝试1：直接解析，这能处理标准 ISO 格式 (e.g., ...T...Z)
+    date = new Date(originalTimestamp);
+
+    // 尝试2：如果直接解析失败，尝试我们为 "YYYY-MM-DD HH:MM:SS TZZ" 格式定制的逻辑
+    if (isNaN(date.getTime())) {
+        // 使用正则表达式精确匹配 "YYYY-MM-DD HH:MM:SS" 部分，忽略后面的一切
+        const match = originalTimestamp.match(/^(\d{4}-\d{2}-\d{2})\s(\d{2}:\d{2}:\d{2})/);
+        if (match) {
+            // 构造成 'YYYY-MM-DDTHH:MM:SS' 格式
+            const parsableString = `${match[1]}T${match[2]}`;
+            date = new Date(parsableString);
+        }
+    }
+
+    // 最终检查和调试日志
+    if (isNaN(date.getTime())) {
+        // 关键的调试步骤：在服务端打印出有问题的原始数据
+        console.error(`[DEBUG] Failed to parse timestamp. Original value: "${originalTimestamp}"`);
+
+        // 向 Zod 添加一个更清晰的错误，而不是直接抛出异常
+        ctx.addIssue({
+            code: z.ZodIssueCode.invalid_date,
+            message: `Invalid time value for timestamp: "${originalTimestamp}"`,
+        });
+        return z.NEVER; // 告诉 Zod 放弃此条目
+    }
+
+    return {
+        ts: date,
+        user: data.user || data.uid || 'unknown_user',
+        command: data.command || data.full_command || 'echo "UNKNOWN COMMAND"',
+        cwd: data.cwd || data.working_dir || '/',
+        sid: data.sid || data.session_id || 'unknown_session',
+    };
+});
 
 type SnoopyLog = z.infer<typeof SnoopyLogSchema>;
 
@@ -44,6 +84,12 @@ const NOISE_COMMAND_PATTERNS = [
   /^dircolors/,
   /^arch$/,
   /^captoinfo/,
+
+    // 允许前面有分隔符/路径/ sudo；只匹配完整单词 apt 或 apt-get
+    /(?:^|[\s;|:&])(?:sudo\s+)?(?:\/\S*\/)?apt(?:-get)?\b/i,
+
+    // 允许前面有分隔符/路径/ sudo；只匹配完整单词 dpkg
+    /(?:^|[\s;|:&])(?:sudo\s+)?(?:\/\S*\/)?dpkg\b/i,
 ];
 
 // --- Helper Functions ---
@@ -72,30 +118,30 @@ async function fetchAllLogs(client: Client, indexName: string) {
 }
 
 function filterNoiseCommands(logs: SnoopyLog[]): SnoopyLog[] {
-  const logsByTimestamp = new Map<string, SnoopyLog[]>();
+    const logsByTimestamp = new Map<string, SnoopyLog[]>();
 
-  for (const log of logs) {
-    const timestampKey = log.ts.toISOString().slice(0, 19); // Group by second
-    if (!logsByTimestamp.has(timestampKey)) {
-      logsByTimestamp.set(timestampKey, []);
+    for (const log of logs) {
+        const timestampKey = log.ts.toISOString().slice(0, 19); // Group by second
+        if (!logsByTimestamp.has(timestampKey)) {
+            logsByTimestamp.set(timestampKey, []);
+        }
+        logsByTimestamp.get(timestampKey)!.push(log);
     }
-    logsByTimestamp.get(timestampKey)!.push(log);
-  }
 
-  const filteredLogs: SnoopyLog[] = [];
-  for (const group of logsByTimestamp.values()) {
-    if (group.length === 1) {
-      filteredLogs.push(group[0]);
-      continue;
+    const filteredLogs: SnoopyLog[] = [];
+    for (const group of logsByTimestamp.values()) {
+        // 统一在这里过滤噪声（无论该组有几条）
+        const keep = group.filter(log =>
+            !NOISE_COMMAND_PATTERNS.some(pattern => pattern.test(log.command ?? ''))
+        );
+
+        // 如果这一秒全是噪声，整组丢弃；否则保留“真实”命令
+        if (keep.length > 0) {
+            filteredLogs.push(...keep);
+        }
     }
-    const realCommands = group.filter(log =>
-      !NOISE_COMMAND_PATTERNS.some(pattern => pattern.test(log.command))
-    );
-    if (realCommands.length > 0) {
-      filteredLogs.push(...realCommands);
-    }
-  }
-  return filteredLogs;
+
+    return filteredLogs;
 }
 
 function groupAndProcessLogs(

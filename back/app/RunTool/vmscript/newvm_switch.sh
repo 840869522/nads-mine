@@ -83,13 +83,31 @@ qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 
 echo "FOREGROUND: Differential image created."
 
 # 根据镜像类型设置内存大小
-# SecurityOnion镜像使用8GB内存，其他镜像使用4GB内存
+# SecurityOnion、kalinew、Report-tools镜像使用8GB内存，其他镜像使用4GB内存
 if [[ "$IMAGE_BASE_NAME" == *"SecurityOnion"* ]]; then
     RAM_SIZE=8192
     echo "DEBUG: SecurityOnion image detected, setting RAM to 8GB"
+elif [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
+    RAM_SIZE=8192
+    echo "DEBUG: kalinew image detected, setting RAM to 8GB"
+elif [[ "$IMAGE_BASE_NAME" == *"Report-tools"* ]]; then
+    RAM_SIZE=8192
+    echo "DEBUG: Report-tools image detected, setting RAM to 8GB"
 else
     RAM_SIZE=4096
     echo "DEBUG: Standard image detected, setting RAM to 4GB"
+fi
+
+# 根据镜像类型设置CPU核心数
+VCPU_NUM=4
+if [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
+    VCPU_NUM=8
+    echo "DEBUG: kalinew image detected, setting vCPUs to 8"
+elif [[ "$IMAGE_BASE_NAME" == *"Report-tools"* ]]; then
+    VCPU_NUM=4
+    echo "DEBUG: Report-tools image detected, setting vCPUs to 4"
+else
+    echo "DEBUG: Standard image detected, setting vCPUs to 4"
 fi
 
 # 執行 virt-install 命令
@@ -98,7 +116,7 @@ virt-install --virt-type kvm \
   --network network=$6,model=virtio \
   --name "$7" \
   --ram=$RAM_SIZE \
-  --vcpus=4 \
+  --vcpus=$VCPU_NUM \
   --disk path="$DESTINATION_IMAGE_PATH",device=disk,bus=virtio,format=qcow2 \
   --disk path="$INSTANCE_DIR/config.iso",device=cdrom \
   --os-variant=ubuntu20.04 \

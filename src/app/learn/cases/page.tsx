@@ -977,10 +977,24 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handleOpenResourceViewer = (resource: CourseCaseResource) => {
+    const token = getCookie('_auth'); // ✅ 获取 Token
     let updatedResource = resource;
-    if (!resource.c_resource_path && resource.fileObject) {
-      updatedResource = { ...resource, c_resource_path: URL.createObjectURL(resource.fileObject) };
+
+    // 仅在资源路径为 HTTP URL 时附加 Token
+    if (resource.c_resource_path && !resource.c_resource_path.startsWith('blob:')) {
+      // 使用 URLSearchParams 避免重复参数
+      const url = new URL(resource.c_resource_path, window.location.origin);
+      url.searchParams.set('token', token);
+      updatedResource = { ...resource, c_resource_path: url.toString() };
     }
+    // 若为 Blob URL（本地文件），保留原有逻辑
+    else if (!resource.c_resource_path && resource.fileObject) {
+      updatedResource = {
+        ...resource,
+        c_resource_path: URL.createObjectURL(resource.fileObject)
+      };
+    }
+
     setViewingResource(updatedResource);
     setIsResourceViewerOpen(true);
   };
@@ -1239,7 +1253,7 @@ const CourseCasesPage: React.FC = () => {
                       </IconButton>
                       <IconButton
                           onClick={() => handleOpenResourcesDialog(course)}
-                          title="查看资源和实验"
+                          title="查看资源"
                       >
                         <VisibilityIcon />
                       </IconButton>
@@ -1282,12 +1296,11 @@ const CourseCasesPage: React.FC = () => {
         </Dialog>
         <Dialog open={isResourcesDialogOpen} onClose={handleCloseResourcesDialog} maxWidth="md" fullWidth>
           <DialogTitle>
-            {selectedCaseForResources?.c_course_name} 的资源和实验
+            {selectedCaseForResources?.c_course_name} 的资源
           </DialogTitle>
           <DialogContent>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
               <Tab label="课程资源" />
-              <Tab label="实验" />
               <Tab label="实验资源" />
             </Tabs>
             {tabValue === 0 && (
@@ -1313,12 +1326,7 @@ const CourseCasesPage: React.FC = () => {
                                   <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
                                     <VisibilityIcon />
                                   </IconButton>
-                                  <IconButton
-                                      onClick={() => handleDeleteResource(resource, false)}
-                                      title="删除"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
+
                                 </TableCell>
                               </TableRow>
                           ))}
@@ -1329,92 +1337,8 @@ const CourseCasesPage: React.FC = () => {
                   )}
                 </Box>
             )}
+
             {tabValue === 1 && (
-                <Box sx={{ mt: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="subtitle1">实验列表</Typography>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button
-                          variant="contained"
-                          startIcon={<AddIcon />}
-                          onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id)}
-                      >
-                        添加实验
-                      </Button>
-                      <Button
-                          variant="outlined"
-                          color="primary"
-                          onClick={() => handleRefreshExperiments(selectedCaseForResources!.c_course_id)}
-                          disabled={isLoading}
-                          startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
-                      >
-                        刷新实验
-                      </Button>
-                    </Box>
-                  </Box>
-                  {selectedCaseForResources?.experiments?.length ? (
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>实验名称</TableCell>
-                            <TableCell>描述</TableCell>
-                            <TableCell>场景配置</TableCell>
-                            <TableCell>创建时间</TableCell>
-                            <TableCell>操作</TableCell>
-                            <TableCell>实验状态</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(selectedCaseForResources.experiments || []).map((experiment: Experiment) => (
-                              <TableRow key={experiment.c_experiment_id}>
-                                <TableCell>{experiment.c_experiment_name}</TableCell>
-                                <TableCell>{experiment.c_description || '-'}</TableCell>
-                                <TableCell>{experiment.c_name || '-'}</TableCell>
-                                <TableCell>{formatDate(experiment.created_at)}</TableCell>
-                                <TableCell>
-                                  <IconButton
-                                      onClick={() => handleOpenExperimentModal(selectedCaseForResources!.c_course_id, experiment)}
-                                      title="编辑"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton
-                                      onClick={() => {
-                                        setExperimentToDelete(experiment);
-                                        setIsConfirmDialogOpen(true);
-                                      }}
-                                      title="删除"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                  <IconButton
-                                      onClick={() => handleOpenResourcesDialog(selectedCaseForResources!, 2)}
-                                      title="查看实验资源"
-                                  >
-                                    <VisibilityIcon />
-                                  </IconButton>
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                      variant="contained"
-                                      size="small"
-                                      startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
-                                      onClick={() => handleStartExperiment(experiment)}
-                                      disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
-                                  >
-                                    {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                  ) : (
-                      <Typography>无实验</Typography>
-                  )}
-                </Box>
-            )}
-            {tabValue === 2 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle1">实验资源</Typography>
                   {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) ? (
@@ -1426,7 +1350,6 @@ const CourseCasesPage: React.FC = () => {
                             <TableCell>类型</TableCell>
                             <TableCell>大小</TableCell>
                             <TableCell>操作</TableCell>
-                            <TableCell>实验状态</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -1455,17 +1378,7 @@ const CourseCasesPage: React.FC = () => {
                                         <DeleteIcon />
                                       </IconButton>
                                     </TableCell>
-                                    <TableCell>
-                                      <Button
-                                        variant="contained"
-                                        size="small"
-                                        startIcon={experimentStatuses[experiment.c_experiment_id] === 'running' ? <PauseIcon /> : <PlayArrowIcon />}
-                                        onClick={() => handleStartExperiment(experiment)}
-                                        disabled={isLoading || experimentStatuses[experiment.c_experiment_id] === 'running'}
-                                      >
-                                        {experimentStatuses[experiment.c_experiment_id] === 'running' ? '实验进行中' : '开始实验'}
-                                      </Button>
-                                    </TableCell>
+
                                   </TableRow>
                               ))}
                         </TableBody>
