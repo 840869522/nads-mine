@@ -95,11 +95,7 @@ const CourseLearningPage: React.FC = () => {
 
                 // Fetch categories
                 const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
-<<<<<<< HEAD
-                    headers: { Authorization: ` ${token}` },
-=======
                     headers: { Authorization: `${token}` },
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
                 });
                 const categoriesData = categoriesResponse.data;
                 if (categoriesData.code === 200) {
@@ -119,11 +115,7 @@ const CourseLearningPage: React.FC = () => {
                     ...(filterCategoryId && { c_category_id: filterCategoryId }),
                 };
                 const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-<<<<<<< HEAD
-                    headers: { Authorization: ` ${token}` },
-=======
                     headers: { Authorization: `${token}` },
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
                     params,
                 });
                 const coursesData = coursesResponse.data;
@@ -134,11 +126,7 @@ const CourseLearningPage: React.FC = () => {
                             let experiments: Experiment[] = [];
                             try {
                                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-<<<<<<< HEAD
-                                    headers: { Authorization: ` ${token}` },
-=======
                                     headers: { Authorization: `${token}` },
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
                                     params: { page: 1, pageSize: 10 },
                                 });
                                 const resourcesData = resourcesResponse.data;
@@ -157,11 +145,7 @@ const CourseLearningPage: React.FC = () => {
                             }
                             try {
                                 const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-<<<<<<< HEAD
-                                    headers: { Authorization: ` ${token}` },
-=======
                                     headers: { Authorization: `${token}` },
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
                                 });
                                 const experimentsData = experimentsResponse.data;
                                 if (experimentsData.code === 200) {
@@ -170,11 +154,7 @@ const CourseLearningPage: React.FC = () => {
                                             let status: InstanceStatus = 'stopped';
                                             try {
                                                 const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
-<<<<<<< HEAD
-                                                    headers: { Authorization: ` ${token}` },
-=======
                                                     headers: { Authorization: `${token}` },
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
                                                 });
                                                 const instanceData = instanceResponse.data;
                                                 status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
@@ -253,31 +233,6 @@ const CourseLearningPage: React.FC = () => {
         return () => debouncedFetchData.cancel();
     }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
-<<<<<<< HEAD
-    const handleStartExperiment = async (experiment: Experiment) => {
-        try {
-            setIsLoading(true);
-            const token = getCookie('_auth');
-            const username = getCookie('username') || 'default_user';
-            const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
-                headers: { Authorization: ` ${token}` },
-            });
-            const responseData = response.data;
-            if (responseData.code === 200) {
-                setExperimentStatuses(prev => ({ ...prev, [experiment.c_experiment_id]: 'running' }));
-                setErrorMessage('');
-                alert('实验启动成功！');
-            } else {
-                setErrorMessage(`实验启动失败: ${responseData.message || '未知错误'}`);
-            }
-        } catch (error: any) {
-            setErrorMessage(error.response?.data?.message || '实验启动失败');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-=======
->>>>>>> 6496b797123bc21507087c57299fd2eb8f3626c5
 
     const handleOpenPermissionDialog = (course: CourseCase) => {
         setSelectedCourse(course);
