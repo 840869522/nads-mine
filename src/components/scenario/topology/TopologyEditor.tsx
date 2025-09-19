@@ -140,6 +140,14 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     //添加 state 来控制保存弹窗
     const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    
+    // 场景级策略开关
+    const [collectionOptions, setCollectionOptions] = useState({
+        zeek: false,
+        sysdig: false
+    });
+    const [simulationEnabled, setSimulationEnabled] = useState(false);
+    const [mirroringEnabled, setMirroringEnabled] = useState(false);
     //添加 useEffect: 监听 initialData prop 的变化
     useEffect(() => {
         // 从 initialData 中提取拓扑信息
@@ -194,19 +202,45 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 englishLabel = `Device-${nodeCount}`;
         }
 
+        // 获取默认配置
+        let nodeConfig = { ...DEFAULT_NODE_CONFIG[type] };
+        
+        // 如果是容器或虚拟机，根据当前的采集选项设置环境变量
+        if (type === 'container' || type === 'virtual_machine') {
+            const currentEnv = nodeConfig.env || '';
+            const envVars = currentEnv.split(',').filter(v => v.trim());
+            
+            // 移除现有的ZEEK_ENABLED和SYSDIG_ENABLED
+            const filteredEnvVars = envVars.filter(v => 
+                !v.includes('ZEEK_ENABLED=') && !v.includes('SYSDIG_ENABLED=')
+            );
+            
+            // 添加新的环境变量
+            const newEnvVars = [
+                ...filteredEnvVars,
+                `ZEEK_ENABLED=${collectionOptions.zeek ? '1' : '0'}`,
+                `SYSDIG_ENABLED=${collectionOptions.sysdig ? '1' : '0'}`
+            ];
+            
+            nodeConfig = {
+                ...nodeConfig,
+                env: newEnvVars.join(',')
+            };
+        }
+
         const newNode: TopologyNode = {
             id: generateId(type),
             type,
             label: englishLabel, // 使用新的英文标签
             x,
             y,
-            config: { ...DEFAULT_NODE_CONFIG[type] }
+            config: nodeConfig
         };
         const action: TopologyAction = { type: 'ADD_NODE', payload: { node: newNode } };
         dispatch(action);
         onAddNode(newNode);
         pushToUndoStack(action);
-    }, [nodes, pushToUndoStack, onAddNode]);
+    }, [nodes, pushToUndoStack, onAddNode, collectionOptions]);
     // --- 修改结束 ---
     const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
     const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [nodeMoveInitialPosition, pushToUndoStack]);
@@ -303,14 +337,57 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     const handleUndo = () => { const lastAction = undoStack[undoStack.length - 1]; if (!lastAction) return; switch (lastAction.type) { case 'ADD_NODE': const addedNode = lastAction.payload.node as TopologyNode; dispatch({ type: 'DELETE_NODE', payload: { nodeId: addedNode.id } }); onDeleteNode(addedNode.id); break; case 'DELETE_NODE': const deletedNode = lastAction.payload.deletedNode as TopologyNode; dispatch({ type: 'ADD_NODE', payload: { node: deletedNode } }); onAddNode(deletedNode); lastAction.payload.deletedEdges.forEach((edge: TopologyEdge) => dispatch({ type: 'ADD_EDGE', payload: { edge } })); break; case 'MOVE_NODE': dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastAction.payload.nodeId, newX: lastAction.payload.oldX, newY: lastAction.payload.oldY } }); break; case 'UPDATE_NODE_CONFIG': const oldNodeConfig = nodes.find(n => n.id === lastAction.payload.nodeId); if (oldNodeConfig) { dispatch({ type: 'UPDATE_NODE_CONFIG', payload: { nodeId: lastAction.payload.nodeId, newConfig: lastAction.payload.oldConfig, newLabel: lastAction.payload.oldLabel } }); onUpdateNode({ ...oldNodeConfig, config: lastAction.payload.oldConfig, label: lastAction.payload.oldLabel }); } break; case 'ADD_EDGE': dispatch({ type: 'DELETE_EDGE', payload: { edgeId: (lastAction.payload.edge as TopologyEdge).id } }); break; case 'DELETE_EDGE': dispatch({ type: 'ADD_EDGE', payload: { edge: lastAction.payload.deletedEdge } }); break; case 'UPDATE_EDGE_CONFIG': dispatch({ type: 'UPDATE_EDGE_CONFIG', payload: { edgeId: lastAction.payload.edgeId, newConfig: lastAction.payload.oldConfig } }); break; default: return; } setUndoStack(prev => prev.slice(0, -1)); setRedoStack(prev => [lastAction, ...prev]); };
     const handleRedo = () => { const lastRedoAction = redoStack[0]; if (!lastRedoAction) return; if (lastRedoAction.type === 'MOVE_NODE') { dispatch({ type: 'MOVE_NODE', payload: { nodeId: lastRedoAction.payload.nodeId, newX: lastRedoAction.payload.newX, newY: lastRedoAction.payload.newY } }); } else { dispatch(lastRedoAction); } if (lastRedoAction.type === 'ADD_NODE') onAddNode(lastRedoAction.payload.node); else if (lastRedoAction.type === 'DELETE_NODE') onDeleteNode(lastRedoAction.payload.nodeId); else if (lastRedoAction.type === 'UPDATE_NODE_CONFIG') { const updatedNode = nodes.find(n => n.id === lastRedoAction.payload.nodeId); if (updatedNode) onUpdateNode({ ...updatedNode, config: lastRedoAction.payload.newConfig, label: lastRedoAction.payload.newLabel }); } setRedoStack(prev => prev.slice(1)); setUndoStack(prev => [...prev, lastRedoAction]); };
 
-    // 场景级策略开关
-    const [collectionEnabled, setCollectionEnabled] = useState(false);
-    const [simulationEnabled, setSimulationEnabled] = useState(false);
-    const [mirroringEnabled, setMirroringEnabled] = useState(false);
+    // 更新所有容器和虚拟机的环境变量
+    const updateAllContainersEnvVars = useCallback((options: { zeek: boolean; sysdig: boolean }) => {
+        const zeekValue = options.zeek ? '1' : '0';
+        const sysdigValue = options.sysdig ? '1' : '0';
+        
+        // 遍历当前所有节点，更新容器和虚拟机的环境变量
+        nodes.forEach(node => {
+            if (node.type === 'container' || node.type === 'virtual_machine') {
+                const currentEnv = node.config.env || '';
+                const envVars = currentEnv.split(',').filter(v => v.trim());
+                
+                // 移除现有的ZEEK_ENABLED和SYSDIG_ENABLED
+                const filteredEnvVars = envVars.filter(v => 
+                    !v.includes('ZEEK_ENABLED=') && !v.includes('SYSDIG_ENABLED=')
+                );
+                
+                // 添加新的环境变量
+                const newEnvVars = [
+                    ...filteredEnvVars,
+                    `ZEEK_ENABLED=${zeekValue}`,
+                    `SYSDIG_ENABLED=${sysdigValue}`
+                ];
+                
+                const newEnv = newEnvVars.join(',');
+                
+                // 更新节点配置
+                dispatch({
+                    type: 'UPDATE_NODE_CONFIG',
+                    payload: {
+                        nodeId: node.id,
+                        newConfig: {
+                            ...node.config,
+                            env: newEnv
+                        },
+                        newLabel: node.label
+                    }
+                });
+            }
+        });
+    }, [nodes]);
 
-    const handleToggleCollection = useCallback(() => {
-        setCollectionEnabled(prev => !prev);
-    }, []);
+    const handleToggleCollectionOption = useCallback((option: 'zeek' | 'sysdig') => {
+        setCollectionOptions(prev => {
+            const newOptions = { ...prev, [option]: !prev[option] };
+            
+            // 更新所有容器和虚拟机的环境变量
+            updateAllContainersEnvVars(newOptions);
+            
+            return newOptions;
+        });
+    }, [updateAllContainersEnvVars]);
     const handleToggleSimulation = useCallback(() => {
         setSimulationEnabled(prev => !prev);
     }, []);
@@ -461,8 +538,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 canRedo={redoStack.length > 0}
                 onSave={handleSave} // 在实例模式下直接保存并展示等待动画
                 isSaving={isSaving}
-                collectionEnabled={collectionEnabled}
-                onToggleCollection={handleToggleCollection}
+                collectionOptions={collectionOptions}
+                onToggleCollectionOption={handleToggleCollectionOption}
                 simulationEnabled={simulationEnabled}
                 onToggleSimulation={handleToggleSimulation}
                 mirroringEnabled={mirroringEnabled}
