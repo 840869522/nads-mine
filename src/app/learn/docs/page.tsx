@@ -331,7 +331,7 @@ const QuestionPage: React.FC = () => {
 
         // 验证并转换数据
         let processedData = questionsData.map(question => ({
-          id: question['试题ID'] || null,
+          id: question['试题ID']+'' || null,
           question: question['题干'],
           course_id: question['课程ID'],
           answer: parseGetAnswer(question),

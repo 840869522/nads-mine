@@ -95,7 +95,7 @@ const CourseLearningPage: React.FC = () => {
 
                 // Fetch categories
                 const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                    headers: { Authorization: ` ${token}` },
                 });
                 const categoriesData = categoriesResponse.data;
                 if (categoriesData.code === 200) {
@@ -115,7 +115,7 @@ const CourseLearningPage: React.FC = () => {
                     ...(filterCategoryId && { c_category_id: filterCategoryId }),
                 };
                 const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                    headers: { Authorization: ` ${token}` },
                     params,
                 });
                 const coursesData = coursesResponse.data;
@@ -126,7 +126,7 @@ const CourseLearningPage: React.FC = () => {
                             let experiments: Experiment[] = [];
                             try {
                                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                                    headers: { Authorization: `Bearer ${token}` },
+                                    headers: { Authorization: ` ${token}` },
                                     params: { page: 1, pageSize: 10 },
                                 });
                                 const resourcesData = resourcesResponse.data;
@@ -145,7 +145,7 @@ const CourseLearningPage: React.FC = () => {
                             }
                             try {
                                 const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                                    headers: { Authorization: `Bearer ${token}` },
+                                    headers: { Authorization: ` ${token}` },
                                 });
                                 const experimentsData = experimentsResponse.data;
                                 if (experimentsData.code === 200) {
@@ -154,7 +154,7 @@ const CourseLearningPage: React.FC = () => {
                                             let status: InstanceStatus = 'stopped';
                                             try {
                                                 const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
-                                                    headers: { Authorization: `Bearer ${token}` },
+                                                    headers: { Authorization: ` ${token}` },
                                                 });
                                                 const instanceData = instanceResponse.data;
                                                 status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
@@ -239,7 +239,7 @@ const CourseLearningPage: React.FC = () => {
             const token = getCookie('_auth');
             const username = getCookie('username') || 'default_user';
             const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: ` ${token}` },
             });
             const responseData = response.data;
             if (responseData.code === 200) {

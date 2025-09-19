@@ -44,7 +44,7 @@ const CourseLearnPermissionDialog: React.FC<CourseLearnPermissionDialogProps> = 
                 const response = await fetch(`/back/api/study/permissions/courses/${course.c_course_id}/users`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': `${token}`,
                         'Content-Type': 'application/json'
                     }
                 });

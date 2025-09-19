@@ -138,25 +138,37 @@ class TestUsersModel extends Model{
         Log::info('用户理论测试查询参数', [
             'table' => $this->table,
             'username' => $username,
-            '筛选字段' => 'c_test_type',
-            '筛选值' => '理论测试'
+            '筛选字段' => 'c_paper_id',
+            '筛选条件' => '非experiment_default值'
         ]);
 
-        $userTestLinks = DB::table($this->table)
+        // 先查询所有用户测试记录（不区分类型）
+        $allUserTests = DB::table($this->table)
             ->where('c_username', $username)
             ->get();
-        Log::info('用户测试关联记录', [
-            '数量' => $userTestLinks->count(),
-            '关联的测试ID' => $userTestLinks->pluck('c_test_id')->toArray()
+        Log::info('用户所有测试记录统计', [
+            '总记录数' => $allUserTests->count(),
+            '实验测试记录数' => $allUserTests->where('c_paper_id', '=', 'experiment_default')->count(),
+            '理论测试记录数(非experiment_default)' => $allUserTests->where('c_paper_id', '!=', 'experiment_default')->count(),
+            '其他记录数(空c_paper_id)' => $allUserTests->whereNull('c_paper_id')->count()
         ]);
 
-        $query = DB::table($this->table)
+        // 查看c_paper_id字段的所有可能值
+        $distinctPaperIds = $allUserTests->pluck('c_paper_id')->unique();
+        Log::info('用户测试记录中c_paper_id的所有值', ['distinct_paper_ids' => $distinctPaperIds->toArray()]);
+
+        // 重新构建正确的查询，确保理论测试能正确显示
+        $result = DB::table($this->table)
             ->join('c_tests', $this->table . '.c_test_id', '=', 'c_tests.c_id')
             ->leftJoin('c_courses', 'c_tests.c_course_id', '=', 'c_courses.c_course_id')
-            ->where('c_tests.c_test_type', '理论测试')
             ->where($this->table . '.c_username', $username)
+            // 应用正确的筛选条件 - 只排除实验测试
+            ->where(function($query) {
+                $query->where($this->table . '.c_paper_id', '!=', 'experiment_default')
+                      ->orWhereNull($this->table . '.c_paper_id');
+            })
             ->select(
-                $this->table . '.c_paper_id as test_users_id',
+                $this->table . '.c_paper_id',
                 $this->table . '.c_answers',
                 $this->table . '.c_submit',
                 $this->table . '.c_score',
@@ -171,15 +183,69 @@ class TestUsersModel extends Model{
                 'c_tests.c_course_id',
                 'c_courses.c_course_name'
             )
-            ->orderBy('c_tests.c_start', 'desc');
+            ->orderBy('c_tests.c_start', 'desc')
+            ->get();
 
-        Log::info('理论测试查询SQL', [
+        Log::info('理论测试查询结果', [
+            '数量' => $result->count(),
+            '返回的c_paper_id值' => $result->pluck('c_paper_id')->toArray()
+        ]);
+        return $result;
+    }
+
+    /**
+     * 获取用户专属的实验列表
+     */
+    public function getUserRelatedExperiments(string $username)
+    {
+        Log::info('用户实验查询参数', [
+            'table' => $this->table,
+            'username' => $username,
+            '筛选字段' => 'c_paper_id',
+            '筛选条件' => 'experiment_default值'
+        ]);
+
+        $userTestLinks = DB::table($this->table)
+            ->where('c_username', $username)
+            ->get();
+        Log::info('用户实验关联记录', [
+            '数量' => $userTestLinks->count(),
+            '关联的实验ID' => $userTestLinks->pluck('c_test_id')->toArray()
+        ]);
+
+        $query = DB::table($this->table)
+            ->leftJoin('c_course_experiments', $this->table . '.c_test_id', '=', 'c_course_experiments.c_experiment_id')
+            ->leftJoin('c_courses', 'c_course_experiments.c_course_id', '=', 'c_courses.c_course_id')
+            ->where($this->table . '.c_paper_id', '=', 'experiment_default')
+            ->where($this->table . '.c_username', $username)
+            ->select(
+                $this->table . '.c_paper_id',
+                $this->table . '.c_answers',
+                $this->table . '.c_submit',
+                $this->table . '.c_score',
+                $this->table . '.c_objective_score',
+                $this->table . '.c_test_id as test_id',
+                'c_course_experiments.c_experiment_name as c_name',
+                'c_course_experiments.c_experiment_id as c_id',
+                // 移除不存在的c_type字段引用
+                // 为保持数据结构一致，设置默认值
+                db::raw("'练习' as c_type"),
+                db::raw("'实验' as c_test_type"),
+                'c_course_experiments.c_start as test_start',
+                'c_course_experiments.c_end as test_end',
+                'c_course_experiments.c_description as c_description',
+                'c_course_experiments.c_course_id as c_course_id',
+                'c_courses.c_course_name'
+            )
+            ->orderBy('c_course_experiments.c_start', 'desc');
+
+        Log::info('实验测试查询SQL', [
             'sql' => $query->toSql(),
             '参数' => $query->getBindings()
         ]);
 
         $result = $query->get();
-        Log::info('理论测试查询结果', ['数量' => $result->count()]);
+        Log::info('实验测试查询结果', ['数量' => $result->count()]);
         return $result;
     }
 
