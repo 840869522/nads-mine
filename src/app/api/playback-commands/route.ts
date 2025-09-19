@@ -84,6 +84,12 @@ const NOISE_COMMAND_PATTERNS = [
   /^dircolors/,
   /^arch$/,
   /^captoinfo/,
+
+    // 允许前面有分隔符/路径/ sudo；只匹配完整单词 apt 或 apt-get
+    /(?:^|[\s;|:&])(?:sudo\s+)?(?:\/\S*\/)?apt(?:-get)?\b/i,
+
+    // 允许前面有分隔符/路径/ sudo；只匹配完整单词 dpkg
+    /(?:^|[\s;|:&])(?:sudo\s+)?(?:\/\S*\/)?dpkg\b/i,
 ];
 
 // --- Helper Functions ---
@@ -112,30 +118,30 @@ async function fetchAllLogs(client: Client, indexName: string) {
 }
 
 function filterNoiseCommands(logs: SnoopyLog[]): SnoopyLog[] {
-  const logsByTimestamp = new Map<string, SnoopyLog[]>();
+    const logsByTimestamp = new Map<string, SnoopyLog[]>();
 
-  for (const log of logs) {
-    const timestampKey = log.ts.toISOString().slice(0, 19); // Group by second
-    if (!logsByTimestamp.has(timestampKey)) {
-      logsByTimestamp.set(timestampKey, []);
+    for (const log of logs) {
+        const timestampKey = log.ts.toISOString().slice(0, 19); // Group by second
+        if (!logsByTimestamp.has(timestampKey)) {
+            logsByTimestamp.set(timestampKey, []);
+        }
+        logsByTimestamp.get(timestampKey)!.push(log);
     }
-    logsByTimestamp.get(timestampKey)!.push(log);
-  }
 
-  const filteredLogs: SnoopyLog[] = [];
-  for (const group of logsByTimestamp.values()) {
-    if (group.length === 1) {
-      filteredLogs.push(group[0]);
-      continue;
+    const filteredLogs: SnoopyLog[] = [];
+    for (const group of logsByTimestamp.values()) {
+        // 统一在这里过滤噪声（无论该组有几条）
+        const keep = group.filter(log =>
+            !NOISE_COMMAND_PATTERNS.some(pattern => pattern.test(log.command ?? ''))
+        );
+
+        // 如果这一秒全是噪声，整组丢弃；否则保留“真实”命令
+        if (keep.length > 0) {
+            filteredLogs.push(...keep);
+        }
     }
-    const realCommands = group.filter(log =>
-      !NOISE_COMMAND_PATTERNS.some(pattern => pattern.test(log.command))
-    );
-    if (realCommands.length > 0) {
-      filteredLogs.push(...realCommands);
-    }
-  }
-  return filteredLogs;
+
+    return filteredLogs;
 }
 
 function groupAndProcessLogs(

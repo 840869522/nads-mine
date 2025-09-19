@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -13,6 +13,7 @@ import {
     Snackbar,
     Alert,
 } from "@mui/material";
+import Slide from "@mui/material/Slide";
 import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -68,9 +69,7 @@ const DEFAULT_FIELDS: Record<string, string[]> = {
 };
 
 function createDefaultInclude(): Record<string, string[]> {
-    return Object.fromEntries(
-        Object.entries(DEFAULT_FIELDS).map(([k, v]) => [k, [...v]])
-    );
+    return Object.fromEntries(Object.entries(DEFAULT_FIELDS).map(([k, v]) => [k, [...v]]));
 }
 
 interface IngestControlDialogProps {
@@ -90,15 +89,18 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                                                                      sceneInstanceId,
                                                                  }) => {
     const [instances, setInstances] = useState<InstanceInfo[]>([]);
-    const [include, setInclude] = useState<
-        Record<string, Record<string, string[]>>
-    >({});
+    const [include, setInclude] = useState<Record<string, Record<string, string[]>>>({});
     const [loading, setLoading] = useState(false);
     const [snackbar, setSnackbar] = useState({
         open: false,
         message: "",
         severity: "success" as "success" | "error",
     });
+
+    // 将 Snackbar 渲染到 Dialog 内部，避免被背板虚化
+    const dialogPaperRef = useRef<HTMLDivElement | null>(null);
+
+    const stopProp = (e: React.SyntheticEvent) => e.stopPropagation();
 
     const defaultExpandedItems = useMemo(() => {
         return instances.flatMap((inst) => [
@@ -114,9 +116,9 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
             customFetch(`${API_BASE}/api/scenariosinstances/${sceneInstanceId}`).then((r) =>
                 r.ok ? r.json() : []
             ),
-            customFetch(
-                `${API_BASE}/api/scenariosinstances/${sceneInstanceId}/vms`
-            ).then((r) => (r.ok ? r.json() : [])),
+            customFetch(`${API_BASE}/api/scenariosinstances/${sceneInstanceId}/vms`).then((r) =>
+                r.ok ? r.json() : []
+            ),
         ])
             .then(async ([containers, vms]) => {
                 const list: InstanceInfo[] = [];
@@ -125,7 +127,7 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 containers.forEach((c: any) => {
                     const index = `${c.scene_instance_id || ""}_${c.name}`.toLowerCase();
                     list.push({ index, name: c.name });
-                    inc[index] = createDefaultInclude(); // 先用默认
+                    inc[index] = createDefaultInclude();
                 });
                 vms.forEach((v: any) => {
                     const index = `${v.scene_instance_id || ""}_${v.name}`.toLowerCase();
@@ -136,21 +138,17 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 setInstances(list);
                 setInclude(inc);
 
-                // —— 新增：尝试读取旧 pipeline 的 include，并覆盖默认 —— //
+                // 读取旧 include 并覆盖默认
                 try {
                     const results = await Promise.all(
                         list.map(async (inst) => {
                             try {
-                                const res = await fetch(
-                                    `/api/ingest-control?index=${encodeURIComponent(inst.index)}`
-                                );
+                                const res = await fetch(`/api/ingest-control?index=${encodeURIComponent(inst.index)}`);
                                 const data = await res.json();
                                 if (res.ok && data?.ok && data?.found && data?.include) {
                                     return { index: inst.index, include: data.include as Record<string, string[]> };
                                 }
-                            } catch (e) {
-                                // 忽略单个失败，统一在最后弹 snackbar
-                            }
+                            } catch {}
                             return null;
                         })
                     );
@@ -159,31 +157,28 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                     const merged = { ...inc };
                     for (const r of results) {
                         if (r && r.include) {
-                            // 仅覆盖已知 src（最小改动）
                             const current = merged[r.index] || createDefaultInclude();
                             const updated: Record<string, string[]> = {};
                             for (const src of Object.keys(DEFAULT_FIELDS)) {
-                                updated[src] = Array.isArray(r.include[src])
-                                    ? r.include[src]
-                                    : current[src] || [];
+                                updated[src] = Array.isArray(r.include[src]) ? r.include[src] : current[src] || [];
                             }
                             merged[r.index] = updated;
                         }
                     }
                     setInclude(merged);
                     if (anyError) {
-                        setSnackbar({
-                            open: true,
-                            message: "部分实例的旧 pipeline 读取失败，已使用默认规则",
-                            severity: "error",
-                        });
+                        //setSnackbar({
+                        //    open: true,
+                        //    message: "部分实例的旧 pipeline 读取失败，已使用默认规则",
+                        //    severity: "error",
+                        //});
                     }
                 } catch {
-                    setSnackbar({
-                        open: true,
-                        message: "读取旧 pipeline 失败，已使用默认规则",
-                        severity: "error",
-                    });
+                    //setSnackbar({
+                    //    open: true,
+                    //    message: "读取旧 pipeline 失败，已使用默认规则",
+                    //    severity: "error",
+                    //});
                 }
             })
             .finally(() => setLoading(false));
@@ -201,13 +196,12 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
         });
     };
 
-    // —— 新增：src 分组全选/全不选 —— //
     const handleGroupToggle = (index: string, src: string) => {
         setInclude((prev) => {
             const all = DEFAULT_FIELDS[src] || [];
             const current = new Set(prev[index]?.[src] ?? []);
             const isAll = all.every((f) => current.has(f));
-            const next = isAll ? [] : all.slice(); // 全不选 / 全选
+            const next = isAll ? [] : all.slice();
             return {
                 ...prev,
                 [index]: { ...prev[index], [src]: next },
@@ -226,7 +220,28 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
         };
     };
 
-    const handleApply = async (index: string) => {
+    // 实例级：全部收集 / 停止收集（仅前端全选/全不选）
+    const handleSelectAllForInstance = (index: string) => {
+        setInclude((prev) => {
+            const nextGroups: Record<string, string[]> = {};
+            for (const src of Object.keys(DEFAULT_FIELDS)) {
+                nextGroups[src] = [...DEFAULT_FIELDS[src]];
+            }
+            return { ...prev, [index]: nextGroups };
+        });
+    };
+
+    const handleClearAllForInstance = (index: string) => {
+        setInclude((prev) => {
+            const nextGroups: Record<string, string[]> = {};
+            for (const src of Object.keys(DEFAULT_FIELDS)) {
+                nextGroups[src] = [];
+            }
+            return { ...prev, [index]: nextGroups };
+        });
+    };
+
+    const handleApply = async (index: string, instanceName?: string) => {
         try {
             const res = await fetch("/api/ingest-control", {
                 method: "POST",
@@ -237,31 +252,9 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
             if (!res.ok || !data.ok) {
                 throw new Error(data.error || res.statusText);
             }
-            setSnackbar({ open: true, message: "规则已应用", severity: "success" });
-        } catch (err: any) {
             setSnackbar({
                 open: true,
-                message: err.message || "操作失败",
-                severity: "error",
-            });
-        }
-    };
-
-    const handlePause = async (index: string, pause: boolean) => {
-        try {
-            const body = pause ? { index, pause: true } : { index, include: include[index] };
-            const res = await fetch("/api/ingest-control", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.ok) {
-                throw new Error(data.error || res.statusText);
-            }
-            setSnackbar({
-                open: true,
-                message: pause ? "已停止收集" : "已启动收集",
+                message: `已应用规则到实例「${instanceName ?? index}」`,
                 severity: "success",
             });
         } catch (err: any) {
@@ -275,7 +268,13 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
 
     return (
         <>
-            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+            <Dialog
+                open={open}
+                onClose={onClose}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{ ref: dialogPaperRef }} // 让 Snackbar 渲染到 Dialog 内部
+            >
                 <DialogTitle>日志收集控制</DialogTitle>
                 <DialogContent dividers>
                     {loading ? (
@@ -292,13 +291,45 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                                     label={
                                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                                             {inst.name}
-                                            <Button size="small" onClick={() => handlePause(inst.index, false)}>
-                                                启动收集
+                                            {/* 防折叠：阻止冒泡；并用 Snackbar 提示 */}
+                                            <Button
+                                                size="small"
+                                                onMouseDown={stopProp}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSelectAllForInstance(inst.index);
+                                                    setSnackbar({
+                                                        open: true,
+                                                        message: `已为实例「${inst.name}」全部收集（全选所有字段）`,
+                                                        severity: "success",
+                                                    });
+                                                }}
+                                            >
+                                                全部收集
                                             </Button>
-                                            <Button size="small" onClick={() => handlePause(inst.index, true)}>
+                                            <Button
+                                                size="small"
+                                                onMouseDown={stopProp}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleClearAllForInstance(inst.index);
+                                                    setSnackbar({
+                                                        open: true,
+                                                        message: `已为实例「${inst.name}」停止收集（清空所有字段）`,
+                                                        severity: "success",
+                                                    });
+                                                }}
+                                            >
                                                 停止收集
                                             </Button>
-                                            <Button size="small" onClick={() => handleApply(inst.index)}>
+                                            <Button
+                                                size="small"
+                                                onMouseDown={stopProp}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleApply(inst.index, inst.name);
+                                                }}
+                                            >
                                                 应用规则
                                             </Button>
                                         </Box>
@@ -312,10 +343,14 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                                                 itemId={`${inst.index}-${src}`}
                                                 label={
                                                     <FormControlLabel
+                                                        onClick={stopProp}
+                                                        onMouseDown={stopProp}
                                                         control={
                                                             <Checkbox
                                                                 checked={checked}
                                                                 indeterminate={indeterminate}
+                                                                onClick={stopProp}
+                                                                onMouseDown={stopProp}
                                                                 onChange={() => handleGroupToggle(inst.index, src)}
                                                             />
                                                         }
@@ -329,9 +364,13 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                                                         itemId={`${inst.index}-${src}-${f}`}
                                                         label={
                                                             <FormControlLabel
+                                                                onClick={stopProp}
+                                                                onMouseDown={stopProp}
                                                                 control={
                                                                     <Checkbox
                                                                         checked={include[inst.index]?.[src]?.includes(f) || false}
+                                                                        onClick={stopProp}
+                                                                        onMouseDown={stopProp}
                                                                         onChange={() => handleFieldToggle(inst.index, src, f)}
                                                                     />
                                                                 }
@@ -353,20 +392,31 @@ const IngestControlDialog: React.FC<IngestControlDialogProps> = ({
                 <DialogActions>
                     <Button onClick={onClose}>关闭</Button>
                 </DialogActions>
-            </Dialog>
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={6000}
-                onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-            >
-                <Alert
-                    onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-                    severity={snackbar.severity}
-                    sx={{ width: "100%" }}
+
+                {/* Snackbar 放到 Dialog 内部、顶部居中、抬高层级并滑入 */}
+                <Snackbar
+                    open={snackbar.open}
+                    autoHideDuration={4000}
+                    anchorOrigin={{ vertical: "top", horizontal: "center" }}
+                    container={dialogPaperRef.current || undefined}
+                    sx={{ zIndex: (theme) => theme.zIndex.tooltip + 1 }}
+                    TransitionComponent={(props) => <Slide {...props} direction="down" />}
+                    onClose={(_, reason) => {
+                        if (reason === "clickaway") return;
+                        setSnackbar((s) => ({ ...s, open: false }));
+                    }}
                 >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
+                    <Alert
+                        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+                        severity={snackbar.severity}
+                        variant="filled"
+                        elevation={6}
+                        sx={{ width: "100%" }}
+                    >
+                        {snackbar.message}
+                    </Alert>
+                </Snackbar>
+            </Dialog>
         </>
     );
 };
