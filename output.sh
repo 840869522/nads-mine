@@ -1,1 +1,0 @@
-docker images --format "docker save -o ./{{.Repository}}-{{.Tag}}.tar.gz {{.Repository}}:{{.Tag}}" | grep -v ":<none>"
