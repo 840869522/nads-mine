@@ -249,7 +249,7 @@
     "description": "Windows远程溢出漏洞探测靶机镜像"
   },
   "v_att_RDP.qcow2": {
-    "osType": "win7",
+    "osType": "ubuntu",
     "description": "WindowsRDP远程溢出漏洞探测攻击镜像"
   },
   "v_tar_RDPremote.qcow2": {
