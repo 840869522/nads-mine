@@ -79,6 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
 
   const handleLogout = () => {
     logout();
+    setTimeout(()=>{},200);
     router.push('/login');
   };
   // ------弃用 ------

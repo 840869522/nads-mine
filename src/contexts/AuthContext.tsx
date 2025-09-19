@@ -45,7 +45,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     deleteCookie("_auth");
-    setTimeout(() => { }, 200);
     setUser(null);
     localStorage.removeItem('droneSimUser');
 
