@@ -2,6 +2,8 @@ import * as Cesium from "cesium";
 import {useLayoutEffect, useRef, useState} from "react";
 import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
+import { AdData } from "./page";
+import { websocketClient } from "@/utils/websocket";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -128,7 +130,7 @@ function shootLaser(
     return laserEntity;
 }
 
-export default function Battlefield () {
+export default function Battlefield (adData: AdData) {
     // let id = localStorage.getItem('instance_id');
     // if (id !== null) {
     //     sessionStorage.setItem('instance_id', id); // 存到每个标签页独立的 sessionStorage
@@ -141,13 +143,13 @@ export default function Battlefield () {
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
-        teamInfo: blueTeamInfos,
+        teamId: adData ? adData.blueTeamId : 0,
         logInfo: blueLogInfos
     }
 
     const redTeam: BattlefieldInfo = {
         type: 1,
-        teamInfo: redTeamInfos,
+        teamId: adData ? adData.redTeamId : 0,
         logInfo: redLogInfos
     }
 
@@ -206,6 +208,48 @@ export default function Battlefield () {
             }
         });
 
+        let timer: string = "";
+        const handleMessage = (data: any) => {
+            try {
+                const msg = typeof data === "string" ? JSON.parse(data) : data;
+                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
+                    timer = msg.timer;
+                    const now = new Date();
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+                            
+                    let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+        
+                    let newLog: LogInfo = {
+                        logId: Date.now(),
+                        logTime: `${hours}:${minutes}:${seconds}`,
+                        logContent: logMessage
+                    };
+        
+                    if(msg.data.success){
+                        setRedTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }else{
+                        setBlueTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.error("解析 WebSocket 数据失败:", e, data);
+            }
+        };
+        
+        if(adData && adData.id !== ""){
+            //fetchData();
+            websocketClient.onMessage(handleMessage);
+        }
+
         const center1: [number, number] = [117.58, 36.20];
         const latRange = 0.05;
         const lonRange = 0.05;
@@ -261,8 +305,9 @@ export default function Battlefield () {
         
         return () => {
             viewer.destroy();
+            websocketClient.offMessage(handleMessage);
         };
-    }, []);
+    }, [adData.id]);
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
             <Team {...blueTeamState} />
@@ -287,17 +332,17 @@ export default function Battlefield () {
 
 const blueTeamInfos: TeamInfo[] = [
     {
-        teamId: 1,
+        teamId: '1',
         teamName: '蓝方席位1',
         teamScore: 295
     },
     {
-        teamId: 2,
+        teamId: '2',
         teamName: '蓝方席位2',
         teamScore: 285
     },
     {
-        teamId: 3,
+        teamId: '3',
         teamName: '蓝方席位3',
         teamScore: 270
     },
@@ -318,22 +363,22 @@ const blueLogInfos: LogInfo[] = [
 
 const redTeamInfos: TeamInfo[] = [
     {
-        teamId: 1,
+        teamId: '1',
         teamName: '红方席位1',
         teamScore: 320
     },
     {
-        teamId: 2,
+        teamId: '2',
         teamName: '红方席位2',
         teamScore: 300
     },
     {
-        teamId: 3,
+        teamId: '3',
         teamName: '红方席位3',
         teamScore: 285
     },
     {
-        teamId: 4,
+        teamId: '4',
         teamName: '红方席位4',
         teamScore: 270
     },
