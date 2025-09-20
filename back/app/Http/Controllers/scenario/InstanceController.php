@@ -42,6 +42,7 @@ class InstanceController extends Controller
                 return [
                     'instance_id'   => $instance->c_scene_instances_id,
                     'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+                    'scenario_description' => $instance->sceneConfig->c_description ?? '',
                     'username'      => $instance->c_username,
                     'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
                     'status'        => $instance->c_status,
