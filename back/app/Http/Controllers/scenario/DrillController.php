@@ -314,6 +314,18 @@ class DrillController extends Controller
                         'image_dir'           => $imageDir,
                         'instance_base_dir'   => $instanceBaseDir,
                     ]);
+                } elseif ($osType === 'kali') {
+                    $this->cliService->createVmKali([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName,
+                        'image'               => $correctImageName,
+                        'ip'                  => $ip,
+                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                        'flag'                => $flagUuid ?? 'NULL',
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
                 } else { // 默认为 ubuntu
                     $this->cliService->createVm([
                         'id'                  => $vmDbId,

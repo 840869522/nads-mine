@@ -1,4 +1,4 @@
-// src/app/ad/management/page.tsx (或者你的 AdManagementPage 组件所在路径)
+// file: src/app/ad/management/page.tsx
 "use client";
 
 import React, {useState, useEffect, useCallback, FormEvent, useMemo, MouseEvent} from 'react';
@@ -55,7 +55,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import PersonIcon from '@mui/icons-material/Person';
 import FlagIcon from '@mui/icons-material/Flag';
-import AccountTreeIcon from '@mui/icons-material/AccountTree'; // ★ 1. 引入拓扑图标
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -63,11 +63,11 @@ import {useAuth} from "@/hooks/useAuth";
 import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
-import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog'; // ★ 2. 引入拓扑弹窗组件 (请确认路径正确)
+import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog';
 
 
 // --- 类型定义 ---
-interface User { c_username: string; c_email?: string; }
+interface User { c_username: string; c_email?: string; c_name?: string; }
 interface Team {
     c_id: number;
     c_name: string;
@@ -81,11 +81,10 @@ interface Team {
 }
 interface AdReferee { c_user_id: string; c_level: string; user?: User; }
 
-// ★ 3. 新增/修改类型定义以包含拓扑数据
 interface SceneConfigForAd {
     c_config_id: number;
     c_name: string;
-    topology_json?: any; // 拓扑数据
+    topology_json?: any;
 }
 
 interface AdConfig {
@@ -99,10 +98,12 @@ interface AdConfig {
     c_status: 'pending' | 'running' | 'finished' | 'archived' | 'failed' | 'creating';
     c_start_time: string | null;
     c_end_time: string | null;
+    c_type: number | null;
+    c_show_attack: number | null;
     referees: AdReferee[];
     redTeam?: Team;
     blueTeam?: Team;
-    sceneConfig?: SceneConfigForAd | null; // <-- ★ 包含场景配置
+    sceneConfig?: SceneConfigForAd | null;
 }
 
 const AdManagementPage: React.FC = () => {
@@ -114,7 +115,7 @@ const AdManagementPage: React.FC = () => {
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [sceneConfigs, setSceneConfigs] = useState<SceneConfigForAd[]>([]); // 使用新类型
+    const [sceneConfigs, setSceneConfigs] = useState<SceneConfigForAd[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; message: string | { [key: string]: string[] } } | null>(null);
@@ -139,7 +140,6 @@ const AdManagementPage: React.FC = () => {
     const [isFlagHistoryOpen, setIsFlagHistoryOpen] = useState(false);
     const [selectedAdForFlagHistory, setSelectedAdForFlagHistory] = useState<AdConfig | null>(null);
 
-    // ★ 4. 添加拓扑弹窗所需的状态
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedTopology, setSelectedTopology] = useState<any>(null);
     const [selectedInstanceIdForTopology, setSelectedInstanceIdForTopology] = useState<string | null>(null);
@@ -244,7 +244,6 @@ const AdManagementPage: React.FC = () => {
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
-    // ★ 5. 添加打开拓扑弹窗的处理函数
     const handleViewTopology = (adConfig: AdConfig) => {
         if (!adConfig.sceneConfig || !adConfig.sceneConfig.topology_json) {
             setStatusMessage({ type: 'warning', message: '此演练未关联有效的场景拓扑。' });
@@ -271,6 +270,8 @@ const AdManagementPage: React.FC = () => {
             c_scene_config_id: Number(formData.get('c_scene_config_id')) || null,
             c_start_time: formData.get('c_start_time') ? new Date(formData.get('c_start_time') as string).toISOString() : null,
             c_end_time: formData.get('c_end_time') ? new Date(formData.get('c_end_time') as string).toISOString() : null,
+            c_type: formData.get('c_type') ? Number(formData.get('c_type')) : null,
+            c_show_attack: formData.get('c_show_attack') ? Number(formData.get('c_show_attack')) : null,
             referees: selectedReferees.map(({ c_user_id, c_level }) => ({ c_user_id, c_level })),
         };
         try {
@@ -380,7 +381,6 @@ const AdManagementPage: React.FC = () => {
 
     const findTeamNameById = (id: number | null) => teams.find(i => i.c_id === id)?.c_name || `未知 (ID: ${id})`;
     const findSceneNameById = (id: number | null) => sceneConfigs.find(i => i.c_config_id === id)?.c_name || `未关联`;
-    const findUserNameById = (id: string | null) => users.find(u => u.c_username === id)?.c_username || `未知 (${id})`;
 
     const renderStatusChip = (status: AdConfig['c_status']) => {
         const statusMap = {
@@ -394,6 +394,25 @@ const AdManagementPage: React.FC = () => {
         const { label, color } = statusMap[status] || statusMap.pending;
         return <Chip label={label} color={color} size="small" />;
     };
+
+    const mapTypeToString = (type: number | null) => {
+        switch (type) {
+            case 1: return '无人机类型';
+            case 2: return '科幻类型';
+            default: return '默认';
+        }
+    };
+
+    // ★★★ START: 修改显示文本 ★★★
+    const mapShowAttackToString = (show: number | null) => {
+        switch (show) {
+            case 1: return <Chip label="是" color="success" size="small" />;
+            case 0: return <Chip label="否" color="default" size="small" />;
+            default: return <Chip label="未设置" color="default" size="small" />;
+        }
+    };
+    // ★★★ END: 修改显示文本 ★★★
+
 
     const handleOpenView = (adConfig: AdConfig) => {
         if (adConfig.c_scene_instance_id) {
@@ -481,14 +500,16 @@ const AdManagementPage: React.FC = () => {
                                 <TableCell sx={{ fontWeight: 'bold' }}>蓝队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>裁判团队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>场景模板</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>可视化类型</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>显示攻击</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>计划开始时间</TableCell>
                                 <TableCell sx={{fontWeight: 'bold'}}>可视化</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>操作</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
+                            {isLoading ? ( <TableRow><TableCell colSpan={11} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
+                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={11} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
                                     : (
                                         adConfigs.map((adConfig) => (
                                             <TableRow hover key={adConfig.c_id}>
@@ -496,8 +517,23 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
                                                 <TableCell>{findTeamNameById(adConfig.c_red_team_id)}</TableCell>
                                                 <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
-                                                <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{adConfig.referees.map(ref => (<Chip key={ref.c_user_id} label={`${findUserNameById(ref.c_user_id)} (${ref.c_level})`} size="small" />))}</Stack></TableCell>
+                                                <TableCell>
+                                                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                                        {adConfig.referees.map(referee => {
+                                                            const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户';
+                                                            return (
+                                                                <Chip
+                                                                    key={referee.c_user_id}
+                                                                    label={`${refereeName} (${referee.c_level})`}
+                                                                    size="small"
+                                                                />
+                                                            );
+                                                        })}
+                                                    </Stack>
+                                                </TableCell>
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
+                                                <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
+                                                <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
                                                 <TableCell align="right">
@@ -519,8 +555,6 @@ const AdManagementPage: React.FC = () => {
                                                     <Tooltip title="查看队伍成员">
                                                         <IconButton color="secondary" onClick={() => handleOpenTeamDetails(adConfig)}><GroupIcon /></IconButton>
                                                     </Tooltip>
-
-                                                    {/* ★ 6. 添加拓扑按钮 */}
                                                     <Tooltip title="查看拓扑">
                                                         <span>
                                                             <IconButton
@@ -575,6 +609,32 @@ const AdManagementPage: React.FC = () => {
                         </Stack>
                         {teamConflictError && (<FormHelperText error sx={{ ml: '14px' }}>{teamConflictError}</FormHelperText>)}
                         <TextField select fullWidth margin="dense" label="场景模板 (可选)" name="c_scene_config_id" defaultValue={editingAdConfig?.c_scene_config_id || ''}><MenuItem value=""><em>不选择场景</em></MenuItem>{sceneConfigs.map(sc => <MenuItem key={sc.c_config_id} value={sc.c_config_id}>{sc.c_name}</MenuItem>)}</TextField>
+
+                        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                margin="dense"
+                                label="可视化页面类型"
+                                name="c_type"
+                                defaultValue={editingAdConfig?.c_type || 1}
+                            >
+                                <MenuItem value={1}>无人机类型</MenuItem>
+                                <MenuItem value={2}>科幻类型</MenuItem>
+                            </TextField>
+                            <TextField
+                                select
+                                fullWidth
+                                margin="dense"
+                                label="是否显示攻击行为"
+                                name="c_show_attack"
+                                defaultValue={editingAdConfig?.c_show_attack === 0 ? 0 : 1}
+                            >
+                                <MenuItem value={1}>是</MenuItem>
+                                <MenuItem value={0}>否</MenuItem>
+                            </TextField>
+                        </Stack>
+
                         <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
                             <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判</Typography>
                             <Autocomplete multiple id="referee-autocomplete" options={users} getOptionLabel={(option) => option.c_username} value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]} isOptionEqualToValue={(option, value) => option.c_username === value.c_username}
@@ -636,7 +696,6 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
-            {/* ★ 7. 添加拓扑弹窗的渲染逻辑 */}
             {isTopologyOpen && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}

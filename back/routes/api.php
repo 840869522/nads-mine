@@ -352,6 +352,8 @@ Route::post('/ad-configs/{adConfig}/stop', [AdConfigController::class, 'stop']);
  */
 Route::prefix('ad')->group(function () {
 
+    Route::get('/users', [UserController::class, 'listAllForSelection']);
+
     // --- 队伍管理 (team) ---
     // 所有与 /team 相关的路由都放在这个组内
     Route::prefix('team')->group(function () {

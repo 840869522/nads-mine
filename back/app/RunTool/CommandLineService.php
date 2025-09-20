@@ -870,6 +870,35 @@ XML;
         'output' => $process->getOutput()
     ]);
     }
+
+    public function createVmKali(array $options): void
+    {
+    // 指向 Kali Linux 脚本（使用 newvm_kali.sh）
+    $scriptPath = app_path('RunTool/vmscript/newvm_kali.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['ip'],
+        $options['scene_instance_id'],
+        $options['flag'] ?? 'NULL',
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'],
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Kali Linux VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360);
+    $process->mustRun();
+
+    Log::info("Kali Linux VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+    }
 }
 
 // // ```json

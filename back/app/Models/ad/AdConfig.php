@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Users\UserModel;
 use App\Models\ad\Team;
 use App\Models\scenario\SceneConfig;
-use Illuminate\Database\Eloquent\Casts\Attribute;
+// ★★★ 1. 引入 HasMany 和 Referee 模型 ★★★
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ad\Referee;
 
 class AdConfig extends Model
 {
@@ -24,9 +26,6 @@ class AdConfig extends Model
 
     /**
      * 可以被批量赋值的属性。
-     * ★★★ 这是唯一的、必需的修改 ★★★
-     * 将 'c_scene_instance_id' 和 'c_status' 添加到此数组中，
-     * 以允许 AdController 中的 save() 方法能够成功更新它们。
      */
     protected $fillable = [
         'c_id',
@@ -35,21 +34,20 @@ class AdConfig extends Model
         'c_red_team_id',
         'c_blue_team_id',
         'c_scene_config_id',
-        'c_scene_instance_id', // <--- 修正点：已添加
-        'c_status',            // <--- 修正点：已添加
+        'c_scene_instance_id',
+        'c_status',
         'c_start_time',
         'c_end_time',
+        'c_type',
+        'c_show_attack',
     ];
 
-    // --- 裁判相关的访问器 (保持原样) ---
-    protected $appends = ['referees_for_frontend'];
-
-    // --- 日期字段转换 (保持原样) ---
+    // --- 日期字段转换 ---
     protected $dates = [
         'c_start_time', 'c_end_time', 'c_create_at', 'c_update_at',
     ];
 
-    // --- 模型关联关系 (保持原样) ---
+    // --- 模型关联关系 ---
 
     public function redTeam()
     {
@@ -66,33 +64,14 @@ class AdConfig extends Model
         return $this->belongsTo(SceneConfig::class, 'c_scene_config_id', 'c_config_id');
     }
 
-    public function referees()
+    /**
+     * 定义一个演练配置 (AdConfig) 与其裁判指派记录 (Referee) 的关系。
+     * 这是一个 "一对多" (HasMany) 关系：一个演练可以有多条裁判指派记录。
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function referees(): HasMany
     {
-        return $this->belongsToMany(
-            UserModel::class,
-            'c_referees',
-            'c_ad_config_id',
-            'c_user_id',
-            'c_id',
-            'c_username'
-        )->withPivot('c_level');
-    }
-
-    // --- 裁判相关的自定义访问器 (保持原样) ---
-    protected function refereesForFrontend(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                if (! $this->relationLoaded('referees')) {
-                    return [];
-                }
-                return $this->referees->map(function ($user) {
-                    return [
-                        'c_user_id' => $user->c_username,
-                        'c_level'   => $user->pivot->c_level,
-                    ];
-                });
-            }
-        );
+        return $this->hasMany(Referee::class, 'c_ad_config_id', 'c_id');
     }
 }
