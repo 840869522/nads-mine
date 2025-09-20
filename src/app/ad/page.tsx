@@ -1,4 +1,4 @@
-// src/app/ad/management/page.tsx
+// file: src/app/ad/management/page.tsx
 "use client";
 
 import React, {useState, useEffect, useCallback, FormEvent, useMemo, MouseEvent} from 'react';
@@ -98,6 +98,8 @@ interface AdConfig {
     c_status: 'pending' | 'running' | 'finished' | 'archived' | 'failed' | 'creating';
     c_start_time: string | null;
     c_end_time: string | null;
+    c_type: number | null;
+    c_show_attack: number | null;
     referees: AdReferee[];
     redTeam?: Team;
     blueTeam?: Team;
@@ -268,6 +270,8 @@ const AdManagementPage: React.FC = () => {
             c_scene_config_id: Number(formData.get('c_scene_config_id')) || null,
             c_start_time: formData.get('c_start_time') ? new Date(formData.get('c_start_time') as string).toISOString() : null,
             c_end_time: formData.get('c_end_time') ? new Date(formData.get('c_end_time') as string).toISOString() : null,
+            c_type: formData.get('c_type') ? Number(formData.get('c_type')) : null,
+            c_show_attack: formData.get('c_show_attack') ? Number(formData.get('c_show_attack')) : null,
             referees: selectedReferees.map(({ c_user_id, c_level }) => ({ c_user_id, c_level })),
         };
         try {
@@ -391,6 +395,25 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
+    const mapTypeToString = (type: number | null) => {
+        switch (type) {
+            case 1: return '无人机类型';
+            case 2: return '科幻类型';
+            default: return '默认';
+        }
+    };
+
+    // ★★★ START: 修改显示文本 ★★★
+    const mapShowAttackToString = (show: number | null) => {
+        switch (show) {
+            case 1: return <Chip label="是" color="success" size="small" />;
+            case 0: return <Chip label="否" color="default" size="small" />;
+            default: return <Chip label="未设置" color="default" size="small" />;
+        }
+    };
+    // ★★★ END: 修改显示文本 ★★★
+
+
     const handleOpenView = (adConfig: AdConfig) => {
         if (adConfig.c_scene_instance_id) {
             const data = {id: adConfig.c_scene_instance_id, blueTeamId: adConfig.c_blue_team_id, redTeamId: adConfig.c_red_team_id};
@@ -477,14 +500,16 @@ const AdManagementPage: React.FC = () => {
                                 <TableCell sx={{ fontWeight: 'bold' }}>蓝队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>裁判团队</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>场景模板</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>可视化类型</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>显示攻击</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>计划开始时间</TableCell>
                                 <TableCell sx={{fontWeight: 'bold'}}>可视化</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>操作</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
+                            {isLoading ? ( <TableRow><TableCell colSpan={11} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
+                                : adConfigs.length === 0 ? ( <TableRow><TableCell colSpan={11} align="center" sx={{ py: 5 }}>没有找到演练配置。</TableCell></TableRow> )
                                     : (
                                         adConfigs.map((adConfig) => (
                                             <TableRow hover key={adConfig.c_id}>
@@ -507,6 +532,8 @@ const AdManagementPage: React.FC = () => {
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
+                                                <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
+                                                <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
                                                 <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
                                                 <TableCell align="right">
@@ -582,6 +609,32 @@ const AdManagementPage: React.FC = () => {
                         </Stack>
                         {teamConflictError && (<FormHelperText error sx={{ ml: '14px' }}>{teamConflictError}</FormHelperText>)}
                         <TextField select fullWidth margin="dense" label="场景模板 (可选)" name="c_scene_config_id" defaultValue={editingAdConfig?.c_scene_config_id || ''}><MenuItem value=""><em>不选择场景</em></MenuItem>{sceneConfigs.map(sc => <MenuItem key={sc.c_config_id} value={sc.c_config_id}>{sc.c_name}</MenuItem>)}</TextField>
+
+                        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                margin="dense"
+                                label="可视化页面类型"
+                                name="c_type"
+                                defaultValue={editingAdConfig?.c_type || 1}
+                            >
+                                <MenuItem value={1}>无人机类型</MenuItem>
+                                <MenuItem value={2}>科幻类型</MenuItem>
+                            </TextField>
+                            <TextField
+                                select
+                                fullWidth
+                                margin="dense"
+                                label="是否显示攻击行为"
+                                name="c_show_attack"
+                                defaultValue={editingAdConfig?.c_show_attack === 0 ? 0 : 1}
+                            >
+                                <MenuItem value={1}>是</MenuItem>
+                                <MenuItem value={0}>否</MenuItem>
+                            </TextField>
+                        </Stack>
+
                         <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 2, mt: 2 }}>
                             <Typography variant="h6" gutterBottom><GroupAddIcon sx={{ verticalAlign: 'middle', mr: 1 }}/>指派裁判</Typography>
                             <Autocomplete multiple id="referee-autocomplete" options={users} getOptionLabel={(option) => option.c_username} value={selectedReferees.map(ref => ref.user).filter(Boolean) as User[]} isOptionEqualToValue={(option, value) => option.c_username === value.c_username}

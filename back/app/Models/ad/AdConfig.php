@@ -38,6 +38,8 @@ class AdConfig extends Model
         'c_status',
         'c_start_time',
         'c_end_time',
+        'c_type',
+        'c_show_attack',
     ];
 
     // --- 日期字段转换 ---

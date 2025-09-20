@@ -32,14 +32,11 @@ class AdConfigController extends Controller
     {
         $perPage = $request->query('per_page', 10);
 
-        // ★★★ 核心修复点 ★★★
-        // 精简 with 数组，只保留最深层的嵌套预加载 'referees.user'
-        // 这会确保 referees 关系和嵌套的 user 关系都被正确加载。
         $query = AdConfig::query()->with([
             'redTeam:c_id,c_name',
             'blueTeam:c_id,c_name',
             'sceneConfig:c_config_id,c_name',
-            'referees.user:c_username,c_name' // 保留这一行就足够了
+            'referees.user:c_username,c_name'
         ]);
 
         if ($request->has('search') && !empty($request->search)) {
@@ -66,6 +63,10 @@ class AdConfigController extends Controller
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
             'c_end_time'        => 'nullable|date|after_or_equal:c_start_time',
+            // ★★★ START: 添加新字段的验证规则 ★★★
+            'c_type'            => 'nullable|integer|in:1,2', // 1=无人机, 2=科幻
+            'c_show_attack'     => 'nullable|integer|in:0,1', // 0=不显示, 1=显示
+            // ★★★ END: 添加新字段的验证规则 ★★★
             'referees'          => ['required', 'array', 'min:1', new NotInTeams((int)$request->input('c_red_team_id', 0), (int)$request->input('c_blue_team_id', 0))],
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
@@ -87,6 +88,10 @@ class AdConfigController extends Controller
                 'c_scene_instance_id' => null,
                 'c_start_time'        => $validated['c_start_time'] ?? null,
                 'c_end_time'          => $validated['c_end_time'] ?? null,
+                // ★★★ START: 添加新字段到创建数组 ★★★
+                'c_type'              => $validated['c_type'] ?? null,
+                'c_show_attack'       => $validated['c_show_attack'] ?? null,
+                // ★★★ END: 添加新字段到创建数组 ★★★
                 'c_status'            => 'pending',
             ]);
 
@@ -146,13 +151,17 @@ class AdConfigController extends Controller
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
             'c_end_time'        => 'nullable|date|after_or_equal:c_start_time',
+            // ★★★ START: 添加新字段的验证规则 ★★★
+            'c_type'            => 'nullable|integer|in:1,2',
+            'c_show_attack'     => 'nullable|integer|in:0,1',
+            // ★★★ END: 添加新字段的验证规则 ★★★
             'referees'          => ['required', 'array', 'min:1', new NotInTeams((int)$request->input('c_red_team_id', 0), (int)$request->input('c_blue_team_id', 0))],
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
-            $adConfig->update($validated);
+            $adConfig->update($validated); // update() 方法会自动处理 $fillable 中的所有字段
 
             $adConfig->referees()->delete();
 
@@ -175,6 +184,7 @@ class AdConfigController extends Controller
         return new AdConfigResource($adConfig);
     }
 
+    // ... destroy, start, stop 等其他方法保持不变 ...
     public function stop(AdConfig $adConfig)
     {
         if ($adConfig->c_status !== 'running') {

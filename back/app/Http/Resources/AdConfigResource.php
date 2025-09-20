@@ -25,6 +25,8 @@ class AdConfigResource extends JsonResource
             'c_status'            => $this->c_status,
             'c_start_time'        => $this->c_start_time ? $this->c_start_time->toDateTimeString() : null,
             'c_end_time'          => $this->c_end_time ? $this->c_end_time->toDateTimeString() : null,
+            'c_type' => $this->c_type,
+            'c_show_attack' => $this->c_show_attack,
             'c_create_at'         => $this->c_create_at->toDateTimeString(),
             'c_update_at'         => $this->c_update_at->toDateTimeString(),
             'c_red_team_id'       => $this->c_red_team_id,
