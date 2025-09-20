@@ -322,6 +322,6 @@
     "description": "WindowsRPC溢出漏洞探测靶机镜像"
   },
   "Report-tools.qcow2": {
-    "osType": "ubuntu"
+    "osType": "kali"
   }
 }
