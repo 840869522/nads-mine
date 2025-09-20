@@ -14,11 +14,12 @@ import {
     Edit as EditIcon,
     Add as AddIcon,
     PeopleAlt as PermissionIcon,
-    Visibility as ViewInstancesIcon, // <-- 新增图标
-    FlashOn as QuickCreateIcon, // <-- 新增快速创建图标
-    Download as ExportIcon // <-- 新增导出图标
+    Visibility as ViewInstancesIcon,
+    FlashOn as QuickCreateIcon,
+    Download as ExportIcon,
+    ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
-import Link from 'next/link'; // <-- 新增导入
+import moment from 'moment'; // 新增导入
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
 import ScenarioPermissionDialog  from './ScenarioPermissionDialog';
@@ -26,7 +27,6 @@ import ScenarioQuickCreateDialog from './ScenarioQuickCreateDialog';
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
-
 
 // 定义场景的数据结构
 export interface Scenario {
@@ -38,11 +38,17 @@ export interface Scenario {
     topology_json: TopologyData;
 }
 
-
 type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
-const ScenarioManagementPage: React.FC = () => {
+interface ScenarioManagementPageProps {
+  testId?: string; // 新增：可选的 testId，用于获取关联场景
+  username: string; // 新增：用户名
+  onBack: () => void; // 新增：返回回调
+  onViewInstances: (name: string) => void; // 新增：查看实例回调
+}
+
+const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId, username, onBack, onViewInstances }) => {
     const { user } = useAuth();
     const [scenarios, setScenarios] = useState<Scenario[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -55,57 +61,85 @@ const ScenarioManagementPage: React.FC = () => {
     const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
-    const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
-    const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null); // 新增导出状态
+    const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null);
+    const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null);
     
     // 导出功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isExportEnabled = true; // 设置为 true 启用导出功能
-
-
+    const isExportEnabled = false; // 设置为 false 禁用导出功能
 
     const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-    const [isQuickCreateDialogOpen, setQuickCreateDialogOpen] = useState(false); // <-- 新增快速创建弹窗状态
-
+    const [isQuickCreateDialogOpen, setQuickCreateDialogOpen] = useState(false);
     const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
-    const fetchScenarios = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const response = await customFetch('/back/api/scenarios');
-            if (!response.ok) {
-                throw new Error('获取场景列表失败');
-            }
-            const data: Scenario[] = await response.json();
-            setScenarios(data);
-        } catch (err: any) {
-            setError(err.message || '发生未知错误');
-            setScenarios([]);
-        } finally {
-            setIsLoading(false);
+
+ const fetchScenarios = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+        let response;
+        if (testId) {
+            response = await customFetch(`/back/api/study/test/getScenarioByTestId/${testId}`);
+        } else {
+            response = await customFetch('/back/api/scenarios');
         }
-    }, []);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '获取场景列表失败' }));
+            throw new Error(errorData.message || '获取场景列表失败');
+        }
+        const result = await response.json();
+        console.log('Fetched scenarios response:', result); // 调试日志
+
+        // 假设后端返回格式为 { code, message, data }
+        if (result.code !== 200) { // 使用硬编码 200 替代 GlobalResponse.HTTP_STATUS_OK_CODE
+            throw new Error(result.message || '后端返回错误状态');
+        }
+
+        const data = result.data;
+        if (!data) {
+            throw new Error('后端返回数据为空');
+        }
+
+        // 确保数据是数组，并过滤掉无效项
+        const scenariosData = (Array.isArray(data) ? data : [data]).filter(
+            (item): item is Scenario => item && typeof item === 'object' && 'name' in item && 'id' in item
+        );
+
+        if (scenariosData.length === 0) {
+            console.warn('没有有效的场景数据');
+            setError('没有找到与测试ID关联的场景数据');
+        }
+
+        setScenarios(scenariosData);
+    } catch (err: any) {
+        console.error('Fetch scenarios error:', err);
+        setError(err.message || '发生未知错误');
+        setScenarios([]);
+    } finally {
+        setIsLoading(false);
+    }
+}, [testId]);
 
     const handleOpenPermissionDialog = (scenario: Scenario) => {
         setPermissionScenario(scenario);
     };
+
     useEffect(() => {
         fetchScenarios();
     }, [fetchScenarios]);
 
     // 更新 handleSaveSuccess 以便它可以同时处理创建和编辑成功后的逻辑
     const handleSaveSuccess = () => {
-        setCreateDialogOpen(false); // 关闭创建弹窗
-        setQuickCreateDialogOpen(false); // <-- 关闭快速创建弹窗
-        setEditingScenario(null);   // 关闭编辑弹窗
-        setPermissionScenario(null); // 关闭权限弹窗
-        fetchScenarios();           // 统一刷新列表
+        setCreateDialogOpen(false);
+        setQuickCreateDialogOpen(false);
+        setEditingScenario(null);
+        setPermissionScenario(null);
+        fetchScenarios();
     };
+
     const handleRefresh = () => {
         fetchScenarios();
     };
 
-    // 2. 新增处理删除相关的函数
     const handleOpenDeleteDialog = (scenario: Scenario) => {
         setDeleteTarget(scenario);
     };
@@ -120,7 +154,6 @@ const ScenarioManagementPage: React.FC = () => {
         setIsDeleting(true);
         setError(null);
         try {
-            // 向后端API发送DELETE请求，通过查询参数传递ID
             const response = await customFetch(`/back/api/scenarios?id=${deleteTarget.id}`, {
                 method: 'DELETE',
             });
@@ -130,31 +163,29 @@ const ScenarioManagementPage: React.FC = () => {
                 throw new Error(errorData.message || '删除失败');
             }
 
-            // 删除成功后，刷新列表
             await fetchScenarios();
-
         } catch (err: any) {
             setError(err.message);
         } finally {
             setIsDeleting(false);
-            handleCloseDeleteDialog(); // 关闭弹窗
+            handleCloseDeleteDialog();
         }
     };
+
     // 启动场景
     const handleStartDrill = async (scenario: Scenario) => {
-        // 1. 从 useAuth Hook 获取用户名
-        const username = (user?.user as any)?.c_username;
+        const currentUsername = username || (user?.user as any)?.c_username;
 
-        if (!username) {
+        if (!currentUsername) {
             alert('无法获取当前用户名，请确保您已登录。');
             return;
         }
 
-        if (!window.confirm(`您确定要启动场景 “${scenario.name}” 的演练吗？`)) {
+        if (!window.confirm(`您确定要启动场景 "${scenario.name}" 的演练吗？`)) {
             return;
         }
 
-        setStartingScenarioId(scenario.id); // 2. 设置加载状态
+        setStartingScenarioId(scenario.id);
         setError(null);
 
         try {
@@ -164,8 +195,7 @@ const ScenarioManagementPage: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                // 2. 在请求体中附加上用户名
-                body: JSON.stringify({ username: username }),
+                body: JSON.stringify({ username: currentUsername }),
             });
 
             const result = await response.json();
@@ -175,13 +205,12 @@ const ScenarioManagementPage: React.FC = () => {
             }
 
             alert(result.message);
-            fetchScenarios(); // 4. 成功后刷新数据
-
+            fetchScenarios();
         } catch (err: any) {
             setError(err.message || '发生未知网络错误');
             alert(`启动失败: ${err.message}`);
         } finally {
-            setStartingScenarioId(null); // 3. 结束加载状态
+            setStartingScenarioId(null);
         }
     };
 
@@ -195,14 +224,12 @@ const ScenarioManagementPage: React.FC = () => {
         setError(null);
 
         try {
-            // 获取场景的拓扑数据
             const topologyData = scenario.topology_json;
             
             if (!topologyData) {
                 throw new Error('场景拓扑数据为空，无法导出');
             }
 
-            // 调用 Next.js API 路由将场景保存为预置场景文件
             const response = await customFetch(`/api/scenarios/${scenario.id}/export`, {
                 method: 'POST',
                 headers: {
@@ -222,7 +249,6 @@ const ScenarioManagementPage: React.FC = () => {
             }
 
             alert(`场景 "${scenario.name}" 已成功导出为预置场景文件！\n\n文件已保存到：src/app/scenario/manage/scene/${result.file_name}`);
-
         } catch (err: any) {
             setError(err.message || '导出失败');
             alert(`导出失败: ${err.message}`);
@@ -231,7 +257,6 @@ const ScenarioManagementPage: React.FC = () => {
         }
     };
 
-    // 新增一个临时的编辑处理函数
     const handleEditScenario = (scenario: Scenario) => {
         setEditingScenario(scenario);
     };
@@ -243,29 +268,35 @@ const ScenarioManagementPage: React.FC = () => {
     };
 
     const filteredAndSortedScenarios = useMemo(() => {
-        let filtered = scenarios.filter(s =>
-            s.name.toLowerCase().includes(searchText.toLowerCase()) ||
-            s.description.toLowerCase().includes(searchText.toLowerCase())
+    const filtered = scenarios
+        .filter((s): s is Scenario => s !== null && s !== undefined && typeof s === 'object' && 'name' in s)
+        .filter(s =>
+            (s.name || '').toLowerCase().includes(searchText.toLowerCase()) ||
+            (s.description || '').toLowerCase().includes(searchText.toLowerCase())
         );
-        filtered.sort((a, b) => {
-            const valA = a[orderBy];
-            const valB = b[orderBy];
-            if (valB < valA) return order === 'asc' ? 1 : -1;
-            if (valB > valA) return order === 'asc' ? -1 : 1;
-            return 0;
-        });
-        return filtered;
-    }, [scenarios, searchText, order, orderBy]);
+    filtered.sort((a, b) => {
+        const valA = a[orderBy] || '';
+        const valB = b[orderBy] || '';
+        if (valB < valA) return order === 'asc' ? 1 : -1;
+        if (valB > valA) return order === 'asc' ? -1 : 1;
+        return 0;
+    });
+    return filtered;
+}, [scenarios, searchText, order, orderBy]);
 
     const paginatedScenarios = filteredAndSortedScenarios.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
     return (
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4" component="h1" fontWeight="bold">
-                    场景管理
-                </Typography>
-                {/* 将两个按钮放在一个flex容器中，用gap设置间距 */}
+                <Box>
+                    <Button startIcon={<ArrowBackIcon />} sx={{ mb: 1 }} onClick={onBack}>
+                        返回测试列表
+                    </Button>
+                    <Typography variant="h4" component="h1" fontWeight="bold">
+                        场景管理 {testId ? `(测试ID: ${testId})` : ''}
+                    </Typography>
+                </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                         variant="outlined"
@@ -275,27 +306,26 @@ const ScenarioManagementPage: React.FC = () => {
                     >
                         {isLoading ? '加载中...' : '刷新'}
                     </Button>
-
-                    {/* 快速创建按钮 */}
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<QuickCreateIcon />}
-                        onClick={() => setQuickCreateDialogOpen(true)}
-                    >
-                        快速创建
-                    </Button>
-
-                    {/* 打开弹窗的按钮 (JSX)用户需要一个交互元素（比如按钮）来触发弹窗的显示。*/}
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<AddIcon />}
-                        // 这是关键。当用户点击此按钮时，它会调用 setCreateDialogOpen(true)，将状态设置为 true，从而触发展示弹窗的逻辑。
-                        onClick={() => setCreateDialogOpen(true)}
-                    >
-                        创建场景
-                    </Button>
+                    {!testId && (
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            startIcon={<QuickCreateIcon />}
+                            onClick={() => setQuickCreateDialogOpen(true)}
+                        >
+                            快速创建
+                        </Button>
+                    )}
+                    {!testId && (
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            startIcon={<AddIcon />}
+                            onClick={() => setCreateDialogOpen(true)}
+                        >
+                            创建场景
+                        </Button>
+                    )}
                 </Box>
             </Box>
 
@@ -309,96 +339,98 @@ const ScenarioManagementPage: React.FC = () => {
                 </Box>
 
                 <TableContainer>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell sortDirection={orderBy === 'name' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleRequestSort('name')}>场景名称</TableSortLabel>
-                                </TableCell>
-                                <TableCell sortDirection={orderBy === 'description' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'description'} direction={orderBy === 'description' ? order : 'asc'} onClick={() => handleRequestSort('description')}>描述</TableSortLabel>
-                                </TableCell>
-                                <TableCell sortDirection={orderBy === 'uploadDate' ? order : false}>
-                                    <TableSortLabel active={orderBy === 'uploadDate'} direction={orderBy === 'uploadDate' ? order : 'asc'} onClick={() => handleRequestSort('uploadDate')}>上传日期</TableSortLabel>
-                                </TableCell>
-                                <TableCell align="right">操作</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {isLoading ? (
-                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }} color="text.secondary">正在加载场景列表...</Typography></TableCell></TableRow>
-                            ) : error ? (
-                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Alert severity="error">{error}</Alert></TableCell></TableRow>
-                            ) : paginatedScenarios.length === 0 ? (
-                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{searchText ? "没有找到匹配的场景。" : "没有可用的场景。"}</Typography></TableCell></TableRow>
-                            ) : (
-                                paginatedScenarios.map((scenario) => (
-                                    <TableRow key={scenario.id} hover>
-                                        <TableCell sx={{ fontWeight: 'medium' }}>{scenario.name}</TableCell>
-                                        <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            <Tooltip title={scenario.description} placement="top-start"><span>{scenario.description}</span></Tooltip>
-                                        </TableCell>
-                                        <TableCell>{new Date(scenario.uploadDate).toLocaleDateString()}</TableCell>
-                                        <TableCell align="right">
-                                            {/* --- MODIFICATION START --- */}
-                                            <Tooltip title="查看实例">
-                                                <IconButton
-                                                    component={Link}
-                                                    href={`/scenario/manage/instances?name=${encodeURIComponent(scenario.name)}`}
-                                                    color="info"
-                                                    size="small"
-                                                >
-                                                    <ViewInstancesIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                            {/* --- MODIFICATION END --- */}
-                                            {isExportEnabled && (
-                                                <Tooltip title="导出到预置场景">
-                                                    <span>
-                                                        <IconButton
-                                                            color="secondary"
-                                                            size="small"
-                                                            onClick={() => handleExportScenario(scenario)}
-                                                            disabled={exportingScenarioId === scenario.id}
-                                                        >
-                                                            {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
-                                                        </IconButton>
-                                                    </span>
-                                                </Tooltip>
-                                            )}
-                                            <Tooltip title="启动演练">
-                                                {/* 3. 更新按钮，根据状态显示加载动画或图标 */}
-                                                <span>
-                                                    <IconButton
-                                                        color="success"
-                                                        size="small"
-                                                        onClick={() => handleStartDrill(scenario)}
-                                                        disabled={startingScenarioId === scenario.id}
-                                                    >
-                                                        {startingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title="权限管理">
-                                                {/* 4. 更新 onClick 事件以打开新弹窗 */}
-                                                <IconButton color="default" size="small" onClick={() => handleOpenPermissionDialog(scenario)}>
-                                                    <PermissionIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                            {/* 3. 更新删除按钮的 onClick 事件 */}
-                                            <Tooltip title="删除场景"><IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}><DeleteIcon /></IconButton></Tooltip>
-                                            <Tooltip title="编辑场景">
-                                                <IconButton color="primary" size="small" onClick={() => handleEditScenario(scenario)}>
-                                                    <EditIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+  <Table>
+    <TableHead>
+      <TableRow>
+        <TableCell sortDirection={orderBy === 'name' ? order : false}>
+          <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleRequestSort('name')}>场景名称</TableSortLabel>
+        </TableCell>
+        <TableCell sortDirection={orderBy === 'description' ? order : false}>
+          <TableSortLabel active={orderBy === 'description'} direction={orderBy === 'description' ? order : 'asc'} onClick={() => handleRequestSort('description')}>描述</TableSortLabel>
+        </TableCell>
+        <TableCell sortDirection={orderBy === 'uploadDate' ? order : false}>
+          <TableSortLabel active={orderBy === 'uploadDate'} direction={orderBy === 'uploadDate' ? order : 'asc'} onClick={() => handleRequestSort('uploadDate')}>上传日期</TableSortLabel>
+        </TableCell>
+        <TableCell align="right">操作</TableCell>
+      </TableRow>
+    </TableHead>
+    <TableBody>
+      {isLoading ? (
+        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }} color="text.secondary">正在加载场景列表...</Typography></TableCell></TableRow>
+      ) : error ? (
+        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Alert severity="error">{error}</Alert></TableCell></TableRow>
+      ) : paginatedScenarios.length === 0 ? (
+        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{searchText ? "没有找到匹配的场景。" : "没有可用的场景。"}</Typography></TableCell></TableRow>
+      ) : (
+        paginatedScenarios.map((scenario) => (
+          <TableRow key={scenario.id} hover>
+            <TableCell sx={{ fontWeight: 'medium' }}>{scenario.name}</TableCell>
+            <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Tooltip title={scenario.description} placement="top-start"><span>{scenario.description}</span></Tooltip>
+            </TableCell>
+            <TableCell>
+              {moment(scenario.uploadDate).isValid()
+                ? moment(scenario.uploadDate).format('YYYY-MM-DD')
+                : moment().format('YYYY-MM-DD')}
+            </TableCell>
+            <TableCell align="right">
+              <Tooltip title="查看实例">
+                <IconButton
+                  color="info"
+                  size="small"
+                  onClick={() => onViewInstances(scenario.name)}
+                >
+                  <ViewInstancesIcon />
+                </IconButton>
+              </Tooltip>
+              {isExportEnabled && (
+                <Tooltip title="导出到预置场景">
+                  <span>
+                    <IconButton
+                      color="secondary"
+                      size="small"
+                      onClick={() => handleExportScenario(scenario)}
+                      disabled={exportingScenarioId === scenario.id}
+                    >
+                      {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+              <Tooltip title="启动演练">
+                <span>
+                  <IconButton
+                    color="success"
+                    size="small"
+                    onClick={() => handleStartDrill(scenario)}
+                    disabled={startingScenarioId === scenario.id}
+                  >
+                    {startingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="权限管理">
+                <IconButton color="default" size="small" onClick={() => handleOpenPermissionDialog(scenario)}>
+                  <PermissionIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="删除场景">
+                <IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}>
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="编辑场景">
+                <IconButton color="primary" size="small" onClick={() => handleEditScenario(scenario)}>
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+            </TableCell>
+          </TableRow>
+        ))
+      )}
+    </TableBody>
+  </Table>
+</TableContainer>
 
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25]}
@@ -412,7 +444,6 @@ const ScenarioManagementPage: React.FC = () => {
                 />
             </Paper>
 
-            {/* 4. 添加删除确认弹窗 */}
             <Dialog
                 open={!!deleteTarget}
                 onClose={handleCloseDeleteDialog}
@@ -424,7 +455,7 @@ const ScenarioManagementPage: React.FC = () => {
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText id="alert-dialog-description">
-                        您确定要永久删除场景 “{deleteTarget?.name}” 吗？此操作无法撤销。
+                        您确定要永久删除场景 "{deleteTarget?.name}" 吗？此操作无法撤销。
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
@@ -439,13 +470,11 @@ const ScenarioManagementPage: React.FC = () => {
                 onClose={() => setCreateDialogOpen(false)}
                 onSaveSuccess={handleSaveSuccess}
             />
-            {/* 快速创建弹窗 */}
             <ScenarioQuickCreateDialog
                 open={isQuickCreateDialogOpen}
                 onClose={() => setQuickCreateDialogOpen(false)}
                 onSaveSuccess={handleSaveSuccess}
             />
-            {/* 4. 在JSX中渲染弹窗: 并将所有需要的 props 传递给它 */}
             <ScenarioEditDialog
                 open={!!editingScenario}
                 onClose={() => setEditingScenario(null)}

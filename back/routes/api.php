@@ -292,8 +292,10 @@ Route::prefix('study')->group(function () {
         Route::get('/get_course_tests_experiments', [TestController::class, 'get_course_tests_experiments']);
         Route::get('get_test_scores', [TestController::class, 'get_test_scores']);
         Route::get('download_test_scores', [TestController::class, 'download_test_scores']);
-            // 启动实验场景
-        Route::post('{testId}/start-experiment', [TestController::class, 'startExperiment']);
+        // 正确的路由配置（使用路由参数）
+        Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
+       // index 路由需要认证
+        Route::get('/scenariosinstances', [TestController::class, 'index'])->middleware('auth:api');    
           // 根据用户名查找用户的场景实例
         Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
     });

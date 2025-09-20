@@ -14,11 +14,9 @@ import {
     ArrowBack as ArrowBackIcon,
     Visibility as ViewIcon, // <-- 确认导入
 } from '@mui/icons-material';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { customFetch } from '@/utils/fetch';
 // [MODIFICATION] 导入详情对话框组件
 import InstanceDetailsDialog from '../../sceneinstances/InstanceDetailsDialog';
-import { customFetch } from '@/utils/fetch';
 
 
 interface ScenarioInstance {
@@ -39,10 +37,13 @@ const statusColors: Record<ScenarioInstance['status'], 'success' | 'warning' | '
     STOPPED: 'default',
 };
 
-const ScenarioInstanceListPageContent: React.FC = () => {
-    const searchParams = useSearchParams();
-    const scenarioNameFromUrl = searchParams.get('name');
+interface ScenarioInstanceManagementPageProps {
+  username: string;
+  scenarioName: string;
+  onBack: () => void;
+}
 
+const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPageProps> = ({ username, scenarioName, onBack }) => {
     const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -59,24 +60,31 @@ const ScenarioInstanceListPageContent: React.FC = () => {
 
 
     const fetchInstances = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const response = await customFetch('/back/api/scenariosinstances');
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
-                throw new Error(errorData.message);
-            }
-            const data: ScenarioInstance[] = await response.json();
-            const filteredData = scenarioNameFromUrl ? data.filter(inst => inst.scenario_name === scenarioNameFromUrl) : data;
-            setInstances(filteredData);
-        } catch (err: any) {
-            setError(err.message || '发生未知错误');
-            setInstances([]);
-        } finally {
-            setIsLoading(false);
+    setIsLoading(true);
+    setError(null);
+    try {
+        const response = await customFetch('/back/api/study/test/index', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
+            throw new Error(errorData.message);
         }
-    }, [scenarioNameFromUrl]);
+        const data: ScenarioInstance[] = await response.json();
+        console.log('Fetched instances:', data); // 调试日志
+        const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
+        setInstances(filteredData);
+    } catch (err: any) {
+        setError(err.message || '发生未知错误');
+        setInstances([]);
+    } finally {
+        setIsLoading(false);
+    }
+}, [username, scenarioName]);
 
     useEffect(() => {
         fetchInstances();
@@ -155,11 +163,11 @@ const ScenarioInstanceListPageContent: React.FC = () => {
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
-                    <Button component={Link} href="/scenario/manage" startIcon={<ArrowBackIcon />} sx={{ mb: 1 }}>
+                    <Button startIcon={<ArrowBackIcon />} sx={{ mb: 1 }} onClick={onBack}>
                         返回场景管理
                     </Button>
                     <Typography variant="h4" component="h1" fontWeight="bold">
-                        场景: {scenarioNameFromUrl || '所有'}
+                        场景: {scenarioName || '所有'}
                     </Typography>
                 </Box>
                 <Button
@@ -269,14 +277,6 @@ const ScenarioInstanceListPageContent: React.FC = () => {
                 />
             )}
         </Paper>
-    );
-};
-
-const ScenarioInstanceManagementPage: React.FC = () => {
-    return (
-        <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>}>
-            <ScenarioInstanceListPageContent />
-        </Suspense>
     );
 };
 

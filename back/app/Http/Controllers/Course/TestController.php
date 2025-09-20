@@ -7,6 +7,9 @@ use App\Models\Course\AnswersModel;
 use App\Models\Course\PaperRulesModel;
 use App\Models\Course\PapersModel;
 use App\Models\Course\QuestionsModel;
+use App\Models\scenario\SceneConfig;
+use Illuminate\Support\Facades\Auth; // 导入 Auth facade
+
 
 use Illuminate\Support\Facades\Validator;
 
@@ -3944,11 +3947,11 @@ public function _response($code = '', $message = 0, $data = [])
         ])->header('X-Content-Type-Options', 'nosniff');
     }
 
-    /**
+ /**
      * 根据测试ID获取场景信息
      * Notes: 通过测试ID查询c_course_experiments表获取c_config_id，再查询c_scene_configs表获取场景信息
      * User: assistant
-     * DateTime: 2025/9/19
+     * DateTime: 2025/9/20
      * @param string $testId
      * @return JsonResponse
      */
@@ -3958,277 +3961,133 @@ public function _response($code = '', $message = 0, $data = [])
             // 验证测试ID
             if (empty($testId) || !is_string($testId)) {
                 Log::error('测试ID无效', ['test_id' => $testId]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    '测试ID无效'
-                );
+                return response()->json([
+                    'code' => 400,
+                    'message' => '测试ID无效',
+                    'data' => null
+                ], 400);
             }
 
-            // 查询c_course_experiments表获取实验信息
+            // 查询 c_course_experiments 表获取 c_config_id
             $experiment = DB::table('c_course_experiments')
                 ->where('c_experiment_id', $testId)
                 ->first();
 
             if (!$experiment) {
                 Log::error('未找到对应的测试信息', ['test_id' => $testId]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    '未找到对应的测试信息'
-                );
+                return response()->json([
+                    'code' => 400,
+                    'message' => '未找到对应的测试信息',
+                    'data' => null
+                ], 400);
             }
 
-            // 获取c_config_id
+            // 获取 c_config_id
             $configId = $experiment->c_config_id;
             if (!$configId) {
                 Log::error('测试未关联场景ID', ['test_id' => $testId]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    '未找到关联的场景ID'
-                );
+                return response()->json([
+                    'code' => 400,
+                    'message' => '未找到关联的场景ID',
+                    'data' => null
+                ], 400);
             }
 
-            // 查询c_scene_configs表获取场景信息
+            // 查询 c_scene_configs 表获取场景信息
             $scenario = DB::table('c_scene_configs')
                 ->where('c_config_id', $configId)
                 ->first();
 
             if (!$scenario) {
                 Log::error('场景配置不存在', ['config_id' => $configId, 'test_id' => $testId]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    "场景配置不存在：{$configId}"
-                );
+                return response()->json([
+                    'code' => 400,
+                    'message' => "场景配置不存在：{$configId}",
+                    'data' => null
+                ], 400);
             }
 
-            // 格式化返回数据
+            // 解析场景配置
+            $sceneData = json_decode($scenario->c_scene, true) ?? [];
+            $nodeCount = isset($sceneData['nodes']) ? count($sceneData['nodes']) : 0;
+
+            // 确保 name 字段不为空
+            $scenarioName = $scenario->c_name ?? '未知场景';
+            if (empty($scenario->c_name)) {
+                Log::warning('场景名称为空，设置默认值', ['config_id' => $configId]);
+            }
+
+            // 格式化返回数据，与 index 方法一致
             $scenarioData = [
                 'id' => $scenario->c_config_id,
-                'name' => $scenario->c_name,
+                'name' => $scenarioName,
                 'description' => $scenario->c_description ?? '无描述',
                 'uploadDate' => $scenario->c_created_at ? date('c', strtotime($scenario->c_created_at)) : null,
-                'nodeCount' => isset($scenario->c_scene['nodes']) ? count(json_decode($scenario->c_scene, true)['nodes']) : 0,
-                'topology_json' => json_decode($scenario->c_scene, true),
-                'experiment_name' => $experiment->c_experiment_name,
-                'course_id' => $experiment->c_course_id,
-                'start_time' => $experiment->c_start ? date('c', strtotime($experiment->c_start)) : null,
-                'end_time' => $experiment->c_end ? date('c', strtotime($experiment->c_end)) : null,
-                'duration' => $experiment->c_duration,
+                'nodeCount' => $nodeCount,
+                'topology_json' => $sceneData
             ];
 
-            // 记录日志
+            // 记录返回数据
             Log::info('获取场景信息成功', [
                 'test_id' => $testId,
                 'config_id' => $configId,
-                'scenario_name' => $scenario->c_name
+                'scenario_name' => $scenarioName,
+                'response_data' => $scenarioData
             ]);
 
-            return $this->_response(
-                GlobalResponse::$HTTP_STATUS_OK_CODE,
-                '场景信息获取成功',
-                $scenarioData
-            );
-
+            return response()->json([
+                'code' => 200,
+                'message' => '场景信息获取成功',
+                'data' => $scenarioData
+            ], 200);
         } catch (\Exception $e) {
             Log::error('获取场景信息失败', [
                 'test_id' => $testId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return $this->_response(
-                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
-                '获取场景信息失败：' . $e->getMessage()
-            );
+            return response()->json([
+                'code' => 500,
+                'message' => '获取场景信息失败：' . $e->getMessage(),
+                'data' => null
+            ], 500);
         }
     }
-
 
     /**
      * 根据用户名查找用户的场景实例
      * Notes:
      * User: assistant
      * DateTime: 2025/7/30
-     * @param Request $request
      * @return JsonResponse
      */
-    public function getUserScenarios(Request $request)
+    public function index()
     {
         try {
-            $username = trim($request->input('username'));
-            
-            $validated_data = array(
-                'username' => 'required|string|exists:c_users,c_username',
-            );
-            
-            $validated_msg = array(
-                'username.required'=>"用户名不能为空",
-                'username.string'=>"用户名类型错误",
-                'username.exists'=>"用户名不存在",
-            );
-            
-            $validatedData = $request->validate($validated_data, $validated_msg);
-            
-            // 查找用户相关的场景实例
-            $scenarios = DB::table('c_scene_instances')
-                ->leftJoin('c_scene_configs', 'c_scene_instances.c_config_id', '=', 'c_scene_configs.c_config_id')
-                ->where('c_scene_instances.c_username', $username)
-                ->select(
-                    'c_scene_instances.c_scene_instances_id as instance_id',
-                    'c_scene_configs.c_name as scenario_name',
-                    'c_scene_instances.c_username as username',
-                    'c_scene_instances.c_runtime as runtime',
-                    'c_scene_instances.c_status as status',
-                    'c_scene_configs.c_scene_config as c_scene_config'
-                )
-                ->orderBy('c_scene_instances.c_runtime', 'desc')
+            // 获取认证用户的用户名
+            $username = Auth::user()->c_username;
+
+            // 按用户名过滤场景实例并包含 sceneConfig
+            $instances = SceneInstance::with('sceneConfig')
+                ->where('c_username', $username)
+                ->latest('c_runtime')
                 ->get();
-            
-            Log::info('根据用户名查找场景实例', [
-                'username' => $username,
-                'scenario_count' => $scenarios->count()
-            ]);
-            
-            return $this->_response(
-                GlobalResponse::$HTTP_STATUS_OK_CODE,
-                GlobalResponse::HTTP_STATUS_OK_MES,
-                $scenarios
-            );
-            
-        } catch (ValidationException $e) {
-            Log::error('参数验证失败', ['error' => $e->getMessage()]);
-            return $this->_response(
-                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                $e->getMessage()
-            );
+
+            $data = $instances->map(function ($instance) {
+                return [
+                    'instance_id'   => $instance->c_scene_instances_id,
+                    'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+                    'username'      => $instance->c_username,
+                    'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
+                    'status'        => $instance->c_status,
+                    'c_scene_config' => $instance->c_scene_config,
+                ];
+            });
+
+            return response()->json($data);
         } catch (\Exception $e) {
-            Log::error('查询用户场景实例失败', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return $this->_response(
-                GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                "查询用户场景实例失败：" . $e->getMessage()
-            );
-        }
-    }
-    
-    /**
-     * 启动实验场景
-     * Notes:
-     * User: assistant
-     * DateTime: 2025/7/30
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function startExperiment(Request $request, $testId)
-    {
-        try {
-            // 1. 获取请求参数
-            $username = trim($request->input('username'));
-            
-            // 2. 验证参数
-            $validated_data = array(
-                'username' => 'required|string|exists:c_users,c_username',
-            );
-            
-            $validated_msg = array(
-                'username.required'=>"用户名不能为空",
-                'username.string'=>"用户名类型错误",
-                'username.exists'=>"用户名不存在",
-            );
-            
-            $request->validate($validated_data, $validated_msg);
-            
-            // 3. 验证测试是否存在
-            $test = DB::table('c_tests')
-                ->where('c_id', $testId)
-                ->first();
-            
-            if (!$test) {
-                Log::error('测试不存在', [
-                    'test_id' => $testId,
-                    'username' => $username
-                ]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    "测试不存在：{$testId}"
-                );
-            }
-            
-            // 4. 获取测试对应的场景配置ID
-            if (empty($test->c_scene_config_id)) {
-                Log::error('测试未关联场景', [
-                    'test_id' => $testId,
-                    'username' => $username
-                ]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    "该测试未关联场景，无法启动实验"
-                );
-            }
-            
-            // 5. 验证场景配置是否存在
-            $sceneConfig = DB::table('c_scene_configs')
-                ->where('c_config_id', $test->c_scene_config_id)
-                ->first();
-            
-            if (!$sceneConfig) {
-                Log::error('场景配置不存在', [
-                    'scene_config_id' => $test->c_scene_config_id,
-                    'test_id' => $testId,
-                    'username' => $username
-                ]);
-                return $this->_response(
-                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                    "场景配置不存在：{$test->c_scene_config_id}"
-                );
-            }
-            
-            // 6. 启动场景（创建场景实例）
-            $sceneInstanceId = DB::table('c_scene_instances')->insertGetId([
-                'c_config_id' => $test->c_scene_config_id,
-                'c_username' => $username,
-                'c_status' => 'running',
-                'c_runtime' => now(),
-                'c_update_time' => now()
-            ]);
-            
-            // 7. 记录日志
-            Log::info('启动实验场景成功', [
-                'scene_instance_id' => $sceneInstanceId,
-                'scene_config_id' => $test->c_scene_config_id,
-                'scene_name' => $sceneConfig->c_name,
-                'test_id' => $testId,
-                'username' => $username
-            ]);
-            
-            // 8. 返回成功响应
-            return $this->_response(
-                GlobalResponse::$HTTP_STATUS_OK_CODE,
-                "场景启动成功：{$sceneConfig->c_name}",
-                [
-                    'scene_instance_id' => $sceneInstanceId,
-                    'scene_name' => $sceneConfig->c_name,
-                    'redirect_url' => '/learning/sceneinstances'
-                ]
-            );
-            
-        } catch (ValidationException $e) {
-            Log::error('参数验证失败', ['error' => $e->getMessage()]);
-            return $this->_response(
-                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                $e->getMessage()
-            );
-        } catch (\Exception $e) {
-            Log::error('启动实验场景失败', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'test_id' => $testId,
-                'username' => $username
-            ]);
-            return $this->_response(
-                GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                "启动实验场景失败：" . $e->getMessage()
-            );
+            Log::error('获取场景实例列表时发生错误: ' . $e->getMessage());
+            return response()->json(['message' => '服务器内部错误，获取列表失败。'], 500);
         }
     }
 
