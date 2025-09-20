@@ -349,7 +349,7 @@ HTML;
             ], 500);
         }
     }
-    
+
     public function convertToPdf(Request $request, $c_resource_id)
     {
         try {
@@ -459,16 +459,16 @@ HTML;
                 ? 'C:\Program Files\LibreOffice\program\soffice.exe'
                 : 'libreoffice';
 
-            // 生成安全的 PDF 文件名（避免中文文件名问题）
-            $safeFileName = uniqid('pdf_'); // 使用唯一 ID，例如 pdf_66ea7b1234567
-            $pdfFileName = $safeFileName . '.pdf';
-            $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $pdfFileName;
+            // 修正：构建基于原文件名的 PDF 路径（LibreOffice 会生成此文件）
+            $originalBaseName = pathinfo($fullPath, PATHINFO_FILENAME); // 如 "初级网络安全设备课程-IDPS"
+            $expectedPdfName = $originalBaseName . '.pdf';
+            $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $expectedPdfName;
 
-            // 检查是否已存在同名 PDF 文件
+            // 修正：检查是否已存在同名 PDF，如果存在则追加计数器（避免覆盖）
             $counter = 1;
             while (file_exists($pdfPath)) {
-                $pdfFileName = $safeFileName . '_' . $counter . '.pdf';
-                $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $pdfFileName;
+                $expectedPdfName = $originalBaseName . '_' . $counter . '.pdf';
+                $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $expectedPdfName;
                 $counter++;
             }
 
@@ -487,7 +487,7 @@ HTML;
                 ], 500);
             }
 
-            // 执行转换命令
+            // 执行转换命令（LibreOffice 会生成基于原文件名的 PDF）
             $process = new Process([
                 $libreOfficePath,
                 '--headless',
@@ -497,12 +497,12 @@ HTML;
                 '--outdir',
                 $targetDir,
             ], null, ['LC_ALL' => 'C.UTF-8']);
-            $process->setTimeout(60);
+            $process->setTimeout(600);
             Log::info('Running LibreOffice conversion', [
                 'platform' => $isWindows ? 'Windows' : 'Linux',
                 'command' => $process->getCommandLine(),
                 'input_path' => $commandFullPath,
-                'output_pdf_path' => $pdfPath,
+                'expected_pdf_path' => $pdfPath, // 修正：使用基于原文件名的路径
             ]);
             $process->run();
 
@@ -516,11 +516,14 @@ HTML;
                 throw new ProcessFailedException($process);
             }
 
-            // 验证 PDF 生成结果
+            // 验证 PDF 生成结果（现在使用正确的预期路径）
             if (!file_exists($pdfPath)) {
+                // 额外调试：列出目录中所有 PDF 文件，确认生成的文件名
+                $allPdfs = glob($targetDir . DIRECTORY_SEPARATOR . '*.pdf');
                 Log::error('PDF generation failed (file not found)', [
                     'c_resource_id' => $c_resource_id,
                     'expected_pdf_path' => $pdfPath,
+                    'all_pdfs_in_dir' => $allPdfs, // 调试用，生产可移除
                 ]);
                 return response()->json([
                     'code' => 500,
@@ -528,8 +531,15 @@ HTML;
                 ], 500);
             }
 
-            // 处理下载文件名编码
+            // 处理下载文件名编码（使用原资源名 + .pdf）
             $encodedFileName = rawurlencode($resource['c_resource_name'] . '.pdf');
+            Log::info('PDF conversion successful', [
+                'c_resource_id' => $c_resource_id,
+                'pdf_path' => $pdfPath,
+                'original_file' => $resource['c_resource_name'],
+            ]);
+
+            // 确保 disposition=inline 时不强制下载
             return response()->file($pdfPath, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => $request->query('disposition', 'inline') === 'inline'

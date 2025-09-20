@@ -76,6 +76,7 @@ class CourseController extends Controller
             'c_course_name' => 'required|string|max:100|unique:c_courses,c_course_name,' . $id . ',c_course_id',
             'c_description' => 'nullable|string',
             'c_category_id' => 'required|string|size:2|exists:c_course_categories,c_category_id',
+            'c_status' => 'sometimes|in:draft,published', // 添加 c_status 验证
         ]);
         if ($validator->fails()) {
             return response()->json([

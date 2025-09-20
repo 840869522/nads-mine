@@ -59,27 +59,118 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
 
 
-    const fetchInstances = useCallback(async () => {
+   const fetchInstances = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-        const response = await customFetch('/back/api/study/test/index', {
+        console.log('开始获取场景实例列表...');
+        
+        const response = await fetch('/back/api/study/test/index', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
             },
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
-            throw new Error(errorData.message);
+        
+        console.log('响应状态:', response.status);
+        console.log('响应头:', Object.fromEntries([...response.headers]));
+        
+        // 获取原始响应文本
+        const rawText = await response.text();
+        console.log('原始响应长度:', rawText.length);
+        console.log('完整响应内容:', rawText);
+        
+        // 检查前100个字符的编码
+        console.log('前100个字符的编码:');
+        const first100Chars = rawText.substring(0, 100);
+        for (let i = 0; i < first100Chars.length; i++) {
+            const char = first100Chars[i];
+            const code = first100Chars.charCodeAt(i);
+            console.log(`位置 ${i}: '${char}' (ASCII: ${code}, Hex: 0x${code.toString(16)})`);
+            
+            // 特别检查位置60附近的字符
+            if (i >= 55 && i <= 65) {
+                console.log(`⚠️ 注意位置 ${i}: '${char}' (ASCII: ${code})`);
+            }
         }
-        const data: ScenarioInstance[] = await response.json();
-        console.log('Fetched instances:', data); // 调试日志
-        const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
-        setInstances(filteredData);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${rawText.substring(0, 200)}`);
+        }
+        
+        // 尝试清理响应
+        let cleanedText = rawText;
+        
+        // 移除BOM (0xFEFF)
+        if (cleanedText.charCodeAt(0) === 0xFEFF) {
+            console.log('检测到BOM头，已移除');
+            cleanedText = cleanedText.substring(1);
+        }
+        
+        // 查找JSON开始位置
+        const jsonStart = cleanedText.indexOf('{');
+        if (jsonStart > 0) {
+            console.log(`发现JSON开始于位置 ${jsonStart}`);
+            console.log(`JSON前的文本: "${cleanedText.substring(0, jsonStart)}"`);
+            cleanedText = cleanedText.substring(jsonStart);
+        }
+        
+        // 查找JSON结束位置
+        const jsonEnd = cleanedText.lastIndexOf('}');
+        if (jsonEnd !== -1 && jsonEnd < cleanedText.length - 1) {
+            console.log(`发现JSON结束于位置 ${jsonEnd}，后面还有内容`);
+            cleanedText = cleanedText.substring(0, jsonEnd + 1);
+        }
+        
+        console.log('清理后的文本:', cleanedText);
+        
+        // 尝试解析JSON
+        try {
+            const data = JSON.parse(cleanedText);
+            console.log('解析成功的数据:', data);
+            
+            // 处理数据格式
+            let instancesData: ScenarioInstance[] = [];
+            
+            if (Array.isArray(data)) {
+                instancesData = data;
+            } else if (data && typeof data === 'object' && Array.isArray(data.data)) {
+                instancesData = data.data;
+            } else if (data && typeof data === 'object') {
+                instancesData = [data];
+            }
+            
+            console.log('处理后的实例数据:', instancesData);
+            
+            // 过滤数据
+            const filteredData = scenarioName 
+                ? instancesData.filter(inst => inst.scenario_name === scenarioName) 
+                : instancesData;
+                
+            setInstances(filteredData);
+            
+        } catch (parseError: any) {
+            console.error('JSON解析错误详情:', parseError);
+            
+            // 显示具体的错误位置
+            if (parseError.message.includes('position')) {
+                const positionMatch = parseError.message.match(/position (\d+)/);
+                if (positionMatch) {
+                    const errorPosition = parseInt(positionMatch[1]);
+                    console.log(`错误位置: ${errorPosition}`);
+                    console.log(`错误位置的字符: '${cleanedText[errorPosition]}' (ASCII: ${cleanedText.charCodeAt(errorPosition)})`);
+                    console.log(`错误位置周围的文本: "${cleanedText.substring(errorPosition - 10, errorPosition + 10)}"`);
+                }
+            }
+            
+            throw new Error(`JSON解析失败: ${parseError.message}`);
+        }
+        
     } catch (err: any) {
-        setError(err.message || '发生未知错误');
+        console.error('获取场景实例列表错误:', err);
+        setError('获取场景实例列表失败: ' + err.message);
         setInstances([]);
     } finally {
         setIsLoading(false);

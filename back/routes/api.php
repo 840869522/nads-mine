@@ -19,6 +19,7 @@ use App\Http\Controllers\Docker\ContainersController;
 use App\Http\Controllers\ad\RefereeController;
 use App\Http\Controllers\ad\TeamController;
 use App\Http\Controllers\Course\CourseController;
+use App\Http\Controllers\Course\CourseLearnController;
 use App\Http\Controllers\Course\CategoryController;
 use App\Http\Controllers\Course\ResourceController;
 use App\Http\Controllers\Vm\VmController;
@@ -108,6 +109,9 @@ Route::prefix("study")->group(function () {
         Route::post('/',[CourseController::class,'store']);
         Route::put('/{id}',[CourseController::class,'update']);
         Route::delete('/{id}',[CourseController::class,'destroy']);
+    });
+     Route::prefix('learn')->group(function () {
+        Route::get('/courses', [CourseLearnController::class, 'index']);  // 新增：学习页面专用路由，只返回已发布课程
     });
     Route::prefix('permissions')->group(function(){
         Route::get('/usernames', [CoursePermissionController::class, 'getAllUsernames']);
@@ -286,6 +290,7 @@ Route::prefix('study')->group(function () {
         Route::post('/query_results', [TestController::class, 'query_results']);
         Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
         Route::post('/redis_test', [TestController::class, 'redis_test']);
+        Route::get('/getPaperRulesByTestId', [TestController::class, 'getPaperRulesByTestId']);
         Route::get('/get_all_paper_rules', [TestController::class, 'get_all_paper_rules']);
         Route::get('get_paper_details', [TestController::class, 'get_paper_details']);
         Route::post('export_paper_to_word', [TestController::class, 'export_paper_to_word']);
@@ -295,7 +300,7 @@ Route::prefix('study')->group(function () {
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
-        Route::get('/scenariosinstances', [TestController::class, 'index'])->middleware('auth:api');    
+        Route::get('index', [TestController::class, 'index'])->middleware('auth:api');  
           // 根据用户名查找用户的场景实例
         Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
     });

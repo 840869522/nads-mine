@@ -160,6 +160,7 @@ export interface CourseCase {
   resources: CourseCaseResource[];
   experiments?: Experiment[];
   created_at: string;
+  c_status?: 'draft' | 'published';
   highlightedTitle?: string;
   highlightedDescription?: string;
 }

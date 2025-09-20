@@ -120,7 +120,7 @@ const CourseCasesPage: React.FC = () => {
 
         // Fetch categories
         const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const categoriesData = categoriesResponse.data;
         if (categoriesData.code === 200) {
@@ -132,20 +132,6 @@ const CourseCasesPage: React.FC = () => {
           setErrorMessage(`获取类别失败: ${categoriesData.message || '未知错误'}`);
         }
 
-        // Fetch scene configs
-        const sceneConfigsResponse = await apiClientWithToken.get(`/back/api/scenarios`, {
-          headers: { Authorization: ` ${token}` },
-        });
-        const sceneConfigsData = sceneConfigsResponse.data;
-        try {
-          setSceneConfigs(sceneConfigsData.map((config: { id: number; name: string }) => ({
-            c_config_id: config.id,
-            c_name: config.name,
-          })) || []);
-        } catch (error: any) {
-          setErrorMessage(`获取场景配置失败: ${error.message || '未知错误'}`);
-        }
-
         // Fetch courses
         const params = {
           page: currentPage,
@@ -154,7 +140,7 @@ const CourseCasesPage: React.FC = () => {
           ...(filterCategoryId && { c_category_id: filterCategoryId }),
         };
         const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
           params,
         });
         const coursesData = coursesResponse.data;
@@ -165,7 +151,7 @@ const CourseCasesPage: React.FC = () => {
                 let experiments: Experiment[] = [];
                 try {
                   const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                    headers: { Authorization: ` ${token}` },
+                    headers: { Authorization: `${token}` },
                     params: {
                       page: 1,
                       pageSize: 10
@@ -187,7 +173,7 @@ const CourseCasesPage: React.FC = () => {
                 }
                 try {
                   const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                    headers: { Authorization: ` ${token}` },
+                    headers: { Authorization: `${token}` },
                   });
                   const experimentsData = experimentsResponse.data;
                   if (experimentsData.code === 200) {
@@ -196,7 +182,7 @@ const CourseCasesPage: React.FC = () => {
                           let status: InstanceStatus = 'stopped';
                           try {
                             const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
-                              headers: { Authorization: ` ${token}` },
+                              headers: { Authorization: `${token}` },
                             });
                             const instanceData = instanceResponse.data;
                             status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
@@ -233,6 +219,7 @@ const CourseCasesPage: React.FC = () => {
                   c_description: course.c_description || '',
                   c_category_id: course.c_category_id,
                   c_category_name: course.c_category_name,
+                  c_status: course.c_status || 'draft',
                   resources,
                   experiments,
                   created_at: course.created_at || new Date().toISOString(),
@@ -333,7 +320,7 @@ const CourseCasesPage: React.FC = () => {
       const token = getCookie('_auth');
       const username = getCookie('username') || 'default_user';
       const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
       });
       const responseData = response.data;
       if (responseData.code === 200) {
@@ -378,7 +365,7 @@ const CourseCasesPage: React.FC = () => {
       let experimentId = experiment.c_experiment_id;
       if (experiment.c_experiment_id.startsWith('temp-id-')) {
         const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments`, experimentData, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code !== 201) {
@@ -389,7 +376,7 @@ const CourseCasesPage: React.FC = () => {
         setTimeout(() => setErrorMessage(''), 3000);
       } else {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code !== 200) {
@@ -407,7 +394,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/experiments/${experimentId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                Authorization: ` ${token}`,
+                Authorization: `${token}`,
               },
             });
             const data = response.data;
@@ -456,12 +443,13 @@ const CourseCasesPage: React.FC = () => {
 
   const handleSaveCourseCase = async (savedCase: CourseCase) => {
     try {
-      const { c_course_id, c_course_name, c_description, c_category_id, resources } = savedCase;
+      const { c_course_id, c_course_name, c_description, c_category_id,c_status, resources } = savedCase;
       const courseData = {
         c_course_id,
         c_course_name,
         c_description,
         c_category_id,
+        c_status, // 添加 c_status
       };
 
       const token = getCookie('_auth');
@@ -472,21 +460,28 @@ const CourseCasesPage: React.FC = () => {
       let courseId = c_course_id;
       if (editingCase) {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code !== 200) {
           throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
         }
+        // 局部更新 courseCases 状态
+        setCourseCases(prev =>
+            prev.map(course =>
+                course.c_course_id === c_course_id ? { ...course, ...courseData, c_status } : course
+            )
+        );
       } else {
         const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code !== 201) {
           throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
         }
         courseId = data.data.c_course_id;
+
       }
 
       if (resources.length > 0) {
@@ -498,7 +493,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                'Authorization': ` ${token}`,
+                'Authorization': `${token}`,
               },
             });
             const data = response.data;
@@ -511,7 +506,7 @@ const CourseCasesPage: React.FC = () => {
 
       // 刷新课程列表
       const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
         params: {
           page: currentPage,
           pageSize: itemsPerPage, // 使用动态每页条数
@@ -527,7 +522,7 @@ const CourseCasesPage: React.FC = () => {
               let experiments: Experiment[] = [];
               try {
                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: ` ${token}` },
+                  headers: { Authorization: `${token}` },
                 });
                 const resourcesData = resourcesResponse.data;
                 if (resourcesData.code === 200) {
@@ -544,7 +539,7 @@ const CourseCasesPage: React.FC = () => {
               }
               try {
                 const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                  headers: { Authorization: ` ${token}` },
+                  headers: { Authorization: `${token}` },
                 });
                 const experimentsData = experimentsResponse.data;
                 if (experimentsData.code === 200) {
@@ -571,6 +566,7 @@ const CourseCasesPage: React.FC = () => {
                 c_course_id: course.c_course_id,
                 c_course_name: course.c_course_name,
                 c_description: course.c_description || '',
+                c_status: course.c_status || 'published',
                 c_category_id: course.c_category_id,
                 c_category_name: course.c_category_name,
                 resources,
@@ -601,7 +597,7 @@ const CourseCasesPage: React.FC = () => {
         throw new Error('未登录，请先登录');
       }
       const response = await apiClientWithToken.get(`/back/api/study/categories`, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -635,7 +631,7 @@ const CourseCasesPage: React.FC = () => {
         ...(filterCategoryId && { c_category_id: filterCategoryId }),
       };
       const response = await apiClientWithToken.get(`/back/api/study/courses`, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
         params,
       });
       const data = response.data;
@@ -646,7 +642,7 @@ const CourseCasesPage: React.FC = () => {
               let experiments: Experiment[] = [];
               try {
                 const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: ` ${token}` },
+                  headers: { Authorization: `${token}` },
                   params: { page: 1, pageSize: 10 },
                 });
                 const resourcesData = resourcesResponse.data;
@@ -725,7 +721,7 @@ const CourseCasesPage: React.FC = () => {
         throw new Error('未登录，请先登录');
       }
       const response = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -783,7 +779,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.put(`/back/api/study/categories/${category.c_category_id}`, {
           c_category_name: category.c_category_name,
         }, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -795,7 +791,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.post(`/back/api/study/categories`, {
           c_category_name: category.c_category_name,
         }, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code === 201) {
@@ -819,7 +815,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error('未登录，请先登录');
         }
         const response = await apiClientWithToken.delete(`/back/api/study/categories/${categoryToDelete.c_category_id}`, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -861,7 +857,7 @@ const CourseCasesPage: React.FC = () => {
           }
         });
         const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.c_course_id}`, {
-          headers: { Authorization: ` ${token}` },
+          headers: { Authorization: `${token}` },
         });
         const data = response.data;
         if (data.code === 200) {
@@ -889,7 +885,7 @@ const CourseCasesPage: React.FC = () => {
         const response = await apiClientWithToken.delete(
             `/back/api/study/courses/${selectedCaseForResources.c_course_id}/experiments/${experimentToDelete.c_experiment_id}`,
             {
-              headers: { Authorization: ` ${token}` },
+              headers: { Authorization: `${token}` },
             }
         );
         const data = response.data;
@@ -936,7 +932,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       const response = await apiClientWithToken.delete(url, {
-        headers: { Authorization: ` ${token}` },
+        headers: { Authorization: `${token}` },
       });
       const data = response.data;
       if (data.code === 200) {
@@ -1223,6 +1219,7 @@ const CourseCasesPage: React.FC = () => {
                 <TableCell>课程名称</TableCell>
                 <TableCell>描述</TableCell>
                 <TableCell>类别</TableCell>
+                <TableCell>状态</TableCell>
                 <TableCell>创建时间</TableCell>
                 <TableCell>操作</TableCell>
               </TableRow>
@@ -1237,6 +1234,13 @@ const CourseCasesPage: React.FC = () => {
                       <span dangerouslySetInnerHTML={{ __html: course.highlightedDescription || course.c_description || '-' }} />
                     </TableCell>
                     <TableCell>{course.c_category_name}</TableCell>
+                    <TableCell>  {/* 新增 */}
+                      <Chip
+                          label={course.c_status === 'published' ? '发布' : '草稿'}
+                          color={course.c_status === 'published' ? 'success' : 'default'}
+                          size="small"
+                      />
+                    </TableCell>
                     <TableCell>{formatDate(course.created_at)}</TableCell>
                     <TableCell>
                       <IconButton onClick={() => handleOpenFormModal(course)} title="编辑">
