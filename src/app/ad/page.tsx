@@ -415,7 +415,7 @@ const AdManagementPage: React.FC = () => {
 
 
     const handleOpenView = (adConfig: AdConfig) => {
-        if (adConfig.c_scene_instance_id) {
+        if (adConfig.c_scene_instance_id && adConfig.c_status === "running") {
             const data = {
                 id: adConfig.c_scene_instance_id, 
                 blueTeamId: adConfig.c_blue_team_id, 
