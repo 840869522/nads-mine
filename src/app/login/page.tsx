@@ -7,10 +7,11 @@ import {
   Typography,
   TextField,
   Button,
-  Alert
+  Alert,
 } from '@mui/material';
 import CryptoJS from "crypto-js";
 import AiIcon from '@/components/icon/AiAnswer';
+import { useThemeMode } from '@/contexts/ThemeModeContext';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -20,13 +21,16 @@ const LoginPage: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login, logout } = useAuth();
+  const { setThemeMode } = useThemeMode();
 
   useEffect(() => {
     logout();
-    setTimeout(()=>{
-      if (document.cookie.includes("_auth"))
-      window.location.reload();
-    },500);
+    setTimeout(() => {
+      if (document.cookie.includes("_auth")) {
+        setThemeMode(localStorage.getItem("themeMode") || "light");
+        window.location.reload();
+      }
+    }, 500);
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

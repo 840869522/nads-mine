@@ -7,11 +7,13 @@ import { antdColors } from '@/utils/color';
 interface ThemeModeContextType {
   mode: PaletteMode;
   toggleThemeMode: () => void;
+  setThemeMode: (mode: string) => void
 }
 
 export const ThemeModeContext = createContext<ThemeModeContextType>({
   mode: 'dark', // Default mode
   toggleThemeMode: () => console.warn('toggleThemeMode function not yet initialized'),
+  setThemeMode: (mode: string) => console.warn('toggleThemeMode function not yet initialized')
 });
 
 export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -53,6 +55,10 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
     setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
   };
 
+  const setThemeMode = (mode: string) => {
+    setMode(mode);
+  }
+
   const theme = useMemo(
     () =>
       createTheme({
@@ -70,11 +76,11 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
             dark: antdColors.magenta[6],
             contrastText: '#fff',
           },
-          lime :{
+          lime: {
             light: antdColors.lime[4],
             main: antdColors.lime[5],
             dark: antdColors.lime[6],
-            contrastText : "#FFF",
+            contrastText: "#FFF",
           },
           purple: {
             light: antdColors.purple[4],
@@ -155,7 +161,7 @@ export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }
   );
 
   return (
-    <ThemeModeContext.Provider value={{ mode, toggleThemeMode }}>
+    <ThemeModeContext.Provider value={{ mode, toggleThemeMode, setThemeMode }}>
       <MuiThemeProvider theme={theme}>
         {children}
       </MuiThemeProvider>
