@@ -49,7 +49,7 @@ import { Chip } from '@mui/material';
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext.tsx';
 import { toast } from 'react-toastify';
 import { resolve } from 'path';
-import { getCookie } from '@/utils/cookie.tsx';
+import { deleteCookie, getCookie } from '@/utils/cookie.tsx';
 
 
 interface SidebarProps {
@@ -82,24 +82,26 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
 
   const handleLogout = async () => {
     toast.info(`正在退出登录`, {
-        autoClose: 1500,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      })
-    await new Promise<void>((resolve) =>{
+      position: "top-center",
+      autoClose: 1000,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    })
+    await new Promise<void>((resolve) => {
       logout();
-      setTimeout(()=>{
+      setTimeout(() => {
         if (!getCookie("_auth") && !localStorage.getItem('droneSimUser')) {
           resolve();
-        }else{
+        } else {
+          deleteCookie("_auth");
           localStorage.removeItem("droneSimUser");
           resolve();
         }
       }, 500);
     });
     router.replace('/login');
-    setTimeout(()=>{router.refresh();},100);
+    setTimeout(() => { router.refresh(); }, 100);
   };
   // ------弃用 ------
   // const navItems: NavItemType[] = [];

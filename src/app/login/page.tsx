@@ -23,6 +23,10 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     logout();
+    setTimeout(()=>{
+      if (document.cookie.includes("_auth"))
+      window.location.reload();
+    },500);
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
