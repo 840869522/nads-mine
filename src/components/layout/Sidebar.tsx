@@ -98,7 +98,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         }
       }, 500);
     });
-    window.location.href = '/login';
+    router.replace('/login');
+    setTimeout(()=>{router.refresh();},100);
   };
   // ------弃用 ------
   // const navItems: NavItemType[] = [];
