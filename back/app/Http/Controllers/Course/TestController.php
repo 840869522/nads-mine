@@ -8,7 +8,7 @@ use App\Models\Course\PaperRulesModel;
 use App\Models\Course\PapersModel;
 use App\Models\Course\QuestionsModel;
 use App\Models\scenario\SceneConfig;
-use Illuminate\Support\Facades\Auth; // 导入 Auth facade
+use App\Utils\JWTControll;
 
 
 use Illuminate\Support\Facades\Validator;
@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Redis;
 use App\Models\Flag\FlagSubmissionModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
-use App\Models\scenario\SceneInstanceModel;
+use App\Models\scenario\SceneInstance;
 
 use Illuminate\Support\Facades\Cache;
 
@@ -4148,19 +4148,19 @@ public function _response($code = '', $message = 0, $data = [])
 
    public function index(Request $request)
 {
-    // 确保没有输出缓冲区内容
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    
-    header_remove();
-    header('Content-Type: application/json; charset=utf-8');
-    
     try {
+        $auth = $request->header("Authorization",null);
+        $jwtRes =  JWTControll::decodeJWT($auth);
+        if ($jwtRes["err"] != null) {
+            return response()->json([
+                        "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                        "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+            ]);
+                }
         // 从 Request 对象获取用户信息
-        $user = $request->user();
-        
-        if (!$user) {
+        $token_data  = $jwtRes["data"];
+        Log::info($token_data);
+        if (!$token_data) {
             return response()->json([
                 'code' => 401,
                 'message' => '用户未认证或token无效',
@@ -4168,7 +4168,7 @@ public function _response($code = '', $message = 0, $data = [])
             ], 401);
         }
         
-        $username = $user->c_username;
+        $username = $token_data['id'];
 
         // 查询数据
         $instances = SceneInstance::with('sceneConfig')
