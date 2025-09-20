@@ -47,6 +47,9 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Chip } from '@mui/material';
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext.tsx';
+import { toast } from 'react-toastify';
+import { resolve } from 'path';
+import { getCookie } from '@/utils/cookie.tsx';
 
 
 interface SidebarProps {
@@ -77,9 +80,27 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     return initialOpenMenus;
   });
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logout();
+    toast.info(`正在退出登录`, {
+        autoClose: 2000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      })
+    await new Promise<void>((resolve) =>{
+      logout();
+      setTimeout(()=>{
+        if (!getCookie("_auth") && !localStorage.getItem('droneSimUser')) {
+          resolve();
+        }else{
+          localStorage.removeItem("droneSimUser");
+          resolve();
+        }
+      }, 500);
+    });
     router.push('/login');
+    
   };
   // ------弃用 ------
   // const navItems: NavItemType[] = [];
@@ -101,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     "FolderOpenIconHero": FolderOpenIconHero,
     "DocumentTextIcon": DocumentTextIcon,
     "FlagIcon": FlagIcon,
-    "MenuIcon":MenuIcon
+    "MenuIcon": MenuIcon
   };
 
   const handleMenuClick = (label: string) => {
@@ -156,7 +177,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
             <Collapse in={isOpen} timeout="auto" unmountOnExit>
               <List component="div" disablePadding>
                 {renderNavList(item.children, true)}
-              </List> 
+              </List>
             </Collapse>
           </React.Fragment>
         );

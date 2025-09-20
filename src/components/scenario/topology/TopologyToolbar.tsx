@@ -18,7 +18,8 @@ import {
   ClipboardDocumentListIcon,
   BeakerIcon,
   ArrowsRightLeftIcon,
-  CheckIcon
+  CheckIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 
 // 1. 更新组件的 Props 接口
@@ -31,8 +32,11 @@ interface TopologyToolbarProps {
   canRedo: boolean;
   onSave: () => void; // 新增：保存功能的回调函数
   isSaving?: boolean; // 新增：保存中状态，用于禁用按钮/显示加载
-  collectionEnabled: boolean;
-  onToggleCollection: () => void;
+  collectionOptions: {
+    zeek: boolean;
+    sysdig: boolean;
+  };
+  onToggleCollectionOption: (option: 'zeek' | 'sysdig') => void;
   simulationEnabled: boolean;
   onToggleSimulation: () => void;
   mirroringEnabled: boolean;
@@ -66,8 +70,8 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                           canRedo,
                                                           onSave, // 新增
                                                           isSaving = false,
-                                                          collectionEnabled,
-                                                          onToggleCollection,
+                                                          collectionOptions,
+                                                          onToggleCollectionOption,
                                                           simulationEnabled,
                                                           onToggleSimulation,
                                                           mirroringEnabled,
@@ -77,6 +81,24 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
     event.dataTransfer.setData('application/reactflow', deviceType);
     event.dataTransfer.effectAllowed = 'move';
   };
+
+  // 下拉菜单状态管理
+  const [isCollectionDropdownOpen, setIsCollectionDropdownOpen] = React.useState(false);
+  const collectionDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭下拉菜单
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (collectionDropdownRef.current && !collectionDropdownRef.current.contains(event.target as Node)) {
+        setIsCollectionDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // 4. 移除了导入功能相关的 ref 和处理函数
   // const importInputRef = React.useRef<HTMLInputElement>(null);
@@ -103,17 +125,65 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
             {/* 策略分组 */}
             <div className="flex items-center gap-2 pr-3 mr-2 border-r border-neutral-200 dark:border-neutral-700">
               <span className="text-sm text-neutral-600 dark:text-neutral-400">策略:</span>
-              <Button
-                onClick={onToggleCollection}
-                disabled={isSaving}
-                variant={collectionEnabled ? 'secondary' : 'outline'}
-                size="sm"
-                leftIcon={<ClipboardDocumentListIcon className="h-4 w-4"/>}
-                aria-label="采集策略"
-                title="采集策略"
-              >
-                <span className="flex items-center gap-1">流量采集 {collectionEnabled && <CheckIcon className="h-4 w-4"/>}</span>
-              </Button>
+              
+              {/* 流量采集下拉菜单 */}
+              <div className="relative" ref={collectionDropdownRef}>
+                <Button
+                  onClick={() => setIsCollectionDropdownOpen(!isCollectionDropdownOpen)}
+                  disabled={isSaving}
+                  variant={(collectionOptions.zeek || collectionOptions.sysdig) ? 'secondary' : 'outline'}
+                  size="sm"
+                  leftIcon={<ClipboardDocumentListIcon className="h-4 w-4"/>}
+                  rightIcon={<ChevronDownIcon className="h-4 w-4"/>}
+                  aria-label="采集策略"
+                  title="采集策略"
+                >
+                  <span className="flex items-center gap-1">
+                    流量采集 
+                    {(collectionOptions.zeek || collectionOptions.sysdig) && <CheckIcon className="h-4 w-4"/>}
+                  </span>
+                </Button>
+                
+                {/* 下拉菜单内容 */}
+                {isCollectionDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md shadow-lg z-50">
+                    <div className="py-1">
+                      <div
+                        className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                        onClick={() => {
+                          onToggleCollectionOption('zeek');
+                        }}
+                      >
+                        <div className="flex items-center gap-2 w-full">
+                          <input
+                            type="checkbox"
+                            checked={collectionOptions.zeek}
+                            onChange={() => onToggleCollectionOption('zeek')}
+                            className="rounded border-neutral-300 dark:border-neutral-600 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>ZEEK</span>
+                        </div>
+                      </div>
+                      <div
+                        className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                        onClick={() => {
+                          onToggleCollectionOption('sysdig');
+                        }}
+                      >
+                        <div className="flex items-center gap-2 w-full">
+                          <input
+                            type="checkbox"
+                            checked={collectionOptions.sysdig}
+                            onChange={() => onToggleCollectionOption('sysdig')}
+                            className="rounded border-neutral-300 dark:border-neutral-600 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>SYSDIG</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <Button
                 onClick={onToggleSimulation}
                 disabled={isSaving}
