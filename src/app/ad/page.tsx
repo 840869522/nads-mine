@@ -416,7 +416,13 @@ const AdManagementPage: React.FC = () => {
 
     const handleOpenView = (adConfig: AdConfig) => {
         if (adConfig.c_scene_instance_id) {
-            const data = {id: adConfig.c_scene_instance_id, blueTeamId: adConfig.c_blue_team_id, redTeamId: adConfig.c_red_team_id};
+            const data = {
+                id: adConfig.c_scene_instance_id, 
+                blueTeamId: adConfig.c_blue_team_id, 
+                redTeamId: adConfig.c_red_team_id,
+                type: adConfig.c_type,
+                showAttack: adConfig.c_show_attack
+            };
             localStorage.setItem('adData', JSON.stringify(data));
             window.open('/visualization', '_blank');
         } else {

@@ -152,8 +152,8 @@ export default function FictionTeam(team:BattlefieldInfo) {
                     teamScore: getRandomDivisibleBy5()
                 }
                 teams.push(item);
-
             }  
+            teams.sort((a, b) => b.teamScore - a.teamScore);
             setTeamList(teams);
         });
         

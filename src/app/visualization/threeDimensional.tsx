@@ -144,6 +144,7 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
 }
 
 export default function ThreeDimensional(adData: AdData){
+    const initialized = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
@@ -166,9 +167,12 @@ export default function ThreeDimensional(adData: AdData){
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
 
     const scene = new THREE.Scene();
+    const rings = new THREE.Group();  // 用于保存所有圆环线
 
     useEffect(() => {
         if (!containerRef.current) return;
+        if (initialized.current) return; // 已经加载过了，直接退出
+        initialized.current = true;      // 第一次加载时设置为 true
         
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
@@ -186,7 +190,7 @@ export default function ThreeDimensional(adData: AdData){
         controls.enableDamping = true;
 
         // 添加一个环境光，让场景有一个基础亮度，避免模型全黑
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 颜色, 强度
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // 颜色, 强度
         scene.add(ambientLight);
 
         // 添加一个平行光（像太阳光），可以产生阴影和高光
@@ -256,7 +260,7 @@ export default function ThreeDimensional(adData: AdData){
         const cloudMaterial = new THREE.MeshBasicMaterial({
             map: cloudTexture,
             transparent: true,
-            opacity: 0.25, // 透明度设置得很低，模拟远距离的云层
+            opacity: 0.35, // 透明度设置得很低，模拟远距离的云层
             side: THREE.DoubleSide,
             depthWrite: false, // 不写深度，避免遮挡
             blending: THREE.AdditiveBlending, // 混合模式
@@ -268,7 +272,7 @@ export default function ThreeDimensional(adData: AdData){
 
         // 创建轨道
         const ringCount = 6;  // 设置6个圆环
-        const rings = new THREE.Group();  // 用于保存所有圆环线
+        
 
         // 生成圆环线并添加到场景中
         for (let i = 0; i < ringCount; i++) {
@@ -333,17 +337,20 @@ export default function ThreeDimensional(adData: AdData){
         async function fetchData() {
             const result = await fetchVMs(adData.id);
             setVms(result);
-            for (let i = 0; i < result.falseTargetList.length; i++) {
-                createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
-                    redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
-                });
-            }
+            if(redSpaceships.length === 0 && blueSpaceships.length === 0){
+                for (let i = 0; i < result.falseTargetList.length; i++) {
+                    createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
+                        redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
+                    });
+                }
 
-            for (let i = 0; i < result.trueTargetList.length; i++) {
-                createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                    blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
-                });
+                for (let i = 0; i < result.trueTargetList.length; i++) {
+                    createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
+                        blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                    });
+                }
             }
+            
         }
 
         let timer = "";
@@ -397,22 +404,22 @@ export default function ThreeDimensional(adData: AdData){
         });
 
 
-        setTimeout(function shootLoop() {
-            if(redSpaceships.length > 0 && blueSpaceships.length > 0){
-                const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
-                const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+        if(adData.showAttack === 1){
+            setTimeout(function shootLoop() {
+                if(redSpaceships.length > 0 && blueSpaceships.length > 0){
+                    const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
+                    const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
 
-                if (red && blue && !shootingPaused) {
-                    shootRay(scene, red.object, blue.object);
+                    if (red && blue && !shootingPaused) {
+                        shootRay(scene, red.object, blue.object);
+                    }
+
+                    // 下次间隔：5~10 秒
+                    const nextDelay = (5 + Math.random() * 5) * 1000;
+                    setTimeout(shootLoop, nextDelay);
                 }
-
-                // 下次间隔：5~10 秒
-                const nextDelay = (5 + Math.random() * 5) * 1000;
-                setTimeout(shootLoop, nextDelay);
-            }
-        }, (5 + Math.random() * 10) * 1000);
-
-
+            }, (5 + Math.random() * 10) * 1000);
+        }
         // ---------- 动画 ----------
         const clock = new THREE.Clock();
         const animate = () => {
@@ -452,7 +459,7 @@ export default function ThreeDimensional(adData: AdData){
             }
             websocketClient.offMessage(handleMessage);
         };
-    }, [adData.id]);
+    }, [adData]);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
