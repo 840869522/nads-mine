@@ -3,11 +3,9 @@
 
 namespace App\Http\Resources;
 
-// ★ 1. 移除 Illuminate\Http\Request 的 use 语句，因为方法签名中不再需要它
-// use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Http\Resources\TeamResource;
-use App\Http\Resources\UserResource;
+use App\Http\Resources\RefereeResource; // ★★★ 引入新的 RefereeResource ★★★
 
 class AdConfigResource extends JsonResource
 {
@@ -17,7 +15,6 @@ class AdConfigResource extends JsonResource
      * @param  \Illuminate\Http\Request  $request
      * @return array
      */
-    // ★★★ 2. 核心修复：移除方法签名中的类型提示 ★★★
     public function toArray($request)
     {
         return [
@@ -36,16 +33,19 @@ class AdConfigResource extends JsonResource
             'c_scene_instance_id' => $this->c_scene_instance_id,
 
             // --- 关联关系 ---
-            'referees' => UserResource::collection($this->whenLoaded('referees')),
             'redTeam' => new TeamResource($this->whenLoaded('redTeam')),
             'blueTeam' => new TeamResource($this->whenLoaded('blueTeam')),
             'sceneConfig' => $this->whenLoaded('sceneConfig', function () {
                 return [
                     'c_config_id'   => $this->sceneConfig->c_config_id,
                     'c_name'        => $this->sceneConfig->c_name,
-                    'topology_json' => $this->sceneConfig->c_scene,
+                    // 如果需要，可以包含其他字段
+                    // 'topology_json' => $this->sceneConfig->c_scene,
                 ];
             }),
+
+            // ★★★ 核心修复：使用 RefereeResource::collection 来格式化裁判列表 ★★★
+            'referees' => RefereeResource::collection($this->whenLoaded('referees')),
         ];
     }
 }
