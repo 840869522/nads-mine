@@ -41,6 +41,11 @@ interface TopologyToolbarProps {
   onToggleSimulation: () => void;
   mirroringEnabled: boolean;
   onToggleMirroring: () => void;
+  // 新增：流量镜像相关props
+  availableSwitches: Array<{id: string, label: string}>; // 可选择的交换机列表
+  onSelectSwitchForMirroring: (switchId: string) => void; // 选择交换机进行镜像的回调
+  isSelectingSwitchForMirroring: boolean; // 是否正在选择交换机模式
+  shouldResetSwitchDropdown?: boolean; // 是否应该重置下拉菜单状态
 }
 
 const DeviceIcon: React.FC<{ type: DeviceType }> = ({ type }) => {
@@ -76,6 +81,11 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                           onToggleSimulation,
                                                           mirroringEnabled,
                                                           onToggleMirroring,
+                                                          // 新增：流量镜像相关props
+                                                          availableSwitches,
+                                                          onSelectSwitchForMirroring,
+                                                          isSelectingSwitchForMirroring,
+                                                          shouldResetSwitchDropdown = false,
                                                         }) => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, deviceType: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', deviceType);
@@ -84,13 +94,18 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
 
   // 下拉菜单状态管理
   const [isCollectionDropdownOpen, setIsCollectionDropdownOpen] = React.useState(false);
+  const [isSwitchSelectionDropdownOpen, setIsSwitchSelectionDropdownOpen] = React.useState(false);
   const collectionDropdownRef = React.useRef<HTMLDivElement>(null);
+  const switchSelectionDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // 点击外部关闭下拉菜单
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (collectionDropdownRef.current && !collectionDropdownRef.current.contains(event.target as Node)) {
         setIsCollectionDropdownOpen(false);
+      }
+      if (switchSelectionDropdownRef.current && !switchSelectionDropdownRef.current.contains(event.target as Node)) {
+        setIsSwitchSelectionDropdownOpen(false);
       }
     };
 
@@ -99,6 +114,13 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // 监听重置下拉菜单状态
+  React.useEffect(() => {
+    if (shouldResetSwitchDropdown) {
+      setIsSwitchSelectionDropdownOpen(false);
+    }
+  }, [shouldResetSwitchDropdown]);
 
   // 4. 移除了导入功能相关的 ref 和处理函数
   // const importInputRef = React.useRef<HTMLInputElement>(null);
@@ -195,17 +217,64 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
               >
                 <span className="flex items-center gap-1">流量模拟 {simulationEnabled && <CheckIcon className="h-4 w-4"/>}</span>
               </Button>
-              <Button
-                onClick={onToggleMirroring}
-                disabled={isSaving}
-                variant={mirroringEnabled ? 'secondary' : 'outline'}
-                size="sm"
-                leftIcon={<ArrowsRightLeftIcon className="h-4 w-4"/>}
-                aria-label="流量镜像策略"
-                title="流量镜像策略"
-              >
-                <span className="flex items-center gap-1">流量镜像 {mirroringEnabled && <CheckIcon className="h-4 w-4"/>}</span>
-              </Button>
+              {/* 流量镜像按钮 - 支持交换机选择 */}
+              <div className="relative" ref={switchSelectionDropdownRef}>
+                <Button
+                  onClick={() => {
+                    if (isSelectingSwitchForMirroring) {
+                      setIsSwitchSelectionDropdownOpen(!isSwitchSelectionDropdownOpen);
+                    } else {
+                      onToggleMirroring();
+                      // 当进入选择模式时，自动显示下拉菜单
+                      setTimeout(() => {
+                        setIsSwitchSelectionDropdownOpen(true);
+                      }, 0);
+                    }
+                  }}
+                  disabled={isSaving}
+                  variant={mirroringEnabled ? 'secondary' : 'outline'}
+                  size="sm"
+                  leftIcon={<ArrowsRightLeftIcon className="h-4 w-4"/>}
+                  rightIcon={isSelectingSwitchForMirroring ? <ChevronDownIcon className="h-4 w-4"/> : undefined}
+                  aria-label="流量镜像策略"
+                  title="流量镜像策略"
+                >
+                  <span className="flex items-center gap-1">
+                    流量镜像 
+                    {mirroringEnabled && <CheckIcon className="h-4 w-4"/>}
+                  </span>
+                </Button>
+                
+                {/* 交换机选择下拉菜单 */}
+                {isSelectingSwitchForMirroring && isSwitchSelectionDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md shadow-lg z-50">
+                    <div className="py-1">
+                      <div className="px-4 py-2 text-sm text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-600">
+                        选择交换机进行镜像
+                      </div>
+                      {availableSwitches.length > 0 ? (
+                        availableSwitches.map(switchItem => (
+                          <div
+                            key={switchItem.id}
+                            className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                            onClick={() => {
+                              onSelectSwitchForMirroring(switchItem.id);
+                              setIsSwitchSelectionDropdownOpen(false);
+                            }}
+                          >
+                            <ServerStackIcon className="h-4 w-4 mr-2 text-teal-500" />
+                            <span>{switchItem.label}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-neutral-500 dark:text-neutral-400">
+                          暂无可用交换机
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <Button onClick={onDeleteSelected} disabled={isSaving} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
             <Button onClick={onUndo} disabled={!canUndo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
