@@ -13,11 +13,16 @@ import {
   Select,
   MenuItem,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  IconButton,
+  Box,
+  Typography
 } from '@mui/material';
 import SearchableSelect from './SearchableSelect';
 import { TopologyNode, NodeConfig } from '../../../types';
 import { customFetch } from '@/utils/fetch';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 // 假设 VMImage 类型
 interface VMImage {
   id: string;
@@ -39,6 +44,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   const [isTarget, setIsTarget] = useState(false);
   const [images, setImages] = useState<VMImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
 
   // --- 副作用钩子 ---
   useEffect(() => {
@@ -48,6 +54,16 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       setIsTarget(node.config.isTarget || false);
       setBaseImage(node.config.Image || '');
       setErrors({});
+
+      const parsedEnvs = node.config.env
+        ? node.config.env.split(',').map(e => {
+            const parts = e.split('=');
+            const key = parts.shift() || '';
+            const value = parts.join('=');
+            return { key, value };
+          })
+        : [];
+      setEnvs(parsedEnvs);
 
       // 获取虚拟机镜像列表
       customFetch("/back/api/vms/images")
@@ -75,6 +91,11 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   const handleSave = () => {
     if (!node || !validate()) return;
 
+    const envString = envs
+      .filter(e => e.key)
+      .map(e => `${e.key}=${e.value}`)
+      .join(',');
+
     const newConfig: NodeConfig = {
       ...node.config, // 保留其他可能存在的配置
       Image: baseImage,
@@ -82,10 +103,16 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       // 清理掉容器特有的配置
       
       portMappings: '',
-      env: ''
+      env: envString
     };
     onSave(node.id, newConfig, label);
     onClose();
+  };
+
+  const handleAddEnv = () => setEnvs([...envs, { key: '', value: '' }]);
+  const handleRemoveEnv = (index: number) => setEnvs(envs.filter((_, i) => i !== index));
+  const handleEnvChange = (index: number, field: 'key' | 'value', value: string) => {
+    setEnvs(envs.map((env, i) => (i === index ? { ...env, [field]: value } : env)));
   };
 
   if (!node) return null;
@@ -128,6 +155,34 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                 control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />}
                 label="设置为靶机"
             />
+
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>环境变量</Typography>
+              {envs.map((env, idx) => (
+                <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  <TextField
+                    label="变量名"
+                    size="small"
+                    value={env.key}
+                    onChange={(e) => handleEnvChange(idx, 'key', e.target.value)}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    label="值"
+                    size="small"
+                    value={env.value}
+                    onChange={(e) => handleEnvChange(idx, 'value', e.target.value)}
+                    sx={{ flex: 1 }}
+                  />
+                  <IconButton onClick={() => handleRemoveEnv(idx)} size="small">
+                    <RemoveCircleOutlineIcon />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small">
+                添加变量
+              </Button>
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions>

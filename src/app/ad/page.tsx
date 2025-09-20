@@ -391,9 +391,10 @@ const AdManagementPage: React.FC = () => {
         return <Chip label={label} color={color} size="small" />;
     };
 
-    const handleOpenView = (c_scene_instance_id: string | null) => {
-        if (c_scene_instance_id) {
-            localStorage.setItem('instance_id', c_scene_instance_id);
+    const handleOpenView = (adConfig: AdConfig) => {
+        if (adConfig.c_scene_instance_id) {
+            const data = {id: adConfig.c_scene_instance_id, blueTeamId: adConfig.c_blue_team_id, redTeamId: adConfig.c_red_team_id};
+            localStorage.setItem('adData', JSON.stringify(data));
             window.open('/visualization', '_blank');
         } else {
             setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' });
@@ -507,7 +508,7 @@ const AdManagementPage: React.FC = () => {
                                                 </TableCell>
                                                 <TableCell>{findSceneNameById(adConfig.c_scene_config_id)}</TableCell>
                                                 <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
-                                                <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig.c_scene_instance_id)}><ScreenShareIcon /></IconButton></TableCell>
+                                                <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
                                                 <TableCell align="right">
                                                     {['pending', 'finished', 'archived', 'failed'].includes(adConfig.c_status) && (
                                                         <Tooltip title="开始/重新开始演练">

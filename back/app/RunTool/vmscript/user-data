@@ -32,8 +32,6 @@ bootcmd:
  - /opt/zeek/bin/zeekctl start
  - echo "FLAG=$flag" >> /etc/ctf-config
  - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
-#  - sed -i '/^\[Service\]/a Environment="TARGET_ID=$n"' /lib/systemd/system/td-agent.service
-#  - sed -i '/^\[Service\]/a Environment="ATTACKER_ID=$n"' /lib/systemd/system/td-agent.service
  - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_HOST=10.100.88.88"' /lib/systemd/system/td-agent.service
  - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_PORT=9200"' /lib/systemd/system/td-agent.service
  - systemctl daemon-reload

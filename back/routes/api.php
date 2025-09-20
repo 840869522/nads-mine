@@ -269,6 +269,7 @@ Route::prefix('study')->group(function () {
         Route::post('/batchStoreTestUsers', [TestController::class, 'batchStoreTestUsers']);
         Route::post('/destroy', [TestController::class, 'destroy']);
         Route::get('/getUserRelatedTests', [TestController::class, 'getUserRelatedTests']);
+        Route::get('/getUserRelatedExperiments', [TestController::class, 'getUserRelatedExperiments']);
         Route::post('/getTestUserRelation', [TestController::class, 'getTestUserRelation']);
         Route::post('/get_exam_paper_details', [TestController::class, 'get_exam_paper_details']);
         Route::post('/getAllStudentsObjectiveScore', [TestController::class, 'getAllStudentsObjectiveScore']);
@@ -288,6 +289,15 @@ Route::prefix('study')->group(function () {
         Route::get('/get_all_paper_rules', [TestController::class, 'get_all_paper_rules']);
         Route::get('get_paper_details', [TestController::class, 'get_paper_details']);
         Route::post('export_paper_to_word', [TestController::class, 'export_paper_to_word']);
+        Route::get('/get_course_tests_experiments', [TestController::class, 'get_course_tests_experiments']);
+        Route::get('get_test_scores', [TestController::class, 'get_test_scores']);
+        Route::get('download_test_scores', [TestController::class, 'download_test_scores']);
+        // 正确的路由配置（使用路由参数）
+        Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
+       // index 路由需要认证
+        Route::get('/scenariosinstances', [TestController::class, 'index'])->middleware('auth:api');    
+          // 根据用户名查找用户的场景实例
+        Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
     });
 });
 
@@ -387,4 +397,5 @@ Route::prefix('flag')->group(function () {
 
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
+    Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
 });

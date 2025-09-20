@@ -341,11 +341,16 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                 });
             }, delay);
         });
-
-        return () => {
-            Object.values(timeoutRef.current).forEach(clearTimeout);
-        }
     }, [playbackStates, data, hostMap, fixedInterval]);
+
+    useEffect(() => {
+        return () => {
+            Object.keys(timeoutRef.current).forEach(key => {
+                clearTimeout(timeoutRef.current[key]);
+                delete timeoutRef.current[key];
+            });
+        };
+    }, []);
 
 
     const handlePlaybackAction = async (key: string, action: 'play' | 'pause' | 'stop' | 'close') => {

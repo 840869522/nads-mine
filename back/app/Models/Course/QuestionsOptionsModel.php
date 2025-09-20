@@ -51,7 +51,7 @@ class QuestionsOptionsModel extends Model{
         $mod = new QuestionsOptionsModel();
         $where['c_id'] = $c_id;
         if(!empty($c_question_id)){
-            $where[] = ['c_question_id','<>',$c_question_id];
+            $where[] = ['c_question_id','=',$c_question_id];
         }
         $cnt = $mod->where($where)->count();
         if($cnt>0){

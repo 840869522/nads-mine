@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faClipboardList, faShieldAlt, faCrosshairs } from '@fortawesome/free-solid-svg-icons'
 
 export type TeamInfo = {
-    teamId: number;
+    teamId: string;
     teamName: string;
     teamScore: number;
 };
@@ -16,25 +16,46 @@ export type LogInfo ={
 
 export type BattlefieldInfo = {
     type: number;
-    teamInfo: TeamInfo[];
+    teamId: number;
     logInfo: LogInfo[];
 };
 
-function TeamInfoItem(props: TeamInfo) {
+function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
+    // 保证范围内能被5整除
+    const start = Math.ceil(min / 5)
+    const end = Math.floor(max / 5)
+
+    const rand = Math.floor(Math.random() * (end - start + 1)) + start
+    return rand * 5
+}
+
+async function fetchTeamMembers(teamId: number) {
+    const res = await fetch(`/back/api/visualization/users/${teamId}`);
+    const result = await res.json();
+
+    if (result.code !== 200) {
+        console.error(result.message);
+        return [];
+    }
+
+    return result.data; // 这里是对象数组 [{ userId, username }, ...]
+}
+
+function TeamInfoItem(props: { info: TeamInfo; index: number }) {
     return (
         <div className="flex h-[30px] justify-between items-center">
             <div className="flex-1 text-center">
-                <div className="text-[#ffcc00] font-bold">{props.teamId}</div>
+                <div className="text-[#ffcc00] font-bold">{props.index+1}</div>
             </div>
             <div className="flex-1 text-center">
                 <div className="bg-[rgba(0,60,120,0.6)]
                     border border-[rgba(0,150,255,0.4)]
                     rounded px-2 py-1
-                    text-[0.85rem] text-center">{props.teamName}
+                    text-[0.85rem] text-center">{props.info.teamName}
                 </div>
             </div>
             <div className="flex-1 text-center">
-                <div className="text-[#ffcc00] font-bold">{props.teamScore}</div>
+                <div className="text-[#ffcc00] font-bold">{props.info.teamScore}</div>
             </div>
         </div>
     )
@@ -58,8 +79,8 @@ function TeamInfo(props: {teamList: TeamInfo[]}){
                 <div className="flex-1 text-center h-[20px] text-[#7dd3fc] font-medium text-[0.9rem]">总分</div>
             </div>
             <div className="flex flex-col gap-2 pt-2">
-                {props.teamList.map((teamInfo) => (
-                    <TeamInfoItem key={teamInfo.teamId} {...teamInfo} />
+                {props.teamList.map((teamInfo, index) => (
+                    <TeamInfoItem key={teamInfo.teamId} info={teamInfo} index={index} {...teamInfo} />
                 ))}
             </div>
         </div>
@@ -87,15 +108,34 @@ function LogInfo(props: {logList: LogInfo[]}){
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export default function Team(team:BattlefieldInfo) {
-    const [teamList, setTeamList] = useState<TeamInfo[]>(team.teamInfo)
+    const [teamList, setTeamList] = useState<TeamInfo[]>([])
 
     const [logList, setLogList] = useState<LogInfo[]>(team.logInfo)
 
     // 同步父组件更新
+    // 同步父组件更新
     useEffect(() => {
-        setTeamList(team.teamInfo)
-        setLogList(team.logInfo)
-    }, [team])
+        let teams: TeamInfo[] = [];
+        fetchTeamMembers(team.teamId).then(users => {
+            for(let i = 0; i < users.length; ++i){
+                let item: TeamInfo = {
+                    teamId: users[i].userId,
+                    teamName: team.type === 0 ? `蓝方席位${i+1}`: `红方席位${i+1}` ,
+                    teamScore: getRandomDivisibleBy5()
+                }
+                teams.push(item);
+                
+            }  
+            setTeamList(teams);
+        });
+        
+        
+    }, [team.teamId])
+
+    useEffect(()=>{
+        setLogList(team.logInfo);
+    }, [team.logInfo])
+
     if(team.type === 0){
         return (
             <div className="absolute min-w-[300px] grid grid-rows-[auto_auto_1fr]

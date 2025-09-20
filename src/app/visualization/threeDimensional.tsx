@@ -4,6 +4,7 @@ import {GLTFLoader, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { websocketClient } from "@/utils/websocket";
+import { AdData } from "./page";
 
 function createSpaceship(
     scene: THREE.Scene,
@@ -142,26 +143,29 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
     }
 }
 
-export default function ThreeDimensional({ id }: { id: string }){
+export default function ThreeDimensional(adData: AdData){
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
 
+    // const adData = data !== "" ? JSON.parse(data) : null;
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
-        teamInfo: blueTeamInfos,
+        teamId: adData ? adData.blueTeamId : 0,
         logInfo: blueLogInfos
     }
 
     const redTeam: BattlefieldInfo = {
         type: 1,
-        teamInfo: redTeamInfos,
+        teamId: adData ? adData.redTeamId : 0,
         logInfo: redLogInfos
     }
 
     const [redTeamState, setRedTeamState] = useState<BattlefieldInfo>(redTeam);
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
+
+    const scene = new THREE.Scene();
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -169,7 +173,6 @@ export default function ThreeDimensional({ id }: { id: string }){
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
 
-        const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
 
         const camera = new THREE.PerspectiveCamera(60, width / height, 1, 5000);
@@ -328,7 +331,7 @@ export default function ThreeDimensional({ id }: { id: string }){
         const blueSpaceships: { ip: string; object: THREE.Object3D }[] = [];
 
         async function fetchData() {
-            const result = await fetchVMs(id);
+            const result = await fetchVMs(adData.id);
             setVms(result);
             for (let i = 0; i < result.falseTargetList.length; i++) {
                 createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
@@ -342,8 +345,49 @@ export default function ThreeDimensional({ id }: { id: string }){
                 });
             }
         }
-        if(id !== ""){
-             fetchData();
+
+        let timer = "";
+
+        const handleMessage = (data: any) => {
+            try {
+                const msg = typeof data === "string" ? JSON.parse(data) : data;
+                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
+                    timer = msg.timer;
+                    const now = new Date();
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+
+                    
+                    let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+
+                    let newLog: LogInfo = {
+                        logId: Date.now(),
+                        logTime: `${hours}:${minutes}:${seconds}`,
+                        logContent: logMessage
+                    };
+
+                    if(msg.data.success){
+                        setRedTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }else{
+                        setBlueTeamState(prev => ({
+                            ...prev,
+                            logInfo: [...prev.logInfo, newLog]
+                        }));
+                    }
+                }
+            } catch (e) {
+            console.error("解析 WebSocket 数据失败:", e, data);
+            }
+        };
+
+        if(adData && adData.id !== ""){
+            fetchData();
+            websocketClient.onMessage(handleMessage);
         }
 
         let shootingPaused = false;
@@ -400,48 +444,7 @@ export default function ThreeDimensional({ id }: { id: string }){
             renderer.render(scene, camera);
         };
         animate();
-
-        let timer = "";
-
-        const handleMessage = (data: any) => {
-            try {
-                const msg = typeof data === "string" ? JSON.parse(data) : data;
-                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === id) {
-                    timer = msg.timer;
-                    const now = new Date();
-                    const hours = now.getHours().toString().padStart(2, '0');
-                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                    const seconds = now.getSeconds().toString().padStart(2, '0');
-
-                    let logMessage : string;
-                    logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
-                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
-
-                    let newLog: LogInfo = {
-                        logId: Date.now(),
-                        logTime: `${hours}:${minutes}:${seconds}`,
-                        logContent: logMessage
-                    };
-
-                    if(msg.data.success){
-                        setRedTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }else{
-                        setBlueTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }
-                }
-            } catch (e) {
-            console.error("解析 WebSocket 数据失败:", e, data);
-            }
-        };
-
-        websocketClient.onMessage(handleMessage);
-
+       
         return () => {
             renderer.dispose();
             if (containerRef.current?.contains(renderer.domElement)) {
@@ -449,7 +452,7 @@ export default function ThreeDimensional({ id }: { id: string }){
             }
             websocketClient.offMessage(handleMessage);
         };
-    }, [id]);
+    }, [adData.id]);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">
@@ -475,17 +478,17 @@ export default function ThreeDimensional({ id }: { id: string }){
 
 const blueTeamInfos: TeamInfo[] = [
     {
-        teamId: 1,
+        teamId: '1',
         teamName: '蓝方席位1',
         teamScore: 295
     },
     {
-        teamId: 2,
+        teamId: '2',
         teamName: '蓝方席位2',
         teamScore: 285
     },
     {
-        teamId: 3,
+        teamId: '3',
         teamName: '蓝方席位3',
         teamScore: 270
     },
@@ -506,22 +509,22 @@ const blueLogInfos: LogInfo[] = [
 
 const redTeamInfos: TeamInfo[] = [
     {
-        teamId: 1,
+        teamId: '1',
         teamName: '红方席位1',
         teamScore: 320
     },
     {
-        teamId: 2,
+        teamId: '2',
         teamName: '红方席位2',
         teamScore: 300
     },
     {
-        teamId: 3,
+        teamId: '3',
         teamName: '红方席位3',
         teamScore: 285
     },
     {
-        teamId: 4,
+        teamId: '4',
         teamName: '红方席位4',
         teamScore: 270
     },

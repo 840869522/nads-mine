@@ -280,7 +280,7 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
     deviceName: '容器',
     dockerImage: 'ubuntu:latest',
     // portMappings: '80:80',
-    env: 'ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai'
+    env: 'ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1'
   },
   switch: {
     deviceName: '交换机',
@@ -290,7 +290,8 @@ export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
   virtual_machine: {
     deviceName: '虚拟机',
     dockerImage: 'vm-qemu:latest',
-    portMappings: '22'
+    portMappings: '',
+    env: 'ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1'
   },
   nat_bridge: {
     deviceName: 'NAT网桥',

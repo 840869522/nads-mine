@@ -150,6 +150,107 @@ function stateIcon(state: VmInstance["state"]) {
     }
 }
 
+/* ---------- 纯前端 CPU/内存使用“假数据”
+   约束：CPU 列总和 ≤ 60%，且单行 CPU 不为 0；内存列总和 ≤ 60%，并在小范围抖动
+---------- */
+const COLUMN_MAX_SUM = 60; // 每列占用总和上限（%）
+const PER_ITEM_MAX = 12;   // 单格上限，保证数值偏小
+const CPU_MIN_PER_ITEM = 1; // CPU 不允许 0
+
+// 将 maxSum(<=60) 的“预算”按权重随机分配到各行，支持最小值约束
+function allocColumn(
+    ids: string[],
+    opts?: { maxSum?: number; perItemMax?: number; minPerItem?: number; targetMin?: number; targetMax?: number }
+): Record<string, number> {
+    const maxSum = opts?.maxSum ?? COLUMN_MAX_SUM;
+    const perItemMax = opts?.perItemMax ?? PER_ITEM_MAX;
+    const targetMin = opts?.targetMin ?? 30; // 让总量偏小：30%~60%
+    const targetMax = opts?.targetMax ?? maxSum;
+    const wantMin = opts?.minPerItem ?? 0;
+
+    const result: Record<string, number> = {};
+    if (!ids || ids.length === 0) return result;
+
+    // 如果最小值总和超过上限，则回退为 0（极端大列表保护）
+    const minPerItem = ids.length * wantMin <= maxSum ? wantMin : 0;
+
+    const target = Math.max(minPerItem * ids.length, Math.floor(targetMin + Math.random() * (targetMax - targetMin + 1)));
+
+    // 随机权重（幂次 > 1 让小值更多）
+    const weights = ids.map(() => Math.random() ** 2.2);
+    const total = weights.reduce((a, b) => a + b, 0) || 1;
+
+    // 先按权重分配到整数，并加上最小值
+    const base = ids.map(() => minPerItem);
+    const room = Math.max(0, Math.min(maxSum, target) - base.reduce((a, b) => a + b, 0));
+    let alloc = weights.map(w => Math.floor((w / total) * room));
+
+    // 裁剪到每项上限
+    alloc = alloc.map((v, i) => Math.min(v, Math.max(0, perItemMax - base[i])));
+
+    // 统计并做余量分配，直到用尽或无容量
+    const sumNow = base.reduce((s, b, i) => s + b + alloc[i], 0);
+    let remainder = Math.max(0, Math.min(maxSum, target) - sumNow);
+    const capLeft = () => alloc.map((v, i) => (perItemMax - base[i] - v));
+    while (remainder > 0) {
+        let progressed = false;
+        const cap = capLeft();
+        for (let i = 0; i < ids.length && remainder > 0; i++) {
+            if (cap[i] > 0) {
+                alloc[i] += 1;
+                remainder -= 1;
+                progressed = true;
+            }
+        }
+        if (!progressed) break; // 无可分配容量
+    }
+
+    ids.forEach((id, i) => { result[id] = base[i] + alloc[i]; });
+    return result; // sum(values) ≤ maxSum
+}
+
+// 内存列围绕基线小抖动：先加噪，再整体归一确保总和 ≤ 上限
+function jitterAroundBase(
+    ids: string[],
+    base: Record<string, number>,
+    jitter: number = 2,
+    maxSum: number = COLUMN_MAX_SUM,
+    perItemMax: number = PER_ITEM_MAX
+): Record<string, number> {
+    if (!ids || ids.length === 0) return {};
+    // 初步加噪并夹紧到 [0, perItemMax]
+    const temp = ids.map(id => {
+        const b = base[id] ?? 0;
+        const delta = Math.floor(Math.random() * (2 * jitter + 1)) - jitter; // [-jitter, +jitter]
+        return Math.max(0, Math.min(perItemMax, b + delta));
+    });
+    let sum = temp.reduce((a, b) => a + b, 0);
+    if (sum <= maxSum) {
+        const out: Record<string, number> = {};
+        ids.forEach((id, i) => { out[id] = temp[i]; });
+        return out;
+    }
+    // 归一缩放后转整数，使用“余数分配”法保证总和 ≤ maxSum
+    const scale = maxSum / (sum || 1);
+    const floored = temp.map(v => Math.floor(v * scale));
+    let remainder = maxSum - floored.reduce((a, b) => a + b, 0);
+    // 可用容量 = perItemMax - floored[i]
+    while (remainder > 0) {
+        let progressed = false;
+        for (let i = 0; i < floored.length && remainder > 0; i++) {
+            if (floored[i] < perItemMax) {
+                floored[i] += 1;
+                remainder -= 1;
+                progressed = true;
+            }
+        }
+        if (!progressed) break;
+    }
+    const out: Record<string, number> = {};
+    ids.forEach((id, i) => { out[id] = floored[i]; });
+    return out;
+}
+
 export default function VmPage() {
     /* ---- SWR 数据 ---- */
     const forceRefreshUntil = React.useRef(0);
@@ -169,9 +270,57 @@ export default function VmPage() {
         pool: false,
         persistent: false,
         autostart: false,
+        // 新增两列：默认隐藏
+        cpuUsage: false,
+        memUsage: false,
     });
     const [snapshotVmId, setSnapshotVmId] = React.useState<string | null>(null);
 
+    // 纯前端使用率表：id -> {cpu, mem}
+    const [usageMap, setUsageMap] = React.useState<Record<string, { cpu: number; mem: number }>>({});
+    // 内存“基线”，用于围绕它小幅抖动，保持相对稳定
+    const [memBase, setMemBase] = React.useState<Record<string, number>>({});
+
+    // 当列表变化时：重建内存基线 & 立即生成一帧（CPU≥1 且列总和≤60；内存≤60）
+    React.useEffect(() => {
+        const list: VmInstance[] = Array.isArray(data) ? data : ((data as any)?.data ?? []);
+        const ids = list.map(v => v.id);
+        // 先生成新的基线（内存）
+        const newMemBase = allocColumn(ids, { minPerItem: 0 });
+        setMemBase(newMemBase);
+        // 立即产出一帧数据
+        const cpuMap = allocColumn(ids, { minPerItem: CPU_MIN_PER_ITEM });
+        const memMap = jitterAroundBase(ids, newMemBase, 0); // 初次不抖动
+        const next: Record<string, { cpu: number; mem: number }> = {};
+        ids.forEach(id => { next[id] = { cpu: cpuMap[id] ?? 0, mem: memMap[id] ?? 0 }; });
+        setUsageMap(next);
+    }, [data]);
+
+    // 定时刷新 —— 每 5 秒：CPU 重新分配且保证最小为 1；内存在基线附近小抖动
+    React.useEffect(() => {
+        const timer = setInterval(() => {
+            const list: VmInstance[] = Array.isArray(data) ? data : ((data as any)?.data ?? []);
+            const ids = list.map(v => v.id);
+            const cpuMap = allocColumn(ids, { minPerItem: CPU_MIN_PER_ITEM });
+            const memMap = jitterAroundBase(ids, memBase, 2);
+            const next: Record<string, { cpu: number; mem: number }> = {};
+            ids.forEach(id => { next[id] = { cpu: cpuMap[id] ?? 0, mem: memMap[id] ?? 0 }; });
+            setUsageMap(next);
+        }, 5_000);
+        return () => clearInterval(timer);
+    }, [data, memBase]);
+
+    const getColumnLabel = (key: string) => {
+        switch (key) {
+            case 'hostNode': return '宿主机';
+            case 'pool': return '存储池';
+            case 'persistent': return '持久化';
+            case 'autostart': return '自动启动';
+            case 'cpuUsage': return 'CPU 使用率';
+            case 'memUsage': return '内存使用率';
+            default: return key;
+        }
+    };
 
     /* ---- 列定义 ---- */
     const columns = React.useMemo<GridColDef[]>(
@@ -247,6 +396,30 @@ export default function VmPage() {
                     <VmInfoCell id={p.row.id} width={40}>{d => d.vram?.total_mb ?? '-'}</VmInfoCell>
                 ),
             },
+            // === 新增：CPU 使用率（纯前端） ===
+            {
+                field: 'cpuUsage',
+                headerName: 'CPU 使用率',
+                width: 120,
+                hide: !showColumns.cpuUsage,
+                sortable: false,
+                renderCell: (p) => {
+                    const u = usageMap[p.row.id];
+                    return u ? <span>{u.cpu}%</span> : <Skeleton width={40} />;
+                },
+            },
+            // === 新增：内存使用率（纯前端） ===
+            {
+                field: 'memUsage',
+                headerName: '内存使用率',
+                width: 120,
+                hide: !showColumns.memUsage,
+                sortable: false,
+                renderCell: (p) => {
+                    const u = usageMap[p.row.id];
+                    return u ? <span>{u.mem}%</span> : <Skeleton width={40} />;
+                },
+            },
             {
                 field: 'ip',
                 headerName: 'IP',
@@ -310,7 +483,8 @@ export default function VmPage() {
                 },
             },
         ],
-        [actionLoading]
+        // 依赖 usageMap 保证定时刷新后单元格重渲染；showColumns 控制初始隐藏
+        [actionLoading, usageMap, showColumns]
     );
 
     const theme = useTheme();
@@ -452,12 +626,7 @@ export default function VmPage() {
                     <MenuItem key={key}>
                         <FormControlLabel
                             control={<Switch checked={val} onChange={(e) => setShowColumns(prev => ({ ...prev, [key]: e.target.checked }))} color="primary" />}
-                            label={
-                                key === 'hostNode' ? '宿主机' :
-                                    key === 'pool' ? '存储池' :
-                                        key === 'persistent' ? '持久化' :
-                                            '自动启动'
-                            }
+                            label={getColumnLabel(key)}
                         />
                     </MenuItem>
                 ))}
@@ -511,7 +680,7 @@ export default function VmPage() {
                     <RdpIcon fontSize="small" sx={{ mr: 1 }} />
                     RDP
                 </MenuItem>*/}
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'vnc'); setActionAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => { const vm = (Array.isArray(data) ? data : (data as any)?.data ?? []).find((v: VmInstance)=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'vnc'); setActionAnchor({ anchor: null, id: null }); }}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} />
                     VNC 控制台
                 </MenuItem>
