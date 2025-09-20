@@ -325,6 +325,136 @@ HTML;
             $downloadFileName = $resource['c_resource_name'];
             $encodedFileName = rawurlencode($downloadFileName);
 
+            // 处理 AVI 文件的预览（disposition=inline），转换为 MP4
+            if ($resource['c_type'] === 'video/x-msvideo' && $disposition === 'inline') {
+                $fullPath = Storage::disk('local_resources')->path($path);
+                $targetDir = dirname($fullPath);
+                $originalBaseName = pathinfo($fullPath, PATHINFO_FILENAME);
+                $mp4Name = $originalBaseName . '.mp4';
+                $mp4Path = $targetDir . DIRECTORY_SEPARATOR . $mp4Name;
+                $mp4RelativePath = str_replace(Storage::disk('local_resources')->path(''), '', $mp4Path);
+
+                // 确定 FFmpeg 可执行路径
+                $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+                $ffmpegPath = $isWindows
+                    ? 'D:\ffmpeg-8.0-essentials_build\ffmpeg-8.0-essentials_build\bin\ffmpeg.exe'
+                    : 'ffmpeg';
+
+                // 处理 Windows 下的路径编码（中文文件名）
+                $commandInputPath = $fullPath;
+                $commandOutputPath = $mp4Path;
+                if ($isWindows) {
+                    $commandInputPath = iconv('UTF-8', 'GBK//IGNORE', $fullPath);
+                    $commandOutputPath = iconv('UTF-8', 'GBK//IGNORE', $mp4Path);
+                    if (!file_exists($commandInputPath)) {
+                        Log::error('File not found after encoding conversion', [
+                            'c_resource_id' => $c_resource_id,
+                            'original_path' => $fullPath,
+                            'converted_path' => $commandInputPath,
+                        ]);
+                        return response()->json([
+                            'code' => 404,
+                            'message' => '编码转换后文件不存在',
+                        ], 404);
+                    }
+                }
+
+                // 检查是否已存在同名 MP4 文件
+                if (Storage::disk('local_resources')->exists($mp4RelativePath)) {
+                    Log::info('Using existing MP4 file', [
+                        'c_resource_id' => $c_resource_id,
+                        'mp4_path' => $mp4RelativePath,
+                    ]);
+                    $path = $mp4RelativePath;
+                    $contentType = 'video/mp4';
+                    $downloadFileName = $originalBaseName . '.mp4';
+                    $encodedFileName = rawurlencode($downloadFileName);
+                } else {
+                    // 检查 FFmpeg 可用性
+                    $testProcess = new Process([$ffmpegPath, '-version']);
+                    $testProcess->run();
+                    if (!$testProcess->isSuccessful()) {
+                        Log::error('FFmpeg not installed or not accessible', [
+                            'c_resource_id' => $c_resource_id,
+                            'command' => $testProcess->getCommandLine(),
+                            'error' => $testProcess->getErrorOutput(),
+                        ]);
+                        return response()->json([
+                            'code' => 500,
+                            'message' => 'FFmpeg 未安装或不可用，请检查服务器配置',
+                        ], 500);
+                    }
+
+                    // 检查文件和目录权限
+                    if (!is_readable($fullPath)) {
+                        Log::error('Resource file not readable', [
+                            'c_resource_id' => $c_resource_id,
+                            'fullPath' => $fullPath,
+                        ]);
+                        return response()->json([
+                            'code' => 500,
+                            'message' => '文件不可读，请检查权限',
+                        ], 500);
+                    }
+                    if (!is_writable($targetDir)) {
+                        Log::error('Target directory not writable', [
+                            'c_resource_id' => $c_resource_id,
+                            'targetDir' => $targetDir,
+                        ]);
+                        return response()->json([
+                            'code' => 500,
+                            'message' => '目标目录不可写，请检查权限',
+                        ], 500);
+                    }
+
+                    // 执行 FFmpeg 转换
+                    $process = new Process([
+                        $ffmpegPath, '-i', $commandInputPath, '-c:v', 'libx264', '-c:a', 'aac', '-y', $commandOutputPath
+                    ]);
+                    $process->setTimeout(300); // 5 分钟超时
+                    Log::info('Running FFmpeg conversion', [
+                        'c_resource_id' => $c_resource_id,
+                        'command' => $process->getCommandLine(),
+                        'input_path' => $commandInputPath,
+                        'output_path' => $commandOutputPath,
+                    ]);
+                    $process->run();
+
+                    if (!$process->isSuccessful()) {
+                        Log::error('FFmpeg conversion failed', [
+                            'c_resource_id' => $c_resource_id,
+                            'command' => $process->getCommandLine(),
+                            'output' => $process->getOutput(),
+                            'error' => $process->getErrorOutput(),
+                        ]);
+                        return response()->json([
+                            'code' => 500,
+                            'message' => '视频转换失败: ' . $process->getErrorOutput(),
+                        ], 500);
+                    }
+
+                    if (!file_exists($mp4Path)) {
+                        Log::error('MP4 file not generated', [
+                            'c_resource_id' => $c_resource_id,
+                            'mp4_path' => $mp4Path,
+                        ]);
+                        return response()->json([
+                            'code' => 500,
+                            'message' => 'MP4 文件生成失败',
+                        ], 500);
+                    }
+
+                    Log::info('AVI converted to MP4 successfully', [
+                        'c_resource_id' => $c_resource_id,
+                        'mp4_path' => $mp4Path,
+                    ]);
+                    $path = $mp4RelativePath;
+                    $contentType = 'video/mp4';
+                    $downloadFileName = $originalBaseName . '.mp4';
+                    $encodedFileName = rawurlencode($downloadFileName);
+                }
+            }
+
             Log::info('Serving resource', [
                 'c_resource_id' => $c_resource_id,
                 'path' => $path,
@@ -435,6 +565,29 @@ HTML;
                 ], 500);
             }
 
+            // 构建基于原文件名的 PDF 路径
+            $originalBaseName = pathinfo($fullPath, PATHINFO_FILENAME); // 如 "初级网络安全设备课程-IDPS"
+            $expectedPdfName = $originalBaseName . '.pdf';
+            $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $expectedPdfName;
+
+            // 新逻辑：检查是否存在同名 PDF，若存在直接返回
+            if (file_exists($pdfPath)) {
+                Log::info('Using existing PDF file', [
+                    'c_resource_id' => $c_resource_id,
+                    'pdf_path' => $pdfPath,
+                    'original_file' => $resource['c_resource_name'],
+                ]);
+
+                // 处理下载文件名编码
+                $encodedFileName = rawurlencode($resource['c_resource_name'] . '.pdf');
+                return response()->file($pdfPath, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => $request->query('disposition', 'inline') === 'inline'
+                        ? 'inline'
+                        : "attachment; filename*=UTF-8''{$encodedFileName}",
+                ]);
+            }
+
             // 系统平台判断及路径编码处理
             $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
             $commandFullPath = $fullPath;
@@ -459,19 +612,6 @@ HTML;
                 ? 'C:\Program Files\LibreOffice\program\soffice.exe'
                 : 'libreoffice';
 
-            // 修正：构建基于原文件名的 PDF 路径（LibreOffice 会生成此文件）
-            $originalBaseName = pathinfo($fullPath, PATHINFO_FILENAME); // 如 "初级网络安全设备课程-IDPS"
-            $expectedPdfName = $originalBaseName . '.pdf';
-            $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $expectedPdfName;
-
-            // 修正：检查是否已存在同名 PDF，如果存在则追加计数器（避免覆盖）
-            $counter = 1;
-            while (file_exists($pdfPath)) {
-                $expectedPdfName = $originalBaseName . '_' . $counter . '.pdf';
-                $pdfPath = $targetDir . DIRECTORY_SEPARATOR . $expectedPdfName;
-                $counter++;
-            }
-
             // 检查 LibreOffice 可用性
             $testProcess = new Process([$libreOfficePath, '--version']);
             $testProcess->run();
@@ -487,7 +627,7 @@ HTML;
                 ], 500);
             }
 
-            // 执行转换命令（LibreOffice 会生成基于原文件名的 PDF）
+            // 执行转换命令
             $process = new Process([
                 $libreOfficePath,
                 '--headless',
@@ -497,12 +637,12 @@ HTML;
                 '--outdir',
                 $targetDir,
             ], null, ['LC_ALL' => 'C.UTF-8']);
-            $process->setTimeout(600);
+            $process->setTimeout(60);
             Log::info('Running LibreOffice conversion', [
                 'platform' => $isWindows ? 'Windows' : 'Linux',
                 'command' => $process->getCommandLine(),
                 'input_path' => $commandFullPath,
-                'expected_pdf_path' => $pdfPath, // 修正：使用基于原文件名的路径
+                'expected_pdf_path' => $pdfPath,
             ]);
             $process->run();
 
@@ -516,14 +656,14 @@ HTML;
                 throw new ProcessFailedException($process);
             }
 
-            // 验证 PDF 生成结果（现在使用正确的预期路径）
+            // 验证 PDF 生成结果
             if (!file_exists($pdfPath)) {
-                // 额外调试：列出目录中所有 PDF 文件，确认生成的文件名
+                // 调试：列出目录中所有 PDF 文件
                 $allPdfs = glob($targetDir . DIRECTORY_SEPARATOR . '*.pdf');
                 Log::error('PDF generation failed (file not found)', [
                     'c_resource_id' => $c_resource_id,
                     'expected_pdf_path' => $pdfPath,
-                    'all_pdfs_in_dir' => $allPdfs, // 调试用，生产可移除
+                    'all_pdfs_in_dir' => $allPdfs,
                 ]);
                 return response()->json([
                     'code' => 500,
@@ -531,15 +671,15 @@ HTML;
                 ], 500);
             }
 
-            // 处理下载文件名编码（使用原资源名 + .pdf）
-            $encodedFileName = rawurlencode($resource['c_resource_name'] . '.pdf');
+            // 记录转换成功
             Log::info('PDF conversion successful', [
                 'c_resource_id' => $c_resource_id,
                 'pdf_path' => $pdfPath,
                 'original_file' => $resource['c_resource_name'],
             ]);
 
-            // 确保 disposition=inline 时不强制下载
+            // 处理下载文件名编码
+            $encodedFileName = rawurlencode($resource['c_resource_name'] . '.pdf');
             return response()->file($pdfPath, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => $request->query('disposition', 'inline') === 'inline'
