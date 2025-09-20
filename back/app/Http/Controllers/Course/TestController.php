@@ -31,6 +31,7 @@ use App\Models\Flag\FlagSubmissionModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
 use App\Models\scenario\SceneInstance;
+use App\Models\scenario\SceneInstanceModel;
 
 use Illuminate\Support\Facades\Cache;
 
