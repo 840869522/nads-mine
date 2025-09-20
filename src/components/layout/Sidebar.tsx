@@ -81,9 +81,8 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
   });
 
   const handleLogout = async () => {
-    logout();
     toast.info(`正在退出登录`, {
-        autoClose: 2000,
+        autoClose: 1500,
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
