@@ -278,29 +278,29 @@ export const TOPOLOGY_DEVICE_TYPES: { type: DeviceType, name: string }[] = [
 export const DEFAULT_NODE_CONFIG: Record<DeviceType, NodeConfig> = {
   container: {
     deviceName: '容器',
-    dockerImage: 'ubuntu:latest',
+    Image: 'ubuntu:latest',
     // portMappings: '80:80',
     env: 'ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1'
   },
   switch: {
     deviceName: '交换机',
-    dockerImage: 'switch-os:latest',
+    Image: 'switch-os:latest',
     portMappings: ''
   },
   virtual_machine: {
     deviceName: '虚拟机',
-    dockerImage: 'vm-qemu:latest',
+    Image: 'vm-qemu:latest',
     portMappings: '',
     env: 'ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1'
   },
   nat_bridge: {
     deviceName: 'NAT网桥',
-    dockerImage: 'nat-bridge:latest',
+    Image: 'nat-bridge:latest',
     portMappings: ''
   },
   router: {
     deviceName: '路由器',
-    dockerImage: 'router-os:latest',
+    Image: 'router-os:latest',
     portMappings: ''
   }
 };

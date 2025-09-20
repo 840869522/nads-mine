@@ -79,7 +79,7 @@ class DrillController extends Controller
 
             if ($memoryUsage > 85) {
                 Log::warning("启动场景失败：内存使用率过高 ({$memoryUsage}%)");
-                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
+                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
             }
 
             // 检查CPU使用率
@@ -93,7 +93,7 @@ class DrillController extends Controller
 
             if ($cpuUsage > 85) {
                 Log::warning("启动场景失败：CPU使用率过高 ({$cpuUsage}%)");
-                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503);
+                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503);
             }
 
             Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);

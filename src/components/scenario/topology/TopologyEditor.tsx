@@ -148,6 +148,9 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     });
     const [simulationEnabled, setSimulationEnabled] = useState(false);
     const [mirroringEnabled, setMirroringEnabled] = useState(false);
+    // 新增：流量镜像交换机选择相关状态
+    const [isSelectingSwitchForMirroring, setIsSelectingSwitchForMirroring] = useState(false);
+    const [shouldResetSwitchDropdown, setShouldResetSwitchDropdown] = useState(false);
     //添加 useEffect: 监听 initialData prop 的变化
     useEffect(() => {
         // 从 initialData 中提取拓扑信息
@@ -392,8 +395,86 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         setSimulationEnabled(prev => !prev);
     }, []);
     const handleToggleMirroring = useCallback(() => {
-        setMirroringEnabled(prev => !prev);
-    }, []);
+        if (!mirroringEnabled) {
+            // 如果当前未启用镜像，则进入交换机选择模式
+            setIsSelectingSwitchForMirroring(true);
+        } else {
+            // 如果当前已启用镜像，则关闭镜像功能
+            setMirroringEnabled(false);
+            setIsSelectingSwitchForMirroring(false);
+        }
+    }, [mirroringEnabled]);
+
+    // 新增：处理交换机选择进行镜像的函数
+    const handleSelectSwitchForMirroring = useCallback((switchId: string) => {
+        const selectedSwitch = nodes.find(node => node.id === switchId && node.type === 'switch');
+        if (!selectedSwitch) {
+            console.error('未找到选中的交换机');
+            return;
+        }
+
+        // 创建默认的Docker镜像容器
+        const defaultImageName = 'ubuntu:latest'; // 默认镜像名称
+        const containerCount = nodes.filter(n => n.type === 'container').length + 1;
+        const containerLabel = `Mirror-${containerCount}`;
+        
+        // 生成容器节点
+        const mirrorContainer: TopologyNode = {
+            id: generateId('container'),
+            type: 'container',
+            label: containerLabel,
+            x: selectedSwitch.x + 200, // 在交换机右侧放置
+            y: selectedSwitch.y,
+            config: {
+                ...DEFAULT_NODE_CONFIG.container,
+                Image: defaultImageName,
+                env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
+            }
+        };
+
+        // 创建容器到交换机的连接
+        const mirrorEdge: TopologyEdge = {
+            id: generateId('edge'),
+            source: mirrorContainer.id,
+            target: switchId,
+            config: {
+                ...DEFAULT_EDGE_CONFIG,
+                sourceInterface: '',
+                targetInterface: '',
+                sourceIp: '',
+                targetIp: ''
+            }
+        };
+
+        // 添加容器节点
+        const addContainerAction: TopologyAction = { type: 'ADD_NODE', payload: { node: mirrorContainer } };
+        dispatch(addContainerAction);
+        onAddNode(mirrorContainer);
+        pushToUndoStack(addContainerAction);
+
+        // 添加连接边
+        const addEdgeAction: TopologyAction = { type: 'ADD_EDGE', payload: { edge: mirrorEdge } };
+        dispatch(addEdgeAction);
+        pushToUndoStack(addEdgeAction);
+
+        // 启用镜像功能并退出选择模式
+        setMirroringEnabled(true);
+        setIsSelectingSwitchForMirroring(false);
+        setShouldResetSwitchDropdown(true);
+    }, [nodes, dispatch, onAddNode, pushToUndoStack]);
+
+    // 新增：获取可用交换机列表
+    const availableSwitches = nodes.filter(node => node.type === 'switch').map(node => ({
+        id: node.id,
+        label: node.label
+    }));
+
+    // 重置下拉菜单状态的effect
+    useEffect(() => {
+        if (shouldResetSwitchDropdown) {
+            setShouldResetSwitchDropdown(false);
+        }
+    }, [shouldResetSwitchDropdown]);
 
     // 3. 原来的 handleSave 现在只负责打开弹窗
     const handleSave = () => {
@@ -544,6 +625,11 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 onToggleSimulation={handleToggleSimulation}
                 mirroringEnabled={mirroringEnabled}
                 onToggleMirroring={handleToggleMirroring}
+                // 新增：流量镜像相关props
+                availableSwitches={availableSwitches}
+                onSelectSwitchForMirroring={handleSelectSwitchForMirroring}
+                isSelectingSwitchForMirroring={isSelectingSwitchForMirroring}
+                shouldResetSwitchDropdown={shouldResetSwitchDropdown}
                 // onExport={handleExport}
                 // onImport={handleImport}
                 onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}

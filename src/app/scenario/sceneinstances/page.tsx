@@ -26,6 +26,7 @@ import { customFetch } from '@/utils/fetch';
 interface ScenarioInstance {
     instance_id: string;
     scenario_name: string;
+    scenario_description: string;
     username: string;
     runtime: string;
     status: 'CREATING' | 'RUNNING' | 'FAILED' | 'STOPPED';
@@ -221,6 +222,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                         场景名称
                                     </TableSortLabel>
                                 </TableCell>
+                                <TableCell>场景描述</TableCell>
                                 <TableCell>
                                     <TableSortLabel active={orderBy === 'username'} direction={orderBy === 'username' ? order : 'asc'} onClick={() => handleRequestSort('username')}>
                                         启动用户
@@ -241,14 +243,30 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading && instances.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
                             ) : paginatedInstances.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
                             ) : (
                                 paginatedInstances.map((instance) => (
                                     <TableRow key={instance.instance_id} hover>
                                         <TableCell><Tooltip title={instance.instance_id}><code>{(instance.instance_id || '').substring(0, 8)}...</code></Tooltip></TableCell>
                                         <TableCell sx={{ fontWeight: 'medium' }}>{instance.scenario_name}</TableCell>
+                                        <TableCell>
+                                            <Tooltip title={instance.scenario_description || '暂无描述'}>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ 
+                                                        maxWidth: 200, 
+                                                        overflow: 'hidden', 
+                                                        textOverflow: 'ellipsis', 
+                                                        whiteSpace: 'nowrap',
+                                                        color: instance.scenario_description ? 'text.primary' : 'text.secondary'
+                                                    }}
+                                                >
+                                                    {instance.scenario_description || '暂无描述'}
+                                                </Typography>
+                                            </Tooltip>
+                                        </TableCell>
                                         <TableCell>{instance.username}</TableCell>
                                         <TableCell>{new Date(instance.runtime).toLocaleString()}</TableCell>
                                         <TableCell>
