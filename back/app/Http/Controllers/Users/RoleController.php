@@ -200,6 +200,32 @@
         }
 
 
+        public function batchImportRoles(Request $req) {
+            $reqData =  $req->json()->all();
+            try {
+                $roles  = $reqData['roles'];
+                $modelRes = RoleModel::batchAddRoles($roles);
+                if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                    return response()->json([
+                        'code'=>GlobalResponse::$HTTP_STATUS_OK_CODE,
+                        "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
+                        "data" => $modelRes['data']
+                    ]);
+                }else{
+                    return response()->json([
+                        "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                        "message" => GlobalResponse::$DATABASE_ERROR_MES
+                    ]);
+                }
+            }catch(Exception $e) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
+                ]);
+            }
+        }
+
+
         public function updateRole(Request $req) {
             $reqData = $req->json()->all();
             try {

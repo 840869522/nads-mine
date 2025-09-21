@@ -218,6 +218,74 @@
             }
         }
 
+
+        public static function batchAddRoles(array $roles) : array {
+            try {
+                $successCount = 0;
+                $errorCount = 0;
+                
+                foreach ($roles as $index => $role) {
+                    try {
+                        DB::beginTransaction();
+                        
+                        // 1. 插入角色基本信息
+                        $sql = "INSERT INTO `c_roles`(
+                            c_id, 
+                            c_name, 
+                            c_create_at, 
+                            c_update_at
+                        ) VALUES(?,?,?,?)";
+                        
+                        $insertResult = DB::insert($sql, [
+                            $role['id'], 
+                            $role['name'],
+                            $role["create_at"],
+                            $role["update_at"]
+                        ]);
+                        
+                        if (!$insertResult) {
+                            throw new \Exception("角色插入失败");
+                        }
+                        
+                        if (isset($role['permissions']) && is_array($role['permissions'])) {
+                            $permissions = array_map(function ($permission_id) use ($role) {
+                                return [
+                                    'c_role_id' => $role['id'],
+                                    'c_permission_id' => $permission_id
+                                ];
+                            }, $role['permissions']);
+                            
+                            $permissionResult = PermissionModel::grantPermission2Role($role['id'], $permissions);
+                            if ($permissionResult["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                                DB::rollBack();
+                                self::deleteRoleById($role['id']);
+                                throw new \Exception("权限分配失败");
+                            }
+                        }
+                        DB::commit();
+                        $successCount++;
+                        
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        $errorCount++;
+                    }
+                }
+                
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'data' => [
+                        'success_count' => $successCount,
+                        'error_count' => $errorCount,
+                    ]
+                ];
+            } catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+                ];
+            } 
+        }
+
         public static function updateRoleById(string $id,?array $data) :array {
             $sql = "UPDATE c_roles SET c_name = ?,c_update_at = NOW() WHERE c_id = ?";
             try {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Typography,
   Box,
@@ -61,6 +61,8 @@ const PermissionManagementPage: React.FC = () => {
   const [tableLaoding, setTableLoading] = useState(true);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [permissionToDelete, setPermissionToDelete] = useState<PermissionDisplayItem | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => {
     if (searchTerm.data.trim())
@@ -253,12 +255,99 @@ const PermissionManagementPage: React.FC = () => {
     setPermissionToDelete(null);
   };
 
+  const handleInputExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    try {
+      // 1. 文件类型验证
+      if (!file.name.match(/\.(xlsx|xls)$/)) {
+        throw new Error("仅支持 .xlsx 或 .xls 格式");
+      }
+
+      // 2. 读取文件内容
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = event.target?.result;
+        if (!data) throw new Error("文件读取失败");
+
+        // 3. 解析 Excel 数据
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheet = workbook.SheetNames[0];
+        const allPermissionWorksheet = workbook.Sheets[firstSheet];
+
+        // 4. 转换为 JSON 数组（跳过空行）
+        const allPermissionJsonData = XLSX.utils.sheet_to_json(allPermissionWorksheet, { header: 1 }).filter(
+          row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
+        );
+
+        // 5. 验证表头是否匹配
+        const expectedHeaders = [
+          '权限id', '名称', '描述', 'api接口', '前端地址', '所属菜单', '状态', '是否为菜单项', '图标', '序号'
+        ];
+        const allUserFileHeaders = allPermissionJsonData[0] as string[];
+        if (!expectedHeaders.every((h, i) => h === allUserFileHeaders[i])) {
+          throw new Error("Excel 表头格式不正确，请使用标准模板");
+        }
+
+
+        // 6. 转换数据格式
+        const permissionsToImport = allPermissionJsonData.slice(1).map(row => ({
+          id: row[0],
+          label: row[1],
+          des: row[2],
+          api_src: row[3],
+          src: row[4],
+          pid: row[5] === "顶级权限" ? '0' : row[5],
+          status: row[6] === "激活" ? 1 : 0,
+          is_menu: row[7] === "是" ? 1 : 0,
+          icon: row[8],
+          sort: row[9]
+        }));
+        
+
+        // 7. 调用 API 批量导入
+        apiClientWithToken.post(`/back/api/support/permission/batch_add`, {
+          permissions: permissionsToImport 
+        }).then(res => {
+          if (res.data.code === 200) {
+            toast.success(`共${permissionsToImport.length}, 成功 : ${res.data.data.success_count} 失败: ${res.data.data.error_count} `, {
+              autoClose: 3000,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+            });
+            getPermissionData(1, rowsPerPage); // 刷新数据
+          } else {
+            throw new Error(res.data.message || "导入失败");
+          }
+        }).catch(error => {
+          toast.error(`导入失败: ${error.message}`, {
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
+        });
+      };
+
+      reader.readAsBinaryString(file);
+    } catch (error) {
+      toast.error(`导入失败: ${error.message}`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''; // 重置文件输入
+    }
+  };
 
   const handleOutputExcel = async () => {
     // 1. 定义表头和数据映射
     const headers = [
-      '权限id', '名称', '描述', 'api接口', '前端地址', '所属菜单', '状态', '是否为菜单项', '图标'
+      '权限id', '名称', '描述', 'api接口', '前端地址', '所属菜单', '状态', '是否为菜单项', '图标', "序号"
     ];
     const res = await apiClientWithToken.post("/back/api/support/permission/all", JSON.stringify({ page: -1, pagesize: 10 }));
     if (res.data.code !== 200) {
@@ -283,6 +372,7 @@ const PermissionManagementPage: React.FC = () => {
         permission.c_status ? "激活" : "禁用",
         permission.c_is_menu ? "是" : "否",
         permission.c_icon,
+        permission.sort
       ])
     ];
 
@@ -366,7 +456,7 @@ const PermissionManagementPage: React.FC = () => {
 
 
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
-          {/* <Box>
+          <Box>
             <Button
               variant="contained"
               startIcon={<AddCircleOutlineIcon />}
@@ -381,7 +471,7 @@ const PermissionManagementPage: React.FC = () => {
               ref={fileInputRef}
               style={{ display: 'none' }}
             />
-          </Box> */}
+          </Box>
           <Button
             variant='contained'
             startIcon={<DownloadOutlined />}

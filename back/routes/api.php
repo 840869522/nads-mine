@@ -78,6 +78,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
         Route::post("/update_common", [UserController::class, "updateCommonUser"]);
         Route::post("/2excel", [UserController::class, "convert2Excel"]);
+        Route::post("batch_add", [UserController::class , "batchImportUsers"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -88,6 +89,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update", [RoleController::class, "updateRole"]);
         Route::post("/delete", [RoleController::class, "deleteRole"]);
         Route::post("/2excel", [RoleController::class, "convert2Excel"]);
+        Route::post("batch_add", [RoleController::class, "batchImportRoles"]);
     });
 
     Route::prefix('permission')->group(function () {
@@ -97,6 +99,7 @@ Route::prefix("support")->group(function () {
         Route::post("/search", [PermissionController::class, "searchPermission"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
+        Route::post("batch_add", [PermissionController::class, "batchImportPermissions"]);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
     });
 });

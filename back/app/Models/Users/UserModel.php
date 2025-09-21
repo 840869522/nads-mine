@@ -178,6 +178,80 @@
             }
         }
 
+        public static function batchAddUsers (array $users) :array {
+            try {
+                $successCount = 0;
+                $errorCount = 0;
+                
+                foreach ($users as $index => $user) {
+                    try {
+                        DB::beginTransaction();
+                        
+                        $sql = "INSERT INTO `c_users`(
+                            c_username, 
+                            c_password, 
+                            c_name, 
+                            c_email, 
+                            c_is_login, 
+                            c_create_at, 
+                            c_update_at,
+                            c_last_login
+                        ) VALUES(?,?,?,?,?,?,?,?)";
+                        $insertResult = DB::insert($sql, [
+                            $user['username'], 
+                            $user['password'], 
+                            $user['name'],
+                            $user['email'], 
+                            $user['is_login'] ?? 1,
+                            $user['crate_at'],
+                            $user["update_at"],
+                            $user['last_login']
+                        ]);
+                        
+                        if (!$insertResult) {
+                            throw new \Exception("用户插入失败");
+                        }
+                        
+                        // 2. 处理用户角色分配
+                        if (isset($user['role']) && is_array($user['role'])) {
+                            $roles = array_map(function ($role_id) use ($user) {
+                                return [
+                                    'c_user_id' => $user['username'],
+                                    'c_role_id' => $role_id
+                                ];
+                            }, $user['role']);
+                            
+                            $roleResult = RoleModel::grantRole2User($user['username'], $roles);
+                            if ($roleResult["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                                DB::rollBack();
+                                self::deleteUserById($user['username']);
+                                throw new \Exception("角色分配失败");
+                            }
+                        }
+                        DB::commit();
+                        $successCount++;
+                        
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        $errorCount++;
+                    }
+                }
+        
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'data' => [
+                        'success_count' => $successCount,
+                        'error_count' => $errorCount,
+                    ]
+                ];
+            }catch (Exception $e){
+                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+                ];
+            } 
+        }
+
 
         public static function updateUserPasswordById(string $id, string $pwd){
             $sql = "UPDATE `c_users` SET `c_password` = ?, c_update_at = NOW() WHERE c_username = ?";

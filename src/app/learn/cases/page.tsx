@@ -1174,17 +1174,6 @@ const CourseCasesPage: React.FC = () => {
                 <MenuItem value="50">50 条/页</MenuItem>
               </Select>
             </FormControl>
-
-            <Button
-                variant="outlined"
-                color="primary"
-                onClick={handleRefreshCourses}
-                disabled={isLoading}
-                startIcon={isLoading ? <CircularProgress size={20} /> : <AddIcon />}
-                sx={{ height: 40 }}
-            >
-              刷新课程
-            </Button>
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
