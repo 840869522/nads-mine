@@ -14,7 +14,7 @@ chat_route = APIRouter(
 )
 
 
-@chat_route.post("/achat")
+@chat_route.post("/chat")
 async def asyncChatController(message: ChatMessage):
     return StreamingResponse(generate_response(message.message), media_type="text/event-stream")
 
