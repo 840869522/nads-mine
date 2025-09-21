@@ -272,21 +272,21 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     const isTarget = vm.is_target;
 
                     // ★ 核心修改：从后端数据中获取操作权限
-                    const canOperate = vm.can_operate;
+                    const canOperate = JSON.parse(atob(vm.can_operate));
 
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
                                     {/* ★ 修改：在 disabled 条件中加入 !canOperate，并用 <span> 或 <Box> 包裹 Tooltip */}
-                                    <Tooltip title={canOperate ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperate}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
-                                    <Tooltip title={canOperate ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperate}><StopIcon fontSize="small" color={canOperate ? "error" : "disabled"} /></IconButton></Box></Tooltip>
-                                    <Tooltip title={canOperate ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperate}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperate?.vm_stop ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperate?.vm_stop}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperate?.vm_shutdown ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperate?.vm_shutdown}><StopIcon fontSize="small" color={canOperate?.vm_shutdown ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperate?.vm_restart ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperate?.vm_restart}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
                                 </>
                             ) : (
-                                <Tooltip title={canOperate ? (isPaused ? "恢复" : "启动") : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading || !canOperate}><StartIcon fontSize="small" color={canOperate ? "success" : "disabled"} /></IconButton></Box></Tooltip>
+                                <Tooltip title={canOperate?.can_operate ? (isPaused ? "恢复" : "启动") : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading || !canOperate?.can_operate}><StartIcon fontSize="small" color={canOperate?.can_operate ? "success" : "disabled"} /></IconButton></Box></Tooltip>
                             )}
-                            <Tooltip title={canOperate ? "删除" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading || !canOperate}><DeleteIcon fontSize="small" color={canOperate ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+                            <Tooltip title={canOperate?.vm_delete ? "删除" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading || !canOperate?.vm_delete}><DeleteIcon fontSize="small" color={canOperate?.vm_delete ? "error" : "disabled"} /></IconButton></Box></Tooltip>
 
                             {isTarget && (
                                 <>
@@ -295,10 +295,10 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                 </>
                             )}
 
-                            <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(vm)} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
+                            <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(vm)} disabled={canOperate?.can_operate} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
 
-                            <Tooltip title={canOperate ? "更多操作" : "无权限"}><Box component="span">
-                                <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })} disabled={!isRunning || !canOperate}>
+                            <Tooltip title={canOperate?.can_operate ? "更多操作" : "无权限"}><Box component="span">
+                                <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })} disabled={!isRunning || !canOperate?.can_operate}>
                                     <ArrowDownIcon fontSize="small" />
                                 </IconButton>
                             </Box></Tooltip>

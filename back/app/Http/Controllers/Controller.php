@@ -23,10 +23,11 @@ class Controller extends BaseController
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
-//        Log::info($controllerName);
+        Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 
+        Log::info($res);
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
             if ($res['data']['found']){
                 $auth = $request->header("Authorization",null);
@@ -56,12 +57,7 @@ class Controller extends BaseController
                     }
                 }
             }else {
-                // 暂时恢复默认 放行未添加权限的请求
-                // response()->json([
-                //     'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                //     "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
-                // ])->send();
-                // exit();
+                Log::info(in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission']));
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
