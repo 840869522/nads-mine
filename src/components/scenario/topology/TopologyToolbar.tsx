@@ -46,6 +46,10 @@ interface TopologyToolbarProps {
   onSelectSwitchForMirroring: (switchId: string) => void; // 选择交换机进行镜像的回调
   isSelectingSwitchForMirroring: boolean; // 是否正在选择交换机模式
   shouldResetSwitchDropdown?: boolean; // 是否应该重置下拉菜单状态
+  // 新增：流量模拟相关props
+  onSelectSwitchForSimulation: (switchId: string) => void; // 选择交换机进行模拟的回调
+  isSelectingSwitchForSimulation: boolean; // 是否正在选择交换机模式
+  shouldResetSimulationDropdown?: boolean; // 是否应该重置下拉菜单状态
 }
 
 const DeviceIcon: React.FC<{ type: DeviceType }> = ({ type }) => {
@@ -86,6 +90,10 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                           onSelectSwitchForMirroring,
                                                           isSelectingSwitchForMirroring,
                                                           shouldResetSwitchDropdown = false,
+                                                          // 新增：流量模拟相关props
+                                                          onSelectSwitchForSimulation,
+                                                          isSelectingSwitchForSimulation,
+                                                          shouldResetSimulationDropdown = false,
                                                         }) => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, deviceType: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', deviceType);
@@ -95,8 +103,10 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
   // 下拉菜单状态管理
   const [isCollectionDropdownOpen, setIsCollectionDropdownOpen] = React.useState(false);
   const [isSwitchSelectionDropdownOpen, setIsSwitchSelectionDropdownOpen] = React.useState(false);
+  const [isSimulationDropdownOpen, setIsSimulationDropdownOpen] = React.useState(false);
   const collectionDropdownRef = React.useRef<HTMLDivElement>(null);
   const switchSelectionDropdownRef = React.useRef<HTMLDivElement>(null);
+  const simulationDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // 点击外部关闭下拉菜单
   React.useEffect(() => {
@@ -106,6 +116,9 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
       }
       if (switchSelectionDropdownRef.current && !switchSelectionDropdownRef.current.contains(event.target as Node)) {
         setIsSwitchSelectionDropdownOpen(false);
+      }
+      if (simulationDropdownRef.current && !simulationDropdownRef.current.contains(event.target as Node)) {
+        setIsSimulationDropdownOpen(false);
       }
     };
 
@@ -121,6 +134,12 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
       setIsSwitchSelectionDropdownOpen(false);
     }
   }, [shouldResetSwitchDropdown]);
+
+  React.useEffect(() => {
+    if (shouldResetSimulationDropdown) {
+      setIsSimulationDropdownOpen(false);
+    }
+  }, [shouldResetSimulationDropdown]);
 
   // 4. 移除了导入功能相关的 ref 和处理函数
   // const importInputRef = React.useRef<HTMLInputElement>(null);
@@ -206,17 +225,64 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                   </div>
                 )}
               </div>
-              <Button
-                onClick={onToggleSimulation}
-                disabled={isSaving}
-                variant={simulationEnabled ? 'secondary' : 'outline'}
-                size="sm"
-                leftIcon={<BeakerIcon className="h-4 w-4"/>}
-                aria-label="流量模拟策略"
-                title="流量模拟策略"
-              >
-                <span className="flex items-center gap-1">流量模拟 {simulationEnabled && <CheckIcon className="h-4 w-4"/>}</span>
-              </Button>
+              {/* 流量模拟按钮 - 支持交换机选择 */}
+              <div className="relative" ref={simulationDropdownRef}>
+                <Button
+                  onClick={() => {
+                    if (isSelectingSwitchForSimulation) {
+                      setIsSimulationDropdownOpen(!isSimulationDropdownOpen);
+                    } else {
+                      onToggleSimulation();
+                      // 当进入选择模式时，自动显示下拉菜单
+                      setTimeout(() => {
+                        setIsSimulationDropdownOpen(true);
+                      }, 0);
+                    }
+                  }}
+                  disabled={isSaving}
+                  variant={simulationEnabled ? 'secondary' : 'outline'}
+                  size="sm"
+                  leftIcon={<BeakerIcon className="h-4 w-4"/>}
+                  rightIcon={isSelectingSwitchForSimulation ? <ChevronDownIcon className="h-4 w-4"/> : undefined}
+                  aria-label="流量模拟策略"
+                  title="流量模拟策略"
+                >
+                  <span className="flex items-center gap-1">
+                    流量模拟 
+                    {simulationEnabled && <CheckIcon className="h-4 w-4"/>}
+                  </span>
+                </Button>
+                
+                {/* 交换机选择下拉菜单 */}
+                {isSelectingSwitchForSimulation && isSimulationDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md shadow-lg z-50">
+                    <div className="py-1">
+                      <div className="px-4 py-2 text-sm text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-600">
+                        选择交换机进行模拟
+                      </div>
+                      {availableSwitches.length > 0 ? (
+                        availableSwitches.map(switchItem => (
+                          <div
+                            key={switchItem.id}
+                            className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                            onClick={() => {
+                              onSelectSwitchForSimulation(switchItem.id);
+                              setIsSimulationDropdownOpen(false);
+                            }}
+                          >
+                            <ServerStackIcon className="h-4 w-4 mr-2 text-teal-500" />
+                            <span>{switchItem.label}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-neutral-500 dark:text-neutral-400">
+                          暂无可用交换机
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               {/* 流量镜像按钮 - 支持交换机选择 */}
               <div className="relative" ref={switchSelectionDropdownRef}>
                 <Button
