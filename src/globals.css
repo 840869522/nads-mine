@@ -1,3 +1,64 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 全局样式文件中添加 */
+.markdown-content .custom-markdown-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    font-size: 0.95rem;
+}
+
+.markdown-content .custom-markdown-th,
+.markdown-content .custom-markdown-td {
+    border: 1px solid #e0e0e0;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    word-break: break-word;
+    white-space: normal;
+}
+
+.markdown-content .custom-markdown-th {
+    background-color: #f5f5f5;
+    font-weight: 600;
+    text-align: center;
+}
+
+.markdown-content .custom-markdown-tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+.markdown-content .custom-markdown-tr:hover {
+    background-color: #f0f7ff;
+}
+
+/* 响应式表格 - 确保在小屏幕上可滚动 */
+@media (max-width: 768px) {
+    .markdown-content .custom-markdown-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 1rem 0;
+    }
+    
+    .markdown-content .custom-markdown-table::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .markdown-content .custom-markdown-table::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .markdown-content .custom-markdown-table::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    
+    .markdown-content .custom-markdown-table::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+}

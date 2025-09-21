@@ -22,11 +22,14 @@
                 $sql = "SELECT * FROM `c_users`";
             }else {
                 $offset = ($page - 1) * $pagesize;
-                $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT $pagesize OFFSET $offset";
+                $sql = "SELECT c_username,c_name,c_email,c_is_login,c_last_login,c_create_at,c_update_at FROM `c_users`  LIMIT ? OFFSET ?";
             }
             $sql_count = "SELECT COUNT(c_username) AS count FROM `c_users`";
             try {
-                $user = db::select($sql);
+                if ($page == -1)
+                    $user = db::select($sql);
+                else
+                    $user = db::select($sql, [ $pagesize, $offset]);
                 $count = db::select($sql_count);
                 return [
                     "data" => $user,
@@ -104,6 +107,33 @@
                     "data" => $res,
                 ];
             } catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
+        }
+
+        public static function getUser2Role(int $page = 1, int $pagesize= 10) : array {
+            if ($page == -1) {
+                $sql = "SELECT * FROM `c_users_roles`";
+            }else {
+                $offset = ($page - 1) * $pagesize;
+                $sql = "SELECT * FROM `c_users_roles` LIMIT ? OFFSET ?";
+            }
+            $sql_count = "SELECT COUNT(c_user_id) AS count FROM `c_users_roles`";
+            try {
+                if ($page == -1)
+                    $user = db::select($sql);
+                else
+                    $user = db::select($sql,[$pagesize, $offset]);
+                $count = db::select($sql_count);
+                return [
+                    "data" => $user,
+                    "count" => $count[0]->count,
+                    "code" => GlobalResponse::$DATABASE_SUCCESS_CODE
+                ];
+            } catch (QueryException $e) {
                 Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE

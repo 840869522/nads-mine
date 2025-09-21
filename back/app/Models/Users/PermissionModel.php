@@ -18,11 +18,18 @@ class PermissionModel extends Model
 
     public static function getAllPermission(int $page = 1, int $pagesize = 10): array
     {
-        $offset = ($page - 1) * $pagesize;
-        $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
+        if ($page == -1) {
+            $sql = "SELECT * FROM `c_permissions`";
+        }else {
+            $offset = ($page - 1) * $pagesize;
+            $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
+        }
         $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions`";
         try {
-            $res  = db::select($sql, [$pagesize, $offset]);
+            if ($page == -1)
+                $res = db::select($sql);
+            else
+                $res  = db::select($sql, [$pagesize, $offset]);
             $count = db::selectOne($sql_count);
             return [
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,

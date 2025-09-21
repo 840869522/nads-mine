@@ -92,6 +92,41 @@
             }
         }
 
+        public function convert2Excel(Request $req) {
+            $reqData = $req->json()->all();
+            try {
+                $page = $reqData['page'] ?? -1;
+                $pagesize = $reqData['pagesize'] ?? 10;
+            }catch(Exception $e) {
+                $page = -1;
+                $pagesize = 10;
+            }
+            $modelAllRes = RoleModel::getAllRole($page,$pagesize);
+            $modelR2PRes = RoleModel::getRole2Permission( $page, $pagesize);
+            if ($modelR2PRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE && $modelAllRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => [
+                        "all_role" => [
+                            "data" =>$modelAllRes['data'],
+                            "count"=> $modelAllRes["count"]
+                        ],
+                        "role_permission"=> [
+                            "count"=> $modelR2PRes["count"],
+                            "data" => $modelR2PRes['data'],
+                        ], 
+                    ]
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "data" => null
+                ]);
+            }
+        }
+
         public function grantRoles2User(Request $req){
             $reqData = $req->json()->all();
             try {

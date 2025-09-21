@@ -14,7 +14,7 @@ use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
 use App\Services\WorkermanService; // 确保这个use语句正确
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Facades\Cache; // 添加 Cache facade 用于 Redis
+use Illuminate\Support\Facades\Redis; // 添加 Cache facade 用于 Redis
 
 class FlagSubmissionController extends BaseController
 {
@@ -851,7 +851,7 @@ class FlagSubmissionController extends BaseController
     {
         try {
             // 使用 Laravel Redis facade（兼容 predis）
-            $redis = \Illuminate\Support\Facades\Redis::connection('cache');
+            $redis = Redis::connection();
 
             // 发送到 Redis 列表（可以用作消息队列）
             $listKey = 'flag_submissions_queue';
