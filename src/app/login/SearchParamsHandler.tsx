@@ -26,7 +26,7 @@ export default function SearchParamsHandler() {
         router.push("/");
       }
     }
-  }, [searchParams, logout, router, setThemeMode]);
+  }, []);
 
   return null;
 }
