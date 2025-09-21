@@ -12,6 +12,7 @@ import {
 import CryptoJS from "crypto-js";
 import AiIcon from '@/components/icon/AiAnswer';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -22,15 +23,24 @@ const LoginPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const { login, logout } = useAuth();
   const { setThemeMode } = useThemeMode();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
-    logout();
-    setTimeout(() => {
+    const op = searchParams.get("op");
+    if (op === "logout") {
+      logout();
+      setTimeout(() => {
+        if (document.cookie.includes("_auth")) {
+          setThemeMode(localStorage.getItem("themeMode") || "light");
+          window.location.reload();
+        }
+      }, 500);
+    }else {
       if (document.cookie.includes("_auth")) {
-        setThemeMode(localStorage.getItem("themeMode") || "light");
-        window.location.reload();
+        router.push("/");
       }
-    }, 500);
+    }
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

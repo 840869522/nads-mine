@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
         }
       }, 500);
     });
-    router.replace('/login');
+    router.replace('/login?op=logout');
     setTimeout(() => { router.refresh(); }, 100);
   };
   // ------弃用 ------
