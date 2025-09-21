@@ -334,7 +334,7 @@ const UserManagementPage: React.FC = () => {
             pauseOnHover: true,
             draggable: true,
           });
-        // });
+        });
       };
 
       reader.readAsBinaryString(file);
