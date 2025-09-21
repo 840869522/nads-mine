@@ -756,8 +756,8 @@ const TestManagement = () => {
           return null;
         }
       } else {
-        response = await apiClientWithToken.get<ApiResponse>(`/back/api/study/test/test_info`, {
-          params: { id: testId }
+        response = await apiClientWithToken.post<ApiResponse>(`/back/api/study/test/test_info`, {
+          id: testId 
         });
 
         if (response.data.code === 200) {
