@@ -11,6 +11,7 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Str;
 use App\Utils\JWTControll;
+use Illuminate\Support\Facades\Cache;
 
 class VmController extends Controller
 {
@@ -41,8 +42,38 @@ class VmController extends Controller
      */
     public function listVmsBySceneInstance(string $instance_id, \Illuminate\Http\Request $request)
     {
+        $vm_stop = 0;
+        $vm_restart = 0;
+        $vm_shutdown = 0;
+        $vm_delete = 0;
+
         // --- 步骤 1: 从底层虚拟化系统获取所有虚拟机的“物理”状态 ---
         try {
+            $auth = $request->header("Authorization",null);
+            $jwtRes =  JWTControll::decodeJWT($auth);
+            if ($jwtRes["err"] != null) {
+                response()->json([
+                  "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                  "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                ])->send();
+                exit();
+            }
+            $permissions = Cache::get($jwtRes["data"]["permission"]);
+            $permissions = array_map(function ($item){
+               return $item->c_id;
+            },$permissions);
+            if(in_array("vm_stop", $permissions)){
+                $vm_stop = 1;
+            }
+            if(in_array("vm_restart", $permissions)){
+                $vm_restart = 1;
+            }
+            if(in_array("vm_shutdown", $permissions)){
+                $vm_shutdown = 1;
+            }
+            if(in_array("vm_delete", $permissions)){
+                $vm_delete = 1;
+            }
             // 这个方法（例如通过 `virsh list --all`）获取宿主机上 所有虚拟机的原始列表
             $allVmsFromHypervisor = $this->fetchVmInstances();
             if (!is_array($allVmsFromHypervisor)) {
@@ -94,8 +125,17 @@ class VmController extends Controller
                 // ★ 关键：调用权限检查函数来动态生成 can_operate 字段 ★
                 // 这个函数内部会自己从 Request 中获取用户信息，所以我们不需要传递参数。
                 // 它的返回值 (true/false) 将决定前端按钮是否可操作。
-                $vm['can_operate'] = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
-
+                $an_operate= $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
+                $permissions = [
+                    "vm_stop"     => $vm_stop && $can_operate,
+                    "vm_restart"  => $vm_restart && $can_operate,
+                    "vm_shutdown" => $vm_shutdown && $can_operate,
+                    "vm_delete"   => $vm_delete && $can_operate,
+                    "can_operate"    => $can_operate,
+                ];
+                $permissionsJson = json_encode($permissions);
+                $encodedPermissions = base64_encode($permissionsJson);
+                $vm["can_operate"] =$encodedPermissions;
                 // 将处理完毕的虚拟机信息添加到最终结果中
                 $resultVms[] = $vm;
             }
