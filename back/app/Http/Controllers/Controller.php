@@ -27,6 +27,7 @@ class Controller extends BaseController
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 
+        Log::info($res);
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
             if ($res['data']['found']){
                 $auth = $request->header("Authorization",null);
