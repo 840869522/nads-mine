@@ -26,7 +26,7 @@ class InstanceController extends Controller
     protected CommandLineService $cliService;
     private array $vmImageOsMap = [];
 
-    public function __construct(DockerService $docker, CommandLineService $cliService,Request $req)
+    public function __construct(DockerService $docker, CommandLineService $cliService, Request $req)
     {
         // 加载父类的构造方法
         parent::__construct($req);

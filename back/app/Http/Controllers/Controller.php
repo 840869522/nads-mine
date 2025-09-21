@@ -57,7 +57,8 @@ class Controller extends BaseController
                     }
                 }
             }else {
-                if (!in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PmerissionController.getSystemAllPermission'])) {
+                Log::info(in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission']));
+                if (!in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission'])) {
                     response()->json([
                         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                         "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
