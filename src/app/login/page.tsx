@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Box,
@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import CryptoJS from "crypto-js";
 import AiIcon from '@/components/icon/AiAnswer';
-import { useThemeMode } from '@/contexts/ThemeModeContext';
+import dynamic from 'next/dynamic';
+import SearchParamsHandler from './SearchParamsHandler';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -21,17 +22,6 @@ const LoginPage: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login, logout } = useAuth();
-  const { setThemeMode } = useThemeMode();
-
-  useEffect(() => {
-    logout();
-    setTimeout(() => {
-      if (document.cookie.includes("_auth")) {
-        setThemeMode(localStorage.getItem("themeMode") || "light");
-        window.location.reload();
-      }
-    }, 500);
-  }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -61,6 +51,9 @@ const LoginPage: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, bgcolor: 'background.default' }}>
+      <Suspense fallback={null}>
+        <SearchParamsHandler />
+      </Suspense>
       <Paper sx={{ p: 4, width: 360 }} elevation={3}>
         <Typography variant="h5" component="h1" align="center" gutterBottom>
           登录到某网络安全实验平台

@@ -328,21 +328,23 @@ const UserManagementPage: React.FC = () => {
   const handleOutputExcel = async () => {
     // 1. 定义表头和数据映射
     const headers = [
-      '用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+      ['用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'],
+      ['用户名', '角色名']
     ];
-    const res = await  apiClientWithToken.post("/back/api/support/user/all", JSON.stringify({page:-1,pagesize: 10}));
+    const res = await apiClientWithToken.post("/back/api/support/user/2excel", JSON.stringify({ page: -1, pagesize: 10 }));
     if (res.data.code !== 200) {
-      toast.error(`导出失败 - ${res.data.message}`,{
+      toast.error(`导出失败 - ${res.data.message}`, {
         autoClose: 3000,
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
       })
+      return
     }
     // 2. 转换数据格式
     const worksheetData = [
-      headers, // 表头行
-      ...res.data.data.data.map(user => [
+      headers[0], 
+      ...res.data.data.all_user.data.map(user => [
         user.c_username,
         user.c_name,
         user.c_password,
@@ -354,21 +356,32 @@ const UserManagementPage: React.FC = () => {
       ])
     ];
 
+    const u2rWorkSheetData = [
+      headers[1],
+      ...res.data.data.user_role.data.map(u2r => [
+        u2r.c_user_id,
+        u2r.c_role_id
+      ])
+    ]
+
     // 3. 创建工作表和工作簿
     const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const u2rWorkSheet = XLSX.utils.aoa_to_sheet(u2rWorkSheetData);
 
-    // 4. 自动调整列宽
-    const columnWidths = worksheetData[0].map((_, colIndex) => {
-      const maxLen = Math.max(
-        ...worksheetData.map(row => row[colIndex]?.toString().length || 0)
-      );
-      return { wch: maxLen + 2 }; // 添加2个字符的边距
-    });
-    worksheet['!cols'] = columnWidths;
+    const autoWidth = (ws, data) =>{
+      const colWidths = data[0].map((_, colIndex) => {
+        const maxLen = Math.max(...data.map(row => row[colIndex]?.toString().length || 0));
+        return { wch: maxLen + 2 };
+      });
+      ws['!cols'] = colWidths;
+    }
+    autoWidth(u2rWorkSheet,u2rWorkSheetData);
+    autoWidth(worksheet,worksheetData);
 
     // 5. 创建工作簿并导出
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "用户列表");
+    XLSX.utils.book_append_sheet(workbook,u2rWorkSheet,"用户-角色列表");
 
     // 6. 生成并下载文件
     XLSX.writeFile(workbook, `用户列表-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -448,14 +461,14 @@ const UserManagementPage: React.FC = () => {
               ref={fileInputRef}
               style={{ display: 'none' }}
             />
-          </Box>
+          </Box> */}
           <Button
             variant='contained'
             startIcon={<DownloadOutlined />}
             onClick={handleOutputExcel}
           >
             导出数据
-          </Button> */}
+          </Button>
           <Button
             variant="contained"
             startIcon={<AddCircleOutlineIcon />}

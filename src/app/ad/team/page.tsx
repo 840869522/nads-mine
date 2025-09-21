@@ -469,12 +469,13 @@ const Page: React.FC = () => {
                                             )}
                                         </TableCell>
                                         <TableCell align="right">
-                                            <Tooltip title="查看实例资源">
+                                            <Tooltip title={drill.c_status !== 'running' ? "只有进行中的演练才能查看实例资源" : "查看实例资源"}>
                                                 <span>
                                                     <IconButton
                                                         color="secondary"
                                                         onClick={() => handleOpenInstanceDetailsDialog(drill.c_scene_instance_id!)}
-                                                        disabled={!drill.c_scene_instance_id}
+                                                        // ★ 增加对演练状态的检查 ★
+                                                        disabled={!drill.c_scene_instance_id || drill.c_status !== 'running'}
                                                     >
                                                         <VisibilityIcon />
                                                     </IconButton>

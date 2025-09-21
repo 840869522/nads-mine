@@ -33,7 +33,8 @@ import ViewRolePermissionsModal from '@/components/admin/ViewRolePermissionsModa
 import { apiClientWithToken } from '@/utils/axios';
 import SearchIcon from '@mui/icons-material/Search';
 import { toast } from 'react-toastify';
-import { red } from '@mui/material/colors';
+import * as XLSX from "xlsx";
+import { DownloadOutlined } from '@mui/icons-material';
 
 
 interface MockRole {
@@ -286,6 +287,65 @@ const RoleManagementPage: React.FC = () => {
         });
     };
 
+
+    const handleOutputExcel = async () => {
+        // 1. 定义表头和数据映射
+        const headers = [
+            ['角色名称', '描述', '创建时间', '最后更新时间'],
+            ["角色名称", "权限id"]
+        ];
+        const res = await apiClientWithToken.post("/back/api/support/role/2excel", JSON.stringify({ page: -1, pagesize: 10 }));
+        if (res.data.code !== 200) {
+            toast.error(`导出失败 - ${res.data.message}`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+            })
+            return
+        }
+        // 2. 转换数据格式
+        const worksheetData = [
+            headers[0], // 表头行
+            ...res.data.data.all_role.data.map(role => [
+                role.c_id,
+                role.c_name,
+                role.c_create_at,
+                role.c_update_at
+            ])
+        ];
+
+        const role2PerData = [
+            headers[1],
+            ...res.data.data.role_permission.data.map(r2p => [
+                r2p.c_role_id,
+                r2p.c_permission_id
+            ])
+        ]
+
+        // 3. 创建工作表和工作簿
+        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+        const role2perWorkSheet = XLSX.utils.aoa_to_sheet(role2PerData)
+
+        const autoWidth = (ws, data) =>{
+            const colWidths = data[0].map((_, colIndex) => {
+              const maxLen = Math.max(...data.map(row => row[colIndex]?.toString().length || 0));
+              return { wch: maxLen + 2 };
+            });
+            ws['!cols'] = colWidths;
+          }
+          autoWidth(role2perWorkSheet,role2PerData);
+          autoWidth(worksheet,worksheetData);
+
+        // 5. 创建工作簿并导出
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "角色列表");
+        XLSX.utils.book_append_sheet(workbook, role2perWorkSheet, "角色权限列表");
+
+        // 6. 生成并下载文件
+        XLSX.writeFile(workbook, `角色列表-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
     const sortedRoles = useMemo(() => {
         let processedRoles = [...roles];
         processedRoles.sort((a, b) => {
@@ -358,15 +418,40 @@ const RoleManagementPage: React.FC = () => {
                         搜索
                     </Button>
                 </Box>
-                <Button
-                    variant="contained"
-                    startIcon={<AddCircleOutlineIcon />}
-                    onClick={handleAddRoleClick}
-                >
-                    添加角色
-                </Button>
-            </Box>
 
+                <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+                    {/* <Box>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddCircleOutlineIcon />}
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            导入数据
+                        </Button>
+                        <input
+                            type="file"
+                            accept=".xlsx,.xls"
+                            onChange={handleInputExcel}
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                        />
+                    </Box> */}
+                    <Button
+                        variant='contained'
+                        startIcon={<DownloadOutlined />}
+                        onClick={handleOutputExcel}
+                    >
+                        导出数据
+                    </Button>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddCircleOutlineIcon />}
+                        onClick={handleAddRoleClick}
+                    >
+                        添加角色
+                    </Button>
+                </Box>
+            </Box>
             <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
                 <Table aria-label="角色列表">
                     <TableHead sx={{ bgcolor: 'action.focus' }}>
