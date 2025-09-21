@@ -71,8 +71,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
             throw new Error(errorData.message);
         }
         const data: ScenarioInstance[] = await response.json();
-        console.log('Fetched instances:', data); // 调试日志
-        const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
+        const filteredData = scenarioName ? data.data.filter(inst => inst.scenario_name === scenarioName) : data;
         setInstances(filteredData);
     } catch (err: any) {
         setError(err.message || '发生未知错误');

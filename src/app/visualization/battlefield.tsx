@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
 import {useLayoutEffect, useRef, useState} from "react";
-import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath } from "cesium";
+import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, Quaternion, CallbackProperty, ScreenSpaceEventHandler, Cartographic, ScreenSpaceEventType } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
 import { websocketClient } from "@/utils/websocket";
@@ -49,24 +49,23 @@ function addPlaneEntity(options: PlaneEntityOptions) {
         modelUri = '/mapdata/model/Cesium_Air.glb',
     } = options;
 
+     const hpr = new HeadingPitchRoll(
+        CesiumMath.toRadians(heading),
+        CesiumMath.toRadians(pitch),
+        CesiumMath.toRadians(roll)
+    );
+
+    const pos = Cartesian3.fromDegrees(position[0], position[1], position[2]);
+
     const entity = viewer.entities.add({
         name,
-        position: Cartesian3.fromDegrees(position[0], position[1], position[2]),
-        orientation: orientationTarget
-        ? Transforms.headingPitchRollQuaternion(
-            Cartesian3.fromDegrees(orientationTarget[0], orientationTarget[1], orientationTarget[2]),
-            new HeadingPitchRoll(
-                CesiumMath.toRadians(heading),
-                CesiumMath.toRadians(pitch),
-                CesiumMath.toRadians(roll)
-            )
-        )
-        : undefined,
+        position: pos,
+        orientation: Transforms.headingPitchRollQuaternion(pos, hpr),
         model: {
-        uri: modelUri,
-        minimumPixelSize: 60,
-        maximumScale: 10000,
-        show: true,
+            uri: modelUri,
+            minimumPixelSize: 60,
+            maximumScale: 10000,
+            show: true,
         },
     });
 
@@ -97,47 +96,75 @@ async function addWorldImageryAsync(viewer: Cesium.Viewer) {
     const tmsImageryProvider = new Cesium.UrlTemplateImageryProvider({
         url: '/mapdata/map4/laiwu/{z}/{x}/{y}.png',
         tilingScheme: new Cesium.WebMercatorTilingScheme(),
-        minimumLevel: 0,
+        minimumLevel: 0, 
         maximumLevel: 15,
     });
 
     viewer.scene.imageryLayers.addImageryProvider(tmsImageryProvider);
 }
 
-function shootLaser(
-    viewer: Viewer,
-    from: Cartesian3,
-    to: Cartesian3,
-    duration: number = 3000
-): Entity {
-    const laserEntity: Entity = viewer.entities.add({
-        name: "激光射线",
-        polyline: {
-            positions: [from, to],
-            width: 5.0,
-            material: new PolylineGlowMaterialProperty({
-                glowPower: 0.3,
-                color: Color.RED.withAlpha(0.9)
-            }),
-            clampToGround: false
-        }
-    });
+function shootLaser(viewer: Viewer, from: Cartesian3, to: Cartesian3, duration: number = 3000): Entity {
+  const startTime = Date.now();
 
-    setTimeout(() => {
+  // 用 CallbackProperty 动态返回 positions，保证每帧刷新
+  const positions = new CallbackProperty(() => {
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= duration) {
+      // 超时移除实体
+      if (viewer.entities.contains(laserEntity)) {
         viewer.entities.remove(laserEntity);
-    }, duration);
+        viewer.scene.requestRender();
+      }
+      return undefined; // 返回 undefined 则不再渲染
+    }
+    return [from, to];
+  }, false);
 
-    return laserEntity;
+  const laserEntity = viewer.entities.add({
+    name: "激光射线",
+    polyline: {
+      positions,
+      width: 5.0,
+      material: new PolylineGlowMaterialProperty({
+        glowPower: 0.3,
+        color: Color.RED.withAlpha(0.9),
+      }),
+      clampToGround: false,
+    },
+  });
+
+  return laserEntity;
+}
+
+interface VMItem {
+    name: string;
+    ip: string;
+}
+
+interface VMResult {
+    trueTargetList: VMItem[];
+    falseTargetList: VMItem[];
+}
+
+/**
+ * 获取 VM 列表并拆分 trueList / falseList
+ */
+async function fetchVMs(instanceId: string): Promise<VMResult> {
+    try {
+        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
+
+        const json = await res.json();
+        // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
+        return json.data as VMResult;
+    } catch (err) {
+        console.error("请求接口出错:", err);
+        // 异常时返回空列表，保证类型安全
+        return { trueTargetList: [], falseTargetList: [] };
+    }
 }
 
 export default function Battlefield (adData: AdData) {
-    // let id = localStorage.getItem('instance_id');
-    // if (id !== null) {
-    //     sessionStorage.setItem('instance_id', id); // 存到每个标签页独立的 sessionStorage
-    //     localStorage.removeItem('instance_id');
-    // }
-    // id = sessionStorage.getItem('instance_id');
-    // console.log(id);
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +182,7 @@ export default function Battlefield (adData: AdData) {
 
     const [redTeamState, setRedTeamState] = useState<BattlefieldInfo>(redTeam);
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
+    const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
 
     useLayoutEffect(() => {
         if (!containerRef.current) return;
@@ -207,6 +235,56 @@ export default function Battlefield (adData: AdData) {
                 roll: 0
             }
         });
+ 
+        viewer.scene.postProcessStages.fxaa.enabled = true;
+
+        const redPlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3  }[] = [];
+        const bluePlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3 }[] = [];
+
+        async function fetchData() {
+            const result = await fetchVMs(adData.id);
+            setVms(result);
+            const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange, result.trueTargetList.length);
+            const randomPositions2 = generateRandomPositionsWithHeight(center2, latRange, lonRange, heightRange, result.falseTargetList.length);
+
+            // 循环生成实体并存到 redPlans
+            result.trueTargetList.forEach((item, index) => {
+                const pos = randomPositions1[index];
+                const entity = addPlaneEntity({
+                    viewer,
+                    name: `redPlane${index + 1}`,
+                    position:  [pos[0], pos[1], pos[2]],
+                    heading: 0,
+                    pitch: 0,
+                    roll: 0
+                });
+
+                bluePlanes.push({
+                    ip: item.ip,  // 取对象中的 ip
+                    object: entity,
+                    pos: Cartesian3.fromDegrees(pos[0], pos[1], pos[2])
+                });
+            });
+
+            // 循环生成实体并存到 redPlans
+            result.falseTargetList.forEach((item, index) => {
+                const pos = randomPositions2[index];
+                const entity = addPlaneEntity({
+                    viewer,
+                    name: `bluePlane${index + 1}`,
+                    position: [pos[0], pos[1], pos[2]],
+                    heading: 180,
+                    pitch: 0,
+                    roll: 0
+                });
+
+                redPlanes.push({
+                    ip: item.ip,  // 取对象中的 ip
+                    object: entity,
+                    pos: Cartesian3.fromDegrees(pos[0], pos[1], pos[2])
+                });
+            });
+        }
 
         let timer: string = "";
         const handleMessage = (data: any) => {
@@ -246,64 +324,58 @@ export default function Battlefield (adData: AdData) {
         };
         
         if(adData && adData.id !== ""){
-            //fetchData();
+            fetchData();
             websocketClient.onMessage(handleMessage);
         }
 
-        const center1: [number, number] = [117.58, 36.20];
-        const latRange = 0.05;
-        const lonRange = 0.05;
+        const center1: [number, number] = [117.54, 36.17];
+        const latRange = 0.01;
+        const lonRange = 0.01;
         const heightRange: [number, number] = [500, 1500];
-        // 生成随机位置
-        const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange, 3);
 
-        // 循环调用生成飞机实体函数
-        const entities1 = randomPositions1.map((pos, index) => 
-            addPlaneEntity({
-                viewer,
-                name: `bluePlane${index + 1}`,
-                position: pos,
-                heading: 0,
-                pitch: 0,
-                roll: 0
-            })
-        );
+        const center2: [number, number] = [117.61, 36.17];
+        
+        let canceled = false;
 
-         const center2: [number, number] = [117.65, 36.20];
-         // 生成随机位置
-        const randomPositions2 = generateRandomPositionsWithHeight(center2, latRange, lonRange, heightRange, 3);
-         // 循环调用生成飞机实体函数
-        const entities2 = randomPositions2.map((pos, index) => 
-            addPlaneEntity({
-                viewer,
-                name: `redPlane${index + 1}`,
-                position: pos,
-                heading: 180,
-                pitch: 0,
-                roll: 0
-            })
-        );
+        const shootLoop = () => {
+            if (canceled) return;
 
-        // websocketClient.connect();
-        // websocketClient.onMessage((data) => {
-        //     console.log("收到消息:", data);
-        //     const now = new Date();
-        //     const hours = now.getHours();   // 0-23
-        //     const minutes = now.getMinutes(); // 0-59
-        //     const seconds = now.getSeconds(); // 0-59
-        //     let newLog: LogInfo = {
-        //         logId: Date.now(),
-        //         logTime: `${hours}:${minutes}:${seconds}`,
-        //         logContent: "开始攻击"
-        //     };
+            // 数组为空，短轮询
+            if (redPlanes.length === 0 || bluePlanes.length === 0) {
+                setTimeout(shootLoop, 500); // 0.5 秒重试
+                return;
+            }
 
-        //     setRedTeamState(prev => ({
-        //         ...prev,              // 保留 type 和 teamInfo
-        //         logInfo: [...prev.logInfo, newLog] // 更新 logInfo
-        //     }));
-        // });
+            // 随机选择红蓝实体
+            const red = redPlanes[Math.floor(Math.random() * redPlanes.length)];
+            const blue = bluePlanes[Math.floor(Math.random() * bluePlanes.length)];
+
+            // 获取当前位置
+            const fromPos = red.pos;
+            const toPos = blue.pos;
+
+            if (fromPos && toPos) {
+                // 强制渲染一次，保证第一次能显示
+                viewer.scene.requestRender();
+                shootLaser(viewer, fromPos, toPos, 3000); // 射线持续 3 秒
+            } else {
+                // 位置未准备好，短时间重试
+                setTimeout(shootLoop, 100);
+                return;
+            }
+
+            viewer.scene.requestRender();
+            // 下一次随机间隔 5–10 秒
+            const nextDelay = (5 + Math.random() * 5) * 1000;
+            setTimeout(shootLoop, nextDelay);
+        };
+
+        // 启动第一次
+        if(adData.showAttack === 1)
+            shootLoop();
         
         return () => {
+            canceled = true;
             viewer.destroy();
             websocketClient.offMessage(handleMessage);
         };
@@ -349,16 +421,7 @@ const blueTeamInfos: TeamInfo[] = [
 ]
 
 const blueLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:45:01',
-        logContent: '检测到异常网络流量，已启动深度分析'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:33',
-        logContent: '成功阻止针对Web服务器的SQL注入攻击'
-    },
+    
 ]
 
 const redTeamInfos: TeamInfo[] = [
@@ -385,34 +448,5 @@ const redTeamInfos: TeamInfo[] = [
 ]
 
 const redLogInfos: LogInfo[] = [
-    {
-        logId: 1,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 2,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 3,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 4,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
-    {
-        logId: 5,
-        logTime: '12:44:50',
-        logContent: '成功渗透目标数据库，提取敏感数据'
-    },
-    {
-        logId: 6,
-        logTime: '12:42:10',
-        logContent: '绕过WAF防护，发起SQL注入攻击'
-    },
+    
 ]

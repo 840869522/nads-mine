@@ -302,7 +302,7 @@ Route::prefix('study')->group(function () {
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
-        Route::get('index', [TestController::class, 'index'])->middleware('auth:api');  
+        Route::get('index', [TestController::class, 'index']);
           // 根据用户名查找用户的场景实例
         Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
     });
