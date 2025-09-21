@@ -203,6 +203,15 @@ class InstanceController extends Controller
 
             foreach ($instance->switches as $switch) {
                 try {
+                    // 先断开与 ovs-switch 的连接，避免 OVS 残留
+                    $this->cliService->disconnectSwitchToSwitch($switch->c_switch_name, 'ovs-switch');
+                    Log::info("已断开交换机 '{$switch->c_switch_name}' 与 ovs-switch 的连接");
+                } catch (\Exception $e) {
+                    Log::warning("断开交换机 '{$switch->c_switch_name}' 连接时出现错误: " . $e->getMessage());
+                    // 断开连接失败不影响后续删除操作
+                }
+                
+                try {
                     $this->cliService->deleteSwitch($switch->c_switch_name);
                 } catch (\Exception $e) {
                     $errors[] = "删除交换机 '{$switch->c_switch_name}' 失败: " . $e->getMessage();
@@ -420,6 +429,15 @@ class InstanceController extends Controller
         }
 
         foreach ($instance->switches as $switch) {
+            try {
+                // 先断开与 ovs-switch 的连接，避免 OVS 残留
+                $this->cliService->disconnectSwitchToSwitch($switch->c_switch_name, 'ovs-switch');
+                Log::info("已断开交换机 '{$switch->c_switch_name}' 与 ovs-switch 的连接");
+            } catch (\Exception $e) {
+                Log::warning("断开交换机 '{$switch->c_switch_name}' 连接时出现错误: " . $e->getMessage());
+                // 断开连接失败不影响后续删除操作
+            }
+            
             try {
                 $this->cliService->deleteSwitch($switch->c_switch_name);
             } catch (\Exception $e) {
