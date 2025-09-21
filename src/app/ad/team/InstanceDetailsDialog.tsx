@@ -58,15 +58,17 @@ const InstanceDetailsDialog: React.FC<InstanceDetailsDialogProps> = ({ open, onC
                     {icon}
                     {title} ({items.length})
                 </ListSubheader>
-                {items.map((item, index) => (
-                    <ListItem key={item.id || item.name || index} dense divider>
-                        <ListItemText
-                            primary={item.name || `容器ID: ${item.id}`}
-                            secondary={item.ip || '无IP地址'}
-                        />
-                        {item.is_target && <Chip label="靶机" color="error" size="small" variant="outlined" />}
-                    </ListItem>
-                ))}
+                {items
+                    .filter(item => item) // ★ 新增：过滤掉所有 "falsy" 值，包括 null 和 undefined
+                    .map((item, index) => (
+                        <ListItem key={item.id || item.name || index} dense divider>
+                            <ListItemText
+                                primary={item.name || `容器ID: ${item.id}`}
+                                secondary={item.ip || '无IP地址'}
+                            />
+                            {item.is_target && <Chip label="靶机" color="error" size="small" variant="outlined" />}
+                        </ListItem>
+                    ))}
             </>
         );
     };
