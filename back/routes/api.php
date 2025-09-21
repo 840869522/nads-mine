@@ -205,7 +205,8 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
-    Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
+    // file: routes/api.php
+    Route::get('/{instance}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
     // 新增：更新场景实例的 c_scene_config JSON
     Route::put('/{instance:c_scene_instances_id}/scene-config', [InstanceController::class, 'updateSceneConfig']);
 });

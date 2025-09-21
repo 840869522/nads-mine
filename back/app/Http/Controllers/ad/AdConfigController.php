@@ -33,9 +33,13 @@ class AdConfigController extends Controller
         $perPage = $request->query('per_page', 10);
 
         $query = AdConfig::query()->with([
+            // 加载队伍本身的 c_id 和 c_name
             'redTeam:c_id,c_name',
             'blueTeam:c_id,c_name',
-            'sceneConfig:c_config_id,c_name',
+            // 额外加载队伍关联的 users，并只选择需要的字段
+            'redTeam.users:c_username,c_name',
+            'blueTeam.users:c_username,c_name',
+            'sceneConfig:c_config_id,c_name,c_scene',
             'referees.user:c_username,c_name'
         ]);
 

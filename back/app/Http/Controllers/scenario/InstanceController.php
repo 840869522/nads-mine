@@ -210,7 +210,7 @@ class InstanceController extends Controller
                     Log::warning("断开交换机 '{$switch->c_switch_name}' 连接时出现错误: " . $e->getMessage());
                     // 断开连接失败不影响后续删除操作
                 }
-                
+
                 try {
                     $this->cliService->deleteSwitch($switch->c_switch_name);
                 } catch (\Exception $e) {
@@ -273,61 +273,78 @@ class InstanceController extends Controller
         }
     }
 
-    // /**
-    //  * --- 新增方法 ---
-    //  * 获取单个演练实例及其所有关联的资源详情 (VMs, 容器, 交换机)。
-    //  * 这是一个专门为前端弹窗设计的、聚合了所有信息的 API 端点。
-    //  *
-    //  * @param  \App\Models\scenario\SceneInstance $instance
-    //  * @return \Illuminate\Http\JsonResponse
-    //  */
-    // public function getDetails(SceneInstance $instance)
-    // {
-    //     try {
-    //         // 使用 Eloquent 的预加载功能，一次性查询出所有关联的资源。
-    //         // 我们只选择前端展示所需要的字段，以保持 API 响应的轻量化。
-    //         $instance->load([
-    //             'vms:c_vm_name,c_scene_instances_id,c_ip,c_flag',
-    //             'containers:c_container_id,c_scene_instances_id,c_ip,c_flag',
-    //             'switches:c_switch_name,c_scene_instances_id',
-    //             'sceneConfig:c_config_id,c_name' // 同时加载场景模板信息
-    //         ]);
+    public function getDetails(string $instanceId)
+        {
+            try {
+                // 步骤 1: 手动查找模型，替代路由模型绑定
+                $instance = SceneInstance::find($instanceId);
 
-    //         // 将数据格式化为前端友好的结构
-    //         $data = [
-    //             'instance_id'   => $instance->c_scene_instances_id,
-    //             'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
-    //             'status'        => $instance->c_status,
-    //             'resources'     => [
-    //                 'vms' => $instance->vms->map(function ($vm) {
-    //                     return [
-    //                         'name'      => $vm->c_vm_name,
-    //                         'ip'        => $vm->c_ip,
-    //                         'is_target' => !empty($vm->c_flag),
-    //                     ];
-    //                 }),
-    //                 'containers' => $instance->containers->map(function ($container) {
-    //                     return [
-    //                         'id'        => substr($container->c_container_id, 0, 12), // 返回短ID即可
-    //                         'ip'        => $container->c_ip,
-    //                         'is_target' => !empty($container->c_flag),
-    //                     ];
-    //                 }),
-    //                 'switches' => $instance->switches->map(function ($switch) {
-    //                     return [
-    //                         'name' => $switch->c_switch_name,
-    //                     ];
-    //                 }),
-    //             ]
-    //         ];
+                // 步骤 2: 增加一个检查，如果找不到，返回一个明确的 404 错误
+                if (!$instance) {
+                    return response()->json(['message' => "场景实例 (ID: {$instanceId}) 不存在或已被删除。"], 404);
+                }
 
-    //         return response()->json(['status' => 'success', 'data' => $data]);
+                // 步骤 3: 使用 Eloquent 的预加载功能，一次性查询出所有关联的资源。
+                $instance->load([
+                    'vms:c_vm_name,c_scene_instances_id,c_ip,c_flag',
+                    'containers:c_container_name,c_container_id,c_scene_instances_id,c_ip,c_flag',
+                    'switches:c_switch_name,c_scene_instances_id',
+                    'sceneConfig:c_config_id,c_name'
+                ]);
 
-    //     } catch (\Exception $e) {
-    //         Log::error("获取实例聚合详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
-    //         return response()->json(['message' => '获取实例详情失败。'], 500);
-    //     }
-    // }
+                // 步骤 4: 将数据格式化为前端友好的结构
+                $data = [
+                    'instance_id'   => $instance->c_scene_instances_id,
+                    'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+                    'status'        => $instance->c_status,
+                    'resources'     => [
+                        // ★ 核心修复点 1 ★
+                        // 在 map 之前调用 filter() 移除 null，然后调用 values() 重置数组索引
+                        'vms' => $instance->vms
+                            ->filter()
+                            ->map(function ($vm) {
+                                return [
+                                    'name'      => $vm->c_vm_name,
+                                    'id'        => $vm->c_vm_name, // 前端 key 需要 id，这里用 name 暂代
+                                    'ip'        => $vm->c_ip,
+                                    'is_target' => !empty($vm->c_flag),
+                                ];
+                            })
+                            ->values(),
+
+                        // ★ 核心修复点 2 ★
+                        'containers' => $instance->containers
+                            ->filter()
+                            ->map(function ($container) {
+                                return [
+                                    'name'      => $container->c_container_name,
+                                    'id'        => substr($container->c_container_id, 0, 12),
+                                    'ip'        => $container->c_ip,
+                                    'is_target' => !empty($container->c_flag),
+                                ];
+                            })
+                            ->values(),
+
+                        // ★ 核心修复点 3 ★
+                        'switches' => $instance->switches
+                            ->filter()
+                            ->map(function ($switch) {
+                                return [
+                                    'name' => $switch->c_switch_name,
+                                    'id'   => $switch->c_switch_name, // 前端 key 需要 id，这里用 name 暂代
+                                ];
+                            })
+                            ->values(),
+                    ]
+                ];
+
+                return response()->json(['status' => 'success', 'data' => $data]);
+
+            } catch (\Exception $e) {
+                Log::error("获取实例聚合详情时发生错误 for instance {$instanceId}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                return response()->json(['message' => '获取实例详情失败，请查看服务器日志。'], 500);
+            }
+        }
 
     /**
      * 步骤 3: 修改此函数以使用新的 runCommand 方法
@@ -437,7 +454,7 @@ class InstanceController extends Controller
                 Log::warning("断开交换机 '{$switch->c_switch_name}' 连接时出现错误: " . $e->getMessage());
                 // 断开连接失败不影响后续删除操作
             }
-            
+
             try {
                 $this->cliService->deleteSwitch($switch->c_switch_name);
             } catch (\Exception $e) {
