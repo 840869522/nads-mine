@@ -19,8 +19,10 @@ class SwitchController extends Controller
     /**
      * 【使用构造函数依赖注入，获取 CommandLineService 实例
      */
-    public function __construct(CommandLineService $cliService)
+    public function __construct(CommandLineService $cliService, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
         $this->cliService = $cliService;
     }
 

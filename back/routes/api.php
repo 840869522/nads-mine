@@ -169,7 +169,7 @@ Route::prefix("study")->group(function () {
  * 定义环境构建分系统
  */
 Route::prefix('scenarios')->group(function () {
-
+    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
     // GET 获取所有场景列表
     Route::get('/', [ScenarioController::class, 'index']);
     // POST 创建一个新场景
@@ -181,7 +181,7 @@ Route::prefix('scenarios')->group(function () {
     //GET 获取场景
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
-    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+    
 });
 
 Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])

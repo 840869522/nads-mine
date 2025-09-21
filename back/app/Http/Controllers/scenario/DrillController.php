@@ -25,8 +25,10 @@ class DrillController extends Controller
     private CommandLineService $cliService;
     private array $vmImageOsMap = []; // 用于存储镜像操作系统映射
 
-    public function __construct(CommandLineService $cliService)
+    public function __construct(CommandLineService $cliService, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
         $this->cliService = $cliService;
         // 在构造函数中加载并解析JSON映射文件
         $this->loadVmImageOsMap();

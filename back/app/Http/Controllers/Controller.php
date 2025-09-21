@@ -23,7 +23,7 @@ class Controller extends BaseController
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
-       Log::info($controllerName);
+        Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 
@@ -57,7 +57,7 @@ class Controller extends BaseController
                     }
                 }
             }else {
-                if (!in_array($controller, ['UserController.login', "PermissionController.all_menu", 'PmerissionController.all_permission'])) {
+                if (!in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PmerissionController.getSystemAllPermission'])) {
                     response()->json([
                         'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                         "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
