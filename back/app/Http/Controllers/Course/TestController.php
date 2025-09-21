@@ -858,12 +858,11 @@ public function destroy(Request $request)
     try {
         // 1. 接收并验证前端参数（三个字段联合唯一标识一条记录）
         $validatedData = $request->validate([
-            'c_test_id' => 'required|string|max:50|regex:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            'c_test_id' => 'required|string|max:50',
             'c_username' => 'required|string|max:50',
             'c_paper_id' => 'required|string|max:50',
         ], [
             'c_test_id.required' => '测试ID不能为空',
-            'c_test_id.regex' => '测试ID格式错误（必须为UUID）',
             'c_username.required' => '用户名不能为空',
             'c_paper_id.required' => '试卷ID不能为空',
         ]);
