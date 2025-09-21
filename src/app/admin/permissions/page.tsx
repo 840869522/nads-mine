@@ -34,6 +34,9 @@ import { toast } from 'react-toastify';
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
 import { PermissionDisplayItem } from '@/components/admin/PermissionModal';
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
+// excel 导入导出工具
+import * as XLSX from "xlsx";
+import { DownloadOutlined } from '@mui/icons-material';
 
 
 
@@ -61,7 +64,7 @@ const PermissionManagementPage: React.FC = () => {
 
   useEffect(() => {
     if (searchTerm.data.trim())
-      getPerimissionDataSearch(page,rowsPerPage);
+      getPerimissionDataSearch(page, rowsPerPage);
     else getPermissionData(page, rowsPerPage)
   }, [page, rowsPerPage]);
 
@@ -80,28 +83,28 @@ const PermissionManagementPage: React.FC = () => {
     });
   }
 
-  const getPerimissionDataSearch =(page: number, pagesize: number) => {
+  const getPerimissionDataSearch = (page: number, pagesize: number) => {
     setTableLoading(true);
-      apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
-        page: page,
-        pagesize: pagesize,
-        name: searchTerm.data
-      })).then(res=>{
-        if (res.data.code === 200) {
-          setPermissions(res.data.data.data);
-          setDataCount(res.data.data.count);
-        } else {
-          setPermissions([]);
-          toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
-            autoClose: 3000,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-          });
-        }
-      }).finally(()=>{
-          setTableLoading(false);
-      });
+    apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
+      page: page,
+      pagesize: pagesize,
+      name: searchTerm.data
+    })).then(res => {
+      if (res.data.code === 200) {
+        setPermissions(res.data.data.data);
+        setDataCount(res.data.data.count);
+      } else {
+        setPermissions([]);
+        toast.error(`搜索权限时发生错误 - ${searchTerm.data}`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      }
+    }).finally(() => {
+      setTableLoading(false);
+    });
   }
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,7 +113,7 @@ const PermissionManagementPage: React.FC = () => {
   };
 
   const handleSearchSubmit = async () => {
-    getPerimissionDataSearch(1,rowsPerPage);
+    getPerimissionDataSearch(1, rowsPerPage);
     setPage(1);
   };
 
@@ -154,7 +157,8 @@ const PermissionManagementPage: React.FC = () => {
 
   const handleSavePermission = async (formData: PermissionFormData, isNew: boolean) => {
     var permissionData = {
-      ...formData
+      ...formData,
+      icon: formData.is_menu ? formData.icon : " "
     }
     if (isNew) {
       apiClientWithToken.post(`/back/api/support/permission/new`, JSON.stringify({ data: { ...permissionData } })).then((res) => {
@@ -250,6 +254,59 @@ const PermissionManagementPage: React.FC = () => {
   };
 
 
+
+  const handleOutputExcel = async () => {
+    // 1. 定义表头和数据映射
+    const headers = [
+      '权限id', '名称', '描述', 'api接口', '前端地址', '所属菜单', '状态', '是否为菜单项', '图标'
+    ];
+    const res = await apiClientWithToken.post("/back/api/support/permission/all", JSON.stringify({ page: -1, pagesize: 10 }));
+    if (res.data.code !== 200) {
+      toast.error(`导出失败 - ${res.data.message}`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      })
+      return
+    }
+    // 2. 转换数据格式
+    const worksheetData = [
+      headers, // 表头行
+      ...res.data.data.data.map(permission => [
+        permission.c_id,
+        permission.c_label,
+        permission.c_des,
+        permission.c_api_src,
+        permission.c_src,
+        permission.c_pid == "0" ? "顶级权限" : permission.c_pid,
+        permission.c_status ? "激活" : "禁用",
+        permission.c_is_menu ? "是" : "否",
+        permission.c_icon,
+      ])
+    ];
+
+    // 3. 创建工作表和工作簿
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // 4. 自动调整列宽
+    const columnWidths = worksheetData[0].map((_, colIndex) => {
+      const maxLen = Math.max(
+        ...worksheetData.map(row => row[colIndex]?.toString().length || 0)
+      );
+      return { wch: maxLen + 2 }; // 添加2个字符的边距
+    });
+    worksheet['!cols'] = columnWidths;
+
+    // 5. 创建工作簿并导出
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "权限列表");
+
+    // 6. 生成并下载文件
+    XLSX.writeFile(workbook, `权限列表-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+
   const filteredAndSortedPermissions = useMemo(() => {
     let processedpermissions = [...permissions].sort((a, b) => {
       const valA = a[orderBy];
@@ -306,13 +363,40 @@ const PermissionManagementPage: React.FC = () => {
             搜索
           </Button>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={handleAddPermissionClick}
-        >
-          添加权限
-        </Button>
+
+
+        <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
+          {/* <Box>
+            <Button
+              variant="contained"
+              startIcon={<AddCircleOutlineIcon />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              导入数据
+            </Button>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleInputExcel}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+            />
+          </Box> */}
+          <Button
+            variant='contained'
+            startIcon={<DownloadOutlined />}
+            onClick={handleOutputExcel}
+          >
+            导出数据
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={handleAddPermissionClick}
+          >
+            添加权限
+          </Button>
+        </Box>
       </Box>
       <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
         <Table aria-label="权限列表">

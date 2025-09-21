@@ -14,11 +14,18 @@
         protected $table = "c_roles";
 
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
-            $offset = ($page - 1 ) * $pagesize;
-            $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
+            if ($page == -1 ) {
+                $sql = "SELECT * FROM `c_roles`";
+            }else {
+                $offset = ($page - 1 ) * $pagesize;
+                $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
+            }
             $sql_count = "SELECT COUNT(c_id) AS count FROM `c_roles`";
-            try {  
-                $res = db::select($sql,[$pagesize,$offset]);
+            try {
+                if ($page == -1)
+                    $res = db::select($sql);
+                else
+                    $res = db::select($sql,[$pagesize,$offset]);
                 $count = db::select($sql_count);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -95,6 +102,33 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             } 
+        }
+
+        public static function getRole2Permission(int $page = 1, $pagesize = 10) : array {
+            if ($page == -1) {
+                $sql = "SELECT * FROM `c_roles_permissions`";
+            }else {
+                $offset = ($page - 1 ) * $pagesize;
+                $sql = "SELECT * FRoM `c_roles_permissions` LIMIT ? OFFSET ?";
+            }
+            $sql_count = "SELECT COUNT(c_role_id) AS count FROM `c_roles_permissions`";
+            try {
+                if ($page == -1)
+                    $res = db::select($sql);
+                else
+                    $res = db::select($sql,[$pagesize,$offset]);
+                $count = db::select($sql_count);
+                return [
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data"=>$res,
+                    "count"=> $count[0]->count
+                ];
+            }catch(Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
         }
 
         public static function grantRole2User (string $user_id,array $values):array {

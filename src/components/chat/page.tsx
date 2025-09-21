@@ -19,7 +19,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-
+import { fixIncompleteMarkdown, isSafeToRender } from "@/utils/markdwonFixer";
 
 interface Message {
     id: string;
@@ -53,7 +53,9 @@ const ChatDialog = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const eventSourceRef = useRef<EventSource>(null);
     const theme = useTheme();
-    // const {user} = useAuth();
+    const [pendingStream, setPendingStream] = useState<string>('');
+    const streamUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+    const lastUpdateRef = useRef<number | null>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,26 +87,46 @@ const ChatDialog = () => {
         setIsLoading(true);
 
         const currentMessage = { current: '' };
+        setPendingStream('');
+        if (streamUpdateTimeout.current) {
+            clearTimeout(streamUpdateTimeout.current);
+        }
 
         streamPostRequest(
             '/chat/chat',
             { message: newMessage.text },
             (chunk) => {
                 currentMessage.current += chunk;
-                setMessages((prev) => {
-                    const newMessages = [...prev];
-                    const lastMessage = newMessages[newMessages.length - 1];
-                    if (lastMessage?.role === 'assistant') {
-                        lastMessage.text = currentMessage.current;
-                    } else {
-                        newMessages.push({
-                            id: (Date.now() + 1).toString(),
-                            role: 'assistant',
-                            text: currentMessage.current,
-                        });
-                    }
-                    return newMessages;
-                });
+                setPendingStream(prev => prev + chunk);
+                if (streamUpdateTimeout.current) {
+                    clearTimeout(streamUpdateTimeout.current);
+                }
+                const lastTime = lastUpdateRef.current ?? 0
+                const delay = Math.min(300, Math.max(50, 100 - (Date.now() - lastTime)))
+                lastUpdateRef.current = Date.now();
+                streamUpdateTimeout.current = setTimeout(() => {
+                    // 1. 优先修复语法
+                    const fixedText = fixIncompleteMarkdown(currentMessage.current);
+
+                    // 2. 仅当处于安全状态时才更新（可选）
+                    // if (isSafeToRender(fixedText)) {
+                    setMessages((prev) => {
+                        const newMessages = [...prev];
+                        const lastMessage = newMessages[newMessages.length - 1];
+                        if (lastMessage?.role === 'assistant') {
+                            lastMessage.text = fixedText;
+                        } else {
+                            newMessages.push({
+                                id: (Date.now() + 1).toString(),
+                                role: 'assistant',
+                                text: fixedText,
+                            });
+                        }
+                        return newMessages;
+                    });
+                    setPendingStream(''); // 清空待处理流
+                    // }
+                }, delay);
             },
             (error) => {
                 setMessages((prev) => [
@@ -186,6 +208,47 @@ const ChatDialog = () => {
                                         rehypePlugins={[rehypeRaw]}
                                         components={{
                                             think: ThinkComponent,
+                                            table: ({ children }) => (
+                                                <table className="custom-markdown-table">
+                                                    {children}
+                                                </table>
+                                            ),
+                                            thead: ({ children }) => (
+                                                <thead className="custom-markdown-thead">
+                                                    {children}
+                                                </thead>
+                                            ),
+                                            tbody: ({ children }) => (
+                                                <tbody className="custom-markdown-tbody">
+                                                    {children}
+                                                </tbody>
+                                            ),
+                                            tr: ({ children }) => (
+                                                <tr className="custom-markdown-tr">
+                                                    {children}
+                                                </tr>
+                                            ),
+                                            th: ({ children }) => (
+                                                <th className="custom-markdown-th" style={{
+                                                    padding: '0.6rem 1rem',
+                                                    textAlign: 'left',
+                                                    backgroundColor: '#f5f5f5',
+                                                    fontWeight: '600',
+                                                    borderBottom: '2px solid #e0e0e0'
+                                                }}>
+                                                    {children}
+                                                </th>
+                                            ),
+                                            td: ({ children }) => (
+                                                <td className="custom-markdown-td" style={{
+                                                    padding: '0.6rem 1rem',
+                                                    borderBottom: '1px solid #e0e0e0',
+                                                    wordBreak: 'break-word',
+                                                    whiteSpace: 'normal'
+                                                }}>
+                                                    {children}
+                                                </td>
+                                            )
                                         }}
                                     >
                                         {typeof message.text === 'string' ? message.text : String(message.text)}
@@ -345,7 +408,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ open, onClose, width }) => {
                     flexDirection: 'column',
                     width: width,
                     minHeight: "100vh",
-                    bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper'
+                    bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+                    overflow: "hidden"
                 }
             }}
             sx={{
