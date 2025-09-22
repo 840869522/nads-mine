@@ -52,6 +52,7 @@ interface ExperimentResourceDialogProps {
   experimentName: string;
   courseId: string;
   onShowMessage?: (message: string, severity: 'success' | 'error' | 'warning' | 'info') => void;
+  hideDeleteButton?: boolean; // 新增：控制是否隐藏删除按钮
 }
 
 const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
@@ -60,7 +61,8 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
   experimentId,
   experimentName,
   courseId,
-  onShowMessage
+  onShowMessage,
+  hideDeleteButton = false
 }) => {
   const [resources, setResources] = useState<ExperimentResource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -247,20 +249,22 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
                           <DownloadIcon />
                         </IconButton>
                       </Box>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteResource(resource)}
-                        disabled={loadingDelete === resource.c_resource_id}
-                        color="error"
-                        title="删除"
-                      >
-                        {loadingDelete === resource.c_resource_id ? (
-                          <CircularProgress size={20} />
-                        ) : (
-                          <DeleteIcon />
+                      {!hideDeleteButton && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteResource(resource)}
+                            disabled={loadingDelete === resource.c_resource_id}
+                            color="error"
+                            title="删除"
+                          >
+                            {loadingDelete === resource.c_resource_id ? (
+                              <CircularProgress size={20} />
+                            ) : (
+                              <DeleteIcon />
+                            )}
+                          </IconButton>
                         )}
-                      </IconButton>
-                    </CardActions>
+                      </CardActions>
                   </Card>
                 </Grid>
               ))}

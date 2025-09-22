@@ -63,9 +63,14 @@ function TeamInfoItem(props: { info: TeamInfo; index: number }) {
 
 function LogItem(props: LogInfo){
     return (
-        <li className="flex gap-[10px] px-2 py-[7px] border-b border-b-[rgba(255,255,255,0.05)] text-[0.8rem]">
-            <span className="text-[#ffcc00] min-w-[60px] font-mono text-xs">{props.logTime}</span>
-            <span className="flex-1 text-[0.8rem]">{props.logContent}</span>
+        <li className="px-2 py-[7px] border-b border-b-[rgba(255,255,255,0.05)] text-[0.8rem]">
+            <div className="text-[#ffcc00] font-mono text-xs mb-1">
+                {props.logTime}
+            </div>
+
+            <div className="text-[0.8rem] break-words">
+                {props.logContent}
+            </div>
         </li>
     );
 }
@@ -124,8 +129,8 @@ export default function Team(team:BattlefieldInfo) {
                     teamScore: getRandomDivisibleBy5()
                 }
                 teams.push(item);
-                
             }  
+            teams.sort((a, b) => b.teamScore - a.teamScore);
             setTeamList(teams);
         });
         

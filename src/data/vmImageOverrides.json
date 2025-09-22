@@ -243,7 +243,10 @@
     "osType": "win7_1",
     "description": "Oracle系统提权攻击镜像"
   },
-  "v_att_oracleControl.qcow2": {},
+  "v_att_oracleControl.qcow2": {
+    "osType": "ubuntu",
+    "description": "数据库控制攻击镜像"
+  },
   "v_tar_RDP.qcow2": {
     "osType": "win7",
     "description": "Windows远程溢出漏洞探测靶机镜像"
@@ -322,6 +325,13 @@
     "description": "WindowsRPC溢出漏洞探测靶机镜像"
   },
   "Report-tools.qcow2": {
-    "osType": "ubuntu"
+    "osType": "kali"
+  },
+  "v_tar_oracleControl.qcow2": {
+    "osType": "ubuntu",
+    "description": "oracle数据库控制靶机镜像"
+  },
+  "Report_new.qcow2": {
+    "osType": "kali"
   }
 }

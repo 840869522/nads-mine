@@ -76,10 +76,17 @@ const ScenarioManagementPage: React.FC = () => {
             if (!response.ok) {
                 throw new Error('获取场景列表失败');
             }
-            const data: Scenario[] = await response.json();
-            setScenarios(data);
+            const data = await response.json();
+            // 确保返回的数据是数组格式
+            if (Array.isArray(data)) {
+                setScenarios(data);
+            } else {
+                console.error('API返回的数据不是数组格式:', data);
+                setScenarios([]);
+                setError('数据加载异常，请点击刷新按钮重试');
+            }
         } catch (err: any) {
-            setError(err.message || '发生未知错误');
+            setError('网络连接异常，请检查网络后点击刷新按钮重试');
             setScenarios([]);
         } finally {
             setIsLoading(false);
@@ -243,6 +250,12 @@ const ScenarioManagementPage: React.FC = () => {
     };
 
     const filteredAndSortedScenarios = useMemo(() => {
+        // 确保 scenarios 是数组
+        if (!Array.isArray(scenarios)) {
+            console.error('scenarios 不是数组:', scenarios);
+            return [];
+        }
+        
         let filtered = scenarios.filter(s =>
             s.name.toLowerCase().includes(searchText.toLowerCase()) ||
             s.description.toLowerCase().includes(searchText.toLowerCase())
@@ -328,7 +341,21 @@ const ScenarioManagementPage: React.FC = () => {
                             {isLoading ? (
                                 <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }} color="text.secondary">正在加载场景列表...</Typography></TableCell></TableRow>
                             ) : error ? (
-                                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Alert severity="error">{error}</Alert></TableCell></TableRow>
+                                <TableRow>
+                                    <TableCell colSpan={4} align="center" sx={{ py: 5 }}>
+                                        <Alert severity="error" sx={{ mb: 2 }}>
+                                            {error}
+                                        </Alert>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<RefreshIcon />}
+                                            onClick={handleRefresh}
+                                            size="small"
+                                        >
+                                            立即刷新
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
                             ) : paginatedScenarios.length === 0 ? (
                                 <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{searchText ? "没有找到匹配的场景。" : "没有可用的场景。"}</Typography></TableCell></TableRow>
                             ) : (

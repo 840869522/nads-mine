@@ -69,6 +69,7 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
   const [resources, setResources] = useState<CourseCaseResource[]>([]);
   const [selectedRawFiles, setSelectedRawFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [c_status, setStatus] = useState<'draft' | 'published'>('published');
 
   useEffect(() => {
     resources.forEach(resource => {
@@ -82,11 +83,13 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
       setDescription(courseCase.c_description || '');
       setCategoryId(courseCase.c_category_id ?? '');
       setResources(courseCase.resources.map(r => ({ ...r })));
+      setStatus(courseCase.c_status || 'published'); // 确保从数据库加载状态
     } else {
       setCourseName('');
       setDescription('');
       setCategoryId(categories.length > 0 && categories[0].c_category_id ? categories[0].c_category_id : '');
       setResources([]);
+      setStatus('published');  // 默认发布
     }
     setSelectedRawFiles([]);
     setErrors({});
@@ -153,6 +156,7 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
         c_course_id: courseCase?.c_course_id || `temp-id-${Date.now()}`,
         c_course_name,
         c_description,
+        c_status,  // 新增
         c_category_id: c_category_id ?? '',
         c_category_name: categories.find(cat => cat.c_category_id === c_category_id)?.c_category_name || '',
         resources: processedResources,
@@ -239,6 +243,19 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
                 value={c_description}
                 onChange={(e) => setDescription(e.target.value)}
             />
+            <FormControl fullWidth variant="outlined" sx={{ mt: 1 }}>
+              <InputLabel id="course-status-label">课程状态（可选，默认发布）</InputLabel>
+              <Select
+                  labelId="course-status-label"
+                  name="c_status"
+                  value={c_status}
+                  onChange={(e) => setStatus(e.target.value as 'draft' | 'published')}
+                  label="课程状态（可选，默认发布）"
+              >
+                <MenuItem value="published">发布</MenuItem>
+                <MenuItem value="draft">草稿</MenuItem>
+              </Select>
+            </FormControl>
             <Box mt={1}>
               <Typography variant="subtitle1" gutterBottom color="text.primary">
                 课程资源（可选）

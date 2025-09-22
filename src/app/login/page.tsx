@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Box,
@@ -7,10 +7,12 @@ import {
   Typography,
   TextField,
   Button,
-  Alert
+  Alert,
 } from '@mui/material';
 import CryptoJS from "crypto-js";
 import AiIcon from '@/components/icon/AiAnswer';
+import dynamic from 'next/dynamic';
+import SearchParamsHandler from './SearchParamsHandler';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -20,10 +22,6 @@ const LoginPage: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login, logout } = useAuth();
-
-  useEffect(() => {
-    logout();
-  }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -53,6 +51,9 @@ const LoginPage: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, bgcolor: 'background.default' }}>
+      <Suspense fallback={null}>
+        <SearchParamsHandler />
+      </Suspense>
       <Paper sx={{ p: 4, width: 360 }} elevation={3}>
         <Typography variant="h5" component="h1" align="center" gutterBottom>
           登录到某网络安全实验平台
@@ -84,13 +85,13 @@ const LoginPage: React.FC = () => {
             {submitting ? '登录中...' : '登录'}
           </Button>
         </Box>
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
+        {/* <Box sx={{ mt: 2, textAlign: 'center' }}>
           <Typography variant="caption" display="block">管理员: admin / admin123</Typography>
           <Typography variant="caption" display="block">学生: student / student123</Typography>
           <Typography variant="caption" display="block">裁判: referee / referee123</Typography>
           <Typography variant="caption" display="block">导调: guidance / guidance123</Typography>
           <Typography variant="caption" display="block">运维: operations / operations123</Typography>
-        </Box>
+        </Box> */}
       </Paper>
     </Box>
   );

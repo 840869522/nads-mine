@@ -25,8 +25,10 @@ class DrillController extends Controller
     private CommandLineService $cliService;
     private array $vmImageOsMap = []; // 用于存储镜像操作系统映射
 
-    public function __construct(CommandLineService $cliService)
+    public function __construct(CommandLineService $cliService, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
         $this->cliService = $cliService;
         // 在构造函数中加载并解析JSON映射文件
         $this->loadVmImageOsMap();
@@ -79,7 +81,7 @@ class DrillController extends Controller
 
             if ($memoryUsage > 85) {
                 Log::warning("启动场景失败：内存使用率过高 ({$memoryUsage}%)");
-                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
+                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
             }
 
             // 检查CPU使用率
@@ -93,7 +95,7 @@ class DrillController extends Controller
 
             if ($cpuUsage > 85) {
                 Log::warning("启动场景失败：CPU使用率过高 ({$cpuUsage}%)");
-                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 75% 的阈值。请联系管理员清理"], 503);
+                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503);
             }
 
             Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);
@@ -310,6 +312,18 @@ class DrillController extends Controller
                         'id'                  => $vmDbId,
                         'vm_name'             => $vmName,
                         'image'               => $correctImageName,
+                        'switch_name'         => $actualSwitchName,
+                        'image_dir'           => $imageDir,
+                        'instance_base_dir'   => $instanceBaseDir,
+                    ]);
+                } elseif ($osType === 'kali') {
+                    $this->cliService->createVmKali([
+                        'id'                  => $vmDbId,
+                        'vm_name'             => $vmName,
+                        'image'               => $correctImageName,
+                        'ip'                  => $ip,
+                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                        'flag'                => $flagUuid ?? 'NULL',
                         'switch_name'         => $actualSwitchName,
                         'image_dir'           => $imageDir,
                         'instance_base_dir'   => $instanceBaseDir,

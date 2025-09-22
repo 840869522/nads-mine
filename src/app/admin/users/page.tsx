@@ -31,7 +31,7 @@ import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import CryptoJS from "crypto-js";
 import { toast } from 'react-toastify';
-import { DownloadOutlined } from '@mui/icons-material';
+import { ConstructionOutlined, DownloadOutlined } from '@mui/icons-material';
 import * as XLSX from "xlsx";
 
 // Mock User Data Type (ensure it matches what UserFormModal expects for initialUser)
@@ -262,37 +262,62 @@ const UserManagementPage: React.FC = () => {
         // 3. 解析 Excel 数据
         const workbook = XLSX.read(data, { type: 'binary' });
         const firstSheet = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheet];
+        const secondSheet = workbook.SheetNames[1];
+        const allUserWorksheet = workbook.Sheets[firstSheet];
+        const u2rWorkSheet = workbook.Sheets[secondSheet];
 
         // 4. 转换为 JSON 数组（跳过空行）
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).filter(
+        const allUserJsonData = XLSX.utils.sheet_to_json(allUserWorksheet, { header: 1 }).filter(
+          row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
+        );
+        const u2rJsonData = XLSX.utils.sheet_to_json(u2rWorkSheet, { header: 1 }).filter(
           row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
         );
 
         // 5. 验证表头是否匹配
         const expectedHeaders = [
-          '用户名', '姓名', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+          ['用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'],
+          ['用户名', '角色名']
         ];
-        const fileHeaders = jsonData[0] as string[];
-        if (!expectedHeaders.every((h, i) => h === fileHeaders[i])) {
+        const allUserFileHeaders = allUserJsonData[0] as string[];
+        if (!expectedHeaders[0].every((h, i) => h === allUserFileHeaders[i])) {
+          throw new Error("Excel 表头格式不正确，请使用标准模板");
+        }
+        const u2rFilterHeader = u2rJsonData[0] as string[];
+        if (!expectedHeaders[1].every((h, i) => h === u2rFilterHeader[i])) {
           throw new Error("Excel 表头格式不正确，请使用标准模板");
         }
 
         // 6. 转换数据格式
-        const usersToImport = jsonData.slice(1).map(row => ({
+        var usersToImport = allUserJsonData.slice(1).map(row => ({
           username: row[0],
           name: row[1],
-          email: row[2],
-          status: row[3] === '已激活' ? 1 : 0,
-          password: CryptoJS.SHA256("123456").toString() // 默认密码
+          password: row[2].trim() ? row[2] : CryptoJS.SHA256("123456").toString(),
+          email: row[3],
+          status: row[4] === '已激活' ? 1 : 0,
+          create_at: row[5],
+          update_at: row[6],
+          last_login: row[7]
         }));
 
+        const u2rToImport = u2rJsonData.slice(1).map(row => ({
+          user_id: row[0],
+          role_id: row[1]
+        }));
+
+        usersToImport = usersToImport.map(user => {
+          const roles = u2rToImport.filter(r => r.user_id === user.username).map(r=>r.role_id);
+          return {
+            ...user, roles: roles
+          }
+        })
+
         // 7. 调用 API 批量导入
-        apiClientWithToken.post(`/back/api/support/user/batch`, {
+        apiClientWithToken.post(`/back/api/support/user/batch_add`, {
           users: usersToImport
         }).then(res => {
           if (res.data.code === 200) {
-            toast.success(`成功导入 ${usersToImport.length} 个用户`, {
+            toast.success(`共${usersToImport.length}, 成功 : ${res.data.data.success_count} 失败: ${res.data.data.error_count} `, {
               autoClose: 3000,
               closeOnClick: true,
               pauseOnHover: true,
@@ -328,21 +353,23 @@ const UserManagementPage: React.FC = () => {
   const handleOutputExcel = async () => {
     // 1. 定义表头和数据映射
     const headers = [
-      '用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'
+      ['用户名', '姓名', '密码', '邮箱', '状态', '创建日期', '更新日期', '最后登录日期'],
+      ['用户名', '角色名']
     ];
-    const res = await  apiClientWithToken.post("/back/api/support/user/all", JSON.stringify({page:-1,pagesize: 10}));
+    const res = await apiClientWithToken.post("/back/api/support/user/2excel", JSON.stringify({ page: -1, pagesize: 10 }));
     if (res.data.code !== 200) {
-      toast.error(`导出失败 - ${res.data.message}`,{
+      toast.error(`导出失败 - ${res.data.message}`, {
         autoClose: 3000,
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
       })
+      return
     }
     // 2. 转换数据格式
     const worksheetData = [
-      headers, // 表头行
-      ...res.data.data.data.map(user => [
+      headers[0],
+      ...res.data.data.all_user.data.map(user => [
         user.c_username,
         user.c_name,
         user.c_password,
@@ -354,21 +381,32 @@ const UserManagementPage: React.FC = () => {
       ])
     ];
 
+    const u2rWorkSheetData = [
+      headers[1],
+      ...res.data.data.user_role.data.map(u2r => [
+        u2r.c_user_id,
+        u2r.c_role_id
+      ])
+    ]
+
     // 3. 创建工作表和工作簿
     const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const u2rWorkSheet = XLSX.utils.aoa_to_sheet(u2rWorkSheetData);
 
-    // 4. 自动调整列宽
-    const columnWidths = worksheetData[0].map((_, colIndex) => {
-      const maxLen = Math.max(
-        ...worksheetData.map(row => row[colIndex]?.toString().length || 0)
-      );
-      return { wch: maxLen + 2 }; // 添加2个字符的边距
-    });
-    worksheet['!cols'] = columnWidths;
+    const autoWidth = (ws, data) => {
+      const colWidths = data[0].map((_, colIndex) => {
+        const maxLen = Math.max(...data.map(row => row[colIndex]?.toString().length || 0));
+        return { wch: maxLen + 2 };
+      });
+      ws['!cols'] = colWidths;
+    }
+    autoWidth(u2rWorkSheet, u2rWorkSheetData);
+    autoWidth(worksheet, worksheetData);
 
     // 5. 创建工作簿并导出
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "用户列表");
+    XLSX.utils.book_append_sheet(workbook, u2rWorkSheet, "用户-角色列表");
 
     // 6. 生成并下载文件
     XLSX.writeFile(workbook, `用户列表-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -433,7 +471,7 @@ const UserManagementPage: React.FC = () => {
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
-          {/* <Box>
+          <Box>
             <Button
               variant="contained"
               startIcon={<AddCircleOutlineIcon />}
@@ -455,7 +493,7 @@ const UserManagementPage: React.FC = () => {
             onClick={handleOutputExcel}
           >
             导出数据
-          </Button> */}
+          </Button>
           <Button
             variant="contained"
             startIcon={<AddCircleOutlineIcon />}

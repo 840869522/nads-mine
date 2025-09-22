@@ -19,6 +19,7 @@ use App\Http\Controllers\Docker\ContainersController;
 use App\Http\Controllers\ad\RefereeController;
 use App\Http\Controllers\ad\TeamController;
 use App\Http\Controllers\Course\CourseController;
+use App\Http\Controllers\Course\CourseLearnController;
 use App\Http\Controllers\Course\CategoryController;
 use App\Http\Controllers\Course\ResourceController;
 use App\Http\Controllers\Vm\VmController;
@@ -76,6 +77,8 @@ Route::prefix("support")->group(function () {
         Route::post("/delete", [UserController::class, "deleteUser"]);
         Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
         Route::post("/update_common", [UserController::class, "updateCommonUser"]);
+        Route::post("/2excel", [UserController::class, "convert2Excel"]);
+        Route::post("batch_add", [UserController::class , "batchImportUsers"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -85,6 +88,8 @@ Route::prefix("support")->group(function () {
         Route::post("/new", [RoleController::class, "newRole"]);
         Route::post("/update", [RoleController::class, "updateRole"]);
         Route::post("/delete", [RoleController::class, "deleteRole"]);
+        Route::post("/2excel", [RoleController::class, "convert2Excel"]);
+        Route::post("batch_add", [RoleController::class, "batchImportRoles"]);
     });
 
     Route::prefix('permission')->group(function () {
@@ -94,6 +99,7 @@ Route::prefix("support")->group(function () {
         Route::post("/search", [PermissionController::class, "searchPermission"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
+        Route::post("batch_add", [PermissionController::class, "batchImportPermissions"]);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
     });
 });
@@ -108,6 +114,9 @@ Route::prefix("study")->group(function () {
         Route::post('/',[CourseController::class,'store']);
         Route::put('/{id}',[CourseController::class,'update']);
         Route::delete('/{id}',[CourseController::class,'destroy']);
+    });
+     Route::prefix('learn')->group(function () {
+        Route::get('/courses', [CourseLearnController::class, 'index']);  // 新增：学习页面专用路由，只返回已发布课程
     });
     Route::prefix('permissions')->group(function(){
         Route::get('/usernames', [CoursePermissionController::class, 'getAllUsernames']);
@@ -160,7 +169,7 @@ Route::prefix("study")->group(function () {
  * 定义环境构建分系统
  */
 Route::prefix('scenarios')->group(function () {
-
+    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
     // GET 获取所有场景列表
     Route::get('/', [ScenarioController::class, 'index']);
     // POST 创建一个新场景
@@ -172,7 +181,7 @@ Route::prefix('scenarios')->group(function () {
     //GET 获取场景
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
-    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+    
 });
 
 Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
@@ -196,7 +205,8 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance:c_scene_instances_id}', [InstanceController::class, 'show']);
     Route::get('/{instance_id}/vms', [VmController::class, 'listVmsBySceneInstance']);
     Route::post('/{instance}/teardown', [InstanceController::class, 'tearDownResources']);
-    Route::get('/{instance:c_scene_instances_id}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
+    // file: routes/api.php
+    Route::get('/{instance}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
     // 新增：更新场景实例的 c_scene_config JSON
     Route::put('/{instance:c_scene_instances_id}/scene-config', [InstanceController::class, 'updateSceneConfig']);
 });
@@ -286,6 +296,7 @@ Route::prefix('study')->group(function () {
         Route::post('/query_results', [TestController::class, 'query_results']);
         Route::post('/batch_question_add', [TestController::class, 'batch_question_add']);
         Route::post('/redis_test', [TestController::class, 'redis_test']);
+        Route::get('/getPaperRulesByTestId', [TestController::class, 'getPaperRulesByTestId']);
         Route::get('/get_all_paper_rules', [TestController::class, 'get_all_paper_rules']);
         Route::get('get_paper_details', [TestController::class, 'get_paper_details']);
         Route::post('export_paper_to_word', [TestController::class, 'export_paper_to_word']);
@@ -295,7 +306,7 @@ Route::prefix('study')->group(function () {
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
-        Route::get('/scenariosinstances', [TestController::class, 'index'])->middleware('auth:api');    
+        Route::get('index', [TestController::class, 'index']);
           // 根据用户名查找用户的场景实例
         Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
     });
@@ -391,6 +402,7 @@ Route::prefix('ad')->group(function () {
 Route::prefix('flag')->group(function () {
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
     Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::get('/latest-submissions', [FlagSubmissionController::class, 'getLatestSubmissions']); // 新增：获取最新提交记录（用于轮询）
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
 });
@@ -398,4 +410,5 @@ Route::prefix('flag')->group(function () {
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
     Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
 });

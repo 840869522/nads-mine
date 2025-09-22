@@ -750,34 +750,38 @@ const TestManagement = () => {
             c_test_type: '实验',
             c_type: '实验'
           };
-          console.log('fetchTestInfo - 实验处理后数据:', result);
           return result;
+        } else {
+          showSnackbar('获取实验详情失败: ' + response.data.message, 'error');
+          return null;
         }
       } else {
-        response = await apiClientWithToken.post<ApiResponse>('/back/api/study/test/test_info', {
-          id: testId
+        response = await apiClientWithToken.post<ApiResponse>(`/back/api/study/test/test_info`, {
+          id: testId 
         });
 
         if (response.data.code === 200) {
           const data = response.data.data;
-          console.log('fetchTestInfo - 理论测试原始数据:', data);
-          
-          const result = {
+          return {
             ...data,
-            c_id: data.c_id || testId, // 确保c_id被正确设置
+            c_id: data.c_id || testId,
+            c_name: data.c_name,
+            c_description: data.c_description,
+            c_test_type: data.c_test_type,
+            c_type: data.c_type,
+            c_course_id: data.c_course_id,
             c_start: data.c_start || null,
             c_end: data.c_end || null,
-            c_duration: data.c_duration,
+            c_paper_count: data.c_paper_count || 0,
+            c_duration: data.c_duration || 0,
             c_scene_config_id: data.c_scene_config_id || 0,
             c_scene_name: data.c_scene_name || ''
           };
-          console.log('fetchTestInfo - 理论测试处理后数据:', result);
-          return result;
+        } else {
+          showSnackbar('获取测试详情失败: ' + response.data.message, 'error');
+          return null;
         }
       }
-
-      showSnackbar('获取测试详情失败: ' + response.data.message, 'error');
-      return null;
     } catch (error: any) {
       console.error('获取测试详情失败:', error);
       showSnackbar('获取测试详情失败: ' + (error.response?.data?.message || error.message), 'error');

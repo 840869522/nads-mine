@@ -826,6 +826,7 @@ const TestManagement_user = () => {
           experimentName={selectedExperiment.test_name}
           courseId={selectedExperiment.c_course_id || ''}
           onShowMessage={handleShowMessage}
+          hideDeleteButton={true} // 添加这个prop来隐藏删除按钮
         />
       )}
 

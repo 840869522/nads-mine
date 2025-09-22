@@ -31,6 +31,7 @@ class CourseModel
                     'c.c_course_id',
                     'c.c_course_name',
                     'c.c_description',
+                    'c.c_status',
                     'cat.c_category_name',
                     'c.created_at',
                     'c.updated_at',
@@ -119,6 +120,11 @@ class CourseModel
                     'message' => 'Missing required fields: c_category_id or c_course_name.',
                 ];
             }
+            // 新增：校验 c_status
+            if (isset($data['c_status']) && !in_array($data['c_status'], ['draft', 'published'])) {
+                return ['code' => 422, 'message' => 'Invalid c_status: Must be "draft" or "published".'];
+            }
+            $status = $data['c_status'] ?? 'published';  // 默认 'published'
 
             if (!preg_match('/^\d{2}$/', $data['c_category_id'])) {
                 return [
@@ -165,8 +171,8 @@ class CourseModel
 
             DB::beginTransaction();
             $result = DB::insert(
-                'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-                [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id']]
+                'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, c_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+                [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id'], $status]  // 新增 $status
             );
             DB::commit();
             return [
@@ -220,6 +226,14 @@ class CourseModel
                     'message' => 'Category does not exist.',
                 ];
             }
+            // 添加：校验 c_status，如果提供则必须是 'draft' 或 'published'，否则默认 'published'
+            if (isset($data['c_status']) && !in_array($data['c_status'], ['draft', 'published'])) {
+                return [
+                    'code' => 422,
+                    'message' => 'Invalid c_status: Must be "draft" or "published".',
+                ];
+            }
+            $status = $data['c_status'] ?? 'published';  // 默认 'published'
 
             $oldCourse = DB::table('c_courses')->where('c_course_id', $id)->first();
             if (!$oldCourse) {
@@ -260,11 +274,11 @@ class CourseModel
                     ];
                 }
 
-                // 插入新课程记录
-                DB::insert(
-                    'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW())',
-                    [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id'], $oldCourse->created_at]
-                );
+            // 插入新课程记录
+            DB::insert(
+                'INSERT INTO c_courses (c_course_id, c_course_name, c_description, c_category_id, c_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+                [$newId, $data['c_course_name'], $data['c_description'] ?? null, $data['c_category_id'], $status, $oldCourse->created_at]
+            );
 
                 // 计算前缀
                 $oldPrefix = $oldCourse->c_category_id . $id; // 旧前缀，如 '1212001'
@@ -466,17 +480,17 @@ class CourseModel
                 // 删除旧课程记录
                 DB::delete('DELETE FROM c_courses WHERE c_course_id = ?', [$id]);
 
-                DB::commit();
-                return [
-                    'code' => 200,
-                    'message' => 'Course updated successfully with new ID.',
-                    'data' => ['new_course_id' => $newId],
-                ];
-            } else {
-                $result = DB::update(
-                    'UPDATE c_courses SET c_course_name = ?, c_description = ?, updated_at = NOW() WHERE c_course_id = ?',
-                    [$data['c_course_name'], $data['c_description'] ?? null, $id]
-                );
+            DB::commit();
+            return [
+                'code' => 200,
+                'message' => 'Course updated successfully with new ID.',
+                'data' => ['new_course_id' => $newId],
+            ];
+        } else {
+            $result = DB::update(
+                'UPDATE c_courses SET c_course_name = ?, c_description = ?, c_status = ?, updated_at = NOW() WHERE c_course_id = ?',
+                [$data['c_course_name'], $data['c_description'] ?? null, $status, $id]
+            );
 
                 if ($result) {
                     DB::commit();
@@ -591,7 +605,7 @@ class CourseModel
 
             $course = DB::table('c_courses as c')
                 ->join('c_course_categories as cat', 'c.c_category_id', '=', 'cat.c_category_id')
-                ->select('c.c_course_id', 'c.c_course_name', 'c.c_description', 'cat.c_category_name', 'c.created_at', 'c.updated_at')
+                ->select('c.c_course_id', 'c.c_course_name', 'c.c_description', 'c.c_status', 'cat.c_category_name', 'c.created_at', 'c.updated_at')
                 ->where('c.c_course_id', $id)
                 ->first();
             if ($course) {

@@ -61,7 +61,9 @@ export default function ExecTerminalModal({ open, containerId, onClose, zIndex }
       const socket = io({
         path: '/api/terminal',
         query: { id: containerId },
-        transports: ['websocket'],
+        //transports: ['websocket'],
+          withCredentials: true,
+          forceNew: true,
       });
       socketRef.current = socket;
 

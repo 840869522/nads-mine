@@ -19,8 +19,11 @@ class VmController extends Controller
         'qcow2', 'raw', 'img', 'iso', 'vmdk', 'vdi', 'vhd', 'vhdx'
     ];
 
-    public function __construct(CommandLineService $cliService)
+    public function __construct(CommandLineService $cliService, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
+
         $this->cliService = $cliService;
     }
 

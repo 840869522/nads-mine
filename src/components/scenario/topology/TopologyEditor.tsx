@@ -148,6 +148,12 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     });
     const [simulationEnabled, setSimulationEnabled] = useState(false);
     const [mirroringEnabled, setMirroringEnabled] = useState(false);
+    // 新增：流量镜像交换机选择相关状态
+    const [isSelectingSwitchForMirroring, setIsSelectingSwitchForMirroring] = useState(false);
+    const [shouldResetSwitchDropdown, setShouldResetSwitchDropdown] = useState(false);
+    // 新增：流量模拟交换机选择相关状态
+    const [isSelectingSwitchForSimulation, setIsSelectingSwitchForSimulation] = useState(false);
+    const [shouldResetSimulationDropdown, setShouldResetSimulationDropdown] = useState(false);
     //添加 useEffect: 监听 initialData prop 的变化
     useEffect(() => {
         // 从 initialData 中提取拓扑信息
@@ -389,11 +395,192 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         });
     }, [updateAllContainersEnvVars]);
     const handleToggleSimulation = useCallback(() => {
-        setSimulationEnabled(prev => !prev);
-    }, []);
+        if (!simulationEnabled) {
+            // 如果当前未启用模拟，则进入交换机选择模式
+            setIsSelectingSwitchForSimulation(true);
+        } else {
+            // 如果当前已启用模拟，则关闭模拟功能
+            setSimulationEnabled(false);
+            setIsSelectingSwitchForSimulation(false);
+        }
+    }, [simulationEnabled]);
     const handleToggleMirroring = useCallback(() => {
-        setMirroringEnabled(prev => !prev);
-    }, []);
+        if (!mirroringEnabled) {
+            // 如果当前未启用镜像，则进入交换机选择模式
+            setIsSelectingSwitchForMirroring(true);
+        } else {
+            // 如果当前已启用镜像，则关闭镜像功能
+            setMirroringEnabled(false);
+            setIsSelectingSwitchForMirroring(false);
+        }
+    }, [mirroringEnabled]);
+
+    // 新增：处理交换机选择进行镜像的函数
+    const handleSelectSwitchForMirroring = useCallback((switchId: string) => {
+        const selectedSwitch = nodes.find(node => node.id === switchId && node.type === 'switch');
+        if (!selectedSwitch) {
+            console.error('未找到选中的交换机');
+            return;
+        }
+
+        // 创建默认的Docker镜像容器
+        const defaultImageName = 'suricata:v1'; // 默认镜像名称
+        const containerCount = nodes.filter(n => n.type === 'container').length + 1;
+        const containerLabel = `Mirror-${containerCount}`;
+        
+        // 生成容器节点
+        const mirrorContainer: TopologyNode = {
+            id: generateId('container'),
+            type: 'container',
+            label: containerLabel,
+            x: selectedSwitch.x + 200, // 在交换机右侧放置
+            y: selectedSwitch.y,
+            config: {
+                ...DEFAULT_NODE_CONFIG.container,
+                Image: defaultImageName,
+                env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
+            }
+        };
+
+        // 创建容器到交换机的连接
+        const mirrorEdge: TopologyEdge = {
+            id: generateId('edge'),
+            source: mirrorContainer.id,
+            target: switchId,
+            config: {
+                ...DEFAULT_EDGE_CONFIG,
+                sourceInterface: '',
+                targetInterface: '',
+                sourceIp: '',
+                targetIp: ''
+            }
+        };
+
+        // 添加容器节点
+        const addContainerAction: TopologyAction = { type: 'ADD_NODE', payload: { node: mirrorContainer } };
+        dispatch(addContainerAction);
+        onAddNode(mirrorContainer);
+        pushToUndoStack(addContainerAction);
+
+        // 添加连接边
+        const addEdgeAction: TopologyAction = { type: 'ADD_EDGE', payload: { edge: mirrorEdge } };
+        dispatch(addEdgeAction);
+        pushToUndoStack(addEdgeAction);
+
+        // 启用镜像功能并退出选择模式
+        setMirroringEnabled(true);
+        setIsSelectingSwitchForMirroring(false);
+        setShouldResetSwitchDropdown(true);
+    }, [nodes, dispatch, onAddNode, pushToUndoStack]);
+
+    // 新增：处理交换机选择进行模拟的函数
+    const handleSelectSwitchForSimulation = useCallback((switchId: string) => {
+        const selectedSwitch = nodes.find(node => node.id === switchId && node.type === 'switch');
+        if (!selectedSwitch) {
+            console.error('未找到选中的交换机');
+            return;
+        }
+
+        // 创建默认的Docker镜像名称
+        const defaultImageName = 'nicolaka/netshoot:latest';
+        const containerCount = nodes.filter(n => n.type === 'container').length;
+        
+        // 创建两个模拟容器
+        const simulationContainer1: TopologyNode = {
+            id: generateId('container'),
+            type: 'container',
+            label: `Sim-${containerCount + 1}`,
+            x: selectedSwitch.x - 200, // 在交换机左侧放置
+            y: selectedSwitch.y - 50,
+            config: {
+                ...DEFAULT_NODE_CONFIG.container,
+                Image: defaultImageName,
+                env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
+            }
+        };
+
+        const simulationContainer2: TopologyNode = {
+            id: generateId('container'),
+            type: 'container',
+            label: `Sim-${containerCount + 2}`,
+            x: selectedSwitch.x - 200, // 在交换机左侧放置
+            y: selectedSwitch.y + 50,
+            config: {
+                ...DEFAULT_NODE_CONFIG.container,
+                Image: defaultImageName,
+                env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
+            }
+        };
+
+        // 创建两个容器到交换机的连接
+        const simulationEdge1: TopologyEdge = {
+            id: generateId('edge'),
+            source: simulationContainer1.id,
+            target: switchId,
+            config: {
+                ...DEFAULT_EDGE_CONFIG,
+                sourceInterface: '',
+                targetInterface: '',
+                sourceIp: '',
+                targetIp: ''
+            }
+        };
+
+        const simulationEdge2: TopologyEdge = {
+            id: generateId('edge'),
+            source: simulationContainer2.id,
+            target: switchId,
+            config: {
+                ...DEFAULT_EDGE_CONFIG,
+                sourceInterface: '',
+                targetInterface: '',
+                sourceIp: '',
+                targetIp: ''
+            }
+        };
+
+        // 添加两个容器节点
+        const addContainer1Action: TopologyAction = { type: 'ADD_NODE', payload: { node: simulationContainer1 } };
+        const addContainer2Action: TopologyAction = { type: 'ADD_NODE', payload: { node: simulationContainer2 } };
+        dispatch(addContainer1Action);
+        dispatch(addContainer2Action);
+        onAddNode(simulationContainer1);
+        onAddNode(simulationContainer2);
+        pushToUndoStack(addContainer1Action);
+        pushToUndoStack(addContainer2Action);
+
+        // 添加两个连接边
+        const addEdge1Action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: simulationEdge1 } };
+        const addEdge2Action: TopologyAction = { type: 'ADD_EDGE', payload: { edge: simulationEdge2 } };
+        dispatch(addEdge1Action);
+        dispatch(addEdge2Action);
+        pushToUndoStack(addEdge1Action);
+        pushToUndoStack(addEdge2Action);
+
+        // 启用模拟功能并退出选择模式
+        setSimulationEnabled(true);
+        setIsSelectingSwitchForSimulation(false);
+        setShouldResetSimulationDropdown(true);
+    }, [nodes, dispatch, onAddNode, pushToUndoStack]);
+
+    // 新增：获取可用交换机列表
+    const availableSwitches = nodes.filter(node => node.type === 'switch').map(node => ({
+        id: node.id,
+        label: node.label
+    }));
+
+    // 重置下拉菜单状态的effect
+    useEffect(() => {
+        if (shouldResetSwitchDropdown) {
+            setShouldResetSwitchDropdown(false);
+        }
+    }, [shouldResetSwitchDropdown]);
+
+    useEffect(() => {
+        if (shouldResetSimulationDropdown) {
+            setShouldResetSimulationDropdown(false);
+        }
+    }, [shouldResetSimulationDropdown]);
 
     // 3. 原来的 handleSave 现在只负责打开弹窗
     const handleSave = () => {
@@ -544,6 +731,15 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 onToggleSimulation={handleToggleSimulation}
                 mirroringEnabled={mirroringEnabled}
                 onToggleMirroring={handleToggleMirroring}
+                // 新增：流量镜像相关props
+                availableSwitches={availableSwitches}
+                onSelectSwitchForMirroring={handleSelectSwitchForMirroring}
+                isSelectingSwitchForMirroring={isSelectingSwitchForMirroring}
+                shouldResetSwitchDropdown={shouldResetSwitchDropdown}
+                // 新增：流量模拟相关props
+                onSelectSwitchForSimulation={handleSelectSwitchForSimulation}
+                isSelectingSwitchForSimulation={isSelectingSwitchForSimulation}
+                shouldResetSimulationDropdown={shouldResetSimulationDropdown}
                 // onExport={handleExport}
                 // onImport={handleImport}
                 onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}

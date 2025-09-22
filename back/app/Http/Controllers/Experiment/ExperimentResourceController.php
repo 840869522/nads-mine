@@ -50,11 +50,12 @@ class ExperimentResourceController extends Controller
             ], 500);
         }
     }
-    public function upload(Request $request, $experimentId)
+  public function upload(Request $request, $courseId, $experimentId)
     {
-        // 移除c_course_id和c_experiment_id验证（使用路由参数）
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:512000',
+            'c_course_id' => 'required|string|exists:c_courses,c_course_id',
+            'c_experiment_id' => 'required|string|exists:c_course_experiments,c_experiment_id',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:2097152',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -66,37 +67,18 @@ class ExperimentResourceController extends Controller
 
         try {
             $file = $request->file('file');
-            // 获取experiment并推导courseId
-            $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->first();
-            if (!$experiment) {
-                return response()->json([
-                    'code' => 404,
-                    'message' => 'Experiment not found.',
-                ], 404);
-            }
-            $courseId = $experiment->c_course_id;
             $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
-            if (!$course) {
+            $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->where('c_course_id', $courseId)->first();
+            if (!$course || !$experiment) {
                 return response()->json([
                     'code' => 404,
-                    'message' => 'Course not found.',
+                    'message' => 'Course or experiment not found.',
                 ], 404);
             }
 
             $targetPath = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$experimentId}";
             if (!Storage::disk('local_resources')->exists($targetPath)) {
                 Storage::disk('local_resources')->makeDirectory($targetPath, 0755, true);
-            }
-            
-            // 确保目录存在且可写
-            $fullTargetPath = Storage::disk('local_resources')->path($targetPath);
-            if (!is_dir($fullTargetPath)) {
-                if (!mkdir($fullTargetPath, 0755, true)) {
-                    return response()->json([
-                        'code' => 500,
-                        'message' => 'Failed to create upload directory.',
-                    ], 500);
-                }
             }
 
             $originalName = mb_convert_encoding($file->getClientOriginalName(), 'UTF-8', 'UTF-8');
@@ -128,7 +110,7 @@ class ExperimentResourceController extends Controller
             }
 
             $data = [
-                'c_course_id' => $courseId,  // 使用推导的courseId
+                'c_course_id' => $courseId,
                 'c_experiment_id' => $experimentId,
                 'c_resource_name' => $fileNameWithoutExtension, // 去除扩展名
                 'c_resource_path' => $resourcePath,
@@ -156,6 +138,7 @@ class ExperimentResourceController extends Controller
             ], 500);
         }
     }
+    
     public function destroy($experimentId, $resourceId)
     {
         try {
@@ -411,131 +394,174 @@ HTML;
         }
     }
 
-    public function uploadMultiple(Request $request, $experimentId)
-    {
-        // 批量上传实验资源
-        $validator = Validator::make($request->all(), [
-            'files' => 'required|array',
-            'files.*' => 'file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:512000',
-        ]);
-        
-        if ($validator->fails()) {
-            return response()->json([
-                'code' => 422,
-                'message' => $validator->errors()->first(),
-                'errors' => $validator->errors()->all(),
-            ], 422);
-        }
-
-        try {
-            $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->first();
-            if (!$experiment) {
-                return response()->json([
-                    'code' => 404,
-                    'message' => 'Experiment not found.',
-                ], 404);
-            }
-            
-            $courseId = $experiment->c_course_id;
-            $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
-            if (!$course) {
-                return response()->json([
-                    'code' => 404,
-                    'message' => 'Course not found.',
-                ], 404);
-            }
-
-            $targetPath = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$experimentId}";
-            if (!Storage::disk('local_resources')->exists($targetPath)) {
-                Storage::disk('local_resources')->makeDirectory($targetPath, 0755, true);
-            }
-            
-            $uploadedFiles = $request->file('files');
-            $uploadedResources = [];
-            $errors = [];
-
-            foreach ($uploadedFiles as $index => $file) {
-                try {
-                    $originalName = mb_convert_encoding($file->getClientOriginalName(), 'UTF-8', 'UTF-8');
-                    $fileNameWithoutExtension = pathinfo($originalName, PATHINFO_FILENAME);
-                    $fileExtension = $file->getClientOriginalExtension();
-                    
-                    $fileName = $originalName;
-                    $counter = 1;
-                    while (Storage::disk('local_resources')->exists("{$targetPath}/{$fileName}")) {
-                        $fileName = "{$fileNameWithoutExtension}_{$counter}.{$fileExtension}";
-                        $counter++;
-                    }
-
-                    $resourcePath = Storage::disk('local_resources')->putFileAs($targetPath, $file, $fileName);
-                    
-                    if (!Storage::disk('local_resources')->exists($resourcePath)) {
-                        $errors[] = "文件 {$originalName} 存储失败";
-                        continue;
-                    }
-
-                    $data = [
-                        'c_course_id' => $courseId,
-                        'c_experiment_id' => $experimentId,
-                        'c_resource_name' => $fileNameWithoutExtension,
-                        'c_resource_path' => $resourcePath,
-                        'c_type' => $fileExtension,
-                        'c_size' => $file->getSize(),
-                    ];
-                    
-                    $modelRes = ExperimentResourceModel::store($data);
-                    if ($modelRes['code'] != 201) {
-                        Storage::disk('local_resources')->delete($resourcePath);
-                        $errors[] = "文件 {$originalName} 数据库保存失败: " . $modelRes['message'];
-                        continue;
-                    }
-
-                    $uploadedResources[] = [
-                        'file_name' => $fileName,
-                        'resource_id' => $modelRes['data']['c_resource_id'],
-                        'size' => $file->getSize(),
-                        'type' => $fileExtension,
-                    ];
-
-                } catch (\Exception $e) {
-                    $errors[] = "文件 {$file->getClientOriginalName()} 上传失败: " . $e->getMessage();
-                    Log::error('批量上传单个文件失败', [
-                        'file_index' => $index,
-                        'file_name' => $file->getClientOriginalName(),
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]);
-                }
-            }
-
-            $response = [
-                'code' => 201,
-                'message' => '批量上传完成',
-                'data' => [
-                    'uploaded_count' => count($uploadedResources),
-                    'total_count' => count($uploadedFiles),
-                    'uploaded_files' => $uploadedResources,
-                    'errors' => $errors,
-                ],
-            ];
-
-            if (count($errors) > 0) {
-                $response['message'] .= '，部分文件上传失败';
-            }
-
-            return response()->json($response, 201);
-
-        } catch (\Exception $e) {
-            Log::error('[GENERAL] 批量上传实验资源失败: ' . $e->getMessage(), [
-                'experiment_id' => $experimentId,
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'code' => 500,
-                'message' => '批量上传失败: ' . $e->getMessage(),
-            ], 500);
-        }
+   public function uploadMultiple(Request $request, $experimentId)
+{
+    // 批量上传实验资源
+    $validator = Validator::make($request->all(), [
+        'files' => 'required|array',
+        'files.*' => 'file|mimes:pdf,jpg,jpeg,png,doc,pptx,docx,mp4,avi|max:512000',
+    ]);
+    
+    if ($validator->fails()) {
+        return response()->json([
+            'code' => 422,
+            'message' => $validator->errors()->first(),
+            'errors' => $validator->errors()->all(),
+        ], 422);
     }
+
+    try {
+        Log::info('开始批量上传实验资源', ['experiment_id' => $experimentId]);
+        
+        // 获取experiment并推导courseId
+        $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->first();
+        if (!$experiment) {
+            Log::error('实验未找到', ['experiment_id' => $experimentId]);
+            return response()->json([
+                'code' => 404,
+                'message' => 'Experiment not found.',
+            ], 404);
+        }
+        
+        $courseId = $experiment->c_course_id;
+        $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
+        if (!$course) {
+            Log::error('课程未找到', ['course_id' => $courseId]);
+            return response()->json([
+                'code' => 404,
+                'message' => 'Course not found.',
+            ], 404);
+        }
+
+        $targetPath = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$experimentId}";
+        Log::info('目标存储路径', ['path' => $targetPath]);
+        
+        // 使用 Storage::disk('local_resources') 确保目录存在
+        $disk = Storage::disk('local_resources');
+        if (!$disk->exists($targetPath)) {
+            $disk->makeDirectory($targetPath, 0755, true);
+        }
+        
+        $uploadedFiles = $request->file('files');
+        $uploadedResources = [];
+        $errors = [];
+
+        Log::info('接收到的文件数量', ['count' => count($uploadedFiles)]);
+
+        foreach ($uploadedFiles as $index => $file) {
+            try {
+                Log::info('处理文件', [
+                    'index' => $index,
+                    'original_name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                    'mime_type' => $file->getMimeType()
+                ]);
+
+                $originalName = mb_convert_encoding($file->getClientOriginalName(), 'UTF-8', 'UTF-8');
+                $fileNameWithoutExtension = pathinfo($originalName, PATHINFO_FILENAME);
+                $fileExtension = $file->getClientOriginalExtension();
+                
+                $fileName = $originalName;
+                $counter = 1;
+                while ($disk->exists("{$targetPath}/{$fileName}")) {
+                    $fileName = "{$fileNameWithoutExtension}_{$counter}.{$fileExtension}";
+                    $counter++;
+                }
+
+                Log::info('准备存储文件', [
+                    'target_path' => $targetPath,
+                    'file_name' => $fileName
+                ]);
+
+                // 使用 putFileAs 方法存储文件
+                $resourcePath = $disk->putFileAs($targetPath, $file, $fileName);
+                
+                Log::info('文件存储结果', ['resource_path' => $resourcePath]);
+
+                // 检查文件是否成功存储
+                if (!$disk->exists($resourcePath)) {
+                    $errorMsg = "文件 {$originalName} 存储失败";
+                    $errors[] = $errorMsg;
+                    Log::error($errorMsg);
+                    continue;
+                }
+
+                // 准备数据并调用 store 方法
+                $data = [
+                    'c_course_id' => $courseId,
+                    'c_experiment_id' => $experimentId,
+                    'c_resource_name' => $fileNameWithoutExtension,
+                    'c_resource_path' => $resourcePath,
+                    'c_type' => $fileExtension,
+                    'c_size' => $file->getSize(),
+                ];
+                
+                Log::info('调用 store 方法保存到数据库', ['data' => $data]);
+                
+                // 调用 store 方法进行数据库存储
+                $modelRes = ExperimentResourceModel::store($data);
+                
+                if ($modelRes['code'] != 201) {
+                    // 数据库存储失败，删除已上传的文件
+                    $disk->delete($resourcePath);
+                    $errorMsg = "文件 {$originalName} 数据库保存失败: " . $modelRes['message'];
+                    $errors[] = $errorMsg;
+                    Log::error($errorMsg, ['response' => $modelRes]);
+                    continue;
+                }
+
+                $uploadedResources[] = [
+                    'file_name' => $fileName,
+                    'resource_id' => $modelRes['data']['c_resource_id'],
+                    'size' => $file->getSize(),
+                    'type' => $fileExtension,
+                    'path' => $resourcePath
+                ];
+
+                Log::info('文件上传成功', ['file_name' => $fileName]);
+
+            } catch (\Exception $e) {
+                $errorMsg = "文件 {$file->getClientOriginalName()} 上传失败: " . $e->getMessage();
+                $errors[] = $errorMsg;
+                Log::error($errorMsg, [
+                    'file_index' => $index,
+                    'file_name' => $file->getClientOriginalName(),
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
+        }
+
+        $response = [
+            'code' => 201,
+            'message' => '批量上传完成',
+            'data' => [
+                'uploaded_count' => count($uploadedResources),
+                'total_count' => count($uploadedFiles),
+                'uploaded_files' => $uploadedResources,
+                'errors' => $errors,
+            ],
+        ];
+
+        if (count($errors) > 0) {
+            $response['message'] .= '，部分文件上传失败';
+        }
+
+        Log::info('批量上传完成', $response);
+
+        return response()->json($response, 201);
+
+    } catch (\Exception $e) {
+        Log::error('[GENERAL] 批量上传实验资源失败: ' . $e->getMessage(), [
+            'experiment_id' => $experimentId,
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'code' => 500,
+            'message' => '批量上传失败: ' . $e->getMessage(),
+        ], 500);
+    }
+}
 
     public function officePreview(Request $request, $c_resource_id)
     {

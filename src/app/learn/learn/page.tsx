@@ -114,7 +114,7 @@ const CourseLearningPage: React.FC = () => {
                     ...(searchKeyword && { keyword: searchKeyword }),
                     ...(filterCategoryId && { c_category_id: filterCategoryId }),
                 };
-                const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
+                const coursesResponse = await apiClientWithToken.get(`/back/api/study/learn/courses`, {
                     headers: { Authorization: `${token}` },
                     params,
                 });

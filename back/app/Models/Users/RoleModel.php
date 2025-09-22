@@ -14,11 +14,18 @@
         protected $table = "c_roles";
 
         public static function getAllRole(int $page = 1,int $pagesize = 10) :array {
-            $offset = ($page - 1 ) * $pagesize;
-            $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
+            if ($page == -1 ) {
+                $sql = "SELECT * FROM `c_roles`";
+            }else {
+                $offset = ($page - 1 ) * $pagesize;
+                $sql = "SELECT * FROM `c_roles` LIMIT ? OFFSET ?";
+            }
             $sql_count = "SELECT COUNT(c_id) AS count FROM `c_roles`";
-            try {  
-                $res = db::select($sql,[$pagesize,$offset]);
+            try {
+                if ($page == -1)
+                    $res = db::select($sql);
+                else
+                    $res = db::select($sql,[$pagesize,$offset]);
                 $count = db::select($sql_count);
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -95,6 +102,33 @@
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             } 
+        }
+
+        public static function getRole2Permission(int $page = 1, $pagesize = 10) : array {
+            if ($page == -1) {
+                $sql = "SELECT * FROM `c_roles_permissions`";
+            }else {
+                $offset = ($page - 1 ) * $pagesize;
+                $sql = "SELECT * FRoM `c_roles_permissions` LIMIT ? OFFSET ?";
+            }
+            $sql_count = "SELECT COUNT(c_role_id) AS count FROM `c_roles_permissions`";
+            try {
+                if ($page == -1)
+                    $res = db::select($sql);
+                else
+                    $res = db::select($sql,[$pagesize,$offset]);
+                $count = db::select($sql_count);
+                return [
+                    "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data"=>$res,
+                    "count"=> $count[0]->count
+                ];
+            }catch(Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                return [
+                    "code"=>GlobalResponse::$DATABASE_ERROR_CODE
+                ];
+            }
         }
 
         public static function grantRole2User (string $user_id,array $values):array {
@@ -182,6 +216,74 @@
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             }
+        }
+
+
+        public static function batchAddRoles(array $roles) : array {
+            try {
+                $successCount = 0;
+                $errorCount = 0;
+                
+                foreach ($roles as $index => $role) {
+                    try {
+                        DB::beginTransaction();
+                        
+                        // 1. 插入角色基本信息
+                        $sql = "INSERT INTO `c_roles`(
+                            c_id, 
+                            c_name, 
+                            c_create_at, 
+                            c_update_at
+                        ) VALUES(?,?,?,?)";
+                        
+                        $insertResult = DB::insert($sql, [
+                            $role['id'], 
+                            $role['name'],
+                            $role["create_at"],
+                            $role["update_at"]
+                        ]);
+                        
+                        if (!$insertResult) {
+                            throw new \Exception("角色插入失败");
+                        }
+                        
+                        if (isset($role['permissions']) && is_array($role['permissions'])) {
+                            $permissions = array_map(function ($permission_id) use ($role) {
+                                return [
+                                    'c_role_id' => $role['id'],
+                                    'c_permission_id' => $permission_id
+                                ];
+                            }, $role['permissions']);
+                            
+                            $permissionResult = PermissionModel::grantPermission2Role($role['id'], $permissions);
+                            if ($permissionResult["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                                DB::rollBack();
+                                self::deleteRoleById($role['id']);
+                                throw new \Exception("权限分配失败");
+                            }
+                        }
+                        DB::commit();
+                        $successCount++;
+                        
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        $errorCount++;
+                    }
+                }
+                
+                return [
+                    'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    'data' => [
+                        'success_count' => $successCount,
+                        'error_count' => $errorCount,
+                    ]
+                ];
+            } catch (Exception $e) {
+                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+                ];
+            } 
         }
 
         public static function updateRoleById(string $id,?array $data) :array {

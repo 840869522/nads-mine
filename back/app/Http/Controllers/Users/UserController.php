@@ -43,6 +43,41 @@
             }
         }
 
+        public function convert2Excel(Request $req) {
+            $reqData = $req->json()->all();
+            try {
+                $page = $reqData['page'] ?? -1;
+                $pagesize = $reqData['pagesize'] ?? 10;
+            }catch(Exception $e) {
+                $page = -1;
+                $pagesize = 10;
+            }
+            $modelAllRes = UserModel::getAllUser($page,$pagesize);
+            $modelRes = UserModel::getUser2Role( $page, $pagesize);
+            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE && $modelAllRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                    "data" => [
+                        "all_user" => [
+                            "data" =>$modelAllRes['data'],
+                            "count"=> $modelAllRes["count"]
+                        ],
+                        "user_role"=> [
+                            "count"=> $modelRes["count"],
+                            "data" => $modelRes['data'],
+                        ], 
+                    ]
+                ]);
+            else {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                    "data" => null
+                ]);
+            }
+        }
+
         public function searchUser(Request $req){
             $reqData =  $req->json()->all();
             try {
@@ -196,6 +231,32 @@
                 return response()->json([
                     "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
                     "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+        }
+
+
+        public function batchImportUsers(Request $req) {
+            $reqData =  $req->json()->all();
+            try {
+                $users  = $reqData['users'];
+                $modelRes = UserModel::batchAddUsers($users);
+                if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                    return response()->json([
+                        'code'=>GlobalResponse::$HTTP_STATUS_OK_CODE,
+                        "message"=>GlobalResponse::HTTP_STATUS_OK_MES,
+                        "data" => $modelRes['data']
+                    ]);
+                }else{
+                    return response()->json([
+                        "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                        "message" => GlobalResponse::$DATABASE_ERROR_MES
+                    ]);
+                }
+            }catch(Exception $e) {
+                return response()->json([
+                    'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
                 ]);
             }
         }

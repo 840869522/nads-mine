@@ -8,7 +8,7 @@ use App\Models\Course\PaperRulesModel;
 use App\Models\Course\PapersModel;
 use App\Models\Course\QuestionsModel;
 use App\Models\scenario\SceneConfig;
-use Illuminate\Support\Facades\Auth; // 导入 Auth facade
+use App\Utils\JWTControll;
 
 
 use Illuminate\Support\Facades\Validator;
@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Redis;
 use App\Models\Flag\FlagSubmissionModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
+use App\Models\scenario\SceneInstance;
 use App\Models\scenario\SceneInstanceModel;
 
 use Illuminate\Support\Facades\Cache;
@@ -857,12 +858,11 @@ public function destroy(Request $request)
     try {
         // 1. 接收并验证前端参数（三个字段联合唯一标识一条记录）
         $validatedData = $request->validate([
-            'c_test_id' => 'required|string|max:50|regex:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            'c_test_id' => 'required|string|max:50',
             'c_username' => 'required|string|max:50',
             'c_paper_id' => 'required|string|max:50',
         ], [
             'c_test_id.required' => '测试ID不能为空',
-            'c_test_id.regex' => '测试ID格式错误（必须为UUID）',
             'c_username.required' => '用户名不能为空',
             'c_paper_id.required' => '试卷ID不能为空',
         ]);
@@ -975,6 +975,98 @@ public function get_all_paper_rules(Request $request)
         );
     }
 }
+
+        /**
+         * 根据测试ID获取组卷规则
+         * Notes: 查询与指定testId相关的组卷规则
+         * User: assistant
+         * DateTime: 2025/9/20
+         * @param Request $request
+         * @return JsonResponse
+         */
+        public function getPaperRulesByTestId(Request $request)
+        {
+            try {
+                // 从查询参数获取testId
+                $testId = $request->query('test_id');
+                
+                // 验证测试ID
+                if (empty($testId) || !is_string($testId)) {
+                    Log::error('测试ID无效', ['test_id' => $testId]);
+                    return $this->_response(
+                        GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                        '测试ID无效'
+                    );
+                }
+
+                // 查询 c_paper_rules 表，关联 c_tests 表获取测试名称
+                $rules = DB::table('c_paper_rules')
+                    ->leftJoin('c_tests', 'c_paper_rules.c_test_id', '=', 'c_tests.c_id')
+                    ->select([
+                        'c_paper_rules.c_id',
+                        'c_paper_rules.c_test_id',
+                        'c_tests.c_name as testName',
+                        'c_paper_rules.c_type',
+                        'c_paper_rules.c_tag',
+                        'c_paper_rules.c_count',
+                        'c_paper_rules.c_score'
+                    ])
+                    ->where('c_paper_rules.c_test_id', $testId)
+                    ->get();
+
+                $typeDict = [
+                    '1' => 'single_choice',
+                    '2' => 'multiple_choice',
+                    '3' => 'true_or_false',
+                    '4' => 'subjective',
+                ];
+
+                // 格式化规则
+                $groupedRules = [
+                    'testId' => $testId,
+                    'testName' => $rules->isEmpty() ? '未知测试' : ($rules->first()->testName ?? '未知测试'),
+                    'items' => []
+                ];
+
+                foreach ($rules as $rule) {
+                    if (isset($typeDict[(string)$rule->c_type])) {
+                        $groupedRules['items'][] = [
+                            'key' => $rule->c_id,
+                            'tag' => $rule->c_tag ?? '',
+                            'type' => (int)$rule->c_type,
+                            'count' => (int)$rule->c_count,
+                            'score' => (int)$rule->c_score
+                        ];
+                    }
+                }
+
+                // 如果没有规则，返回空 items 数组
+                if ($rules->isEmpty()) {
+                    Log::info('未找到与测试ID关联的组卷规则', ['test_id' => $testId]);
+                } else {
+                    Log::info('获取组卷规则成功', [
+                        'test_id' => $testId,
+                        'test_name' => $groupedRules['testName'],
+                        'item_count' => count($groupedRules['items'])
+                    ]);
+                }
+
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_OK_CODE,
+                    GlobalResponse::HTTP_STATUS_OK_MES,
+                    $groupedRules // 移除了数组包装，直接返回对象
+                );
+            } catch (\Exception $e) {
+                Log::error("[getPaperRulesByTestId错误] Line: {$e->getLine()}, Msg: {$e->getMessage()}", [
+                    'test_id' => $testId ?? 'null',
+                    'trace' => $e->getTraceAsString()
+                ], 'paper_rules_log');
+                return $this->_response(
+                    GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "获取规则失败：{$e->getMessage()}"
+                );
+            }
+        }
 
 
    /**
@@ -4054,42 +4146,63 @@ public function _response($code = '', $message = 0, $data = [])
         }
     }
 
-    /**
-     * 根据用户名查找用户的场景实例
-     * Notes:
-     * User: assistant
-     * DateTime: 2025/7/30
-     * @return JsonResponse
-     */
-    public function index()
-    {
-        try {
-            // 获取认证用户的用户名
-            $username = Auth::user()->c_username;
-
-            // 按用户名过滤场景实例并包含 sceneConfig
-            $instances = SceneInstance::with('sceneConfig')
-                ->where('c_username', $username)
-                ->latest('c_runtime')
-                ->get();
-
-            $data = $instances->map(function ($instance) {
-                return [
-                    'instance_id'   => $instance->c_scene_instances_id,
-                    'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
-                    'username'      => $instance->c_username,
-                    'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
-                    'status'        => $instance->c_status,
-                    'c_scene_config' => $instance->c_scene_config,
-                ];
-            });
-
-            return response()->json($data);
-        } catch (\Exception $e) {
-            Log::error('获取场景实例列表时发生错误: ' . $e->getMessage());
-            return response()->json(['message' => '服务器内部错误，获取列表失败。'], 500);
+   public function index(Request $request)
+{
+    try {
+        $auth = $request->header("Authorization",null);
+        $jwtRes =  JWTControll::decodeJWT($auth);
+        if ($jwtRes["err"] != null) {
+            return response()->json([
+                        "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                        "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+            ]);
+                }
+        // 从 Request 对象获取用户信息
+        $token_data  = $jwtRes["data"];
+        Log::info($token_data);
+        if (!$token_data) {
+            return response()->json([
+                'code' => 401,
+                'message' => '用户未认证或token无效',
+                'data' => []
+            ], 401);
         }
-    }
+        
+        $username = $token_data['id'];
 
+        // 查询数据
+        $instances = SceneInstance::with('sceneConfig')
+            ->where('c_username', $username)
+            ->latest('c_runtime')
+            ->get();
+
+        $data = $instances->map(function ($instance) {
+            return [
+                'instance_id'   => $instance->c_scene_instances_id,
+                'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+                'username'      => $instance->c_username,
+                'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
+                'status'        => $instance->c_status,
+                'c_scene_config' => $instance->c_scene_config,
+            ];
+        });
+
+        // 返回干净的JSON响应
+        return response()->json([
+            'code' => 200,
+            'message' => 'success',
+            'data' => $data
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('获取场景实例列表错误: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+        
+        return response()->json([
+            'code' => 500,
+            'message' => '服务器内部错误',
+            'data' => []
+        ], 500);
+    }
+}
 
 }

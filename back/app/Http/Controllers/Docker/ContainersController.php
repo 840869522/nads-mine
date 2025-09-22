@@ -11,8 +11,11 @@ class ContainersController extends Controller
 {
     private $docker;
 
-    public function __construct(DockerService $docker)
+    public function __construct(DockerService $docker, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
+
         $this->docker = $docker;
     }
 

@@ -9,21 +9,11 @@ import {
 import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
-    Delete as DeleteIcon,
     PlayCircleOutline as StartIcon,
-    Edit as EditIcon,
-    Add as AddIcon,
-    PeopleAlt as PermissionIcon,
     Visibility as ViewInstancesIcon,
-    FlashOn as QuickCreateIcon,
-    Download as ExportIcon,
     ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
-import moment from 'moment'; // 新增导入
-import ScenarioCreateDialog from './ScenarioCreateDialog';
-import ScenarioEditDialog from './ScenarioEditDialog';
-import ScenarioPermissionDialog  from './ScenarioPermissionDialog';
-import ScenarioQuickCreateDialog from './ScenarioQuickCreateDialog';
+import moment from 'moment';
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
@@ -58,19 +48,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('uploadDate');
-    const [deleteTarget, setDeleteTarget] = useState<Scenario | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null);
-    const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null);
-    
-    // 导出功能启用状态 - 可以通过硬编码控制
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isExportEnabled = false; // 设置为 false 禁用导出功能
-
-    const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-    const [isQuickCreateDialogOpen, setQuickCreateDialogOpen] = useState(false);
-    const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
 
  const fetchScenarios = useCallback(async () => {
     setIsLoading(true);
@@ -119,57 +97,17 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     }
 }, [testId]);
 
-    const handleOpenPermissionDialog = (scenario: Scenario) => {
-        setPermissionScenario(scenario);
-    };
-
     useEffect(() => {
         fetchScenarios();
     }, [fetchScenarios]);
 
-    // 更新 handleSaveSuccess 以便它可以同时处理创建和编辑成功后的逻辑
+    // 更新 handleSaveSuccess
     const handleSaveSuccess = () => {
-        setCreateDialogOpen(false);
-        setQuickCreateDialogOpen(false);
-        setEditingScenario(null);
-        setPermissionScenario(null);
         fetchScenarios();
     };
 
     const handleRefresh = () => {
         fetchScenarios();
-    };
-
-    const handleOpenDeleteDialog = (scenario: Scenario) => {
-        setDeleteTarget(scenario);
-    };
-
-    const handleCloseDeleteDialog = () => {
-        setDeleteTarget(null);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!deleteTarget) return;
-
-        setIsDeleting(true);
-        setError(null);
-        try {
-            const response = await customFetch(`/back/api/scenarios?id=${deleteTarget.id}`, {
-                method: 'DELETE',
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || '删除失败');
-            }
-
-            await fetchScenarios();
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsDeleting(false);
-            handleCloseDeleteDialog();
-        }
     };
 
     // 启动场景
@@ -212,53 +150,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
         } finally {
             setStartingScenarioId(null);
         }
-    };
-
-    // 导出场景到预置场景文件
-    const handleExportScenario = async (scenario: Scenario) => {
-        if (!window.confirm(`您确定要将场景 "${scenario.name}" 导出为预置场景吗？`)) {
-            return;
-        }
-
-        setExportingScenarioId(scenario.id);
-        setError(null);
-
-        try {
-            const topologyData = scenario.topology_json;
-            
-            if (!topologyData) {
-                throw new Error('场景拓扑数据为空，无法导出');
-            }
-
-            const response = await customFetch(`/api/scenarios/${scenario.id}/export`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    topologyData,
-                    scenarioName: scenario.name 
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || '导出失败');
-            }
-
-            alert(`场景 "${scenario.name}" 已成功导出为预置场景文件！\n\n文件已保存到：src/app/scenario/manage/scene/${result.file_name}`);
-        } catch (err: any) {
-            setError(err.message || '导出失败');
-            alert(`导出失败: ${err.message}`);
-        } finally {
-            setExportingScenarioId(null);
-        }
-    };
-
-    const handleEditScenario = (scenario: Scenario) => {
-        setEditingScenario(scenario);
     };
 
     const handleRequestSort = (property: SortableKeys) => {
@@ -306,26 +197,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     >
                         {isLoading ? '加载中...' : '刷新'}
                     </Button>
-                    {!testId && (
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<QuickCreateIcon />}
-                            onClick={() => setQuickCreateDialogOpen(true)}
-                        >
-                            快速创建
-                        </Button>
-                    )}
-                    {!testId && (
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<AddIcon />}
-                            onClick={() => setCreateDialogOpen(true)}
-                        >
-                            创建场景
-                        </Button>
-                    )}
                 </Box>
             </Box>
 
@@ -383,20 +254,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                   <ViewInstancesIcon />
                 </IconButton>
               </Tooltip>
-              {isExportEnabled && (
-                <Tooltip title="导出到预置场景">
-                  <span>
-                    <IconButton
-                      color="secondary"
-                      size="small"
-                      onClick={() => handleExportScenario(scenario)}
-                      disabled={exportingScenarioId === scenario.id}
-                    >
-                      {exportingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              )}
               <Tooltip title="启动演练">
                 <span>
                   <IconButton
@@ -408,21 +265,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     {startingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
                   </IconButton>
                 </span>
-              </Tooltip>
-              <Tooltip title="权限管理">
-                <IconButton color="default" size="small" onClick={() => handleOpenPermissionDialog(scenario)}>
-                  <PermissionIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="删除场景">
-                <IconButton color="error" size="small" onClick={() => handleOpenDeleteDialog(scenario)}>
-                  <DeleteIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="编辑场景">
-                <IconButton color="primary" size="small" onClick={() => handleEditScenario(scenario)}>
-                  <EditIcon />
-                </IconButton>
               </Tooltip>
             </TableCell>
           </TableRow>
@@ -443,50 +285,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     labelRowsPerPage="每页行数:"
                 />
             </Paper>
-
-            <Dialog
-                open={!!deleteTarget}
-                onClose={handleCloseDeleteDialog}
-                aria-labelledby="alert-dialog-title"
-                aria-describedby="alert-dialog-description"
-            >
-                <DialogTitle id="alert-dialog-title">
-                    确认删除场景
-                </DialogTitle>
-                <DialogContent>
-                    <DialogContentText id="alert-dialog-description">
-                        您确定要永久删除场景 "{deleteTarget?.name}" 吗？此操作无法撤销。
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>取消</Button>
-                    <Button onClick={handleConfirmDelete} color="error" disabled={isDeleting} autoFocus>
-                        {isDeleting ? <CircularProgress size={20} /> : '确认删除'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-            <ScenarioCreateDialog
-                open={isCreateDialogOpen}
-                onClose={() => setCreateDialogOpen(false)}
-                onSaveSuccess={handleSaveSuccess}
-            />
-            <ScenarioQuickCreateDialog
-                open={isQuickCreateDialogOpen}
-                onClose={() => setQuickCreateDialogOpen(false)}
-                onSaveSuccess={handleSaveSuccess}
-            />
-            <ScenarioEditDialog
-                open={!!editingScenario}
-                onClose={() => setEditingScenario(null)}
-                onSaveSuccess={handleSaveSuccess}
-                scenario={editingScenario}
-            />
-            <ScenarioPermissionDialog
-                open={!!permissionScenario}
-                onClose={() => setPermissionScenario(null)}
-                onSaveSuccess={handleSaveSuccess}
-                scenario={permissionScenario}
-            />
         </Paper>
     );
 };

@@ -18,11 +18,18 @@ class PermissionModel extends Model
 
     public static function getAllPermission(int $page = 1, int $pagesize = 10): array
     {
-        $offset = ($page - 1) * $pagesize;
-        $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
+        if ($page == -1) {
+            $sql = "SELECT * FROM `c_permissions`";
+        }else {
+            $offset = ($page - 1) * $pagesize;
+            $sql = "SELECT * FROM `c_permissions` LIMIT ? OFFSET ?";
+        }
         $sql_count = "SELECT COUNT(c_id) AS count FROM `c_permissions`";
         try {
-            $res  = db::select($sql, [$pagesize, $offset]);
+            if ($page == -1)
+                $res = db::select($sql);
+            else
+                $res  = db::select($sql, [$pagesize, $offset]);
             $count = db::selectOne($sql_count);
             return [
                 "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
@@ -186,6 +193,57 @@ class PermissionModel extends Model
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
         }
+    }
+
+    public static function batchAddPermissions(array $permissions) : array {
+        try {
+            $successCount = 0;
+            $errorCount = 0;
+            
+            foreach ($permissions as $index => $permission) {
+                try {
+                    DB::beginTransaction();
+                    
+                    // 1. 插入角色基本信息
+                    $value = [
+                        "c_id" => $permission["id"],
+                        "c_des"=>$permission['des'],
+                        "c_api_src"=>$permission['api_src'],
+                        "c_pid"=>$permission['pid'],
+                        "c_src"=>$permission['src'],
+                        "c_is_menu"=> $permission['is_menu'],
+                        "c_label"=>$permission['label'],
+                        "c_icon"=>$permission['icon'],
+                        "c_status"=> $permission['status'],
+                        "sort"=>$permission['status'] ?? 100
+                    ];
+                    
+                    $insertResult = DB::table("c_permissions")->insert($value);
+                    
+                    if (!$insertResult) {
+                        throw new \Exception("权限插入失败");
+                    }
+                    DB::commit();
+                    $successCount++;
+                    
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    $errorCount++;
+                }
+            }
+            return [
+                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'data' => [
+                    'success_count' => $successCount,
+                    'error_count' => $errorCount,
+                ]
+            ];
+        } catch (Exception $e) {
+            Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            return [
+                "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+            ];
+        } 
     }
 
 

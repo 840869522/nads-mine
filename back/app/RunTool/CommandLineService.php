@@ -446,6 +446,63 @@ class CommandLineService
     }
 
     /**
+     * 断开两个OVS交换机之间的连接。
+     * 仿照Python版本的disconnectS2S方法实现。
+     *
+     * @param string $switch1Name 第一个交换机的名称
+     * @param string $switch2Name 第二个交换机的名称
+     * @return void
+     * @throws ProcessFailedException
+     */
+    public function disconnectSwitchToSwitch(string $switch1Name, string $switch2Name): void
+    {
+        // 1. 根据两个交换机的名称，生成veth pair的端口名（与连接时保持一致）
+        $s1Hash = substr(md5($switch1Name), 0, 4);
+        $s2Hash = substr(md5($switch2Name), 0, 4);
+        $port1 = "veth-{$s1Hash}-{$s2Hash}";
+        $port2 = "veth-{$s2Hash}-{$s1Hash}";
+
+        Log::info("开始断开交换机连接: {$switch1Name} <-> {$switch2Name}", [
+            'port1' => $port1,
+            'port2' => $port2
+        ]);
+
+        // 2. 删除veth pair的端口（从OVS中移除）
+        $commandDelPort = ['sudo', 'ovs-vsctl', 'del-port', $port1, '--', 'del-port', $port2];
+        Log::info('Executing [Disconnect Switch-to-Switch]: ' . implode(' ', $commandDelPort));
+        $processDelPort = new Process($commandDelPort);
+        $processDelPort->run();
+        
+        if (!$processDelPort->isSuccessful()) {
+            $errorOutput = $processDelPort->getErrorOutput();
+            // 如果端口不存在，记录警告但不抛出异常
+            if (str_contains($errorOutput, 'no port named') || str_contains($errorOutput, 'no bridge named')) {
+                Log::warning("尝试删除不存在的端口或网桥: {$port1}, {$port2}");
+            } else {
+                Log::warning("删除OVS端口时出现错误: " . $errorOutput);
+            }
+        }
+
+        // 3. 删除网络接口
+        $commandDelLink1 = ['sudo', 'ip', 'link', 'del', $port1];
+        Log::info('Executing [Disconnect Switch-to-Switch]: ' . implode(' ', $commandDelLink1));
+        $processDelLink1 = new Process($commandDelLink1);
+        $processDelLink1->run();
+        
+        if (!$processDelLink1->isSuccessful()) {
+            $errorOutput = $processDelLink1->getErrorOutput();
+            // 如果接口不存在，记录警告但不抛出异常
+            if (str_contains($errorOutput, 'Cannot find device') || str_contains($errorOutput, 'No such device')) {
+                Log::warning("尝试删除不存在的网络接口: {$port1}");
+            } else {
+                Log::warning("删除网络接口时出现错误: " . $errorOutput);
+            }
+        }
+
+        Log::info("成功断开交换机连接: {$switch1Name} <-> {$switch2Name}");
+    }
+
+    /**
      *
      * 将一个容器连接到一个OVS交换机上，严格最新的命名规则。
      *
@@ -867,6 +924,35 @@ XML;
     $process->mustRun();
 
     Log::info("Kylin VM creation script for vm '{$options['vm_name']}' executed successfully.", [
+        'output' => $process->getOutput()
+    ]);
+    }
+
+    public function createVmKali(array $options): void
+    {
+    // 指向 Kali Linux 脚本（使用 newvm_kali.sh）
+    $scriptPath = app_path('RunTool/vmscript/newvm_kali.sh');
+
+    $args = [
+        $options['id'],
+        $options['image'],
+        $options['ip'],
+        $options['scene_instance_id'],
+        $options['flag'] ?? 'NULL',
+        $options['switch_name'],
+        $options['vm_name'],
+        $options['image_dir'],
+        $options['instance_base_dir'],
+    ];
+
+    $command = array_merge([$scriptPath], $args);
+    Log::info('Executing Kali Linux VM creation shell script: ' . implode(' ', $command));
+
+    $process = new Process($command);
+    $process->setTimeout(360);
+    $process->mustRun();
+
+    Log::info("Kali Linux VM creation script for vm '{$options['vm_name']}' executed successfully.", [
         'output' => $process->getOutput()
     ]);
     }

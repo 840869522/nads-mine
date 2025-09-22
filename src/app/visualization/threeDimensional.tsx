@@ -3,7 +3,6 @@ import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
-import { websocketClient } from "@/utils/websocket";
 import { AdData } from "./page";
 
 function createSpaceship(
@@ -125,6 +124,11 @@ interface VMResult {
     falseTargetList: VMItem[];
 }
 
+interface FlagLog {
+    redLogList: LogInfo[];
+    blueLogList: LogInfo[];
+}
+
 /**
  * 获取 VM 列表并拆分 trueList / falseList
  */
@@ -143,7 +147,23 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
     }
 }
 
+async function fetchLogs(instanceId: string): Promise<FlagLog> {
+    try {
+        const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
+        if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
+
+        const json = await res.json();
+        // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
+        return json.data as FlagLog;
+    } catch (err) {
+        console.error("请求接口出错:", err);
+        // 异常时返回空列表，保证类型安全
+        return { redLogList: [], blueLogList: [] };
+    }
+}
+
 export default function ThreeDimensional(adData: AdData){
+    const initialized = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
@@ -166,9 +186,12 @@ export default function ThreeDimensional(adData: AdData){
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
 
     const scene = new THREE.Scene();
+    const rings = new THREE.Group();  // 用于保存所有圆环线
 
     useEffect(() => {
         if (!containerRef.current) return;
+        if (initialized.current) return; // 已经加载过了，直接退出
+        initialized.current = true;      // 第一次加载时设置为 true
         
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
@@ -186,7 +209,7 @@ export default function ThreeDimensional(adData: AdData){
         controls.enableDamping = true;
 
         // 添加一个环境光，让场景有一个基础亮度，避免模型全黑
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 颜色, 强度
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // 颜色, 强度
         scene.add(ambientLight);
 
         // 添加一个平行光（像太阳光），可以产生阴影和高光
@@ -256,7 +279,7 @@ export default function ThreeDimensional(adData: AdData){
         const cloudMaterial = new THREE.MeshBasicMaterial({
             map: cloudTexture,
             transparent: true,
-            opacity: 0.25, // 透明度设置得很低，模拟远距离的云层
+            opacity: 0.35, // 透明度设置得很低，模拟远距离的云层
             side: THREE.DoubleSide,
             depthWrite: false, // 不写深度，避免遮挡
             blending: THREE.AdditiveBlending, // 混合模式
@@ -268,7 +291,7 @@ export default function ThreeDimensional(adData: AdData){
 
         // 创建轨道
         const ringCount = 6;  // 设置6个圆环
-        const rings = new THREE.Group();  // 用于保存所有圆环线
+        
 
         // 生成圆环线并添加到场景中
         for (let i = 0; i < ringCount; i++) {
@@ -333,61 +356,99 @@ export default function ThreeDimensional(adData: AdData){
         async function fetchData() {
             const result = await fetchVMs(adData.id);
             setVms(result);
-            for (let i = 0; i < result.falseTargetList.length; i++) {
-                createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
-                    redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
-                });
+            if(redSpaceships.length === 0 && blueSpaceships.length === 0){
+                for (let i = 0; i < result.falseTargetList.length; i++) {
+                    createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
+                        redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
+                    });
+                }
+
+                for (let i = 0; i < result.trueTargetList.length; i++) {
+                    createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
+                        blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                    });
+                }
             }
 
-            for (let i = 0; i < result.trueTargetList.length; i++) {
-                createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                    blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
-                });
-            }
         }
 
-        let timer = "";
+        // 每 5 秒执行一次 fetchLogs
+        let lastRedLogLength = 0;
+        let lastBlueLogLength = 0;
 
-        const handleMessage = (data: any) => {
+        const fetchAndUpdateLogs = async () => {
             try {
-                const msg = typeof data === "string" ? JSON.parse(data) : data;
-                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
-                    timer = msg.timer;
-                    const now = new Date();
-                    const hours = now.getHours().toString().padStart(2, '0');
-                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                    const seconds = now.getSeconds().toString().padStart(2, '0');
+                const logs = await fetchLogs(adData.id);
 
-                    
-                    let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
-                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
-
-                    let newLog: LogInfo = {
-                        logId: Date.now(),
-                        logTime: `${hours}:${minutes}:${seconds}`,
-                        logContent: logMessage
-                    };
-
-                    if(msg.data.success){
-                        setRedTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }else{
-                        setBlueTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }
+                if (logs.redLogList.length !== 0 && logs.redLogList.length !== lastRedLogLength) {
+                    setRedTeamState(prev => ({
+                        ...prev,
+                        logInfo: logs.redLogList
+                    }));
+                    lastRedLogLength = logs.redLogList.length;
                 }
-            } catch (e) {
-            console.error("解析 WebSocket 数据失败:", e, data);
+
+                if (logs.blueLogList.length !== 0 && logs.blueLogList.length !== lastBlueLogLength) {
+                    setBlueTeamState(prev => ({
+                        ...prev,
+                        logInfo: logs.blueLogList
+                    }));
+                    lastBlueLogLength = logs.blueLogList.length;
+                }
+
+            } catch (err) {
+                console.error('fetchLogs error:', err);
             }
         };
 
+        // 页面加载立即请求一次
+        fetchAndUpdateLogs();
+
+        // 然后每隔 5 秒轮询
+        setInterval(fetchAndUpdateLogs, 5000);
+
+        // let timer = "";
+
+        // const handleMessage = (data: any) => {
+        //     try {
+        //         const msg = typeof data === "string" ? JSON.parse(data) : data;
+        //         if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
+        //             timer = msg.timer;
+        //             const now = new Date();
+        //             const hours = now.getHours().toString().padStart(2, '0');
+        //             const minutes = now.getMinutes().toString().padStart(2, '0');
+        //             const seconds = now.getSeconds().toString().padStart(2, '0');
+
+                    
+        //             let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+        //                 : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+
+        //             let newLog: LogInfo = {
+        //                 logId: Date.now(),
+        //                 logTime: `${hours}:${minutes}:${seconds}`,
+        //                 logContent: logMessage
+        //             };
+
+        //             if(msg.data.success){
+        //                 setRedTeamState(prev => ({
+        //                     ...prev,
+        //                     logInfo: [...prev.logInfo, newLog]
+        //                 }));
+        //             }else{
+        //                 setBlueTeamState(prev => ({
+        //                     ...prev,
+        //                     logInfo: [...prev.logInfo, newLog]
+        //                 }));
+        //             }
+        //         }
+        //     } catch (e) {
+        //     console.error("解析 WebSocket 数据失败:", e, data);
+        //     }
+        // };
+
         if(adData && adData.id !== ""){
             fetchData();
-            websocketClient.onMessage(handleMessage);
+            // websocketClient.onMessage(handleMessage);
         }
 
         let shootingPaused = false;
@@ -397,22 +458,22 @@ export default function ThreeDimensional(adData: AdData){
         });
 
 
-        setTimeout(function shootLoop() {
-            if(redSpaceships.length > 0 && blueSpaceships.length > 0){
-                const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
-                const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+        if(adData.showAttack === 1){
+            setTimeout(function shootLoop() {
+                if(redSpaceships.length > 0 && blueSpaceships.length > 0){
+                    const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
+                    const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
 
-                if (red && blue && !shootingPaused) {
-                    shootRay(scene, red.object, blue.object);
+                    if (red && blue && !shootingPaused) {
+                        shootRay(scene, red.object, blue.object);
+                    }
+
+                    // 下次间隔：5~10 秒
+                    const nextDelay = (5 + Math.random() * 5) * 1000;
+                    setTimeout(shootLoop, nextDelay);
                 }
-
-                // 下次间隔：5~10 秒
-                const nextDelay = (5 + Math.random() * 5) * 1000;
-                setTimeout(shootLoop, nextDelay);
-            }
-        }, (5 + Math.random() * 10) * 1000);
-
-
+            }, (5 + Math.random() * 10) * 1000);
+        }
         // ---------- 动画 ----------
         const clock = new THREE.Clock();
         const animate = () => {
@@ -450,9 +511,9 @@ export default function ThreeDimensional(adData: AdData){
             if (containerRef.current?.contains(renderer.domElement)) {
                 containerRef.current.removeChild(renderer.domElement);
             }
-            websocketClient.offMessage(handleMessage);
+            // websocketClient.offMessage(handleMessage);
         };
-    }, [adData.id]);
+    }, [adData]);
 
     return (
         <div className="h-full col-start-2 row-start-2 bg-[rgba(0,10,20,0.8)] border border-[rgba(0,150,255,0.4)] rounded-lg relative shadow-[0_0_25px_rgba(0,100,255,0.3)]">

@@ -9,15 +9,12 @@ import {
 import {
     Refresh as RefreshIcon,
     Search as SearchIcon,
-    Delete as DeleteIcon,
-    Pause as PauseIcon,
     ArrowBack as ArrowBackIcon,
-    Visibility as ViewIcon, // <-- 确认导入
+    Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { customFetch } from '@/utils/fetch';
 // [MODIFICATION] 导入详情对话框组件
 import InstanceDetailsDialog from '../../sceneinstances/InstanceDetailsDialog';
-
 
 interface ScenarioInstance {
     instance_id: string;
@@ -58,8 +55,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
 
-
-    const fetchInstances = useCallback(async () => {
+   const fetchInstances = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -75,8 +71,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
             throw new Error(errorData.message);
         }
         const data: ScenarioInstance[] = await response.json();
-        console.log('Fetched instances:', data); // 调试日志
-        const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
+        const filteredData = scenarioName ? data.data.filter(inst => inst.scenario_name === scenarioName) : data;
         setInstances(filteredData);
     } catch (err: any) {
         setError(err.message || '发生未知错误');
@@ -99,42 +94,6 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
         setSelectedInstanceId(instance.instance_id);
         setSelectedScenarioName(instance.scenario_name);
         setIsDetailsModalOpen(true);
-    };
-
-    const handleDeleteInstance = async (instanceId: string, scenarioName: string) => {
-        if (window.confirm(`您确定要永久删除场景实例 "${scenarioName}" (${instanceId}) 吗？此操作将删除所有关联的容器和资源，且无法撤销。`)) {
-            setIsLoading(true);
-            try {
-                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}`, { method: 'DELETE' });
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `删除失败，状态码: ${response.status}`);
-                }
-                setInstances(prevInstances => prevInstances.filter(inst => inst.instance_id !== instanceId));
-            } catch (err: any) {
-                setError(err.message || '删除过程中发生错误');
-            } finally {
-                setIsLoading(false);
-            }
-        }
-    };
-
-    const handlePauseInstance = async (instanceId: string, scenarioName: string) => {
-        if (window.confirm(`您确定要暂停场景实例 "${scenarioName}" (${instanceId}) 吗？这将拆卸相关资源。`)) {
-            setIsLoading(true);
-            try {
-                const response = await customFetch(`/back/api/scenariosinstances/${instanceId}/teardown`, { method: 'POST' });
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `暂停失败，状态码: ${response.status}`);
-                }
-                fetchInstances();
-            } catch (err: any) {
-                setError(err.message || '暂停过程中发生错误');
-            } finally {
-                setIsLoading(false);
-            }
-        }
     };
 
     const handleRequestSort = (property: SortableKeys) => {
@@ -237,16 +196,6 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
-                                            <Tooltip title="暂停场景">
-                                                <IconButton color="warning" size="small" onClick={() => handlePauseInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
-                                                    <PauseIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="删除场景">
-                                                <IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))
