@@ -519,7 +519,7 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                                        {adConfig.referees.map(referee => {
+                                                        {adConfig.referees.map(( ) => {
                                                             const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户';
                                                             return (
                                                                 <Chip
