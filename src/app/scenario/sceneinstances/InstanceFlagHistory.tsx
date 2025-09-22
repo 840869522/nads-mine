@@ -1,6 +1,6 @@
 // src/app/scenario/sceneinstances/InstanceFlagHistory.tsx
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Box,
     Typography,
@@ -19,6 +19,10 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    FormControlLabel,
+    Switch,
+    Button,
+    Tooltip,
 } from '@mui/material';
 import {
     History as HistoryIcon,
@@ -49,12 +53,29 @@ const InstanceFlagHistory: React.FC<InstanceFlagHistoryProps> = ({ instanceId })
     const [page, setPage] = useState(1);
     const [itemsPerPage] = useState(10);
     const [filter, setFilter] = useState<'all' | 'correct' | 'incorrect'>('all');
+    const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(true);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (instanceId) {
             fetchSubmissions();
+            
+            // 如果启用自动刷新，设置轮询
+            if (isAutoRefreshEnabled) {
+                intervalRef.current = setInterval(() => {
+                    fetchSubmissions();
+                }, 10000); // 10秒轮询一次
+            }
         }
-    }, [instanceId, filter]);
+        
+        // 清理函数
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [instanceId, filter, isAutoRefreshEnabled]);
 
     const fetchSubmissions = async () => {
         if (!instanceId) return;
@@ -128,23 +149,48 @@ const InstanceFlagHistory: React.FC<InstanceFlagHistoryProps> = ({ instanceId })
                 <Typography variant="h6">Flag 历史记录</Typography>
             </Box>
             
-            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                    <InputLabel>筛选结果</InputLabel>
-                    <Select
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value as any)}
-                        label="筛选结果"
-                    >
-                        <MenuItem value="all">全部</MenuItem>
-                        <MenuItem value="correct">正确</MenuItem>
-                        <MenuItem value="incorrect">错误</MenuItem>
-                    </Select>
-                </FormControl>
+            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>筛选结果</InputLabel>
+                        <Select
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value as any)}
+                            label="筛选结果"
+                        >
+                            <MenuItem value="all">全部</MenuItem>
+                            <MenuItem value="correct">正确</MenuItem>
+                            <MenuItem value="incorrect">错误</MenuItem>
+                        </Select>
+                    </FormControl>
+                    
+                    <Typography variant="body2" color="text.secondary">
+                        共 {filteredSubmissions.length} 条记录
+                    </Typography>
+                </Box>
                 
-                <Typography variant="body2" color="text.secondary">
-                    共 {filteredSubmissions.length} 条记录
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Tooltip title="开启后每10秒自动更新数据">
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={isAutoRefreshEnabled}
+                                    onChange={(e) => setIsAutoRefreshEnabled(e.target.checked)}
+                                    size="small"
+                                />
+                            }
+                            label="自动刷新"
+                        />
+                    </Tooltip>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => fetchSubmissions()}
+                        disabled={loading}
+                    >
+                        手动刷新
+                    </Button>
+                </Box>
             </Box>
 
             {loading ? (
