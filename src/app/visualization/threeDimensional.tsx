@@ -3,7 +3,6 @@ import * as THREE from "three";
 import {GLTFLoader, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
-import { websocketClient } from "@/utils/websocket";
 import { AdData } from "./page";
 
 function createSpaceship(
