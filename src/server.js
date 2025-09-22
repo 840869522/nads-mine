@@ -18,14 +18,12 @@ const TERMINAL_PORT  = parseInt(process.env.TERMINAL_PORT || '3100', 10); // 终
 const GUAC_INTERNAL_PORT = parseInt(process.env.GUAC_PORT || '3001', 10);
 const PHP_API_PORT   = parseInt(process.env.PHP_API_PORT || '8000', 10);
 const AI_CHAT_PORT   = parseInt(process.env.AI_CHAT_PORT || '9000', 10);
-const WEBSOCKET_PORT = parseInt(process.env.WEBSOCKET_PORT || '8080', 10);
 
 /* -------------------- Proxy Targets ------------------ */
-const GUAC_TARGET_URL      = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
-const PHP_TARGET_URL       = `http://127.0.0.1:${PHP_API_PORT}`;
-const AI_CHAT_URL          = `http://127.0.0.1:${AI_CHAT_PORT}`;
-const WEBSOCKET_TARGET_URL = `http://127.0.0.1:${WEBSOCKET_PORT}`;
-const TERMINAL_TARGET_URL  = `http://127.0.0.1:${TERMINAL_PORT}`; // 代理到终端服务
+const GUAC_TARGET_URL     = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
+const PHP_TARGET_URL      = `http://127.0.0.1:${PHP_API_PORT}`;
+const AI_CHAT_URL         = `http://127.0.0.1:${AI_CHAT_PORT}`;
+const TERMINAL_TARGET_URL = `http://127.0.0.1:${TERMINAL_PORT}`;
 
 let mainHttpServer;
 let terminalHttpServer;
@@ -56,7 +54,7 @@ function startTerminalServer() {
     terminalHttpServer.requestTimeout = 0;
     terminalHttpServer.headersTimeout = 0;
 
-    // 抓最底层的错误（客户端提前断开等）
+    // 最底层错误（客户端提前断等）
     terminalHttpServer.on('clientError', (err, socket) => {
         console.error('[TERM clientError]', err?.message);
         try { socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); } catch {}
@@ -85,7 +83,7 @@ function startTerminalServer() {
                 const ip = ipOf(req);
                 console.log(`[${now()}][TERM allowRequest] url=${req.url} ip=${ip} ua=${ua}`);
 
-                // 基本校验（按需替换成 JWT/签名校验）
+                // 基本校验（按需替换成 JWT/签名）
                 if (!id) return cb('missing id', false);
                 if (!/^[a-f0-9]{32,128}$/i.test(id)) return cb('bad id format', false);
 
@@ -156,9 +154,7 @@ function startTerminalServer() {
             });
 
             // 客户端 → PTY
-            socket.on('input', (d) => {
-                if (typeof d === 'string') shell.write(d);
-            });
+            socket.on('input', (d) => { if (typeof d === 'string') shell.write(d); });
             socket.on('resize', ({ cols, rows }) => {
                 if (Number.isFinite(cols) && Number.isFinite(rows)) shell.resize(cols, rows);
             });
@@ -195,7 +191,7 @@ function startTerminalServer() {
 }
 
 /* =========================================================
- * Main Server  (Next.js + 代理 + 其它 WS)
+ * Main Server  (Next.js + 代理 + Guacamole)
  * =======================================================*/
 app.prepare().then(() => {
     // 1) 先启动终端独立服务
@@ -245,36 +241,13 @@ app.prepare().then(() => {
         },
     });
 
-    const websocketProxy = createProxyMiddleware({
-        target: WEBSOCKET_TARGET_URL,
-        changeOrigin: true,
-        ws: true,
-        logLevel: dev ? 'debug' : 'info',
-        timeout: 0,
-        proxyTimeout: 0,
-        onError: (err, req, res) => {
-            console.error('[WS proxy error][/ws]:', err.message);
-            if (res && !res.headersSent) {
-                res.writeHead(502, { 'Content-Type': 'text/plain' });
-                res.end('WS proxy error');
-            }
-        },
-        onProxyReqWs: (proxyReq, req, socket) => {
-            console.log(`[${now()}][/ws proxyReqWs] url=${req.url}`);
-            proxyReq.setHeader('Connection', 'Upgrade');
-            proxyReq.setHeader('Upgrade', 'websocket');
-            socket.setKeepAlive?.(true, 30_000);
-            socket.setNoDelay?.(true);
-        },
-    });
-
     // 终端代理：/api/terminal → 127.0.0.1:TERMINAL_PORT/socket.io/
     const terminalProxy = createProxyMiddleware({
         target: TERMINAL_TARGET_URL,
         changeOrigin: true,
         ws: true,
         logLevel: dev ? 'debug' : 'info',
-        pathRewrite: { '^/api/terminal/?': '/socket.io/' }, // 显式改写到标准路径
+        pathRewrite: { '^/api/terminal/?': '/socket.io/' },
         timeout: 0,
         proxyTimeout: 0,
         onError(err, req, res) {
@@ -322,7 +295,6 @@ app.prepare().then(() => {
         if (url.startsWith('/connect-guac')) return guacProxy(req, res);
         if (url.startsWith('/back/'))        return phpProxy(req, res);
         if (url.startsWith('/chat/'))        return aiChatProxy(req, res);
-        if (url.startsWith('/ws'))           return websocketProxy(req, res);
 
         return handle(req, res);
     });
@@ -342,14 +314,13 @@ app.prepare().then(() => {
             return terminalProxy.upgrade(req, socket, head);
         }
 
+        // 其他升级只剩 guac
         console.log(`[${now()}][upgrade] url=${url}`);
         socket.setKeepAlive?.(true, 30_000);
         socket.setNoDelay?.(true);
 
         if (url.startsWith('/connect-guac')) {
             return guacProxy.upgrade(req, socket, head);
-        } else if (url.startsWith('/ws')) {
-            return websocketProxy.upgrade(req, socket, head);
         }
     });
 
@@ -399,7 +370,6 @@ app.prepare().then(() => {
         console.log(`> ➡️  PHP proxied from /back/`);
         console.log(`> ➡️  AI proxied from /chat/`);
         console.log(`> ➡️  Guacamole proxied from /connect-guac`);
-        console.log(`> ➡️  WebSocket proxied from /ws`);
         console.log(`> ➡️  Terminal proxied from /api/terminal  → http://127.0.0.1:${TERMINAL_PORT}/socket.io/ (WS)`);
     });
 
