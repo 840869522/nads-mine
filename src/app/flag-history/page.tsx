@@ -425,7 +425,7 @@ export default function FlagHistoryPage() {
                                 <TableCell>用户</TableCell>
                                 <TableCell>得分</TableCell>
                                 <TableCell>靶机类型</TableCell>
-                                <TableCell>靶机ID</TableCell>
+                                <TableCell>靶机名称</TableCell>
                                 <TableCell>场景ID</TableCell>
                                 <TableCell>尝试次数</TableCell>
                                 <TableCell>提交时间</TableCell>
@@ -492,8 +492,8 @@ export default function FlagHistoryPage() {
                                             </Box>
                                         </TableCell>
                                         <TableCell>
-                                            <Typography variant="body2" fontFamily="monospace">
-                                                {submission.container_instance_id || submission.vm_instance_id || '-'}
+                                            <Typography variant="body2" fontWeight="medium">
+                                                {submission.instance_name || 'Unknown Instance'}
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
