@@ -330,5 +330,8 @@
   "v_tar_oracleControl.qcow2": {
     "osType": "ubuntu",
     "description": "oracle数据库控制靶机镜像"
+  },
+  "Report_new.qcow2": {
+    "osType": "kali"
   }
 }
