@@ -125,7 +125,11 @@ class VmController extends Controller
                 // ★ 关键：调用权限检查函数来动态生成 can_operate 字段 ★
                 // 这个函数内部会自己从 Request 中获取用户信息，所以我们不需要传递参数。
                 // 它的返回值 (true/false) 将决定前端按钮是否可操作。
+<<<<<<< HEAD
+                $can_operate = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
+=======
                 $an_operate= $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
+>>>>>>> 1f333d1631cf2b90374255f6bcf84be3a11ba435
                 $permissions = [
                     "vm_stop"     => $vm_stop && $can_operate,
                     "vm_restart"  => $vm_restart && $can_operate,

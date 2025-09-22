@@ -402,6 +402,7 @@ Route::prefix('ad')->group(function () {
 Route::prefix('flag')->group(function () {
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
     Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::get('/latest-submissions', [FlagSubmissionController::class, 'getLatestSubmissions']); // 新增：获取最新提交记录（用于轮询）
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
 });

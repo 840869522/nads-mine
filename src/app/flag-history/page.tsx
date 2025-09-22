@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Box,
     Typography,
@@ -34,7 +34,6 @@ import {
     PlayArrow,
     Stop,
 } from '@mui/icons-material';
-import { websocketClient } from '@/utils/websocket';
 import { getCookie } from '@/utils/cookie.tsx';
 import {customFetch} from "@/utils/fetch.ts";
 
@@ -67,67 +66,129 @@ export default function FlagHistoryPage() {
         success_rate: 0,
         active_users: 0,
     });
-    const [isConnected, setIsConnected] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
     const [autoScroll, setAutoScroll] = useState(true);
     const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // 获取认证token（从 cookie 中获取）
     const getAuthToken = () => {
         return getCookie('_auth');
     };
 
-    // WebSocket消息处理
-    const handleWebSocketMessage = useCallback((message: any) => {
-        console.log('📨 收到WebSocket消息:', message);
-        
-        if (message.type === 'flag_submission') {
-            console.log('🏴 处理Flag提交消息...');
-            const newSubmission: FlagSubmission = {
-                submission_id: message.submission_id,
-                username: message.c_username || message.username,
-                is_correct: message.c_is_correct || message.is_correct,
-                points_earned: message.c_points_earned || message.points_earned,
-                submitted_at: message.c_submitted_at || message.submitted_at,
-                scene_instance_id: message.c_scene_instances_id || message.scene_instance_id,
-                container_instance_id: message.c_container_instance_id,
-                vm_instance_id: message.c_vm_instance_id,
-                instance_type: message.instance_type,
-                instance_name: message.instance_name,
-                attempt_count: message.attempt_count || 1,
-            };
+    // 轮询获取最新的Flag提交数据
+    const fetchLatestSubmissions = useCallback(async () => {
+        const token = getAuthToken();
+        if (!token) {
+            console.error('未找到认证token');
+            return;
+        }
 
-            console.log('💾 更新提交列表...');
-            setSubmissions(prev => {
-                const updated = [newSubmission, ...prev.slice(0, 49)];
-                console.log('✅ 提交列表已更新，当前数量:', updated.length);
-                return updated;
+        setIsLoading(true);
+        try {
+            const params = new URLSearchParams({
+                limit: '20', // 获取最新20条记录
+                ...(lastFetchTime && { since: lastFetchTime })
             });
-            
-            // 更新统计数据
-            setStats(prev => ({
-                total_submissions: prev.total_submissions + 1,
-                correct_submissions: prev.correct_submissions + (newSubmission.is_correct ? 1 : 0),
-                success_rate: ((prev.correct_submissions + (newSubmission.is_correct ? 1 : 0)) / (prev.total_submissions + 1)) * 100,
-                active_users: prev.active_users, // 这个需要从后端获取
-            }));
 
-            // 自动滚动到顶部 - 使用回调式获取当前值
-            setTimeout(() => {
-                // 从 localStorage或状态中获取autoScroll状态
-                const shouldAutoScroll = document.querySelector('[data-auto-scroll]')?.getAttribute('data-auto-scroll') === 'true';
-                if (shouldAutoScroll) {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+            const response = await customFetch(`/back/api/flag/latest-submissions?${params}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('📨 收到API响应:', data);
+                
+                if (data.code === 200 && data.data?.submissions) {
+                    const newSubmissions = data.data.submissions;
+                    
+                    if (newSubmissions.length > 0) {
+                        console.log('🏴 处理Flag提交数据...', newSubmissions.length, '条记录');
+                        
+                        // 转换数据格式
+                        const formattedSubmissions: FlagSubmission[] = newSubmissions.map((item: any) => ({
+                            submission_id: item.submission_id,
+                            username: item.c_username,
+                            is_correct: item.c_is_correct,
+                            points_earned: item.c_points_earned,
+                            submitted_at: item.c_submitted_at,
+                            scene_instance_id: item.c_scene_instances_id || '',
+                            container_instance_id: item.c_container_instance_id,
+                            vm_instance_id: item.c_vm_instance_id,
+                            instance_type: item.instance_type,
+                            instance_name: item.instance_name,
+                            attempt_count: item.attempt_count || 1,
+                        }));
+
+                        console.log('💾 更新提交列表...');
+                        setSubmissions(prev => {
+                            if (!lastFetchTime) {
+                                // 初始加载，直接替换
+                                console.log('✅ 初始加载，提交列表已更新，当前数量:', formattedSubmissions.length);
+                                return formattedSubmissions;
+                            } else {
+                                // 轮询更新，将新数据加入列表顶部
+                                const combined = [...formattedSubmissions, ...prev];
+                                // 去重并只保留最新的50条
+                                const unique = combined.filter((item, index, arr) => 
+                                    arr.findIndex(sub => sub.submission_id === item.submission_id) === index
+                                ).slice(0, 50);
+                                console.log('✅ 轮询更新，提交列表已更新，当前数量:', unique.length);
+                                return unique;
+                            }
+                        });
+                        
+                        // 更新统计数据
+                        const correctCount = formattedSubmissions.filter(s => s.is_correct).length;
+                        setStats(prev => {
+                            if (!lastFetchTime) {
+                                // 初始加载
+                                return {
+                                    total_submissions: formattedSubmissions.length,
+                                    correct_submissions: correctCount,
+                                    success_rate: formattedSubmissions.length > 0 ? (correctCount / formattedSubmissions.length) * 100 : 0,
+                                    active_users: new Set(formattedSubmissions.map(s => s.username)).size,
+                                };
+                            } else {
+                                // 轮询更新
+                                return {
+                                    total_submissions: prev.total_submissions + formattedSubmissions.length,
+                                    correct_submissions: prev.correct_submissions + correctCount,
+                                    success_rate: ((prev.correct_submissions + correctCount) / (prev.total_submissions + formattedSubmissions.length)) * 100,
+                                    active_users: prev.active_users, // 这个需要从后端获取
+                                };
+                            }
+                        });
+
+                        // 更新最后获取时间
+                        setLastFetchTime(data.data.stats?.latest_timestamp || new Date().toISOString());
+
+                        // 自动滚动到顶部
+                        if (autoScroll && lastFetchTime) {
+                            setTimeout(() => {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }, 100);
+                        }
+                    }
+                } else {
+                    console.warn('无效的 API 响应格式:', data);
                 }
-            }, 100);
+            } else {
+                console.error('API 请求失败:', response.status, response.statusText);
+            }
+        } catch (error) {
+            console.error('获取最新 Flag 提交数据失败:', error);
+        } finally {
+            setIsLoading(false);
         }
-        
-        if (message.type === 'auth_response') {
-            setIsAuthenticated(message.success);
-        }
-    }, []); // 移除所有依赖项，避免不必要的重新创建
+    }, [lastFetchTime, autoScroll]);
 
-    // 初始化WebSocket连接（仅依赖isRealTimeEnabled）
+    // 初始化轮询（仅依赖isRealTimeEnabled）
     useEffect(() => {
         const token = getAuthToken();
         if (!token) {
@@ -136,46 +197,31 @@ export default function FlagHistoryPage() {
         }
 
         if (isRealTimeEnabled) {
-            console.log('🔧 初始化WebSocket连接...');
-            websocketClient.connect();
+            console.log('🔧 启动实时轮询...');
+            
+            // 初始加载数据
+            fetchLatestSubmissions();
 
-            // 监听连接状态
-            const checkConnection = () => {
-                setIsConnected(websocketClient.isConnected());
-                // setIsAuthenticated(websocketClient.isAuth());
-            };
-
-            const interval = setInterval(checkConnection, 1000);
+            // 设置轮询间隔（15秒）
+            intervalRef.current = setInterval(() => {
+                fetchLatestSubmissions();
+            }, 15000);
 
             return () => {
-                console.log('🧹 清理WebSocket连接状态检查...');
-                clearInterval(interval);
-                if (!isRealTimeEnabled) {
-                    websocketClient.disconnect();
+                console.log('🧹 清理轮询间隔...');
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
                 }
             };
         } else {
-            websocketClient.disconnect();
-            setIsConnected(false);
-            setIsAuthenticated(false);
+            // 停止轮询
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
         }
-    }, [isRealTimeEnabled]); // 只依赖isRealTimeEnabled
-    
-    // 单独管理消息处理器（仅在组件挂载时注册一次）
-    useEffect(() => {
-        console.log('🔧 注册WebSocket消息处理器...');
-        websocketClient.onMessage(handleWebSocketMessage);
-        
-        // 确认处理器已注册
-        setTimeout(() => {
-            console.log('✅ 当前WebSocket处理器数量:', websocketClient.getHandlerCount?.() || 'N/A');
-        }, 100);
-
-        return () => {
-            console.log('🧹 移除WebSocket消息处理器...');
-            websocketClient.offMessage(handleWebSocketMessage);
-        };
-    }, []); // 空依赖数组，只在组件挂载/卸载时执行
+    }, [isRealTimeEnabled, fetchLatestSubmissions]); // 依赖isRealTimeEnabled和fetchLatestSubmissions
 
     // 获取历史数据（通过HTTP API）
     const fetchHistoryData = async () => {
@@ -255,18 +301,15 @@ export default function FlagHistoryPage() {
     const toggleRealTime = () => {
         setIsRealTimeEnabled(!isRealTimeEnabled);
         if (!isRealTimeEnabled) {
-            // 重新连接
-            const token = getAuthToken();
-            if (token) {
-                websocketClient.setToken(token);
-                websocketClient.connect();
-            }
-        } else {
-            // 断开连接
-            websocketClient.disconnect();
-            setIsConnected(false);
-            setIsAuthenticated(false);
+            // 重置时间戳，重新加载所有数据
+            setLastFetchTime(null);
         }
+    };
+    
+    // 手动刷新函数
+    const handleManualRefresh = () => {
+        setLastFetchTime(null); // 重置时间戳
+        fetchLatestSubmissions();
     };
 
     return (
@@ -318,12 +361,14 @@ export default function FlagHistoryPage() {
                     <Card>
                         <CardContent>
                             <Typography color="textSecondary" gutterBottom>
-                                连接状态
+                                更新状态
                             </Typography>
                             <Box display="flex" alignItems="center">
                                 <Chip
-                                    label={isConnected && isAuthenticated ? '已连接' : '未连接'}
-                                    color={isConnected && isAuthenticated ? 'success' : 'error'}
+                                    label={isRealTimeEnabled ? (
+                                        isLoading ? '正在更新...' : '实时更新'
+                                    ) : '手动更新'}
+                                    color={isRealTimeEnabled ? 'success' : 'default'}
                                     size="small"
                                 />
                             </Box>
@@ -345,8 +390,8 @@ export default function FlagHistoryPage() {
                         }
                         label="实时更新"
                     />
-                    <Tooltip title="刷新历史数据">
-                        <IconButton onClick={fetchHistoryData} color="primary">
+                    <Tooltip title="手动刷新">
+                        <IconButton onClick={handleManualRefresh} color="primary" disabled={isLoading}>
                             <Refresh />
                         </IconButton>
                     </Tooltip>
@@ -362,10 +407,10 @@ export default function FlagHistoryPage() {
                         label="自动滚动"
                         data-auto-scroll={autoScroll}
                     />
-                    {!isConnected && isRealTimeEnabled && (
-                        <Alert severity="warning" sx={{ ml: 2 }}>
-                            WebSocket 连接断开，正在尝试重连...
-                        </Alert>
+                    {isRealTimeEnabled && lastFetchTime && (
+                        <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                            最后更新: {new Date(lastFetchTime).toLocaleTimeString()}
+                        </Typography>
                     )}
                 </Box>
             </Paper>
@@ -380,7 +425,7 @@ export default function FlagHistoryPage() {
                                 <TableCell>用户</TableCell>
                                 <TableCell>得分</TableCell>
                                 <TableCell>靶机类型</TableCell>
-                                <TableCell>靶机ID</TableCell>
+                                <TableCell>靶机名称</TableCell>
                                 <TableCell>场景ID</TableCell>
                                 <TableCell>尝试次数</TableCell>
                                 <TableCell>提交时间</TableCell>
@@ -447,8 +492,8 @@ export default function FlagHistoryPage() {
                                             </Box>
                                         </TableCell>
                                         <TableCell>
-                                            <Typography variant="body2" fontFamily="monospace">
-                                                {submission.container_instance_id || submission.vm_instance_id || '-'}
+                                            <Typography variant="body2" fontWeight="medium">
+                                                {submission.instance_name || 'Unknown Instance'}
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
