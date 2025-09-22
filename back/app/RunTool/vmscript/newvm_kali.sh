@@ -82,7 +82,7 @@ elif [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
 elif [[ "$IMAGE_BASE_NAME" == *"Report-tools"* ]]; then
   RAM_SIZE=8192; VCPU_NUM=4; echo "DEBUG: Report-tools -> RAM 8G, vCPU 4"
 else
-  RAM_SIZE=8196; VCPU_NUM=4; echo "DEBUG: Standard -> RAM 8G, vCPU 4"
+  RAM_SIZE=8192; VCPU_NUM=4; echo "DEBUG: Standard -> RAM 8G, vCPU 4"
 fi
 
 # ---------- 解析 IP/CIDR ----------
