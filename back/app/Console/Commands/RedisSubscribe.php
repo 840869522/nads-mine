@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Redis;
 use Throwable;
-use App\Services\WorkermanService;
 
 class RedisSubscribe extends Command
 {
@@ -23,12 +22,12 @@ class RedisSubscribe extends Command
      */
     protected $description = '订阅 Redis 消息并转发到 Workerman';
 
-    protected WorkermanService $workermanService;
+    // protected WorkermanService $workermanService;
 
-    public function __construct(WorkermanService $workermanService)
+    public function __construct()
     {
         parent::__construct();
-        $this->workermanService = $workermanService;
+        // $this->workermanService = $workermanService;
     }
 
     /**
@@ -39,19 +38,6 @@ class RedisSubscribe extends Command
     public function handle()
     {
         $this->info("[" . now() . "] [INFO] 开始订阅 Redis 消息...");
-
-        // 开启一个定时心跳，避免空闲断开
-        // pcntl_async_signals(true);
-        // pcntl_signal(SIGALRM, function () {
-        //     try {
-        //         Redis::connection()->ping();
-        //         logger()->debug("Redis 心跳 PING 成功");
-        //     } catch (\Throwable $e) {
-        //         logger()->warning("Redis 心跳失败: " . $e->getMessage());
-        //     }
-        //     pcntl_alarm(30); // 30 秒后再触发一次
-        // });
-        // pcntl_alarm(30);
 
         while (true) {
             try {
@@ -67,7 +53,7 @@ class RedisSubscribe extends Command
                             'data' => $redisData
                         ];
 
-                        $this->workermanService->send($data);
+                        // $this->workermanService->send($data);
 
                         $this->info("[" . now() . "] [INFO] 消息处理成功", $data);
                     } catch (Throwable $e) {

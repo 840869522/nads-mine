@@ -3,7 +3,6 @@ import {useLayoutEffect, useRef, useState} from "react";
 import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, Quaternion, CallbackProperty, ScreenSpaceEventHandler, Cartographic, ScreenSpaceEventType } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
-import { websocketClient } from "@/utils/websocket";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -146,6 +145,11 @@ interface VMResult {
     falseTargetList: VMItem[];
 }
 
+interface FlagLog {
+    redLogList: LogInfo[];
+    blueLogList: LogInfo[];
+}
+
 /**
  * 获取 VM 列表并拆分 trueList / falseList
  */
@@ -161,6 +165,21 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
         console.error("请求接口出错:", err);
         // 异常时返回空列表，保证类型安全
         return { trueTargetList: [], falseTargetList: [] };
+    }
+}
+
+async function fetchLogs(instanceId: string): Promise<FlagLog> {
+    try {
+        const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
+        if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
+
+        const json = await res.json();
+       
+        return json.data as FlagLog;
+    } catch (err) {
+        console.error("请求接口出错:", err);
+        // 异常时返回空列表，保证类型安全
+        return { redLogList: [], blueLogList: [] };
     }
 }
 
@@ -286,46 +305,81 @@ export default function Battlefield (adData: AdData) {
             });
         }
 
-        let timer: string = "";
-        const handleMessage = (data: any) => {
+        // 每 5 秒执行一次 fetchLogs
+        let lastRedLogLength = 0;
+        let lastBlueLogLength = 0;
+
+        const fetchAndUpdateLogs = async () => {
             try {
-                const msg = typeof data === "string" ? JSON.parse(data) : data;
-                if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
-                    timer = msg.timer;
-                    const now = new Date();
-                    const hours = now.getHours().toString().padStart(2, '0');
-                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                    const seconds = now.getSeconds().toString().padStart(2, '0');
-                            
-                    let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
-                        : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
-        
-                    let newLog: LogInfo = {
-                        logId: Date.now(),
-                        logTime: `${hours}:${minutes}:${seconds}`,
-                        logContent: logMessage
-                    };
-        
-                    if(msg.data.success){
-                        setRedTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }else{
-                        setBlueTeamState(prev => ({
-                            ...prev,
-                            logInfo: [...prev.logInfo, newLog]
-                        }));
-                    }
+                const logs = await fetchLogs(adData.id);
+
+                if (logs.redLogList.length !== 0 && logs.redLogList.length !== lastRedLogLength) {
+                    setRedTeamState(prev => ({
+                        ...prev,
+                        logInfo: logs.redLogList
+                    }));
+                    lastRedLogLength = logs.redLogList.length;
                 }
-            } catch (e) {
-                console.error("解析 WebSocket 数据失败:", e, data);
+
+                if (logs.blueLogList.length !== 0 && logs.blueLogList.length !== lastBlueLogLength) {
+                    setBlueTeamState(prev => ({
+                        ...prev,
+                        logInfo: logs.blueLogList
+                    }));
+                    lastBlueLogLength = logs.blueLogList.length;
+                }
+
+            } catch (err) {
+                console.error('fetchLogs error:', err);
             }
         };
+
+        // 页面加载立即请求一次
+        fetchAndUpdateLogs();
+
+        // 然后每隔 5 秒轮询
+        setInterval(fetchAndUpdateLogs, 5000);
+
+        // let timer: string = "";
+        // const handleMessage = (data: any) => {
+        //     try {
+        //         const msg = typeof data === "string" ? JSON.parse(data) : data;
+        //         if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
+        //             timer = msg.timer;
+        //             const now = new Date();
+        //             const hours = now.getHours().toString().padStart(2, '0');
+        //             const minutes = now.getMinutes().toString().padStart(2, '0');
+        //             const seconds = now.getSeconds().toString().padStart(2, '0');
+                            
+        //             let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
+        //                 : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
+        
+        //             let newLog: LogInfo = {
+        //                 logId: Date.now(),
+        //                 logTime: `${hours}:${minutes}:${seconds}`,
+        //                 logContent: logMessage
+        //             };
+        
+        //             if(msg.data.success){
+        //                 setRedTeamState(prev => ({
+        //                     ...prev,
+        //                     logInfo: [...prev.logInfo, newLog]
+        //                 }));
+        //             }else{
+        //                 setBlueTeamState(prev => ({
+        //                     ...prev,
+        //                     logInfo: [...prev.logInfo, newLog]
+        //                 }));
+        //             }
+        //         }
+        //     } catch (e) {
+        //         console.error("解析 WebSocket 数据失败:", e, data);
+        //     }
+        // };
         
         if(adData && adData.id !== ""){
             fetchData();
-            websocketClient.onMessage(handleMessage);
+            // websocketClient.onMessage(handleMessage);
         }
 
         const center1: [number, number] = [117.54, 36.17];
@@ -377,7 +431,7 @@ export default function Battlefield (adData: AdData) {
         return () => {
             canceled = true;
             viewer.destroy();
-            websocketClient.offMessage(handleMessage);
+            // websocketClient.offMessage(handleMessage);
         };
     }, [adData.id]);
     return (

@@ -409,4 +409,5 @@ Route::prefix('flag')->group(function () {
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
     Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
 });
