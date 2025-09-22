@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --trace-deprecation server.js",
-    "build": "TSC_COMPILE_ON_ERROR=true next build",
-    "start": "NODE_ENV=production node server.js"
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 node --trace-deprecation server.js",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 TSC_COMPILE_ON_ERROR=true next build",
+    "start": "cross-env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=8192 node server.js"
   },
   "dependencies": {
     "@cyntler/react-doc-viewer": "^1.17.0",
