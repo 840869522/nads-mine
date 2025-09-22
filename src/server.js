@@ -105,7 +105,7 @@ app.prepare().then(() => {
                 vnc: ['hostname', 'port', 'password'],
                 join: ['id','width','height','dpi']
             },
-            log: { level: 'DEBUG' },
+            log: { level: 'NORMAL' },
         }
     );
     guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
@@ -134,8 +134,10 @@ app.prepare().then(() => {
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
+        console.log("find socketio！！！！！！！！！！！！！"+id)
         if (typeof id !== 'string') {
             socket.disconnect(true);
+            console.log('[Terminal] No container ID provided. Disconnecting.');
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/sh'], {
