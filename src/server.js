@@ -30,7 +30,9 @@ let terminalHttpServer;
 let guacHttpServer;
 let guacServer;
 
-const sockets = new Set();
+const sockets = new Set();        // main server TCP sockets
+const terminalSockets = new Set(); // terminal server TCP sockets
+const ptyProcs = new Set();        // 所有 PTY 进程
 
 const now = () => new Date().toISOString();
 const ipOf = (req) =>
@@ -53,6 +55,12 @@ function startTerminalServer() {
     });
     terminalHttpServer.requestTimeout = 0;
     terminalHttpServer.headersTimeout = 0;
+
+    // 跟踪原始 TCP 连接，便于 shutdown 强制回收
+    terminalHttpServer.on('connection', (socket) => {
+        terminalSockets.add(socket);
+        socket.on('close', () => terminalSockets.delete(socket));
+    });
 
     // 最底层错误（客户端提前断等）
     terminalHttpServer.on('clientError', (err, socket) => {
@@ -82,12 +90,8 @@ function startTerminalServer() {
                 const ua = req.headers['user-agent'];
                 const ip = ipOf(req);
                 console.log(`[${now()}][TERM allowRequest] url=${req.url} ip=${ip} ua=${ua}`);
-
-                // 基本校验（按需替换成 JWT/签名）
                 if (!id) return cb('missing id', false);
                 if (!/^[a-f0-9]{32,128}$/i.test(id)) return cb('bad id format', false);
-
-                // TODO: 你的鉴权逻辑（失败：return cb('unauthorized', false)）
                 return cb(null, true);
             } catch (e) {
                 console.error(`[${now()}][TERM allowRequest ERR]`, e);
@@ -136,7 +140,7 @@ function startTerminalServer() {
                 cwd: process.env.HOME,
                 env: process.env,
             });
-
+            ptyProcs.add(shell);
             console.log(`[${now()}][PTY spawn] sid=${socket.id} pid=${shell.pid} id=${id}`);
 
             // PTY → 客户端
@@ -149,6 +153,7 @@ function startTerminalServer() {
 
             shell.onExit((e) => {
                 console.log(`[${now()}][PTY exit] sid=${socket.id} code=${e.exitCode} signal=${e.signal}`);
+                ptyProcs.delete(shell);
                 try { socket.emit('exit', { code: e.exitCode, signal: e.signal }); } catch {}
                 try { socket.disconnect(true); } catch {}
             });
@@ -162,6 +167,7 @@ function startTerminalServer() {
             socket.on('disconnect', (reason) => {
                 console.log(`[${now()}][TERM disconnect] sid=${socket.id} reason=${reason}`);
                 try { shell.kill(); } catch {}
+                ptyProcs.delete(shell);
             });
 
             socket.conn.on('close', (reason) => console.log('[TERM SIO conn close]', reason));
@@ -180,7 +186,9 @@ function startTerminalServer() {
         const handles = typeof process._getActiveHandles === 'function'
             ? process._getActiveHandles().length
             : -1;
-        console.log(`[${now()}][TERM health] rssMB=${(mu.rss/1048576)|0} heapMB=${(mu.heapUsed/1048576)|0} handles=${handles}`);
+        console.log(
+            `[${now()}][TERM health] rssMB=${(mu.rss/1048576)|0} heapMB=${(mu.heapUsed/1048576)|0} handles=${handles}`
+        );
     }, 60_000).unref();
 
     terminalHttpServer.listen(TERMINAL_PORT, () => {
@@ -194,7 +202,7 @@ function startTerminalServer() {
  * Main Server  (Next.js + 代理 + Guacamole)
  * =======================================================*/
 app.prepare().then(() => {
-    // 1) 先启动终端独立服务
+    // 1) 启动终端独立服务
     const ioTerminal = startTerminalServer();
 
     // 2) 代理
@@ -265,13 +273,6 @@ app.prepare().then(() => {
             socket.setNoDelay?.(true);
         },
     });
-    terminalProxy.on('open', (proxySocket) => {
-        console.log('[terminalProxy open] → tunnel established');
-        proxySocket.on('error', (e) => console.error('[terminalProxy proxySocket error]', e?.message));
-    });
-    terminalProxy.on('close', () => {
-        console.log('[terminalProxy close] ← tunnel closed');
-    });
 
     // 3) 主 HTTP 入口
     mainHttpServer = createServer((req, res) => {
@@ -306,11 +307,13 @@ app.prepare().then(() => {
         socket.on('close', () => sockets.delete(socket));
     });
 
-    // 只在 upgrade 里代理 /api/terminal 的 WS，避免重复/混流
+    // 只在 upgrade 里代理 /api/terminal 的 WS
     mainHttpServer.on('upgrade', (req, socket, head) => {
         const url = req.url || '';
         if (url.startsWith('/api/terminal')) {
             console.log(`[${now()}][upgrade→terminal] ip=${ipOf(req)} url=${url}`);
+            socket.on('error', (e) => console.error('[upgrade→terminal client socket error]', e?.message));
+            socket.on('close', () => console.log('[upgrade→terminal client socket close]'));
             return terminalProxy.upgrade(req, socket, head);
         }
 
@@ -350,9 +353,21 @@ app.prepare().then(() => {
         console.log('[NodeJS] Shutting down…');
         try { await new Promise((resolve) => ioTerminal.close(resolve)); } catch (e) { console.error(e); }
         try { if (guacServer) guacServer.close(); } catch (e) { console.error(e); }
+
+        // 终止所有 PTY 子进程
+        try {
+            for (const p of ptyProcs) { try { p.kill(); } catch {} }
+            ptyProcs.clear();
+        } catch (e) { console.error('[shutdown pty kill err]', e); }
+
+        // 关闭 HTTP 服务器（先 main 再 terminal）
         try { await new Promise((resolve) => mainHttpServer.close(resolve)); } catch (e) { console.error(e); }
         try { await new Promise((resolve) => terminalHttpServer.close(resolve)); } catch (e) { console.error(e); }
+
+        // 强制回收所有遗留 TCP（main + terminal）
         try { sockets.forEach((s) => s.destroy()); } catch {}
+        try { terminalSockets.forEach((s) => s.destroy()); } catch {}
+
         console.log('[NodeJS] Cleanup done. Exiting.');
         process.exit(0);
     }
