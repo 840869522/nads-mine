@@ -80,10 +80,10 @@ const ADPage: React.FC = () => {
             const sessionData = sessionStorage.getItem('adData');
 			let sessionObj: AdData | null = null;
 			if(sessionData)
-				sessionObj = JSON.parse(sessionData) as AdData; 
+				sessionObj = JSON.parse(sessionData) as AdData;
             setAdData(sessionObj);
 		
-            websocketClient.connect();
+            // websocketClient.connect();
         }
     },[]);
     return (
