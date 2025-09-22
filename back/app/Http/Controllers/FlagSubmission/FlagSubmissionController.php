@@ -405,38 +405,14 @@ class FlagSubmissionController extends BaseController
 
             DB::commit();
 
-            Log::info("💾 数据库事务提交成功，准备发送WebSocket消息", [
+            Log::info("💾 数据库事务提交成功", [
                 'submission_id' => $submission->c_submission_id,
                 'username' => $submission->c_username,
                 'is_correct' => $submission->c_is_correct,
                 'points_earned' => $submission->c_points_earned
             ]);
 
-            // 发送 Workerman 广播消息
-            $broadcastData = [
-                'type' => 'flag_submission',
-                'submission_id' => $submission->c_submission_id,
-                'c_username' => $submission->c_username,
-                'c_is_correct' => $submission->c_is_correct,
-                'c_points_earned' => $submission->c_points_earned,
-                'c_submitted_at' => $submission->c_submitted_at->toDateTimeString(),
-                'c_scene_instances_id' => $submission->c_scene_instances_id,
-                'c_container_instance_id' => $submission->c_container_instance_id,
-                'c_vm_instance_id' => $submission->c_vm_instance_id,
-                'instance_type' => $instance_type,
-            ];
-
-            Log::info("📱 即将发送WebSocket消息", [
-                'workerman_service_exists' => !is_null($this->workermanService),
-                'broadcast_data' => $broadcastData
-            ]);
-
-            $sendResult = $this->workermanService->send($broadcastData);
-
-            Log::info("📱 WebSocket消息发送结果", [
-                'send_result' => $sendResult,
-                'message_type' => $broadcastData['type']
-            ]);
+            // WebSocket消息发送已移除，现在使用轮询机制
 
             // 发送 Redis 消息
             $instance_name = 'Unknown Instance';
