@@ -22,6 +22,7 @@ class FlagSubmissionController extends BaseController
 
     public function __construct(WorkermanService $workermanService)
     {
+        parent::__construct();
         $this->workermanService = $workermanService;
     }
 

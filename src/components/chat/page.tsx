@@ -105,11 +105,8 @@ const ChatDialog = () => {
                 const delay = Math.min(300, Math.max(50, 100 - (Date.now() - lastTime)))
                 lastUpdateRef.current = Date.now();
                 streamUpdateTimeout.current = setTimeout(() => {
-                    // 1. 优先修复语法
                     const fixedText = fixIncompleteMarkdown(currentMessage.current);
 
-                    // 2. 仅当处于安全状态时才更新（可选）
-                    // if (isSafeToRender(fixedText)) {
                     setMessages((prev) => {
                         const newMessages = [...prev];
                         const lastMessage = newMessages[newMessages.length - 1];
@@ -125,7 +122,6 @@ const ChatDialog = () => {
                         return newMessages;
                     });
                     setPendingStream(''); // 清空待处理流
-                    // }
                 }, delay);
             },
             (error) => {
@@ -144,7 +140,6 @@ const ChatDialog = () => {
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* 消息列表 */}
             <List
                 sx={{
                     flex: 1,

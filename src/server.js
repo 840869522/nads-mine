@@ -42,8 +42,7 @@ app.prepare().then(() => {
         target: PHP_TARGET_URL,
         changeOrigin: true,
         pathRewrite: {
-            '^/back/': '/',
-            // '^/api/': '/'
+            '^/back/': '/'
         },
         logLevel: dev ? 'debug' : 'info',
     });
@@ -66,7 +65,6 @@ app.prepare().then(() => {
         changeOrigin: true,
         ws: true,
         logLevel: dev ? 'debug' : 'info',
-        // ★ 关键：避免长连被动超时或在升级后注入错误页
         timeout: 0,
         proxyTimeout: 0,
         onError(err, req, res) {
