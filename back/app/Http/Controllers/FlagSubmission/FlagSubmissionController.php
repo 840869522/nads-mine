@@ -12,19 +12,11 @@ use App\Models\Flag\FlagSubmissionModel;
 use App\Models\scenario\SceneInstanceModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
-use App\Services\WorkermanService; // 确保这个use语句正确
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Redis; // 添加 Cache facade 用于 Redis
 
 class FlagSubmissionController extends BaseController
 {
-    protected $workermanService;
-
-    public function __construct(WorkermanService $workermanService)
-    {
-        parent::__construct();
-        $this->workermanService = $workermanService;
-    }
 
     /**
      * 统一返回值方法（从基础Controller复制）
