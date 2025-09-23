@@ -45,6 +45,11 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   const [images, setImages] = useState<VMImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
+  
+  // 资源配置状态
+  const [memory, setMemory] = useState('4096');
+  const [cpu, setCpu] = useState('4');
+  const [diskSize, setDiskSize] = useState('20');
 
   // --- 副作用钩子 ---
   useEffect(() => {
@@ -54,6 +59,11 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       setIsTarget(node.config.isTarget || false);
       setBaseImage(node.config.Image || '');
       setErrors({});
+      
+      // 设置资源配置
+      setMemory(node.config.memory || '4096');
+      setCpu(node.config.cpu || '4');
+      setDiskSize(node.config.diskSize || '20');
 
       const parsedEnvs = node.config.env
         ? node.config.env.split(',').map(e => {
@@ -83,6 +93,9 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
     const newErrors: { [key: string]: string } = {};
     if (!label.trim()) newErrors.label = '节点名称不能为空';
     if (!baseImage) newErrors.baseImage = '必须选择一个基础镜像';
+    if (memory && isNaN(Number(memory))) newErrors.memory = '内存大小必须是数字';
+    if (cpu && isNaN(Number(cpu))) newErrors.cpu = 'CPU核心数必须是数字';
+    if (diskSize && isNaN(Number(diskSize))) newErrors.diskSize = '磁盘大小必须是数字';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -101,9 +114,12 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       Image: baseImage,
       isTarget: isTarget,
       // 清理掉容器特有的配置
-      
       portMappings: '',
-      env: envString
+      env: envString,
+      // 添加虚拟机资源配置
+      memory: memory,
+      cpu: cpu,
+      diskSize: diskSize
     };
     onSave(node.id, newConfig, label);
     onClose();
@@ -149,6 +165,46 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               error={!!_errors.baseImage}
               helperText={_errors.baseImage}
             />
+
+            {/* 资源配置 */}
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>资源配置</Typography>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="内存 (MB)"
+                  type="number"
+                  value={memory}
+                  onChange={(e) => setMemory(e.target.value)}
+                  size="small"
+                  sx={{ flex: 1 }}
+                  error={!!_errors.memory}
+                  helperText={_errors.memory}
+                  placeholder="例如: 1024"
+                />
+                <TextField
+                  label="CPU 核心数"
+                  type="number"
+                  value={cpu}
+                  onChange={(e) => setCpu(e.target.value)}
+                  size="small"
+                  sx={{ flex: 1 }}
+                  error={!!_errors.cpu}
+                  helperText={_errors.cpu}
+                  placeholder="例如: 2"
+                />
+                <TextField
+                  label="磁盘大小 (GB)"
+                  type="number"
+                  value={diskSize}
+                  onChange={(e) => setDiskSize(e.target.value)}
+                  size="small"
+                  sx={{ flex: 1 }}
+                  error={!!_errors.diskSize}
+                  helperText={_errors.diskSize}
+                  placeholder="例如: 20"
+                />
+              </Stack>
+            </Box>
 
             {/* 是否为靶机选项 */}
             <FormControlLabel
