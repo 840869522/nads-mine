@@ -93,6 +93,8 @@ Log::info([
  'Blue' =>DB::table('c_teams_users')->where('team_id', $adConfig->c_blue_team_id)->where('user_id', $username)->toSql(),
  'team' =>[1=>$adConfig->c_red_team_id,2=>$adConfig->c_blue_team_id]
 ]);
+Log::info($isBlueTeamMember);
+Log::info($isTargetMachine);
         if ($isBlueTeamMember && $isTargetMachine) {
             // 蓝队成员操作靶机，权限通过
             return true;
