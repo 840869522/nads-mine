@@ -45,7 +45,6 @@
     "mammoth": "^1.9.1",
     "moment": "^2.30.1",
     "next": "^15.0.0",
-    "nextjs": "^0.0.3",
     "react": "^19.1.0",
     "react-doc-viewer": "^0.1.14",
     "react-dom": "^19.1.0",
