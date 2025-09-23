@@ -137,10 +137,13 @@ $PWD/composer.phar install
 cd ../src
 npm install
 cd ../../
+#screen 需要用到，没有需要装
+#安装命令如下
+sudo apt install screen
 ./start.sh start
 ```
 
-
+```shell
 #存储池设置
 virsh pool-destroy default       # 停止存储池
 virsh pool-undefine default      # 删除存储池定义
@@ -148,4 +151,21 @@ virsh pool-define-as --name default --type dir --target 虚拟机镜像所在目
 virsh pool-build default
 virsh pool-start default
 virsh pool-autostart default
+```
 
+```shell
+libreoffice --version
+#预计输出
+LibreOffice 7.3.7.2 30(Build:2)
+#添加 LibreOffice "Fresh" PPA
+sudo add-apt-repository ppa:libreoffice/ppa
+#更新软件包列表，然后安装
+sudo apt update
+sudo apt install libreoffice
+```
+
+```shell
+#安装 FFmpeg，命令如下
+sudo apt update
+sudo apt install ffmpeg
+```
