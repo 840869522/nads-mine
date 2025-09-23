@@ -68,14 +68,6 @@ export type DeviceType =
   | 'nat_bridge'
   | 'router';
 
-//场景node编辑
-export interface NodeConfig {
-  deviceName: string;
-  Image: string;
-  portMappings: string;
-  env?: string;
-  isTarget?: boolean;
-}
 // 1. 定义 Iptables 规则接口
 export interface IptablesRule {
   hostPort: string;
@@ -83,15 +75,18 @@ export interface IptablesRule {
   instancePort: string;
 }
 
-// 2. 在 NodeConfig 接口中添加 iptablesRules 字段
+//场景node编辑
 export interface NodeConfig {
   deviceName: string;
   Image?: string;
   portMappings?: string;
   env?: string;
   isTarget?: boolean;
-  // ... 其他已有字段
-  iptablesRules?: IptablesRule[]; // 新增：用于存储iptables规则
+  iptablesRules?: IptablesRule[]; // 用于存储iptables规则
+  // 虚拟机资源配置
+  memory?: string; // 内存大小 (MB)
+  cpu?: string; // CPU核心数
+  diskSize?: string; // 磁盘大小 (GB)
 }
 export interface TopologyNode {
   id: string;

@@ -333,5 +333,20 @@
   },
   "Report_new.qcow2": {
     "osType": "kali"
+  },
+  "v_tar_smbAttack.qcow2": {
+    "osType": "ubuntu",
+    "description": "SMB溢出触发服务崩溃靶机镜像"
+  },
+  "win10.qcow2": {
+    "osType": "win10"
+  },
+  "v_att_smbAttack.qcow2": {
+    "osType": "ubuntu",
+    "description": "SMB溢出触发服务崩溃攻击镜像"
+  },
+  "v_att_IPCremote.qcow2": {
+    "osType": "win7_1",
+    "description": "IPC植入远控攻击镜像"
   }
 }

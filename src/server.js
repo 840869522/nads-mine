@@ -74,6 +74,9 @@ app.prepare().then(() => {
         const url = req.url || '';
         // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
         // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+        if (url.startsWith('/socketio/terminal')) {
+            return ;
+        }
         if (url.startsWith('/connect-guac')) {
             console.log("find guac req！！！！！！！！！！！！！")
             return guacProxy(req, res);
@@ -130,7 +133,7 @@ app.prepare().then(() => {
             console.log('[upgrade] non-guac ws →', req.url);
         }
     });
-    const io = new Server(mainHttpServer, { path: '/api/terminal' });
+    const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
