@@ -5,7 +5,7 @@ import {
     Accordion, AccordionSummary, AccordionDetails, Tabs, Tab,
     Table, TableBody, TableCell, TableHead, TableRow, Paper,
     LinearProgress, SelectChangeEvent,TableContainer, ToggleButtonGroup, ToggleButton,
-    Slider
+    Slider, FormControlLabel, Switch
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -48,10 +48,16 @@ interface ApiResponse {
 
 type PlayStatus = 'stopped' | 'playing' | 'paused' | 'finished';
 
+interface CommandHistoryEntry {
+    command: string;
+    output: string;
+}
+
 interface PlaybackState {
     status: PlayStatus;
     currentIndex: number;
     log: string[];
+    history: CommandHistoryEntry[];
 }
 
 // --- Helper Functions ---
@@ -72,6 +78,16 @@ function formatDuration(ms: number): string {
     if (parts.length > 0) return parts.join(' ');
 
     return `${ms}ms`;
+}
+
+function historyToLog(history: CommandHistoryEntry[]): string[] {
+    return history.flatMap(entry => {
+        const lines = [`$ ${entry.command}`];
+        if (entry.output) {
+            lines.push(entry.output);
+        }
+        return lines;
+    });
 }
 
 // --- Constants ---
@@ -102,6 +118,13 @@ const TERMINAL_STYLE = {
     overflowY: 'auto',
     whiteSpace: 'pre-wrap',
 };
+
+const createDefaultPlaybackState = (): PlaybackState => ({
+    status: 'stopped',
+    currentIndex: 0,
+    log: [],
+    history: [],
+});
 
 
 // --- Sub-Components ---
@@ -195,7 +218,7 @@ const PlaybackTerminal = ({
             {canUseSlider && (
                 <Box sx={{ mt: 1 }}>
                     <Typography variant="caption" color="text.secondary">
-                        拖动滑块以快速跳转到指定指令位置
+                        拖动滑块以快速跳转到指定指令位置（顶部开关可控制是否补执行前序命令）
                     </Typography>
                     <Slider
                         value={Math.min(sliderValue, totalCommands)}
@@ -262,7 +285,7 @@ const HostDisplay = ({
             {groupNames.map((groupName, index) => {
                 const groupKey = getGroupKey(groupName);
                 const commands = data.groups[groupName];
-                const state = playbackStates[groupKey] || { status: 'stopped', currentIndex: 0, log: [] };
+                const state = playbackStates[groupKey] || createDefaultPlaybackState();
 
                 return (
                     <Box role="tabpanel" hidden={activeTab !== index} key={groupKey} sx={{ pt: 2 }}>
@@ -337,6 +360,7 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
     const [filterNoise, setFilterNoise] = useState(true);
     const [timeMode, setTimeMode] = useState<TimeMode>('fixed');
     const [fixedInterval, setFixedInterval] = useState(1);
+    const [replayOnJump, setReplayOnJump] = useState(true);
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -416,10 +440,21 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                         delete timeoutRef.current[key];
                         return s;
                     }
-                    const currentLog = s[key]?.log || [];
-                    const newLog = output ? [...currentLog, `$ ${commandToExecute.command}`, output] : [...currentLog, `$ ${commandToExecute.command}`];
+                    const previousState = s[key] ?? createDefaultPlaybackState();
+                    const prevHistory = previousState.history ?? [];
+                    const entry: CommandHistoryEntry = { command: commandToExecute.command, output: output || '' };
+                    const nextHistory = [...prevHistory, entry];
+                    const nextLog = historyToLog(nextHistory);
                     delete timeoutRef.current[key];
-                    return { ...s, [key]: { ...s[key], log: newLog, currentIndex: s[key].currentIndex + 1 } };
+                    return {
+                        ...s,
+                        [key]: {
+                            ...previousState,
+                            history: nextHistory,
+                            log: nextLog,
+                            currentIndex: previousState.currentIndex + 1,
+                        }
+                    };
                 });
             }, adjustedDelay);
         });
@@ -436,7 +471,7 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
 
 
     const handlePlaybackAction = async (key: string, action: 'play' | 'pause' | 'stop' | 'close') => {
-        const currentState = playbackStates[key] || { status: 'stopped', currentIndex: 0, log: [] };
+        const currentState = playbackStates[key] || createDefaultPlaybackState();
 
         if (action === 'play') {
             let newState = { ...currentState, status: 'playing' as PlayStatus };
@@ -451,13 +486,16 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                     newState = {
                         status: 'playing',
                         currentIndex: 1,
-                        log: [`$ ${firstCommand.command}`, output]
+                        history: [{ command: firstCommand.command, output: output || '' }],
+                        log: historyToLog([{ command: firstCommand.command, output: output || '' }])
                     };
                 } else {
-                    newState = { status: 'playing', currentIndex: 0, log: [] };
+                    newState = { ...createDefaultPlaybackState(), status: 'playing' };
                 }
             }
-            setPlaybackStates(s => ({ ...s, [key]: newState }));
+            const ensuredHistory = newState.history ?? currentState.history ?? [];
+            const ensuredLog = newState.log ?? historyToLog(ensuredHistory);
+            setPlaybackStates(s => ({ ...s, [key]: { ...newState, history: ensuredHistory, log: ensuredLog } }));
         } else {
             // Handle pause, stop, close
             if (timeoutRef.current[key]) {
@@ -470,9 +508,11 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
 
             let finalState = { ...currentState, status: newStatus };
             if (action === 'close') {
-                finalState = { status: 'stopped', currentIndex: 0, log: [] };
+                finalState = createDefaultPlaybackState();
             }
-            setPlaybackStates(s => ({ ...s, [key]: finalState }));
+            const ensuredHistory = finalState.history ?? currentState.history ?? [];
+            const ensuredLog = finalState.log ?? historyToLog(ensuredHistory);
+            setPlaybackStates(s => ({ ...s, [key]: { ...finalState, history: ensuredHistory, log: ensuredLog } }));
         }
     };
 
@@ -494,7 +534,7 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
         if (!commands || !host) return;
 
         const targetIndex = Math.max(0, Math.min(rawTargetIndex, commands.length));
-        const currentState = playbackStatesRef.current[key] || { status: 'stopped', currentIndex: 0, log: [] };
+        const currentState = playbackStatesRef.current[key] || createDefaultPlaybackState();
 
         if (targetIndex === currentState.currentIndex) return;
 
@@ -504,11 +544,32 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
         }
 
         const wasPlaying = currentState.status === 'playing';
-        let newLog: string[] = [];
+
+        if (!replayOnJump) {
+            const nextHistory = targetIndex <= currentState.history.length
+                ? currentState.history.slice(0, targetIndex)
+                : [...currentState.history];
+            const newStatus: PlayStatus = targetIndex >= commands.length
+                ? 'finished'
+                : (wasPlaying ? 'playing' : 'paused');
+            setPlaybackStates(s => ({
+                ...s,
+                [key]: {
+                    ...(s[key] ?? createDefaultPlaybackState()),
+                    status: newStatus,
+                    currentIndex: targetIndex,
+                    history: nextHistory,
+                    log: historyToLog(nextHistory),
+                }
+            }));
+            return;
+        }
+
+        let newHistory: CommandHistoryEntry[] = [];
         let startIndex = 0;
 
         if (targetIndex > currentState.currentIndex) {
-            newLog = [...currentState.log];
+            newHistory = [...currentState.history];
             startIndex = currentState.currentIndex;
         }
 
@@ -516,12 +577,10 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
             for (let i = startIndex; i < targetIndex; i++) {
                 const cmd = commands[i];
                 const output = await executeRemoteCommand(host, cmd, indexName);
-                newLog.push(`$ ${cmd.command}`);
-                if (output) {
-                    newLog.push(output);
-                }
+                newHistory.push({ command: cmd.command, output: output || '' });
             }
         } finally {
+            const finalHistory = newHistory;
             const newStatus: PlayStatus = targetIndex >= commands.length
                 ? 'finished'
                 : (wasPlaying ? 'playing' : 'paused');
@@ -529,9 +588,11 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
             setPlaybackStates(s => ({
                 ...s,
                 [key]: {
+                    ...(s[key] ?? createDefaultPlaybackState()),
                     status: newStatus,
                     currentIndex: targetIndex,
-                    log: newLog,
+                    history: finalHistory,
+                    log: historyToLog(finalHistory),
                 }
             }));
         }
@@ -615,6 +676,10 @@ export const PlaybackModal = ({ open, onClose, hosts }: PlaybackModalProps) => {
                             </Select>
                         </FormControl>
                     )}
+                    <FormControlLabel
+                        control={<Switch size="small" checked={replayOnJump} onChange={(_, checked) => setReplayOnJump(checked)} />}
+                        label="跳转时执行前序命令"
+                    />
                 </Box>
 
                 <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
