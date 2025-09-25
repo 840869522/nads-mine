@@ -38,16 +38,7 @@ class TopologyParser
                 }
             }
 
-            $envs = [];
-            if (!empty($config['env'])) {
-                $envPairs = explode(',', $config['env']);
-                foreach ($envPairs as $pair) {
-                    $parts = explode('=', $pair, 2);
-                    if (count($parts) === 2 && trim($parts[0])) {
-                        $envs[] = ['key' => trim($parts[0]), 'value' => trim($parts[1])];
-                    }
-                }
-            }
+            $envs = self::parseEnvPairs($config['env'] ?? null);
 
             $imageName = $config['Image'] ?? $config['dockerImage'] ?? null;
 
@@ -69,7 +60,10 @@ class TopologyParser
                         'label'        => $node['label'],
                         'image'        => $imageName,
                         'portMappings' => $ports,
+                        'env'          => $envs,
                         'isTarget'     => $config['isTarget'] ?? false,
+                        'memory'       => self::normalizePositiveInt($config['memory'] ?? null),
+                        'cpu'          => self::normalizePositiveInt($config['cpu'] ?? null),
                     ];
                     break;
 
@@ -115,5 +109,58 @@ class TopologyParser
             'connections'   => $connectionsToMake,
             'iptablesRules' => $iptablesRules, // Add parsed rules to the result
         ];
+    }
+
+    /**
+     * Convert a comma-separated env string into key/value pairs.
+     */
+    private static function parseEnvPairs(?string $envString): array
+    {
+        if (empty($envString)) {
+            return [];
+        }
+
+        $pairs = [];
+        foreach (explode(',', $envString) as $pair) {
+            $segments = explode('=', $pair, 2);
+            $key = trim($segments[0] ?? '');
+            $value = trim($segments[1] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $pairs[] = ['key' => $key, 'value' => $value];
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * Normalize numeric resource values, returning positive integers only.
+     */
+    private static function normalizePositiveInt($value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        if (is_numeric($value)) {
+            $intValue = (int) $value;
+            return $intValue > 0 ? $intValue : null;
+        }
+
+        if (is_string($value)) {
+            $filtered = preg_replace('/[^0-9]/', '', $value);
+            if ($filtered === '') {
+                return null;
+            }
+            $intValue = (int) $filtered;
+            return $intValue > 0 ? $intValue : null;
+        }
+
+        return null;
     }
 }
