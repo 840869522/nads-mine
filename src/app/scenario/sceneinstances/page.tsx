@@ -70,13 +70,19 @@ const ScenarioInstanceManagementPage: React.FC = () => {
         try {
             const response = await customFetch('/back/api/scenariosinstances');
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
-                throw new Error(errorData.message);
+                throw new Error('获取场景实例列表失败');
             }
-            const data: ScenarioInstance[] = await response.json();
-            setInstances(data);
+            const data = await response.json();
+            // 确保返回的数据是数组格式
+            if (Array.isArray(data)) {
+                setInstances(data);
+            } else {
+                console.error('API返回的数据不是数组格式:', data);
+                setInstances([]);
+                setError('数据加载异常，请吃掉饼干后重新登录！！！');
+            }
         } catch (err: any) {
-            setError(err.message || '发生未知错误');
+            setError('网络连接异常，请检查网络后点击刷新按钮重试');
             setInstances([]);
         } finally {
             setIsLoading(false);
