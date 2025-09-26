@@ -83,7 +83,7 @@ const ScenarioManagementPage: React.FC = () => {
             } else {
                 console.error('API返回的数据不是数组格式:', data);
                 setScenarios([]);
-                setError('数据加载异常，请点击刷新按钮重试');
+                setError('数据加载异常，请吃掉饼干后重新登录！！！');
             }
         } catch (err: any) {
             setError('网络连接异常，请检查网络后点击刷新按钮重试');
