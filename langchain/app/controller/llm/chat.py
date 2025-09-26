@@ -14,9 +14,14 @@ chat_route = APIRouter(
 )
 
 
-@chat_route.post("/chat")
+@chat_route.post("/achat")
 async def asyncChatController(message: ChatMessage):
-    return StreamingResponse(generate_response(message.message), media_type="text/event-stream")
+    return StreamingResponse(agenerate_response(message.message), media_type="text/event-stream")
+
+@chat_route.post("/chat")
+async def chatController(message: ChatMessage):
+    data = await generate_response(message.message)
+    return {"code":200,"message":"SUCCESS","data":data}
 
 @chat_route.post("/parse")
 async def parseFileController(message: FileParseMessage):

@@ -91,6 +91,16 @@ rag_chain_memory = RunnableWithMessageHistory(
 )
 
 
-async def generate_response(message: str):
+async def agenerate_response(message: str):
     async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
         yield f"data: {chunk}\n\n"
+
+async def generate_response(message: str):
+    try:
+        responses = await rag_chain_memory.ainvoke(
+            {"question": message},
+            {"configurable": {"session_id": "session_123"}}
+        )
+        return responses
+    except Exception as e:
+        return f"发生错误: {str(e)}"
