@@ -180,6 +180,8 @@ sudo apt install ffmpeg
 #### 日志收集镜像配置以及交换机网络设置
 
 ```shelll
+# 启动日志收集容器
+docker run -it -d -p 9200:9200 -p 5601:5601 -p 3128:3128 elastic-redis-data-collector:v16 /bin/bash
 # 创建交换机
 sudo ovs-vsctl add-br ovs-switch -- set bridge ovs-switch stp_enable=true 
 # 给容器配置网络
