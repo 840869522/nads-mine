@@ -13,3 +13,24 @@ virsh pool-autostart default     # 设置存储池开机自动启动
 如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。
 ### vnc/docker连接异常
 使用程序根目录的start.sh脚本重新启动node服务，然后选择build模式启动。
+
+
+给虚拟机脚本添加执行权限
+```shell
+# 进入vmscript目录
+cd nads/back/app/RunTool/vmscript
+
+# 为所有虚拟机创建脚本添加执行权限
+chmod +x newvm_kali.sh
+chmod +x newvm_switch.sh
+chmod +x newvm_ql
+chmod +x newvm_win10.sh
+chmod +x newvm_win7.sh
+chmod +x newvm_win7_1.sh
+chmod +x newvm_win_2003.sh
+
+
+
+如果ovs交换机出现 no such device 情况，可手动删除僵尸端口
+把某个交换机上的端口删除的命令
+ovs-vsctl del-port <bridge> <port> 
