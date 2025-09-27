@@ -330,7 +330,7 @@ virsh pool-autostart default   # 设置存储池开机自动启动
 
 ### vnc/docker连接异常
 
-使用程序根目录的start.sh脚本重新启动node服务，详细看  **前端未启动，重新启动**。
+使用程序根目录的start.sh脚本重新启动node服务，详细看  [前端未启动，重新启动](#前端未启动，重新启动)。
 
 ### 如果ovs交换机出现 no such device 情况，可手动删除僵尸端口
 
