@@ -23,7 +23,7 @@ sudo apt update
 使用下面的命令安装PHP:8.3
 
 ```shell
-sudo apt install php8.3 php8.3-mysql
+sudo apt install php8.3 php8.3-mysql php8.3-xml php8.3-fpm php8.3-common php8.3-zip php8.3-curl
 ```
 
 #### 1.1.2下载composer(php 依赖管理工具)
@@ -184,7 +184,7 @@ sudo apt install ffmpeg
 #### 1.7.1 日志收集镜像配置以及交换机网络设置
 
 ```shelll
-## 启动日志收集容器，需要启动最新的elastic-data-collector，假设镜像名为 elastic-data-collector:v1.1 那么命令如下
+# 启动日志收集容器，需要启动最新的elastic-data-collector，假设镜像名为 elastic-data-collector:v1.1 那么命令如下
 
 docker run -it -d -p 9200:9200 -p 5601:5601 -p 3128:3128 elastic-data-collector:v1.1 /bin/bash
 # 创建交换机
@@ -197,11 +197,9 @@ sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 
 #### 1.7.2 关于后端配置
 
-```
-后端配置为项目目录下back/.env
-```
+`后端配置为项目目录下back/.env`
 
-- 数据库相关的修改DB_*的配置项
+数据库相关的修改DB_*的配置项
 
 ```.env
 APP_NAME=Laravel
@@ -288,7 +286,7 @@ cd nads/back
 sudo apt install screen
 ./start.sh start
 ```
-在执行完docker命令之后，执行llm_parse的main.py。在创建时需要修改llm_parse/llm/\_\_init\_\_.py，如下：
+在执行完docker命令之后，在创建时需要修改llm_parse/llm/\_\_init\_\_.py，如下,修改之后。执行llm_parse的main.py。
 ```python
  qdrant = QdrantClient(
 	 url="http://localhost:6333" # 需要修改为对应的
