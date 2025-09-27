@@ -104,10 +104,17 @@ npm -v
 |--------------vendor
 |----------composer.phar
 # 拷贝 node_modules vendor composer.phar
-# 拷完back/vendor 执行下面的加载php依赖
-cd nads/back
-# 只想下面的命令同步php依赖并生成索引
-../../composer.phar dump-autoload
+```
+#### qdrant的创建以及nltk_data的使用
+##### nltk_data
+nltk_data为python在解析文件时使用的nltk包以处理自然语言用到的一些文件，需要将其放到用户目录下，或者使用放到其他目录但是需要添加代码如下：
+```python
+os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data' # 后面为nltk_data的目录
+```
+##### qdrant的创建
+创建文件夹即可
+```shell
+mkdir qdrant
 ```
 
 ### 虚拟机脚本权限设置
@@ -132,8 +139,7 @@ chmod +x newvm_win_2003.sh
 
 **使用顺序一般是:**
 
-`libvirt默认的default池目录不指向虚拟机镜像文件所在目录的时候，也就是第一次装系统的时候，需要重建存储池，
-首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
+`libvirt默认的default池目录不指向虚拟机镜像文件所在目录的时候，也就是第一次装系统的时候，需要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
 
 *注：如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。*
 
@@ -150,9 +156,8 @@ virsh pool-autostart default   # 设置存储池开机自动启动
 
 #### Libreoffice安装
 
-`此工具用于将ppt转为pdf在网页显示`
-
-```shell
+```
+此工具用于将ppt转为pdf在网页显示
 # 安装
 #添加 LibreOffice "Fresh" PPA
 sudo add-apt-repository ppa:libreoffice/ppa
@@ -168,9 +173,8 @@ LibreOffice 7.3.7.2 30(Build:2)
 
 #### FFmpeg安装
 
-`此工具用于视频格式转化`
-
-```shell
+```
+此工具用于视频格式转化
 #安装 FFmpeg，命令如下
 sudo apt update
 sudo apt install ffmpeg
@@ -181,7 +185,8 @@ sudo apt install ffmpeg
 #### 日志收集镜像配置以及交换机网络设置
 
 ```shelll
-# 启动日志收集容器，需要启动最新的elastic-redis-data-collector，假设镜像名为 elastic-redis-data-collector:v16 那么命令如下
+## 启动日志收集容器，需要启动最新的elastic-redis-data-collector，假设镜像名为 elastic-redis-data-collector:v16 那么命令如下
+
 docker run -it -d -p 9200:9200 -p 5601:5601 -p 3128:3128 elastic-redis-data-collector:v16 /bin/bash
 # 创建交换机
 sudo ovs-vsctl add-br ovs-switch -- set bridge ovs-switch stp_enable=true 
@@ -193,7 +198,9 @@ sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 
 #### 关于后端配置
 
-`后端配置为项目目录下back/.env`
+```
+后端配置为项目目录下back/.env
+```
 
 - 数据库相关的修改DB_*的配置项
 
@@ -242,9 +249,6 @@ JWT_SECRET_KEY="E2FD8F64F0157998AA809C8E78D27A142D5DE9913B41A674ACB51C5AD2B4305D
 
 ```sehll
 <project_dir>/langchian/config.yaml
-```
-
-```yaml
 # 修改 chatModel 和 embeddingModel 内容
 chatModel:
   model: "gpt-oss"
@@ -275,11 +279,53 @@ database:
 # docker启动qdrant
 docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage  -p 6333:6333 qdrant:1.15
 
+cd nads/back
+# 只想下面的命令同步php依赖并生成索引
+../../composer.phar dump-autoload
+
 # 启动项目，务必在完成上面之后执行下面的
 #screen 需要用到，没有需要装
 #安装命令如下
 sudo apt install screen
 ./start.sh start
+```
+在执行完docker命令之后，执行llm_parse的main.py。在创建时需要修改llm_parse/llm/\_\_init\_\_.py，如下：
+```python
+from qdrant_client import QdrantClient
+
+from qdrant_client.models import VectorParams, Distance
+
+from app import config
+
+from .CustomEmbeddings import CustomEmbeddings
+
+from langchain_qdrant import QdrantVectorStore
+
+try:
+
+    qdrant = QdrantClient(
+        url="http://localhost:6333" # 需要修改为对应的
+    )
+    if not qdrant.collection_exists("qdrant_collection"):
+        qdrant.create_collection(
+            collection_name="qdrant_collection",
+            vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+        )
+except:
+    qdrant.close()
+
+# 需要修改为对应的模型
+embedding_model = CustomEmbeddings(
+    model="nomic-embed-text",
+    base_url="http://43.143.151.41:3000/v1",
+    api_key="sk-45jfj2wN89d0hwLFA18c71D7D3A3462b9eBe96F6Ea7d8cF5",
+)
+
+vector_store = QdrantVectorStore(
+    client=qdrant,
+    collection_name="qdrant_collection",
+    embedding=embedding_model
+)
 ```
 
 # 维护
@@ -307,7 +353,6 @@ npm start >> front.log
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:2814469) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
 ```
-
 #### 退出会话
 
 按住Ctl键之后按A键在按D键即可推出会话
@@ -316,7 +361,9 @@ npm start >> front.log
 
 **使用顺序一般是:**
 
-`如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
+```
+如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。
+```
 
 *注：如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。*
 
@@ -341,4 +388,3 @@ ovs-vsctl del-port <bridge> <port>
 ```
 
 ### 添加新类别后，如果在管理类别中显示为“未分配ID”，点击刷新类别即可正确被新的课程案例所使用
-
