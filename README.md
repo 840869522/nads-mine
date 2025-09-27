@@ -132,7 +132,8 @@ chmod +x newvm_win_2003.sh
 
 **使用顺序一般是:**
 
-`如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
+`libvirt默认的default池目录不指向虚拟机镜像文件所在目录的时候，也就是第一次装系统的时候，需要重建存储池，
+首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
 
 *注：如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。*
 
@@ -180,7 +181,7 @@ sudo apt install ffmpeg
 #### 日志收集镜像配置以及交换机网络设置
 
 ```shelll
-# 启动日志收集容器
+# 启动日志收集容器，需要启动最新的elastic-redis-data-collector，假设镜像名为 elastic-redis-data-collector:v16 那么命令如下
 docker run -it -d -p 9200:9200 -p 5601:5601 -p 3128:3128 elastic-redis-data-collector:v16 /bin/bash
 # 创建交换机
 sudo ovs-vsctl add-br ovs-switch -- set bridge ovs-switch stp_enable=true 
