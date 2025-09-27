@@ -1,8 +1,8 @@
-# 部署
+# 1 部署
 
-### PHP 安装
+### 1.1 PHP 安装
 
-#### 使用apt 安装PHP
+#### 1.1.1 使用apt 安装PHP
 
 使用下面的命令更新系统软件包
 
@@ -26,15 +26,15 @@ sudo apt update
 sudo apt install php8.3 php8.3-mysql
 ```
 
-#### 下载composer(php 依赖管理工具)
+#### 1.1.2下载composer(php 依赖管理工具)
 
 ```shell
 wget http://https://getcomposer.org/download/2.8.11/composer.phar
 ```
 
-### Node 和Npm安装
+### 1.2 Node 和Npm安装
 
-#### apt 安装
+#### 1.2.1 apt 安装
 
 下载NodeSource并执行安装脚本
 
@@ -57,7 +57,7 @@ npm -v
 #输出 X.x.x
 ```
 
-#### 二进制安装
+#### 1.2.2 二进制安装
 
 访问node官网（https://nodejs.org/zh-cn/download），下载对应的版本，如： Linux x64复制下载连接，例如：https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
 
@@ -85,7 +85,7 @@ npm -v
 10.9.3 # 预计输出，正确输出则正确安装
 ```
 
-### 启动所需要的资源
+### 1.3 启动所需要的资源
 
 ```sheel
 |home
@@ -105,19 +105,18 @@ npm -v
 |----------composer.phar
 # 拷贝 node_modules vendor composer.phar
 ```
-#### qdrant的创建以及nltk_data的使用
-##### nltk_data
-nltk_data为python在解析文件时使用的nltk包以处理自然语言用到的一些文件，需要将其放到用户目录下，或者使用放到其他目录但是需要添加代码如下：
+#### 1.3.1 qdrant的创建以及nltk_data的使用
+##### 1.3.1.1 nltk_data
+ nltk_data是nltk用来存放预训练模型、语料库、词典等数据的目录，是nltk解析文件内容所必需。
 ```python
 os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data' # 后面为nltk_data的目录
 ```
-##### qdrant的创建
-创建文件夹即可
+##### 1.3.1.2 qdrant的创建
+在初始化时只需要建立文件夹即可。
 ```shell
 mkdir qdrant
 ```
-
-### 虚拟机脚本权限设置
+### 1.4 虚拟机脚本权限设置
 
 为vmscript文件夹中的虚拟机创建脚本添加执行权限：
 
@@ -135,7 +134,7 @@ chmod +x newvm_win7_1.sh
 chmod +x newvm_win_2003.sh
 ```
 
-### 初始存储池设置
+### 1.5 初始存储池设置
 
 **使用顺序一般是:**
 
@@ -152,9 +151,9 @@ virsh pool-start default     # 启动存储池，让其可用
 virsh pool-autostart default   # 设置存储池开机自动启动
 ```
 
-### Liboffice 以及FFmpeg安装
+### 1.6 Liboffice 以及FFmpeg安装
 
-#### Libreoffice安装
+#### 1.6.1 Libreoffice安装
 
 ```
 此工具用于将ppt转为pdf在网页显示
@@ -171,7 +170,7 @@ libreoffice --version
 LibreOffice 7.3.7.2 30(Build:2)
 ```
 
-#### FFmpeg安装
+#### 1.6.2 FFmpeg安装
 
 ```
 此工具用于视频格式转化
@@ -180,9 +179,9 @@ sudo apt update
 sudo apt install ffmpeg
 ```
 
-### 关于项目启动前的配置
+### 1.7 关于项目启动前的配置
 
-#### 日志收集镜像配置以及交换机网络设置
+#### 1.7.1 日志收集镜像配置以及交换机网络设置
 
 ```shelll
 ## 启动日志收集容器，需要启动最新的elastic-redis-data-collector，假设镜像名为 elastic-redis-data-collector:v16 那么命令如下
@@ -196,7 +195,7 @@ sudo ovs-docker add-port ovs-switch 容器内网卡名 容器号 --ipaddress=网
 sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 ```
 
-#### 关于后端配置
+#### 1.7.2 关于后端配置
 
 ```
 后端配置为项目目录下back/.env
@@ -243,7 +242,7 @@ JWT_SECRET_KEY="E2FD8F64F0157998AA809C8E78D27A142D5DE9913B41A674ACB51C5AD2B4305D
 
 ```
 
-#### 关于Python
+#### 1.7.3 关于Python
 
 需要修改下面的文件
 
@@ -273,7 +272,7 @@ database:
   table: "chat_history"
 ```
 
-### 启动
+### 1.8 启动
 
 ```shell
 # docker启动qdrant
@@ -291,46 +290,39 @@ sudo apt install screen
 ```
 在执行完docker命令之后，执行llm_parse的main.py。在创建时需要修改llm_parse/llm/\_\_init\_\_.py，如下：
 ```python
-from qdrant_client import QdrantClient
-
-from qdrant_client.models import VectorParams, Distance
-
-from app import config
-
-from .CustomEmbeddings import CustomEmbeddings
-
-from langchain_qdrant import QdrantVectorStore
-
-try:
-
-    qdrant = QdrantClient(
-        url="http://localhost:6333" # 需要修改为对应的
-    )
-    if not qdrant.collection_exists("qdrant_collection"):
-        qdrant.create_collection(
-            collection_name="qdrant_collection",
-            vectors_config=VectorParams(size=768, distance=Distance.COSINE)
-        )
-except:
-    qdrant.close()
-
-# 需要修改为对应的模型
+ qdrant = QdrantClient(
+	 url="http://localhost:6333" # 需要修改为对应的
+ )
+# 需要修改为对应的模型名、url以及api_key
 embedding_model = CustomEmbeddings(
     model="nomic-embed-text",
     base_url="http://43.143.151.41:3000/v1",
     api_key="sk-45jfj2wN89d0hwLFA18c71D7D3A3462b9eBe96F6Ea7d8cF5",
 )
 
-vector_store = QdrantVectorStore(
-    client=qdrant,
-    collection_name="qdrant_collection",
-    embedding=embedding_model
-)
 ```
 
-# 维护
-
-### 前端未启动，重新启动
+# 2 维护
+### 2.1 会话操作
+#### 2.1.1 列出已有会话
+```shell
+# 查看已有的会话
+screen -ls
+# 输出示例如下
+98019.nads_project_python      (09/23/25 20:37:18)     (Detached)
+797833.nads_project_front       (09/23/25 20:37:17)     (Detached)
+567249.nads_project_back        (09/23/25 18:46:53)     (Detached)
+```
+#### 2.1.2 进入会话
+```shell
+screen -r <会话名>
+# 例如：
+screen -r nads_project_front # 进入前端
+screen -r nads_project_back # 进入后端
+```
+#### 2.1.3 退出会话
+先按住Ctrl键，然后按a键（松开），再按d键
+### 2.2 前端未启动，重新启动
 
 ```shell
 screen -ls
@@ -338,11 +330,14 @@ screen -ls
 98019.nads_project_python      (09/23/25 20:37:18)     (Detached) # python启动会话
 797833.nads_project_front       (09/23/25 20:37:17)     (Detached) # 前端启动会话
 567249.nads_project_back        (09/23/25 18:46:53)     (Detached) # 后端启动会话
-# 如果不存在 nads_project_front
+
+# 如果存在, 进入会话命令如下,
+screen -r nads_project_front
+
+# 如果不存在 nads_project_front，建立会话并进入会话
 screen -S nads_project_front
 
-# 如果存在, 进入会话命令如下
-screen -r nads_project_front
+# 进入会话后执行
 
 # cd到前端目录
 cd /xx/xx/nads/src
@@ -353,20 +348,13 @@ npm start >> front.log
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:2814469) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
 ```
-#### 退出会话
 
-按住Ctl键之后按A键在按D键即可推出会话
-
-### 存储池设置
+### 2.3 存储池设置
 
 **使用顺序一般是:**
 
-```
-如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。
-```
-
+`如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
 *注：如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。*
-
 ```shell
 virsh pool-destroy default    # 停止名为 default 的存储池（正在运行时使用）
 virsh pool-undefine default    # 删除存储池的配置定义（从 libvirt 配置中移除）
@@ -375,16 +363,14 @@ virsh pool-build default     # 初始化存储池目录（如果目录不存在�
 virsh pool-start default     # 启动存储池，让其可用
 virsh pool-autostart default   # 设置存储池开机自动启动
 ```
-
-### vnc/docker连接异常
+### 2.4 vnc/docker连接异常
 
 使用程序根目录的start.sh脚本重新启动node服务，详细看  [前端未启动，重新启动](#前端未启动，重新启动)。
-
-### 如果ovs交换机出现 no such device 情况，可手动删除僵尸端口
+### 2.5 如果ovs交换机出现 no such device 情况，可手动删除僵尸端口
 
 ```shell
 # 把某个交换机上的端口删除的命令
 ovs-vsctl del-port <bridge> <port> 
 ```
 
-### 添加新类别后，如果在管理类别中显示为“未分配ID”，点击刷新类别即可正确被新的课程案例所使用
+### 2.6 添加新类别后，如果在管理类别中显示为“未分配ID”，点击刷新类别即可正确被新的课程案例所使用
