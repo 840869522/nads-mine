@@ -775,7 +775,19 @@ XML;
 
         // d. 设置网络模式为 none，这是后续手动连接的关键
         // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
-        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1','px4-image:latest','px4pro2-image:latest','px4pro-image:latest','px4-image1:latest','px4-image1:v1'];
+        $skipNetworkImages = [
+            'd_tar_oralcercedb35:v3',
+            'd_tar_oralcepasswd10:v1',
+            'd_tar_oraclepasswd10:v1',
+            'd_att_oraclerce15',
+            'd_tar_oraclerce24:v2',
+            'd_tar_oraclerce15:v1',
+            'px4-image:latest',
+            'px4pro2-image:latest',
+            'px4pro-image:latest',
+            'px4-image1:latest',
+            'px4-image1:v1',
+        ];
         if (!in_array($options['image'], $skipNetworkImages)) {
             $command[] = '--network=none';
         }
