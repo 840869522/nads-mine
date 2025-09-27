@@ -106,6 +106,7 @@ npm -v
 # 拷贝 node_modules vendor composer.phar
 # 拷完back/vendor 执行下面的加载php依赖
 cd nads/back
+# 只想下面的命令同步php依赖并生成索引
 ../../composer.phar dump-autoload
 ```
 
