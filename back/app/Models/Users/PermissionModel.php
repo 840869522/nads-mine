@@ -399,14 +399,18 @@ class PermissionModel extends Model
 
     public static function getPermissionByApi($api){
         try {
-            $res = db::table("c_permissions")->select(["c_id as id",'c_status as status'])->where("c_api_src","=",$api)->limit(1)->get()->toArray();
+            $res = db::table("c_permissions")->select(["c_id as id",'c_status as status'])->where("c_api_src","=",$api)->get()->toArray();
             if (!empty($res)){
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>[
-                        "permission"=>$res[0]->id,
+                        "permission"=>array_map(function($item){
+                            return $item->id;
+                        },$res),
                         "found"=>true,
-                        "status"=>$res[0]->status
+                        "status"=>array_map(function($item) {
+                            return $item->status;
+                        }, $res)
                     ]
                 ];
             }else{

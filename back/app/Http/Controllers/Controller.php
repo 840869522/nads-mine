@@ -47,8 +47,18 @@ class Controller extends BaseController
                 $request->merge([
                     "token_data"=>$jwtRes["data"]
                 ]);
-                if ($res['data']['status']){
-                    if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                if ($this->array_every($res['data']['status'],function($value){
+                    if($value == 1){
+                        return true;
+                    }
+                    return false;
+                })){
+                    if (!$this->array_some($res['data']['permission'],function($item) use ($jwtRes){
+                        if (in_array($item,$jwtRes["data"]["permission"])){
+                            return true;
+                        }
+                        return false;
+                    })){
                         response()->json([
                             'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                             "message"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
@@ -106,5 +116,24 @@ class Controller extends BaseController
                 return $directory;
             }
         }
+    }
+
+    private function array_some($array, $callback) {
+        foreach($array as $value) {
+            if ($callback($value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    private function array_every($array, $callback){
+        foreach ($array as $value) {
+            if (!$callback($value)) {
+                return false;
+            }
+        }
+        return true;
     }
 }
