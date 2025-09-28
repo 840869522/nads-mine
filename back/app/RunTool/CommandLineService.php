@@ -782,6 +782,8 @@ XML;
             'd_att_oraclerce15',
             'd_tar_oraclerce24:v2',
             'd_tar_oraclerce15:v1',
+            'd_tar_virusorce31:v1',
+            'd_att_virussorce31:v1.1',
             'px4-image:latest',
             'px4pro2-image:latest',
             'px4pro-image:latest',
