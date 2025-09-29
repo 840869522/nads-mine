@@ -113,7 +113,8 @@ npm -v
  nltk_data是nltk用来存放预训练模型、语料库、词典等数据的目录，是nltk解析文件内容所必需。
 
 ```python
-os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data' # 后面为nltk_data的目录
+# 注：当nltk_data不在/home/ubunut 目录时，可添加下面代码到python代码
+os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data' # nltk_data的实际所在目录
 ```
 
 ##### 1.3.1.2 创建qdrant目录
@@ -193,9 +194,9 @@ sudo apt install ffmpeg
 #### 1.7.1 日志收集镜像配置以及交换机网络设置
 
 ```shelll
-# 启动日志收集容器，需要启动最新的elastic-data-collector，假设镜像名为 elastic-data-collector:v1.6 那么命令如下
+# 启动日志收集容器，需要启动最新的elastic-data-collector，假设镜像名为 elastic-data-collector:v1.1 那么命令如下
+sudo docker run -it -d -p 9200:9200 -p 5601:5601 -p 3218:3218 --memory="4g" --memory-swap="4g" -e "ES_JAVA_OPTS=-Xms2g -Xmx2g" -e "bootstrap.memory_lock=true" --name elastic-data-collector -v eslogs:/usr/share/elasticsearch/logs elastic-data-collector:v1.6 /bin/bash
 
-docker run -it -d -p 9200:9200 -p 5601:5601 -p 3128:3128 elastic-data-collector:v1.6 /bin/bash
 # 创建交换机
 sudo ovs-vsctl add-br ovs-switch -- set bridge ovs-switch stp_enable=true 
 
@@ -249,7 +250,7 @@ qdrant:
 ```shell
 # docker启动qdrant
 # /home/ubuntu/web/qdrant 需要改为 1.3.1.2中创建的路径
-docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage  -p 6333:6333 qdrant:1.15
+docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage --name qdrant_database -p 6333:6333 qdrant:1.15
 ```
 
 #### 1.8.2 构建向量数据库
@@ -257,6 +258,8 @@ docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage  -p 6333:6333 qdran
 需要用到llm_parse代码，在执行之前需要激活虚拟环境并修改如下内容。修改之后，执行llm_parse的main.py。
 
 ```python
+# 激活虚拟环境
+source 
 # main.py
 asyncio.run(process_file(".")) # 需要将 . 改为课程资源所在路径
 # llm_parse/llm/__init__.py
@@ -375,8 +378,7 @@ php artisan serve >> back.log
 
 **使用顺序一般是:**
 
-libvirt默认的default池目录不指向虚拟机镜像文件所在目录的时候，也就是第一次装系统的时候，需要重建存储池，
-首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。
+`如果要重建存储池，首先 destroy 停止 → undefine 删除定义 → define-as 重新定义 → build 初始化 → start 启动 → autostart 开机自动启用。`
 *注：如果系统还没有默认的存储池，可以直接从 define-as 开始，后续步骤依次进行即可。*
 
 ```shell
@@ -403,6 +405,39 @@ ovs-vsctl del-port <bridge> <port>
 
 `在课程管理页面添加新类别后，如果出现在管理类别中显示为“未分配ID"的情况，点击刷新类别，即可正确被使用。`
 
+### 2.8 chatenv问题
+
+需要修改的文件包含
+
+```shell
+chatenv/bin/activate
+chatenv/bin/pip
+chatenv/bin/pip3
+chatenv/bin/pip3.10
+```
+
+具体的修改内容：
+
+- chatenv/bin/activate
+
+  ```shell
+  vi chtenv/bin/activate
+  # 修改下面的内容到实际的chatenv路径
+  VIRTUAL_ENV=/home/ubuntu/chatenv
+  ```
+
+- chatenv/bin/pip
+
+  ```python
+  vi chatenv/bin/pip
+  # 将下面的内容修改为实际的chatenv路径，下面的内容为pip寻找python解释器的路径
+  #!/var/www/chatenv/bin/python3
+  ```
+
+- chatenv/bin/pip3、chatenv/bin/pip3.10 
+
+  与chatenv/bin/pip 类似
+
 # 3 更新
 
 ### 3.1 应用补丁
@@ -425,3 +460,4 @@ git apply /path/to/fix_login.patch #
 ```
 
 在启动中出现问题，请见 [2 维护](#2 维护)
+
