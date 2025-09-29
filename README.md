@@ -241,7 +241,24 @@ embeddingModel:
     api_key: "sk-45jfj2wN89d0hwLFA18c71D7D3A8962b9eBe96F6Ea7d8cF5"
 qdrant:
   server: "http://localhost:6333"
+  
 ```
+#### 1.7.4 安装 guacd
+
+两种方法任选其一
+1. apt安装
+```shelll
+apt install guacd
+systemctl start guacd
+systemctl enable guacd
+```
+2.docker安装
+```shelll
+docker run --name guacd \
+  --network host \
+  -d --restart unless-stopped \
+  guacamole/guacd:1.6.0
+``` 
 
 ### 1.8 启动
 
