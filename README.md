@@ -278,7 +278,7 @@ embedding_model = CustomEmbeddings(
 
 ```shell
 cd nads/back
-# 只想下面的命令同步php依赖并生成索引
+# 执行下面的命令同步php依赖并生成索引
 ../../composer.phar dump-autoload
 
 # 启动项目，务必在完成上面之后执行下面的
@@ -292,7 +292,7 @@ sudo apt install screen
 ```shell
 # 进入会话查看相关服务是否启动
 screen -r nads_project_front # 进入前端会话
-#退会话之后进入后端会话，如何退出见 2.1.3
+# 退出前端会话之后进入后端会话，如何退出见 2.1.3
 screen -r nads_project_back # 进入后端会话
 
 # 查看相关服务的启动日志 
@@ -345,7 +345,7 @@ screen -ls
 # 如果存在, 进入会话命令如下,
 screen -r nads_project_front
 
-# 如果不存在 nads_project_front，建立会话并进入会话
+# 如果不存在 nads_project_front，建立会话（会自动进入会话）
 screen -S nads_project_front
 
 # 进入会话后执行
@@ -367,7 +367,7 @@ npm start >> front.log
 # 如果存在, 进入会话命令如下：
 screen -r nads_project_back
 
-# 如果不存在，则需要建立会话并进入会话
+# 如果不存在，则需要建立会话（会自动进入会话）
 screen -S nads_project_back
 # 位于项目录下
 cd back
@@ -392,7 +392,7 @@ virsh pool-autostart default   # 设置存储池开机自动启动
 
 ### 2.5 vnc/docker连接异常
 
-使用程序根目录的start.sh脚本重新启动node服务，详细看  [重新启动](#3.2 重新启动)。
+使用程序根目录的start.sh脚本重新启动node服务，详细看  [重新启动](README.md#32-重新启动)。
 
 ### 2.6 如果ovs交换机出现 no such device 情况，可手动删除僵尸端口
 
@@ -459,5 +459,4 @@ git apply /path/to/fix_login.patch #
 选择前端运行模式 dev or build:
 ```
 
-在启动中出现问题，请见 [2 维护](#2 维护)
-
+在启动中出现问题，请见 [2 维护](README.md#2-维护)
