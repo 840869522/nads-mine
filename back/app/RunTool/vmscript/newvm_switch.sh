@@ -65,8 +65,15 @@ fi
 echo "DEBUG: Template files found."
 
 # 使用模板生成配置文件
-n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config")\"" > "$INSTANCE_DIR/network-config"
-n=$1 ip=$3 SCENE_ID="$4_$7" flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
+ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}
+ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+
+n=$1 ip=$3 SCENE_ID=$4 flag=$5 \
+  ELASTICSEARCH_HOST=$ELASTICSEARCH_HOST ELASTICSEARCH_PORT=$ELASTICSEARCH_PORT \
+  eval "echo \"$(cat \"$TEMPLATE_DIR/network-config\")\"" > "$INSTANCE_DIR/network-config"
+n=$1 ip=$3 SCENE_ID="$4_$7" flag=$5 \
+  ELASTICSEARCH_HOST=$ELASTICSEARCH_HOST ELASTICSEARCH_PORT=$ELASTICSEARCH_PORT \
+  eval "echo \"$(cat \"$TEMPLATE_DIR/user-data\")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 
 

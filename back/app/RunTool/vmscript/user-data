@@ -32,8 +32,10 @@ bootcmd:
  - /opt/zeek/bin/zeekctl start
  - echo "FLAG=$flag" >> /etc/ctf-config
  - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
- - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_HOST=10.100.88.88"' /lib/systemd/system/td-agent.service
- - sed -i '/^\[Service\]/a Environment="ELASTICSEARCH_PORT=9200"' /lib/systemd/system/td-agent.service
+ - "ES_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}"
+ - "ES_PORT=${ELASTICSEARCH_PORT:-9200}"
+ - 'sed -i "/^\[Service\]/a Environment=\"ELASTICSEARCH_HOST=${ES_HOST}\"" /lib/systemd/system/td-agent.service'
+ - 'sed -i "/^\[Service\]/a Environment=\"ELASTICSEARCH_PORT=${ES_PORT}\"" /lib/systemd/system/td-agent.service'
  - systemctl daemon-reload
  - if ! id -u ubuntu &>/dev/null; then useradd -m -s /bin/bash -G sudo ubuntu; fi
  - echo "ubuntu:123456" | chpasswd
