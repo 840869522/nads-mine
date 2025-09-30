@@ -981,12 +981,33 @@ class VmController extends Controller
     public function deleteVm(Request $request, $vmId)
     {
         try {
-            try { $this->runVirsh('destroy', $vmId); } catch (\Throwable $e) {}
-            $this->runVirsh('undefine', $vmId, '--remove-all-storage', '--snapshots-metadata');
+            // 1) 尝试强制停止（保持原行为）
+            try {
+                $this->runVirsh('destroy', $vmId);
+            } catch (\Throwable $e) {
+                // 忽略 destroy 失败（与原逻辑一致）
+            }
+
+            // 2) 先按原参数 undefine
+            try {
+                $this->runVirsh('undefine', $vmId, '--remove-all-storage', '--snapshots-metadata');
+            } catch (\Throwable $e) {
+                // 若因 NVRAM 报错导致不能 undefine，则追加 --nvram 重试；其它错误照旧抛出
+                $msg = strtolower($e->getMessage());
+                $isNvramErr = str_contains($msg, 'cannot undefine domain with nvram')
+                           || (str_contains($msg, 'nvram') && str_contains($msg, 'undefine'));
+
+                if ($isNvramErr) {
+                    $this->runVirsh('undefine', $vmId, '--remove-all-storage', '--snapshots-metadata', '--nvram');
+                } else {
+                    throw $e;
+                }
+            }
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
 
+        // 3) 清理业务记录（保持原行为）
         $domain = $request->input('domain_name');
         if ($domain) {
             try {

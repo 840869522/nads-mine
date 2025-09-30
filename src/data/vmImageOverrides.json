@@ -348,5 +348,9 @@
   "v_att_IPCremote.qcow2": {
     "osType": "win7_1",
     "description": "IPC植入远控攻击镜像"
+  },
+  "v_tar_IPCremote.qcow2": {
+    "osType": "win7_1",
+    "description": "IPC植入远控靶机镜像"
   }
 }

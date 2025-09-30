@@ -77,7 +77,6 @@ echo "FOREGROUND: Creating cloud-init ISO image..."
 genisoimage -output "$INSTANCE_DIR/config.iso" -volid cidata -joliet -rock "$INSTANCE_DIR/meta-data" "$INSTANCE_DIR/network-config" "$INSTANCE_DIR/user-data"
 echo "FOREGROUND: ISO image created."
 
-# ★★★ 使用 backing file 技术创建差分镜像，并明确指定 backing_fmt ★★★
 echo "FOREGROUND: Creating differential image using backing file..."
 qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 "$DESTINATION_IMAGE_PATH" 50G
 echo "FOREGROUND: Differential image created."
@@ -98,6 +97,11 @@ else
     echo "DEBUG: Standard image detected, setting RAM to 4GB"
 fi
 
+if [[ "$NADS_VM_MEMORY" =~ ^[0-9]+$ ]]; then
+    RAM_SIZE=$NADS_VM_MEMORY
+    echo "DEBUG: Overriding RAM to ${RAM_SIZE}MB from NADS_VM_MEMORY"
+fi
+
 # 根据镜像类型设置CPU核心数
 VCPU_NUM=4
 if [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
@@ -108,6 +112,11 @@ elif [[ "$IMAGE_BASE_NAME" == *"Report-tools"* ]]; then
     echo "DEBUG: Report-tools image detected, setting vCPUs to 4"
 else
     echo "DEBUG: Standard image detected, setting vCPUs to 4"
+fi
+
+if [[ "$NADS_VM_CPU" =~ ^[0-9]+$ ]]; then
+    VCPU_NUM=$NADS_VM_CPU
+    echo "DEBUG: Overriding vCPUs to ${VCPU_NUM} from NADS_VM_CPU"
 fi
 
 # 執行 virt-install 命令

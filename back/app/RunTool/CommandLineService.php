@@ -13,6 +13,56 @@ use Illuminate\Support\Facades\Log;
  */
 class CommandLineService
 {
+    /**
+     * Build environment variables for VM creation scripts based on provided options.
+     */
+    private function buildVmProcessEnv(array $options): array
+    {
+        $env = [];
+
+        $memory = $this->normalizePositiveInt($options['memory'] ?? null);
+        if ($memory !== null) {
+            $env['NADS_VM_MEMORY'] = (string) $memory;
+        }
+
+        $cpu = $this->normalizePositiveInt($options['cpu'] ?? null);
+        if ($cpu !== null) {
+            $env['NADS_VM_CPU'] = (string) $cpu;
+        }
+
+        return $env;
+    }
+
+    /**
+     * Ensure user-provided numeric values are positive integers.
+     */
+    private function normalizePositiveInt($value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        if (is_numeric($value)) {
+            $intValue = (int) $value;
+            return $intValue > 0 ? $intValue : null;
+        }
+
+        if (is_string($value)) {
+            $filtered = preg_replace('/[^0-9]/', '', $value);
+            if ($filtered === '') {
+                return null;
+            }
+            $intValue = (int) $filtered;
+            return $intValue > 0 ? $intValue : null;
+        }
+
+        return null;
+    }
+
        /**
      * Applies DNAT rules for port forwarding using iptables.
      *
@@ -375,7 +425,12 @@ class CommandLineService
         $command = array_merge([$scriptPath], $args);
         Log::info('Executing VM creation shell script (9-param version): ' . implode(' ', $command));
 
-        $process = new Process($command);
+        $env = $this->buildVmProcessEnv($options);
+        if (!empty($env)) {
+            Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+        }
+
+        $process = new Process($command, null, empty($env) ? null : $env);
         $process->setTimeout(360);
         $process->run();
 
@@ -720,7 +775,24 @@ XML;
 
         // d. 设置网络模式为 none，这是后续手动连接的关键
         // 检查镜像名称，如果是特定的数据库镜像则不设置网络模式
-        $skipNetworkImages = ['d_tar_oralcercedb35:v3', 'd_tar_oralcepasswd10:v1','px4-image:latest','px4pro2-image:latest','px4pro-image:latest','px4-image1:latest','px4-image1:v1'];
+        $skipNetworkImages = [
+            'd_tar_oralcercedb35:v3',
+            'd_tar_oralcepasswd10:v1',
+            'd_tar_oraclepasswd10:v1',
+            'd_att_oraclerce15',
+            'd_tar_oraclerce24:v2',
+            'd_att_oraclerce24:v1.2',
+            'd_tar_oraclerce15:v1',
+            'd_tar_virusorce31:v1',
+            'd_att_virusorce31:v1.1',
+            'd_att_oracleromate9:v1.0',
+            'd_tar_oracleromate9:v1',
+            'px4-image:latest',
+            'px4pro2-image:latest',
+            'px4pro-image:latest',
+            'px4-image1:latest',
+            'px4-image1:v1',
+        ];
         if (!in_array($options['image'], $skipNetworkImages)) {
             $command[] = '--network=none';
         }
@@ -815,7 +887,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Windows VM creation shell script: ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
     $process->mustRun(); // 如果失败则抛出异常
 
@@ -841,7 +918,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Windows VM creation shell script (win7_1): ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
     $process->mustRun(); // 如果失败则抛出异常
 
@@ -867,7 +949,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Windows VM creation shell script (win2003): ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
     $process->mustRun(); // 如果失败则抛出异常
 
@@ -893,7 +980,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Windows VM creation shell script (win10): ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360); // Windows启动可能较慢，设置更长的超时
     $process->mustRun(); // 如果失败则抛出异常
 
@@ -919,7 +1011,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Kylin VM creation shell script: ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360);
     $process->mustRun();
 
@@ -948,7 +1045,12 @@ XML;
     $command = array_merge([$scriptPath], $args);
     Log::info('Executing Kali Linux VM creation shell script: ' . implode(' ', $command));
 
-    $process = new Process($command);
+    $env = $this->buildVmProcessEnv($options);
+    if (!empty($env)) {
+        Log::info('Applying VM resource overrides', ['vm' => $options['vm_name'] ?? $options['id'] ?? null, 'overrides' => $env]);
+    }
+
+    $process = new Process($command, null, empty($env) ? null : $env);
     $process->setTimeout(360);
     $process->mustRun();
 
