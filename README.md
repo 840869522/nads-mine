@@ -59,7 +59,7 @@ npm -v
 
 #### 1.2.2 二进制安装（可选）
 
-访问node官网（https://nodejs.org/zh-cn/download），下载对应的版本，如： Linux x64复制下载连接，例如：https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
+访问[node官网](https://nodejs.org/zh-cn/download)，下载对应的版本，如： Linux x64复制下载连接，例如：https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
 
 ```shell
 wget https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
