@@ -14,7 +14,8 @@ import {
   MenuBook as MenuBookIcon,
   Logout as LogoutIcon,
   Error as ErrorIcon,
-  FolderOpen as FolderOpenIcon
+  FolderOpen as FolderOpenIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
@@ -161,13 +162,19 @@ const theoryTestApi = {
     return response.data;
   },
 
-  checkSubmissionStatus: async (testId: string, username: string) => {
-    if (!testId || !username) {
-      throw new Error('检查提交状态失败：test_id或username为空');
+  
+
+  getUserTestScore: async (courseId: string, username: string, testId: string) => {
+    if (!courseId || !username || !testId) {
+      throw new Error('获取成绩失败：course_id、username或c_test_id为空');
     }
     const response = await apiClient.post(
-      `/back/api/study/test/checkSubmissionStatus`,
-      { test_id: testId, username }
+      `/back/api/study/test/get_user_test_score`,
+      { 
+        course_id: courseId,
+        username: username,
+        c_test_id: testId
+      }
     );
     return response.data;
   },
@@ -218,6 +225,20 @@ const TestManagement_user = () => {
   const [selectedExperiment, setSelectedExperiment] = useState<Test | null>(null);
   const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
   const [submissionStatus, setSubmissionStatus] = useState<Record<string, boolean>>({});
+  const [scoresDialog, setScoresDialog] = useState<{
+    open: boolean;
+    data: any;
+    type: 'theory' | 'experiment';
+    testName: string;
+  }>({ open: false, data: null, type: 'theory', testName: '' });
+  const [scoresLoadingMap, setScoresLoadingMap] = useState<Record<string, boolean>>({});
+
+  // 修改确认对话框状态，添加提示信息
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    test: Test | null;
+    message?: string; // 添加提示消息字段
+  }>({ open: false, test: null });
 
   // 从localStorage读取认证状态
   const getAuthState = (): { isAuthenticated: boolean; username: string } => {
@@ -321,7 +342,7 @@ const TestManagement_user = () => {
           console.log('理论测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
-            test_id: test.c_id.trim().replace(/[{}]/g, ''), // 清理花括号
+            test_id: test.c_id.trim().replace(/[{}]/g, ''),
             c_name: test.c_name || '未知测试',
             test_name: test.test_name || test.c_name || '未命名测试',
             c_test_type: '理论测试',
@@ -333,7 +354,7 @@ const TestManagement_user = () => {
             c_course_name: test.c_course_name || '未知课程',
             test_users_id: `${test.c_id}_${username}`,
             duration: test.duration ? Number(test.duration) : undefined,
-            c_paper_id: userPaperId.trim(),       
+            c_paper_id: userPaperId.trim(),
           });
           return acc;
         }, []);
@@ -351,7 +372,7 @@ const TestManagement_user = () => {
           console.log('实验测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
-            test_id: test.c_id.trim().replace(/[{}]/g, ''), // 清理花括号
+            test_id: test.c_id.trim().replace(/[{}]/g, ''),
             c_name: test.c_name || '未知测试',
             test_name: test.test_name || test.c_name || '未命名测试',
             c_test_type: '实验',
@@ -372,74 +393,118 @@ const TestManagement_user = () => {
       setTheoreticalTests(formattedTheoreticalTests);
       setPracticalTests(formattedPracticalTests);
 
-      // 检查考试的提交状态
-      const examTests = [...formattedTheoreticalTests, ...formattedPracticalTests].filter(test => test.c_type === '考试');
-      const statusPromises = examTests.map(test =>
-        theoryTestApi.checkSubmissionStatus(test.test_id, username)
-          .then(response => {
-            if (response.code === 200) {
-              return { testId: test.test_id, hasSubmitted: response.data.hasSubmitted };
-            }
-            console.warn(`检查提交状态失败（test_id: ${test.test_id}）: ${response.message}`);
-            return { testId: test.test_id, hasSubmitted: false };
-          })
-          .catch(err => {
-            console.error(`检查提交状态错误（test_id: ${test.test_id}）:`, err);
-            return { testId: test.test_id, hasSubmitted: false };
-          })
-      );
+      // 关键修改：删除不存在的状态检查
+    // 不再调用 checkSubmissionStatus 接口
+    
+  } catch (err: any) {
+    console.error('加载测试列表失败:', err);
+    setError(err.message || '加载测试列表失败');
+  } finally {
+    setLoading(false);
+  }
+};
 
-      const statuses = await Promise.all(statusPromises);
-      const statusMap = statuses.reduce((acc, { testId, hasSubmitted }) => {
-        acc[testId] = hasSubmitted;
-        return acc;
-      }, {} as Record<string, boolean>);
-      setSubmissionStatus(statusMap);
-
-    } catch (err: any) {
-      console.error('加载测试列表失败:', err);
-      setError(err.message || '加载测试列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEnterTest = async (test: Test) => {
-    try {
-      setLoading(true);
-      // 检查考试提交状态（适用于理论和实验）
-      if (test.c_type === '考试') {
-        const response = await theoryTestApi.checkSubmissionStatus(test.test_id, username);
-        if (response.code === 200 && response.data.hasSubmitted) {
-          setErrorDialog({
-            open: true,
-            title: '无法进入测试',
-            details: '试卷已提交，无法再次进入考试。',
-            requestParams: null
-          });
-          return;
-        }
+  try {
+    setLoading(true);
+    
+    // 关键修改：使用 getTestUserRelation 接口检查是否已提交
+    if (test.c_type === '考试') {
+      const response = await theoryTestApi.getTestUserRelation(test.test_id, username);
+      
+      // 如果后端返回400状态码且包含"已经提交过考试试卷"的提示，说明已提交
+      if (response.code === 400 && response.message.includes('已经提交过考试试卷')) {
+        setErrorDialog({
+          open: true,
+          title: '无法进入测试',
+          details: '试卷已提交，无法再次进入考试。',
+          requestParams: null
+        });
+        return;
       }
+      
+      // 其他错误也阻止进入
+      if (response.code !== 200) {
+        setErrorDialog({
+          open: true,
+          title: '无法进入测试',
+          details: response.message || '检查测试状态失败',
+          requestParams: null
+        });
+        return;
+      }
+    }
 
-      if (test.c_test_type === '理论测试') {
-        // 理论测试保持不变
-        setCurrentTest(test);
-        setCurrentView('theoretical');
-      } else {
-        // 实验测试：进入场景管理
-        setCurrentTest(test);
-        setCurrentView('scenario-management');
+    // 关键修改：只有实验测试显示确认对话框
+    if (test.c_test_type === '实验') {
+      setConfirmDialog({
+        open: true,
+        test: test,
+        message: '请注意测试截至时间，超时提交不计成绩。' // 添加实验测试的特定提示
+      });
+    } else {
+      // 理论测试直接进入
+      setCurrentTest(test);
+      setCurrentView('theoretical');
+    }
+
+  } catch (err: any) {
+    console.error('进入测试失败:', err);
+    setErrorDialog({
+      open: true,
+      title: '进入测试失败',
+      details: err.message || '发生未知错误',
+      requestParams: { test_id: test.test_id, username }
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
+// 确认进入测试
+const handleConfirmEnterTest = () => {
+  if (!confirmDialog.test) return;
+  
+  // 直接进入实验测试界面
+  setCurrentTest(confirmDialog.test);
+  setCurrentView('scenario-management');
+  setConfirmDialog({ open: false, test: null });
+};
+
+// 取消进入测试
+const handleCancelEnterTest = () => {
+  setConfirmDialog({ open: false, test: null });
+};
+
+
+  const handleViewScores = async (test: Test) => {
+    try {
+      setScoresLoadingMap(prev => ({ ...prev, [test.test_id]: true }));
+      const courseId = test.c_course_id || '';
+      const response = await theoryTestApi.getUserTestScore(courseId, username, test.test_id);
+      if (response.code !== 200) {
+        throw new Error(response.message || '获取成绩失败');
       }
+      const data = response.data;
+      const type = test.c_test_type === '理论测试' ? 'theory' : 'experiment';
+      const scoresData = type === 'theory' ? data.tests : data.experiments;
+      setScoresDialog({
+        open: true,
+        data: scoresData[0] || {},
+        type,
+        testName: test.test_name
+      });
     } catch (err: any) {
-      console.error('进入测试失败:', err);
+      console.error('获取成绩失败:', err);
       setErrorDialog({
         open: true,
-        title: '进入测试失败',
+        title: '获取成绩失败',
         details: err.message || '发生未知错误',
-        requestParams: { test_id: test.test_id, username }
+        requestParams: { course_id: test.c_course_id, username, c_test_id: test.test_id }
       });
     } finally {
-      setLoading(false);
+      setScoresLoadingMap(prev => ({ ...prev, [test.test_id]: false }));
     }
   };
 
@@ -510,153 +575,198 @@ const TestManagement_user = () => {
   );
 
   const renderTestTable = (tests: Test[], page: number, setPage: (page: number) => void, pageCount: number, isPracticalTestTable = false) => {
-    return (
-      <Box>
-        <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor(), boxShadow: 'none' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>测试名称</TableCell>
-                {!isPracticalTestTable && (
-                  <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>类型</TableCell>
-                )}
-                <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>课程</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>描述</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>时间</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>状态</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tests.map((test) => {
-                const isTestValid = !!test.test_id?.trim();
-                const isPaperValid = !!test.c_paper_id?.trim();
-                const now = moment();
-                const start = moment(test.test_start);
-                const end = moment(test.test_end);
-                const isExpired = now.isAfter(end);
-                const isSubmitted = test.c_type === '考试' && submissionStatus[test.test_id];
-                const status = isExpired ? { label: '已结束', color: 'error' } : now.isBefore(start) ? { label: '未开始', color: 'warning' } : { label: '进行中', color: 'success' };
+  return (
+    <Box>
+      <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor(), boxShadow: 'none' }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>测试名称</TableCell>
+              {!isPracticalTestTable && (
+                <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>类型</TableCell>
+              )}
+              <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>课程</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: getTextColor() }}>描述</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>时间</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>状态</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600, color: getTextColor() }}>操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tests.map((test) => {
+              const isTestValid = !!test.test_id?.trim();
+              const isPaperValid = !!test.c_paper_id?.trim();
+              const now = moment();
+              const start = moment(test.test_start);
+              const end = moment(test.test_end);
+              const isExpired = now.isAfter(end);
+              const isNotStarted = now.isBefore(start);
+              const isInProgress = !isNotStarted && !isExpired; // 关键修改：定义进行中状态
+              const isSubmitted = false; // 关键修改：不再依赖不存在的状态检查
+              const status = isExpired ? { label: '已结束', color: 'error' } : 
+                           isNotStarted ? { label: '未开始', color: 'warning' } : 
+                           { label: '进行中', color: 'success' };
+              const isScoresLoading = scoresLoadingMap[test.test_id] || false;
 
-                return (
-                  <TableRow key={test.test_id} hover>
-                    <TableCell sx={{ fontWeight: 500, color: getTextColor() }}>{test.test_name}</TableCell>
-                    {!isPracticalTestTable && (
-                      <TableCell>
-                        <Chip
-                          label={test.c_type}
-                          size="small"
-                          color={test.c_type === '考试' ? 'primary' : 'secondary'}
-                          sx={{ borderRadius: 1, fontWeight: 500 }}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell sx={{ color: getTextColor() }}>
-                      {test.c_course_name || test.c_course_id || '无'}
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 300, color: getTextColor() }}>{test.c_description}</TableCell>
-                    <TableCell align="center" sx={{ color: getTextColor() }}>
-                      <Box fontSize="0.875rem">
-                        <div>开始: {test.test_start ? moment(test.test_start).format('YYYY-MM-DD HH:mm') : '无效时间'}</div>
-                        <div>结束: {test.test_end ? moment(test.test_end).format('YYYY-MM-DD HH:mm') : '无效时间'}</div>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
+              // 关键修改：定义操作区按钮的禁用条件
+              const isOperationDisabled = !isInProgress; // 只有进行中状态才能操作
+
+              return (
+                <TableRow key={test.test_id} hover>
+                  <TableCell sx={{ fontWeight: 500, color: getTextColor() }}>{test.test_name}</TableCell>
+                  {!isPracticalTestTable && (
+                    <TableCell>
                       <Chip
-                        label={status.label}
-                        color={status.color}
+                        label={test.c_type}
                         size="small"
+                        color={test.c_type === '考试' ? 'primary' : 'secondary'}
                         sx={{ borderRadius: 1, fontWeight: 500 }}
                       />
                     </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        <Tooltip
-                          title={
-                            !isTestValid ? "测试ID无效，无法进入" :
-                            !isPaperValid && !isPracticalTestTable ? "试卷ID无效，无法进入" :
-                            isExpired ? "测试已结束，无法进入" :
-                            isSubmitted ? "试卷已提交，无法再次进入" :
-                            "进入测试"
-                          }
+                  )}
+                  <TableCell sx={{ color: getTextColor() }}>
+                    {test.c_course_name || test.c_course_id || '无'}
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 300, color: getTextColor() }}>{test.c_description}</TableCell>
+                  <TableCell align="center" sx={{ color: getTextColor() }}>
+                    <Box fontSize="0.875rem">
+                      <div>开始: {test.test_start ? moment(test.test_start).format('YYYY-MM-DD HH:mm') : '无效时间'}</div>
+                      <div>结束: {test.test_end ? moment(test.test_end).format('YYYY-MM-DD HH:mm') : '无效时间'}</div>
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={status.label}
+                      color={status.color}
+                      size="small"
+                      sx={{ borderRadius: 1, fontWeight: 500 }}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                      <Tooltip
+                        title={
+                          !isTestValid ? "测试ID无效，无法进入" :
+                          !isPaperValid && !isPracticalTestTable ? "试卷ID无效，无法进入" :
+                          !isInProgress ? "测试未开始或已结束，无法进入" : // 关键修改
+                          isSubmitted && !isPracticalTestTable ? "试卷已提交，无法再次进入" :
+                          "进入测试"
+                        }
+                        placement="top"
+                      >
+                        <IconButton
+                          size="small"
+                        // 修改进入测试按钮的禁用逻辑
+                            disabled={
+                              !isTestValid || 
+                              (!isPaperValid && !isPracticalTestTable) || 
+                              !isInProgress || 
+                              loading
+                            }
+                          onClick={() => handleEnterTest(test)}
+                          sx={{
+                            backgroundColor: (
+                              !isTestValid || 
+                              (!isPaperValid && !isPracticalTestTable) || 
+                              !isInProgress || 
+                              (isSubmitted && !isPracticalTestTable)
+                            )
+                              ? (isDarkMode ? '#555' : '#ccc')
+                              : getButtonColor(),
+                            color: '#fff',
+                            '&:hover': {
+                              backgroundColor: (
+                                !isTestValid || 
+                                (!isPaperValid && !isPracticalTestTable) || 
+                                !isInProgress || 
+                                (isSubmitted && !isPracticalTestTable)
+                              )
+                                ? (isDarkMode ? '#555' : '#ccc')
+                                : (isDarkMode ? '#303f9f' : '#1565c0')
+                            },
+                            borderRadius: 1,
+                            minWidth: 40
+                          }}
+                        >
+                          {!isTestValid ? <ErrorIcon fontSize="small" /> :
+                            (!isPaperValid && !isPracticalTestTable) ? <ErrorIcon fontSize="small" /> :
+                            !isInProgress ? <ErrorIcon fontSize="small" /> : // 关键修改
+                            (isSubmitted && !isPracticalTestTable) ? <ErrorIcon fontSize="small" /> :
+                            loading ? <CircularProgress size={16} /> :
+                            <MenuBookIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                      {isPracticalTestTable && (
+                        <Tooltip 
+                          title={!isInProgress ? "测试未开始或已结束，无法查看资源" : "查看资源"} 
                           placement="top"
                         >
                           <IconButton
                             size="small"
-                            disabled={!isTestValid || (!isPaperValid && !isPracticalTestTable) || isExpired || isSubmitted || loading}
-                            onClick={() => handleEnterTest(test)}
+                            onClick={() => handleOpenResources(test)}
+                            disabled={!isTestValid || !isInProgress || loading} // 关键修改：只有进行中才能查看资源
                             sx={{
-                              backgroundColor: (!isTestValid || (!isPaperValid && !isPracticalTestTable) || isExpired || isSubmitted)
-                                ? (isDarkMode ? '#555' : '#ccc')
-                                : getButtonColor(),
-                              color: '#fff',
+                              color: (!isTestValid || !isInProgress || loading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
                               '&:hover': {
-                                backgroundColor: (!isTestValid || (!isPaperValid && !isPracticalTestTable) || isExpired || isSubmitted)
-                                  ? (isDarkMode ? '#555' : '#ccc')
-                                  : (isDarkMode ? '#303f9f' : '#1565c0')
+                                backgroundColor: (!isTestValid || !isInProgress || loading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
                               },
-                              borderRadius: 1,
-                              minWidth: 40
+                              borderRadius: 1
                             }}
                           >
-                            {!isTestValid ? <ErrorIcon fontSize="small" /> :
-                              (!isPaperValid && !isPracticalTestTable) ? <ErrorIcon fontSize="small" /> :
-                              isExpired ? <ErrorIcon fontSize="small" /> :
-                              isSubmitted ? <ErrorIcon fontSize="small" /> :
-                              loading ? <CircularProgress size={16} /> :
-                              <MenuBookIcon fontSize="small" />}
+                            <FolderOpenIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        {isPracticalTestTable && (
-                          <Tooltip title="查看资源" placement="top">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenResources(test)}
-                              disabled={!isTestValid || loading}
-                              sx={{
-                                color: (!isTestValid || loading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
-                                '&:hover': {
-                                  backgroundColor: (!isTestValid || loading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
-                                },
-                                borderRadius: 1
-                              }}
-                            >
-                              <FolderOpenIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                      )}
+                      <Tooltip 
+                        title={!isInProgress ? "测试未开始或已结束，无法查看成绩" : "查看成绩"} 
+                        placement="top"
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={() => handleViewScores(test)}
+                          disabled={!isTestValid || !isInProgress || isScoresLoading} // 关键修改：只有进行中才能查看成绩
+                          sx={{
+                            color: (!isTestValid || !isInProgress || isScoresLoading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
+                            '&:hover': {
+                              backgroundColor: (!isTestValid || !isInProgress || isScoresLoading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
+                            },
+                            borderRadius: 1
+                          }}
+                        >
+                          {isScoresLoading ? <CircularProgress size={16} /> : <VisibilityIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-        {pageCount > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-            <Pagination
-              count={pageCount}
-              page={page}
-              onChange={(e, value) => setPage(value)}
-              shape="rounded"
-              color="primary"
-              sx={{
-                '& .MuiPaginationItem-root': { color: getTextColor() },
-                '& .MuiPaginationItem-page.Mui-selected': {
-                  backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
-                  color: '#fff',
-                }
-              }}
-            />
-          </Box>
-        )}
-      </Box>
-    );
-  };
+      {pageCount > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+          <Pagination
+            count={pageCount}
+            page={page}
+            onChange={(e, value) => setPage(value)}
+            shape="rounded"
+            color="primary"
+            sx={{
+              '& .MuiPaginationItem-root': { color: getTextColor() },
+              '& .MuiPaginationItem-page.Mui-selected': {
+                backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
+                color: '#fff',
+              }
+            }}
+          />
+        </Box>
+      )}
+    </Box>
+  );
+};
 
-  // 视图渲染 - 场景管理页
   if (currentView === 'scenario-management' && currentTest && username) {
     return (
       <ScenarioManagementPage
@@ -671,7 +781,6 @@ const TestManagement_user = () => {
     );
   }
 
-  // 视图渲染 - 场景实例管理页
   if (currentView === 'scenario-instances' && username) {
     return (
       <ScenarioInstanceManagementPage
@@ -682,7 +791,6 @@ const TestManagement_user = () => {
     );
   }
 
-  // 视图渲染 - 理论测试页（保持不变）
   if (currentView === 'theoretical' && currentTest && username) {
     return (
       <TheoreticalTestPage
@@ -716,20 +824,17 @@ const TestManagement_user = () => {
     );
   }
 
-  // 获取当前用户信息
   const { isAuthenticated } = getAuthState();
 
-  // 未认证且加载中状态
   if (!isAuthenticated && auth.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>检查认证状态...</Typography>
-      </Box>
+      <CircularProgress />
+      <Typography sx={{ ml: 2 }}>检查认证状态...</Typography>
+    </Box>
     );
   }
 
-  // 测试列表视图
   return (
     <Paper sx={{
       p: 3,
@@ -826,7 +931,7 @@ const TestManagement_user = () => {
           experimentName={selectedExperiment.test_name}
           courseId={selectedExperiment.c_course_id || ''}
           onShowMessage={handleShowMessage}
-          hideDeleteButton={true} // 添加这个prop来隐藏删除按钮
+          hideDeleteButton={true}
         />
       )}
 
@@ -844,6 +949,43 @@ const TestManagement_user = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={confirmDialog.open}
+        onClose={handleCancelEnterTest}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>确认进入测试</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {confirmDialog.test && confirmDialog.test.c_test_type === '实验' ? (
+              <>
+                <Typography color="warning.main" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  请注意测试截至时间，超时提交不计成绩。
+                </Typography>
+                <Typography>
+                  您即将进入实验测试：<strong>{confirmDialog.test.test_name}</strong>
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                  测试结束时间：{moment(confirmDialog.test.test_end).format('YYYY-MM-DD HH:mm')}
+                </Typography>
+              </>
+            ) : (
+              <Typography>
+                您即将进入测试：<strong>{confirmDialog.test?.test_name}</strong>
+              </Typography>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEnterTest}>取消</Button>
+          <Button onClick={handleConfirmEnterTest} variant="contained" autoFocus>
+            确认进入
+          </Button>
+        </DialogActions>
+      </Dialog>
+
 
       <Dialog
         open={errorDialog.open}
@@ -877,6 +1019,103 @@ const TestManagement_user = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setErrorDialog(prev => ({ ...prev, open: false }))}>
+            关闭
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={scoresDialog.open}
+        onClose={() => setScoresDialog(prev => ({ ...prev, open: false }))}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
+          {scoresDialog.testName} - {scoresDialog.type === 'theory' ? '理论测试成绩' : '实验Flag提交历史'}
+        </DialogTitle>
+        <DialogContent>
+          {Object.values(scoresLoadingMap).some(v => v) ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {scoresDialog.type === 'theory' && scoresDialog.data?.scores?.length > 0 ? (
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>用户名</TableCell>
+                        <TableCell>试卷名称</TableCell>
+                        <TableCell>开始时间</TableCell>
+                        <TableCell>提交时间</TableCell>
+                        <TableCell>总分</TableCell>
+                        <TableCell>客观分</TableCell>
+                        <TableCell>主观分</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {scoresDialog.data.scores.flatMap((score: any) =>
+                        score.papers.map((paper: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell>{score.username}</TableCell>
+                            <TableCell>{paper.paper_name}</TableCell>
+                            <TableCell>{paper.start_time || '无'}</TableCell>
+                            <TableCell>{paper.submit_time || '无'}</TableCell>
+                            <TableCell>{paper.total_score}</TableCell>
+                            <TableCell>{paper.objective_score}</TableCell>
+                            <TableCell>{paper.subjective_score}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : scoresDialog.type === 'theory' ? (
+                <Typography>暂无理论测试成绩</Typography>
+              ) : null}
+
+              {scoresDialog.type === 'experiment' && scoresDialog.data?.history?.length > 0 ? (
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>用户名</TableCell>
+                        <TableCell>提交时间</TableCell>
+                        <TableCell>是否正确</TableCell>
+                        <TableCell>尝试次数</TableCell>
+                        <TableCell>获得积分</TableCell>
+                        <TableCell>靶机IP</TableCell>
+                        <TableCell>靶机名称</TableCell>
+                        <TableCell>靶机类型</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {scoresDialog.data.history.flatMap((hist: any) =>
+                        hist.history.map((record: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell>{hist.username}</TableCell>
+                            <TableCell>{record.c_submitted_at || '无'}</TableCell>
+                            <TableCell>{record.c_is_correct ? '是' : '否'}</TableCell>
+                            <TableCell>{record.c_attempt_count}</TableCell>
+                            <TableCell>{record.c_points_earned}</TableCell>
+                            <TableCell>{record.instance_ip}</TableCell>
+                            <TableCell>{record.instance_name}</TableCell>
+                            <TableCell>{record.instance_type}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : scoresDialog.type === 'experiment' ? (
+                <Typography>暂无实验成绩</Typography>
+              ) : null}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setScoresDialog(prev => ({ ...prev, open: false }))}>
             关闭
           </Button>
         </DialogActions>

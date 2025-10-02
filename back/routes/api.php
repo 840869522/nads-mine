@@ -78,6 +78,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update_pwd", [UserController::class, "updateUserPassword"]);
         Route::post("/update_common", [UserController::class, "updateCommonUser"]);
         Route::post("/2excel", [UserController::class, "convert2Excel"]);
+        Route::post("batch_add", [UserController::class , "batchImportUsers"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -88,6 +89,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update", [RoleController::class, "updateRole"]);
         Route::post("/delete", [RoleController::class, "deleteRole"]);
         Route::post("/2excel", [RoleController::class, "convert2Excel"]);
+        Route::post("batch_add", [RoleController::class, "batchImportRoles"]);
     });
 
     Route::prefix('permission')->group(function () {
@@ -97,6 +99,7 @@ Route::prefix("support")->group(function () {
         Route::post("/search", [PermissionController::class, "searchPermission"]);
         Route::post('/new', [PermissionController::class, 'newPermission']);
         Route::post('/update', [PermissionController::class, 'updatePermission']);
+        Route::post("batch_add", [PermissionController::class, "batchImportPermissions"]);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
     });
 });
@@ -166,7 +169,7 @@ Route::prefix("study")->group(function () {
  * 定义环境构建分系统
  */
 Route::prefix('scenarios')->group(function () {
-
+    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
     // GET 获取所有场景列表
     Route::get('/', [ScenarioController::class, 'index']);
     // POST 创建一个新场景
@@ -178,7 +181,7 @@ Route::prefix('scenarios')->group(function () {
     //GET 获取场景
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
-    Route::post('/{scenario}/start', [DrillController::class, 'startDrill']);
+    
 });
 
 Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
@@ -266,9 +269,11 @@ Route::prefix('study')->group(function () {
         Route::post('/question_del', [TestController::class, 'question_del']);
         Route::post('/question_list', [TestController::class, 'question_list']);
         Route::post('/question_info', [TestController::class, 'question_info']);
+        Route::get('/getCourses', [TestController::class, 'getCourses']);
         Route::post('/test_add', [TestController::class, 'test_add']);
         Route::post('/test_update', [TestController::class, 'test_update']);
         Route::post('/test_del', [TestController::class, 'test_del']);
+        Route::post('/experiment_del', [TestController::class, 'experiment_del']);
         Route::get('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
         Route::get('/getTestUsersByTestId', [TestController::class, 'getTestUsersByTestId']);
@@ -300,12 +305,13 @@ Route::prefix('study')->group(function () {
         Route::get('/get_course_tests_experiments', [TestController::class, 'get_course_tests_experiments']);
         Route::get('get_test_scores', [TestController::class, 'get_test_scores']);
         Route::get('download_test_scores', [TestController::class, 'download_test_scores']);
+        Route::post('get_user_test_score', [TestController::class, 'get_user_test_score']);
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
         Route::get('index', [TestController::class, 'index']);
           // 根据用户名查找用户的场景实例
-        Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
+        Route::post('startDrill', [TestController::class, 'startDrill']);
     });
 });
 
@@ -399,6 +405,7 @@ Route::prefix('ad')->group(function () {
 Route::prefix('flag')->group(function () {
     Route::post('/submit-flag', [FlagSubmissionController::class, 'submitFlag'])->middleware('throttle:60,1');
     Route::post('/submission-history', [FlagSubmissionController::class, 'getSubmissionHistory']);
+    Route::get('/latest-submissions', [FlagSubmissionController::class, 'getLatestSubmissions']); // 新增：获取最新提交记录（用于轮询）
     Route::get('/scene-instances', [FlagSubmissionController::class, 'getSceneInstances']);
     Route::get('/target-instances', [FlagSubmissionController::class, 'getTargetInstances']);
 });
@@ -406,4 +413,5 @@ Route::prefix('flag')->group(function () {
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
     Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
 });

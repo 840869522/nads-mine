@@ -15,6 +15,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import moment from 'moment';
 import { apiClientWithToken } from "@/utils/axios";
 
@@ -41,6 +42,11 @@ interface SceneConfig {
   c_description?: string;
 }
 
+interface Course {
+  c_course_id: string;
+  c_course_name: string;
+}
+
 interface UploadedFile {
   id: string;
   name: string;
@@ -62,6 +68,7 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]); // 初始化为空数组
   
   // 专门用于前端展示和处理的Moment对象
   const [startDate, setStartDate] = useState<moment.Moment | null>(null);
@@ -80,6 +87,29 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
     c_duration: 60,
     c_scene_config_id: undefined
   });
+
+ // 获取课程列表
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await apiClientWithToken.get('/back/api/study/test/getCourses');
+        if (response.data.code === 200) {
+          // 确保设置为数组，即使后端返回空数据
+          setCourses(Array.isArray(response.data.data) ? response.data.data : []);
+        } else {
+          setCourses([]); // 后端返回非200时设置为空数组
+          setError('获取课程列表失败');
+        }
+      } catch (error) {
+        console.error('获取课程列表失败:', error);
+        setCourses([]); // 错误时设置为空数组
+        setError('获取课程列表失败');
+      }
+    };
+    if (open) {
+      fetchCourses();
+    }
+  }, [open]);
 
   // 处理基础输入变化
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
@@ -139,6 +169,15 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
     setError(null);
   };
 
+  // 处理课程变化
+  const handleCourseChange = (event: React.SyntheticEvent, newValue: Course | null) => {
+    setFormData(prev => ({
+      ...prev,
+      c_course_id: newValue ? newValue.c_course_id : ''
+    }));
+    setError(null);
+  };
+
   // 处理文件批量上传
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -161,36 +200,36 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
   };
 
   // 处理开始日期变化
-  const handleStartDateChange = (date: moment.Moment | null) => {
-    setStartDate(date);
-    // 同时更新表单数据为字符串格式
+const handleStartDateChange = (date: moment.Moment | null) => {
+  setStartDate(date);
+  // 同时更新表单数据为字符串格式
+  setFormData(prev => ({
+    ...prev,
+    c_start: date ? date.format('YYYY-MM-DD HH:mm:ss') : null
+  }));
+  
+  // 如果选择了新的开始日期且结束日期早于开始日期，则自动调整结束日期
+  if (date && endDate && endDate.isBefore(date)) {
+    const newEndDate = date.clone().add(1, 'hour');
+    setEndDate(newEndDate);
     setFormData(prev => ({
       ...prev,
-      c_start: date ? date.format('YYYY-MM-DD HH:mm:ss') : null
+      c_end: newEndDate.format('YYYY-MM-DD HH:mm:ss')
     }));
-    
-    // 如果选择了新的开始日期且结束日期早于开始日期，则自动调整结束日期
-    if (date && endDate && endDate.isBefore(date)) {
-      const newEndDate = date.clone().add(1, 'hour');
-      setEndDate(newEndDate);
-      setFormData(prev => ({
-        ...prev,
-        c_end: newEndDate.format('YYYY-MM-DD HH:mm:ss')
-      }));
-    }
-    setError(null);
-  };
+  }
+  setError(null);
+};
 
-  // 处理结束日期变化
-  const handleEndDateChange = (date: moment.Moment | null) => {
-    setEndDate(date);
-    // 同时更新表单数据为字符串格式
-    setFormData(prev => ({
-      ...prev,
-      c_end: date ? date.format('YYYY-MM-DD HH:mm:ss') : null
-    }));
-    setError(null);
-  };
+// 处理结束日期变化
+const handleEndDateChange = (date: moment.Moment | null) => {
+  setEndDate(date);
+  // 同时更新表单数据为字符串格式
+  setFormData(prev => ({
+    ...prev,
+    c_end: date ? date.format('YYYY-MM-DD HH:mm:ss') : null
+  }));
+  setError(null);
+};
 
   // 表单验证
   const validateForm = (): boolean => {
@@ -208,7 +247,7 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
     }
 
     if (!formData.c_course_id.trim()) {
-      setError('请输入课程ID');
+      setError('请选择课程');
       return false;
     }
 
@@ -228,17 +267,17 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
       return false;
     }
 
-    // 时间逻辑验证
-    const now = moment();
-    if (startDate.isBefore(now, 'minute')) {
-      setError('开始时间不能早于当前时间');
-      return false;
-    }
+          // 时间逻辑验证
+      const now = moment();
+      if (startDate.isBefore(now, 'minute')) {
+        setError('开始时间不能早于当前时间');
+        return false;
+      }
 
-    if (endDate.isBefore(startDate, 'minute')) {
-      setError('结束时间不能早于开始时间');
-      return false;
-    }
+      if (endDate.isBefore(startDate, 'minute')) {
+        setError('结束时间不能早于开始时间');
+        return false;
+      }
 
     // 考试类型必须填写时长
     if (formData.c_test_type === '理论测试' && formData.c_type === '考试') {
@@ -752,96 +791,120 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
                 mb: 1,
                 pl: 1
               }}>
-                课程ID *
+                课程名称 *
               </InputLabel>
-              <TextField
-                fullWidth
-                variant="outlined"
-                name="c_course_id"
-                value={formData.c_course_id}
-                onChange={handleChange}
+              <Autocomplete
+                options={courses}
+                getOptionLabel={(option) => option.c_course_name}
+                getOptionKey={(option) => option.c_course_id}
+                value={courses.find(course => course.c_course_id === formData.c_course_id) || null}
+                onChange={handleCourseChange}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="搜索或选择课程"
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        border: `2px solid ${theme.palette.divider}`,
+                      }
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} style={{ padding: '12px 16px' }}>
+                    <div style={{ width: '100%' }}>
+                      <div style={{ 
+                        fontSize: '1.1rem', 
+                        fontWeight: 500,
+                        color: theme.palette.text.primary 
+                      }}>
+                        {option.c_course_name}
+                      </div>
+                    </div>
+                  </li>
+                )}
                 disabled={submitting}
-                sx={{ 
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                    border: `2px solid ${theme.palette.divider}`,
-                  }
-                }}
+                noOptionsText="未找到匹配的课程"
+                loading={!courses.length}
+                loadingText="加载中..."
+                sx={{ width: '100%' }}
               />
             </Box>
           </Box>
 
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            width: '100%',
-            gap: '40px',
-            flexWrap: 'wrap'
-          }}>
-            <LocalizationProvider dateAdapter={AdapterMoment}>
-              <Box sx={{ flex: 1, minWidth: '250px' }}>
-                <InputLabel sx={{ 
-                  color: theme.palette.text.secondary,
-                  fontSize: '1.1rem',
-                  fontWeight: 500,
-                  mb: 1,
-                  pl: 1
-                }}>
-                  开始时间 *
-                </InputLabel>
-                <DatePicker
-                  value={startDate}
-                  onChange={handleStartDateChange}
-                  disabled={submitting}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      variant="outlined"
-                      sx={{ 
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '8px',
-                          border: `2px solid ${theme.palette.divider}`,
-                        }
-                      }}
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                width: '100%',
+                gap: '40px',
+                flexWrap: 'wrap'
+              }}>
+                <LocalizationProvider dateAdapter={AdapterMoment}>
+                  <Box sx={{ flex: 1, minWidth: '250px' }}>
+                    <InputLabel sx={{ 
+                      color: theme.palette.text.secondary,
+                      fontSize: '1.1rem',
+                      fontWeight: 500,
+                      mb: 1,
+                      pl: 1
+                    }}>
+                      开始时间 *
+                    </InputLabel>
+                    <DateTimePicker
+                      value={startDate}
+                      onChange={handleStartDateChange}
+                      disabled={submitting}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          variant="outlined"
+                          sx={{ 
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: '8px',
+                              border: `2px solid ${theme.palette.divider}`,
+                            }
+                          }}
+                        />
+                      )}
+                      inputFormat="YYYY/MM/DD HH:mm"
+                      minDate={moment().add(1, 'minute')}
                     />
-                  )}
-                  inputFormat="YYYY/MM/DD HH:mm"
-                  minDate={moment().add(1, 'minute')}
-                />
-              </Box>
-              
-              <Box sx={{ flex: 1, minWidth: '250px' }}>
-                <InputLabel sx={{ 
-                  color: theme.palette.text.secondary,
-                  fontSize: '1.1rem',
-                  fontWeight: 500,
-                  mb: 1,
-                  pl: 1
-                }}>
-                  结束时间 *
-                </InputLabel>
-                <DatePicker
-                  value={endDate}
-                  onChange={handleEndDateChange}
-                  disabled={submitting}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      variant="outlined"
-                      sx={{ 
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '8px',
-                          border: `2px solid ${theme.palette.divider}`,
-                        }
-                      }}
+                  </Box>
+                  
+                  <Box sx={{ flex: 1, minWidth: '250px' }}>
+                    <InputLabel sx={{ 
+                      color: theme.palette.text.secondary,
+                      fontSize: '1.1rem',
+                      fontWeight: 500,
+                      mb: 1,
+                      pl: 1
+                    }}>
+                      结束时间 *
+                    </InputLabel>
+                    <DateTimePicker
+                      value={endDate}
+                      onChange={handleEndDateChange}
+                      disabled={submitting}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          variant="outlined"
+                          sx={{ 
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: '8px',
+                              border: `2px solid ${theme.palette.divider}`,
+                            }
+                          }}
+                        />
+                      )}
+                      inputFormat="YYYY/MM/DD HH:mm"
+                      minDate={startDate ? startDate.clone().add(1, 'minute') : moment().add(2, 'minutes')}
                     />
-                  )}
-                  inputFormat="YYYY/MM/DD HH:mm"
-                  minDate={startDate ? startDate.clone().add(1, 'minute') : moment().add(2, 'minutes')}
-                />
+                  </Box>
+                </LocalizationProvider>
               </Box>
-            </LocalizationProvider>
-          </Box>
 
           {/* 资源上传 - 仅在实验类型显示 */}
           {formData.c_test_type === '实验' && (

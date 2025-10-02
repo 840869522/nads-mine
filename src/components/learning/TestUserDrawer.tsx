@@ -6,7 +6,8 @@ import {
   TextField, Select, MenuItem, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogActions,
   CircularProgress, InputAdornment, Checkbox, FormGroup,
-  FormControlLabel, Paper, Chip as MuiChip
+  FormControlLabel, Paper, Chip as MuiChip,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import { 
   Close as CloseIcon, 
@@ -19,6 +20,7 @@ import {
   ArrowRight as ArrowRightIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { apiClientWithToken } from '@/utils/axios';
 
 // 日期格式化函数
 const formatDate = (dateString: string | null) => {
@@ -58,6 +60,8 @@ interface TestUser {
 interface TestData {
   c_id?: string;
   c_name: string;
+  c_course_id: string;
+  c_type: string;
   [key: string]: any;
 }
 
@@ -67,6 +71,50 @@ interface Paper {
   totalScore: number;
   questionCount: number;
   paperName: string;
+}
+
+interface ScoreData {
+  course_id: string;
+  course_name: string;
+  tests: Array<{
+    test_id: string;
+    test_name: string;
+    category: string;
+    scores: Array<{
+      username: string;
+      papers: Array<{
+        paper_id: string;
+        paper_name: string;
+        start_time: string | null;
+        submit_time: string | null;
+        total_score: number;
+        objective_score: number;
+        subjective_score: number;
+      }>;
+    }>;
+  }>;
+  experiments: Array<{
+    test_id: string;
+    test_name: string;
+    category: string;
+    history: Array<{
+      username: string;
+      history: Array<{
+        c_submission_id: string;
+        c_username: string;
+        c_submitted_at: string;
+        c_is_correct: boolean;
+        c_attempt_count: number;
+        c_points_earned: number;
+        c_submitted_flag: string;
+        instance_id: string;
+        instance_ip: string;
+        instance_name: string;
+        instance_type: string;
+        c_scene_instances_id: string;
+      }>;
+    }>;
+  }>;
 }
 
 interface TestUserDrawerProps {
@@ -89,7 +137,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
   
-  // 状态定义 - 分离两个搜索框的状态
+  // 状态定义
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isSelectAll, setIsSelectAll] = useState<boolean>(false);
   const [selectedPaperId, setSelectedPaperId] = useState<string>('');
@@ -99,6 +147,8 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const [addUserSearchText, setAddUserSearchText] = useState(''); // 添加用户区域搜索
   const [associatedUserSearchText, setAssociatedUserSearchText] = useState(''); // 已关联用户区域搜索
   const [tempTestUsers, setTempTestUsers] = useState<TestUser[]>([]);
+  const [scoreData, setScoreData] = useState<ScoreData | null>(null); // 成绩数据
+  const [loadingScores, setLoadingScores] = useState<boolean>(false); // 加载成绩状态
 
   // 动态颜色函数
   const getBgColor = () => isDarkMode ? '#1e1e1e' : '#ffffff';
@@ -109,7 +159,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const getBorderColor = () => isDarkMode ? '#444' : '#ddd';
   const getSearchBgColor = () => isDarkMode ? '#2d2d2d' : '#f5f5f5';
 
-  // 过滤可用用户（使用添加用户区域的搜索词）
+  // 过滤可用用户
   const filteredAvailableUsers = availableUsers.filter(user => 
     user.username.toLowerCase().includes(addUserSearchText.toLowerCase()) ||
     user.name.toLowerCase().includes(addUserSearchText.toLowerCase())
@@ -119,28 +169,30 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   const isExperiment = test?.c_type === '实验';
 
   // 计算可用用户
+  // 在计算可用用户的 useEffect 中修改
   useEffect(() => {
-    if (open && test) {
-      const associatedUserIds = testUsers.map(u => u.username).filter(id => id != null);
-      const filteredUsers = allUsers.filter(user => 
-        user.username && !associatedUserIds.includes(user.username)
-      );
-      setAvailableUsers(filteredUsers);
-      setSelectedUsers([]);
-      setIsSelectAll(false);
-      
-      if (!isExperiment && papers.length > 0) {
-        setSelectedPaperId(papers[0].paperId);
-      } else if (isExperiment) {
-        // 实验类型不需要选择试卷，使用默认值
-        setSelectedPaperId('experiment_default');
-      }
+  if (open && test) {
+    const associatedUserIds = testUsers.map(u => u.username).filter(id => id != null);
+    const filteredUsers = allUsers.filter(user => 
+      user.username && !associatedUserIds.includes(user.username)
+    );
+    setAvailableUsers(filteredUsers);
+    setSelectedUsers([]);
+    setIsSelectAll(false);
+    
+    if (!isExperiment && papers.length > 0) {
+      setSelectedPaperId(papers[0].paperId);
+    } else if (isExperiment) {
+      setSelectedPaperId('experiment_default');
+    } else {
+      // 关键修改：理论测试且没有试卷时清空 selectedPaperId
+      setSelectedPaperId('');
     }
-    setAddUserSearchText('');
-    setAssociatedUserSearchText('');
-    setTempTestUsers([]);
-  }, [open, test, testUsers, allUsers, papers, isExperiment]);
-
+  }
+  setAddUserSearchText('');
+  setAssociatedUserSearchText('');
+  setTempTestUsers([]);
+}, [open, test, testUsers, allUsers, papers, isExperiment]);
   // 全选状态管理
   useEffect(() => {
     const filtered = filteredAvailableUsers;
@@ -151,7 +203,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
     }
   }, [selectedUsers, filteredAvailableUsers]);
 
-  // 搜索已关联用户（使用已关联用户区域的搜索词）
+  // 搜索已关联用户
   const getFilteredTestUsers = () => {
     if (!associatedUserSearchText.trim()) {
       return testUsers;
@@ -162,6 +214,38 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
       user.name.toLowerCase().includes(lowerSearchText)
     );
   };
+
+  // 获取用户成绩
+  useEffect(() => {
+    const fetchUserScores = async () => {
+      if (!selectedUser || !test?.c_id || !test.c_course_id) return;
+      setLoadingScores(true);
+      try {
+        const response = await apiClientWithToken.post('/back/api/study/test/get_user_test_score', {
+          course_id: test.c_course_id,
+          username: selectedUser.username,
+          c_test_id: test.c_id
+        });
+        if (response.data.code === 200) {
+          setScoreData(response.data.data);
+        } else {
+          setScoreData(null);
+          console.error('获取成绩失败:', response.data.message);
+        }
+      } catch (error: any) {
+        setScoreData(null);
+        console.error('获取成绩失败:', error);
+      } finally {
+        setLoadingScores(false);
+      }
+    };
+
+    if (userDetailOpen && selectedUser) {
+      fetchUserScores();
+    } else {
+      setScoreData(null);
+    }
+  }, [userDetailOpen, selectedUser, test]);
 
   // 处理用户选择变化
   const handleUserSelectionChange = (username: string) => {
@@ -183,38 +267,40 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
   };
 
   // 批量添加用户到测试
-  const handleAddSelectedUsers = () => {
-    if (selectedUsers.length === 0 || !test?.c_id) {
-      return;
-    }
+  // 在 handleAddSelectedUsers 函数中也添加验证
+const handleAddSelectedUsers = () => {
+  if (selectedUsers.length === 0 || !test?.c_id) {
+    return;
+  }
+  
+  // 关键修改：理论测试必须选择试卷且必须有可用试卷
+  if (!isExperiment && (!selectedPaperId || papers.length === 0)) {
+    return;
+  }
+  
+  const newUsers = selectedUsers.map(username => {
+    const userInfo = allUsers.find(u => u.username === username);
+    return {
+      id: undefined,
+      username,
+      name: userInfo?.name || username,
+      c_test_id: test.c_id,
+      c_paper_id: isExperiment ? 'experiment_default' : selectedPaperId,
+      c_answers: [],
+      start_time: new Date().toISOString(),
+      end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      submit_time: null,
+      score: 0,
+      correct_status: 1,
+      correct_status_text: '未完成'
+    };
+  });
+  
+  setTempTestUsers([...tempTestUsers, ...newUsers]);
+  setSelectedUsers([]);
+  setIsSelectAll(false);
+};
     
-    // 实验类型不需要验证selectedPaperId，理论测试需要
-    if (!isExperiment && !selectedPaperId) {
-      return;
-    }
-    
-    const newUsers = selectedUsers.map(username => {
-      const userInfo = allUsers.find(u => u.username === username);
-      return {
-        id: undefined,
-        username,
-        name: userInfo?.name || username,
-        c_test_id: test.c_id,
-        c_paper_id: isExperiment ? 'experiment_default' : selectedPaperId,
-        c_answers: [],
-        start_time: new Date().toISOString(),
-        end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        submit_time: null,
-        score: 0,
-        correct_status: 1,
-        correct_status_text: '未完成'
-      };
-    });
-    
-    setTempTestUsers([...tempTestUsers, ...newUsers]);
-    setSelectedUsers([]);
-    setIsSelectAll(false);
-  };
 
   // 确认添加临时用户
   const handleConfirmAddUsers = async () => {
@@ -271,6 +357,77 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
     return `${user.c_test_id}-${user.username}-${user.c_paper_id}`;
   };
 
+  // 渲染成绩详情
+  const renderScoreDetails = () => {
+    if (loadingScores) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress size={24} />
+        </Box>
+      );
+    }
+
+    if (!scoreData) {
+      return (
+        <Typography variant="body1" sx={{ color: getSecondaryTextColor(), textAlign: 'center', p: 2 }}>
+          暂无成绩数据
+        </Typography>
+      );
+    }
+
+    if (isExperiment) {
+      // 实验测试：显示 Flag 提交历史表格
+      const history = scoreData.experiments[0]?.history[0]?.history || [];
+      if (history.length === 0) {
+        return (
+          <Typography variant="body1" sx={{ color: getSecondaryTextColor(), textAlign: 'center', p: 2 }}>
+            暂无实验成绩
+          </Typography>
+        );
+      }
+
+      return (
+        <TableContainer component={Paper} sx={{ mt: 2, backgroundColor: getCardBgColor() }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ color: getTextColor() }}>提交时间</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>是否正确</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>尝试次数</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>获得积分</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>靶机IP</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>靶机名称</TableCell>
+                <TableCell sx={{ color: getTextColor() }}>靶机类型</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {history.map((record: any, index: number) => (
+                <TableRow key={index}>
+                  <TableCell sx={{ color: getTextColor() }}>{formatDate(record.c_submitted_at)}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={record.c_is_correct ? '是' : '否'}
+                      color={record.c_is_correct ? 'success' : 'error'}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell sx={{ color: getTextColor() }}>{record.c_attempt_count}</TableCell>
+                  <TableCell sx={{ color: getTextColor() }}>{record.c_points_earned}</TableCell>
+                  <TableCell sx={{ color: getTextColor() }}>{record.instance_ip}</TableCell>
+                  <TableCell sx={{ color: getTextColor() }}>{record.instance_name}</TableCell>
+                  <TableCell sx={{ color: getTextColor() }}>{record.instance_type}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      );
+    } else {
+      // 理论测试：删除成绩详情及表格，返回空
+      return null;
+    }
+  };
+
   return (
     <>
       <Drawer
@@ -306,31 +463,39 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
           </Typography>
           
           {/* 试卷选择下拉框 - 仅在非实验类型时显示 */}
-          {!isExperiment && (
-            <FormControl fullWidth sx={{ mb: 2, minWidth: 180 }}>
-              <InputLabel sx={{ color: getSecondaryTextColor() }}>选择试卷</InputLabel>
-              <Select
-                value={selectedPaperId}
-                onChange={(e) => setSelectedPaperId(e.target.value as string)}
-                label="选择试卷"
-                disabled={papers.length === 0 || loading}
-                sx={{ color: getTextColor() }}
-              >
-                {papers.map(paper => (
-                  <MenuItem key={paper.paperId} value={paper.paperId} sx={{ color: getTextColor() }}>
-                    {paper.paperName} (题目数: {paper.questionCount}, 总分: {paper.totalScore})
-                  </MenuItem>
-                ))}
-                {papers.length === 0 && (
-                  <MenuItem disabled sx={{ color: getSecondaryTextColor() }}>
-                    {loading ? '加载试卷中...' : '无可用试卷'}
-                  </MenuItem>
-                )}
-              </Select>
-            </FormControl>
-          )}
+         {!isExperiment && (
+  <FormControl fullWidth sx={{ mb: 2, minWidth: 180 }}>
+    <InputLabel sx={{ color: getSecondaryTextColor() }}>选择试卷</InputLabel>
+    <Select
+      value={selectedPaperId}
+      onChange={(e) => setSelectedPaperId(e.target.value as string)}
+      label="选择试卷"
+      disabled={papers.length === 0 || loading}
+      sx={{ color: getTextColor() }}
+    >
+      {papers.map(paper => (
+        <MenuItem key={paper.paperId} value={paper.paperId} sx={{ color: getTextColor() }}>
+          {paper.paperName} (题目数: {paper.questionCount}, 总分: {paper.totalScore})
+        </MenuItem>
+      ))}
+      {papers.length === 0 && (
+        <MenuItem disabled sx={{ color: getSecondaryTextColor() }}>
+          {loading ? '加载试卷中...' : '无可用试卷'}
+        </MenuItem>
+      )}
+    </Select>
+    
+    {/* 在这里添加提示 */}
+    {papers.length === 0 && !loading && (
+      <Typography variant="body2" color="error" sx={{ mt: 1, fontSize: '0.75rem' }}>
+        请先创建试卷才能添加用户
+      </Typography>
+    )}
+  </FormControl>
+)}
+           
           
-          {/* 搜索可用用户（添加用户区域专用） */}
+          {/* 搜索可用用户 */}
           <TextField
             size="small"
             placeholder="搜索用户..."
@@ -419,13 +584,28 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
                         checked={selectedUsers.includes(user.username)}
                         onChange={() => handleUserSelectionChange(user.username)}
                         color="primary"
-                        disabled={isSelectAll}
                       />
                     }
-                    label={`${user.name} (${user.username})`}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Avatar sx={{ 
+                          bgcolor: isDarkMode ? '#3f51b5' : '#3f51b5', 
+                          mr: 1, 
+                          width: 24, 
+                          height: 24,
+                          fontSize: '0.875rem',
+                          color: '#fff'
+                        }}>
+                          {user.name.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography sx={{ color: getTextColor() }}>
+                          {user.name} ({user.username})
+                        </Typography>
+                      </Box>
+                    }
                     sx={{
                       '& .MuiFormControlLabel-label': { color: getTextColor() },
-                      '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+                      '&:hover': { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
                     }}
                   />
                 ))}
@@ -433,67 +613,70 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
             )}
           </Box>
           
-          {/* 添加按钮 */}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            endIcon={<ArrowRightIcon />}
-            onClick={handleAddSelectedUsers}
-            disabled={
-              selectedUsers.length === 0 || 
-              loading || 
-              (!isExperiment && (!selectedPaperId || papers.length === 0))
-            }
-            sx={{ 
-              mb: 3,
-              backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
-              color: '#fff',
-              '&:hover': {
-                backgroundColor: isDarkMode ? '#303f9f' : '#303f9f'
-              }
-            }}
-            fullWidth
-          >
-            添加选中用户 ({selectedUsers.length})
-          </Button>
-          
-          {/* 待确认添加的用户 */}
-          {tempTestUsers.length > 0 && (
-            <Paper sx={{ 
-              p: 2, 
-              mb: 3, 
-              backgroundColor: getCardBgColor(),
-              border: `1px solid ${getBorderColor()}`
-            }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, color: getTextColor() }}>
-                待添加用户 ({tempTestUsers.length})
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {tempTestUsers.map(user => (
-                  <MuiChip
-                    key={user.username}
-                    label={`${user.name}${!isExperiment ? ` (${papers.find(p => p.paperId === user.c_paper_id)?.paperName})` : ''}`}
-                    onDelete={() => {
-                      setTempTestUsers(tempTestUsers.filter(u => u.username !== user.username));
-                      setSelectedUsers(prev => [...prev, user.username]);
-                    }}
-                    size="small"
-                    sx={{ 
-                      backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
-                      color: getTextColor()
-                    }}
-                  />
-                ))}
+          {/* 批量添加按钮 */}
+          {filteredAvailableUsers.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2, backgroundColor: getCardBgColor() }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography sx={{ color: getTextColor() }}>
+                  已选择 {selectedUsers.length} 个用户
+                </Typography>
+               
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddSelectedUsers}
+                      disabled={
+                        selectedUsers.length === 0 || 
+                        // 关键修改：理论测试必须选择试卷且必须有可用试卷
+                        (!isExperiment && (!selectedPaperId || papers.length === 0)) || 
+                        loading
+                      }
+                      sx={{ 
+                        backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
+                        color: '#fff',
+                        '&:hover': {
+                          backgroundColor: isDarkMode ? '#303f9f' : '#303f9f'
+                        },
+                        '&:disabled': {
+                          backgroundColor: isDarkMode ? '#555' : '#ccc',
+                          color: isDarkMode ? '#888' : '#666'
+                        }
+                      }}
+                    >
+                      添加到测试
+                    </Button>
               </Box>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<CheckIcon />}
-                onClick={handleConfirmAddUsers}
-                sx={{ mt: 2 }}
-              >
-                确认添加
-              </Button>
+              {tempTestUsers.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: getTextColor(), mb: 1 }}>
+                    待确认用户：
+                  </Typography>
+                  <Box sx={{ maxHeight: 100, overflow: 'auto' }}>
+                    {tempTestUsers.map(user => (
+                      <MuiChip
+                        key={user.username}
+                        label={`${user.name} (${user.username})`}
+                        onDelete={() => setTempTestUsers(tempTestUsers.filter(u => u.username !== user.username))}
+                        sx={{ 
+                          m: 0.5, 
+                          backgroundColor: isDarkMode ? '#333' : '#f0f0f0',
+                          color: getTextColor()
+                        }}
+                      />
+                    ))}
+                  </Box>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<CheckIcon />}
+                    onClick={handleConfirmAddUsers}
+                    sx={{ mt: 2 }}
+                  >
+                    确认添加
+                  </Button>
+                </Box>
+              )}
             </Paper>
           )}
           
@@ -505,7 +688,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
               已关联用户 ({getFilteredTestUsers().length}/{testUsers.length})
             </Typography>
             
-            {/* 搜索已关联用户（已关联用户区域专用） */}
+            {/* 搜索已关联用户 */}
             <TextField
               size="small"
               placeholder="搜索姓名/用户名..."
@@ -664,7 +847,7 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
       <Dialog
         open={userDetailOpen}
         onClose={() => setUserDetailOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         PaperProps={{
           style: {
@@ -709,95 +892,104 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
               <Divider sx={{ my: 2, borderColor: getBorderColor() }} />
               
               <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    试卷
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: getTextColor() }}>
-                    {papers.find(p => p.paperId === selectedUser.c_paper_id)?.paperName || selectedUser.c_paper_id}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    测试状态
-                  </Typography>
-                  <Chip 
-                    label={selectedUser.correct_status_text || getStatusLabel(selectedUser.correct_status)} 
-                    color={getStatusColor(selectedUser.correct_status)}
-                  />
-                </Grid>
+                {!isExperiment && (
+                  <>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        试卷
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: getTextColor() }}>
+                        {papers.find(p => p.paperId === selectedUser.c_paper_id)?.paperName || selectedUser.c_paper_id}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        测试状态
+                      </Typography>
+                      <Chip 
+                        label={selectedUser.correct_status_text || getStatusLabel(selectedUser.correct_status)} 
+                        color={getStatusColor(selectedUser.correct_status)}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        开始时间
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: getTextColor() }}>
+                        {formatDate(selectedUser.start_time)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        提交时间
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: getTextColor() }}>
+                        {formatDate(selectedUser.submit_time)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        客观题得分
+                      </Typography>
+                      {selectedUser.correct_status === 2 ? (
+                        <Typography 
+                          variant="body1" 
+                          color={getTextColor()}
+                        >
+                          {selectedUser.c_objective_score || 0} 分
+                        </Typography>
+                      ) : (
+                        <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
+                          未完成
+                        </Typography>
+                      )}
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        主观题得分
+                      </Typography>
+                      {selectedUser.correct_status === 2 ? (
+                        <Typography 
+                          variant="body1" 
+                          color={getTextColor()}
+                        >
+                          {selectedUser.c_subjective_score || 0} 分
+                        </Typography>
+                      ) : (
+                        <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
+                          未完成
+                        </Typography>
+                      )}
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
+                        总得分
+                      </Typography>
+                      {selectedUser.correct_status === 2 ? (
+                        <Typography 
+                          variant="body1" 
+                          color={selectedUser.score > 60 ? 'success.main' : 'error.main'}
+                          fontWeight="bold"
+                        >
+                          {selectedUser.score} 分
+                        </Typography>
+                      ) : (
+                        <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
+                          未完成
+                        </Typography>
+                      )}
+                    </Grid>
+                  </>
+                )}
                 
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    开始时间
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: getTextColor() }}>
-                    {formatDate(selectedUser.start_time)}
-                  </Typography>
-                </Grid>
-                
-                
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    提交时间
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: getTextColor() }}>
-                    {formatDate(selectedUser.submit_time)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    客观题得分
-                  </Typography>
-                  {selectedUser.correct_status === 2 ? (
-                    <Typography 
-                      variant="body1" 
-                      color={getTextColor()}
-                    >
-                      {selectedUser.c_objective_score || 0} 分
-                    </Typography>
-                  ) : (
-                    <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
-                      未完成
-                    </Typography>
-                  )}
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    主观题得分
-                  </Typography>
-                  {selectedUser.correct_status === 2 ? (
-                    <Typography 
-                      variant="body1" 
-                      color={getTextColor()}
-                    >
-                      {selectedUser.c_subjective_score || 0} 分
-                    </Typography>
-                  ) : (
-                    <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
-                      未完成
-                    </Typography>
-                  )}
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" sx={{ color: getSecondaryTextColor() }}>
-                    总得分
-                  </Typography>
-                  {selectedUser.correct_status === 2 ? (
-                    <Typography 
-                      variant="body1" 
-                      color={selectedUser.score > 60 ? 'success.main' : 'error.main'}
-                      fontWeight="bold"
-                    >
-                      {selectedUser.score} 分
-                    </Typography>
-                  ) : (
-                    <Typography variant="body1" sx={{ color: getSecondaryTextColor() }}>
-                      未完成
-                    </Typography>
-                  )}
-                </Grid>
               </Grid>
+
+              {/* 成绩详情 */}
+              {isExperiment && (
+                <>
+                  {renderScoreDetails()}
+                </>
+              )}
             </>
           )}
         </DialogContent>
@@ -827,6 +1019,3 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
 };
 
 export default TestUserDrawer;
-
-    
-    

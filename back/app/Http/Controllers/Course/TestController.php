@@ -11,6 +11,10 @@ use App\Models\scenario\SceneConfig;
 use App\Utils\JWTControll;
 
 
+use App\Models\scenario\SceneContainerInstance;
+use App\Models\scenario\SceneSwitchInstance;
+use App\Models\scenario\SceneVmInstance;
+
 use Illuminate\Support\Facades\Validator;
 
 use App\Models\Course\QuestionsOptionsModel;
@@ -33,11 +37,23 @@ use App\Models\scenario\SceneVmInstanceModel;
 use App\Models\scenario\SceneInstance;
 use App\Models\scenario\SceneInstanceModel;
 
+use App\RunTool\CommandLineService;
+use App\RunTool\TopologyParser;
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File; // 引入File Facade
+use Illuminate\Support\Str;
+
+
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+
 use Illuminate\Support\Facades\Cache;
 
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class TestController extends Controller
 {
@@ -414,8 +430,35 @@ class TestController extends Controller
         }
     }
 
+    /**
+     * Notes: 获取课程列表
+     * DateTime: 2025/10/02 11:08
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getCourses(Request $request): JsonResponse
+    {
+        try {
+            // 直接使用 DB 门面查询 c_courses 表
+            $courses = DB::table('c_courses')
+                ->select('c_course_id', 'c_course_name')
+                ->get()
+                ->map(function ($course) {
+                    return [
+                        'c_course_id' => $course->c_course_id,
+                        'c_course_name' => $course->c_course_name
+                    ];
+                })
+                ->toArray();
+
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $courses);
+        } catch (\Exception $e) {
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "获取课程列表失败: " . $e->getMessage());
+        }
+    }
+
 /**
- * Notes:添加测试
+ * Notes: 添加测试
  * User: zhangnan
  * DateTime: 2025/7/11 14:21
  * @param Request $request
@@ -431,7 +474,7 @@ public function test_add(Request $request)
         $c_paper_count     = trim($request->input('paper_count'));
         $c_start     = trim($request->input('start'));
         $c_end     = trim($request->input('end'));
-        $c_course_id     = trim($request->input('course_id'));
+        $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
         $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
         
         // 验证规则 - 新增时长验证
@@ -449,28 +492,28 @@ public function test_add(Request $request)
         );
         
         $validated_msg = array(
-            'name.required'=>"名称不能为空",
-            'name.max'=>"名称字数超限",
-            'description.required'=>"描述不能为空",
-            'paper_count.required'=>"试卷数不能为空",
-            'paper_count.integer'=>"试卷数数据格式不正确",
-            'paper_count.max'=>"试卷数超限",
-            'start.required'=>"测试开始时间不能为空",
-            'start.date_format'=>"测试开始时间不格式不正确",
-            'start.after'=>"测试开始时间不能小于当前日期",
-            'start.before'=>"测试结束时间不能小于测试开始时间",
-            'end.required'=>"测试结束时间不能为空",
-            'end.date_format'=>"测试结束时间不格式不正确",
-            'end.after'=>"测试结束时间不能小于当前日期",
-            'start.date'=>"测试开始时间格式不正确，请使用有效的日期格式",
-            'end.date'=>"测试结束时间格式不正确，请使用有效的日期格式",
-            'course_id.required'=>"课程id不能为空",
-            'course_id.exists'=>"课程id不存在",
+            'name.required' => "名称不能为空",
+            'name.max' => "名称字数超限",
+            'description.required' => "描述不能为空",
+            'paper_count.required' => "试卷数不能为空",
+            'paper_count.integer' => "试卷数数据格式不正确",
+            'paper_count.max' => "试卷数超限",
+            'start.required' => "测试开始时间不能为空",
+            'start.date_format' => "测试开始时间不格式不正确",
+            'start.after' => "测试开始时间不能小于当前日期",
+            'start.before' => "测试结束时间不能小于测试开始时间",
+            'end.required' => "测试结束时间不能为空",
+            'end.date_format' => "测试结束时间不格式不正确",
+            'end.after' => "测试结束时间不能小于当前日期",
+            'start.date' => "测试开始时间格式不正确，请使用有效的日期格式",
+            'end.date' => "测试结束时间格式不正确，请使用有效的日期格式",
+            'course_id.required' => "课程id不能为空",
+            'course_id.exists' => "课程id不存在",
             // 新增时长验证消息
-            'duration.required'=>"测试时长不能为空",
-            'duration.integer'=>"测试时长必须为整数",
-            'duration.min'=>"测试时长不能小于1分钟",
-            'duration.max'=>"测试时长不能超过300分钟"
+            'duration.required' => "测试时长不能为空",
+            'duration.integer' => "测试时长必须为整数",
+            'duration.min' => "测试时长不能小于1分钟",
+            'duration.max' => "测试时长不能超过300分钟"
         );
         
         $validatedData = $request->validate($validated_data, $validated_msg);
@@ -490,19 +533,18 @@ public function test_add(Request $request)
             $c_duration // 新增：传递时长
         );
         
-        if(!$res){
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试插入失败");
+        if (!$res) {
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试插入失败");
         }
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
 
     } catch (ValidationException $e) {
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
     }
 }
 
-
 /**
- * Notes:修改测试
+ * Notes: 修改测试
  * User: zhangnan
  * DateTime: 2025/7/11 16:14
  * @param Request $request
@@ -519,7 +561,7 @@ public function test_update(Request $request)
         $c_paper_count     = trim($request->input('paper_count'));
         $c_start     = trim($request->input('start'));
         $c_end     = trim($request->input('end'));
-        $c_course_id     = trim($request->input('course_id'));
+        $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
         $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
         
         // 验证规则 - 新增时长验证
@@ -538,29 +580,29 @@ public function test_update(Request $request)
         );
         
         $validated_msg = array(
-            'id.required'=>"id不能为空",
-            'id.string'=>"id类型错误",
-            'id.exists'=>"id不存在",
-            'name.required'=>"名称不能为空",
-            'name.max'=>"名称字数超限",
-            'description.required'=>"描述不能为空",
-            'paper_count.required'=>"试卷数不能为空",
-            'paper_count.integer'=>"试卷数数据格式不正确",
-            'paper_count.max'=>"试卷数超限",
-            'start.required'=>"测试开始时间不能为空",
-            'start.date_format'=>"测试开始时间不格式不正确",
-            'start.after'=>"测试开始时间不能小于当前日期",
-            'start.before'=>"测试结束时间不能小于测试开始时间",
-            'end.required'=>"测试结束时间不能为空",
-            'end.date_format'=>"测试结束时间不格式不正确",
-            'end.after'=>"测试结束时间不能小于当前日期",
-            'course_id.required'=>"课程id不能为空",
-            'course_id.exists'=>"课程id不存在",
+            'id.required' => "id不能为空",
+            'id.string' => "id类型错误",
+            'id.exists' => "id不存在",
+            'name.required' => "名称不能为空",
+            'name.max' => "名称字数超限",
+            'description.required' => "描述不能为空",
+            'paper_count.required' => "试卷数不能为空",
+            'paper_count.integer' => "试卷数数据格式不正确",
+            'paper_count.max' => "试卷数超限",
+            'start.required' => "测试开始时间不能为空",
+            'start.date_format' => "测试开始时间不格式不正确",
+            'start.after' => "测试开始时间不能小于当前日期",
+            'start.before' => "测试结束时间不能小于测试开始时间",
+            'end.required' => "测试结束时间不能为空",
+            'end.date_format' => "测试结束时间不格式不正确",
+            'end.after' => "测试结束时间不能小于当前日期",
+            'course_id.required' => "课程id不能为空",
+            'course_id.exists' => "课程id不存在",
             // 新增时长验证消息
-            'duration.required'=>"测试时长不能为空",
-            'duration.integer'=>"测试时长必须为整数",
-            'duration.min'=>"测试时长不能小于1分钟",
-            'duration.max'=>"测试时长不能超过300分钟"
+            'duration.required' => "测试时长不能为空",
+            'duration.integer' => "测试时长必须为整数",
+            'duration.min' => "测试时长不能小于1分钟",
+            'duration.max' => "测试时长不能超过300分钟"
         );
         
         $validatedData = $request->validate($validated_data, $validated_msg);
@@ -582,78 +624,187 @@ public function test_update(Request $request)
             $c_duration // 新增：传递时长
         );
         
-        if(!$res){
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"测试修改失败");
+        if (!$res) {
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试修改失败");
         }
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
 
     } catch (ValidationException $e) {
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
     }
 }
 
 
-            /**
-     * Notes:测试删除
-     * User: zhangnan
-     * DateTime: 2025/7/11 16:34
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function test_del(Request $request)
-    {
-        try {
-            $c_id     = trim($request->input('id'));
-            $validated_data = array(
-                'id' => 'required|string|exists:c_tests,c_id',
-            );
-            $validated_msg = array(
-                'id.required'=>"id不能为空",
-                'id.string'=>"id类型错误",
-                'id.exists'=>"id不存在",
-            );
-            $validatedData = $request->validate($validated_data, $validated_msg);
+        /**
+ * Notes: 测试删除（包含关联用户数据删除）
+ * User: zhangnan
+ * DateTime: 2025/7/11 16:34
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function test_del(Request $request)
+{
+    try {
+        $c_id = trim($request->input('id'));
+        $validated_data = array(
+            'id' => 'required|string|exists:c_tests,c_id',
+        );
+        $validated_msg = array(
+            'id.required' => "id不能为空",
+            'id.string' => "id类型错误",
+            'id.exists' => "id不存在",
+        );
+        $validatedData = $request->validate($validated_data, $validated_msg);
 
-            $mod = new TestsModel();
-            $res = $mod->del_test_info($c_id);
-            
-            if(!$res){
-                // 修复：通过PDO连接获取错误信息（正确方式）
-                $pdo = DB::connection()->getPdo(); // 获取底层PDO连接
-                $errorInfo = $pdo->errorInfo(); // 使用PDO的errorInfo方法
-                $errorMsg = "测试删除失败，可能存在未清理的关联数据。错误信息: " . (isset($errorInfo[2]) ? $errorInfo[2] : '未知错误');
-                DLOG($errorMsg . " test_id={$c_id}",'error','test_log');
-                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, $errorMsg);
-            }
-            
-            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
-
-        } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
-        } catch (\Exception $e) {
-            // 新增：捕获所有异常，避免崩溃
-            DLOG("测试删除异常: [{$e->getLine()}]{$e->getMessage()} test_id={$c_id}",'error','test_log');
-            return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
-        }
-    }
-
-
-    /**
-     * Notes:测试列表
-     * User: zhangnan
-     * DateTime: 2025/7/11 16:54
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function test_list(Request $request)
-    {
-        $page     = intval($request->input('page'));
-        $pageSize     = intval($request->input('pageSize'));
+        // 开启事务
+        DB::beginTransaction();
+        
         $mod = new TestsModel();
-        $res = $mod->get_test_list($pageSize,$page);
+        
+        // 统计关联用户数据数量
+        $userCount = DB::table('c_test_users')->where('c_test_id', $c_id)->count();
+        
+        // 删除测试及关联数据
+        $res = $mod->del_test_info($c_id);
+        
+        if (!$res) {
+            // 回滚事务
+            DB::rollBack();
+            
+            // 获取PDO错误信息
+            $pdo = DB::connection()->getPdo();
+            $errorInfo = $pdo->errorInfo();
+            $errorMsg = "测试删除失败，可能存在未清理的关联数据。错误信息: " . (isset($errorInfo[2]) ? $errorInfo[2] : '未知错误');
+            DLOG($errorMsg . " test_id={$c_id}", 'error', 'test_log');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, $errorMsg);
+        }
+        
+        // 提交事务
+        DB::commit();
+        
+        // 返回成功提示，包含删除的关联用户数量
+        $message = "测试及关联的 {$userCount} 个用户数据已删除";
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
 
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
+    } catch (ValidationException $e) {
+        // 验证异常
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        // 回滚事务
+        DB::rollBack();
+        
+        // 捕获所有异常
+        DLOG("测试删除异常: [{$e->getLine()}]{$e->getMessage()} test_id={$c_id}", 'error', 'test_log');
+        return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
     }
+}
+
+/**
+ * Notes: 删除实验（包含关联用户和资源数据删除）
+ * User: zhangnan
+ * DateTime: 2025/10/02
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function experiment_del(Request $request)
+{
+    try {
+        $c_experiment_id = trim($request->input('id'));
+        $validated_data = array(
+            'id' => 'required|string|exists:c_course_experiments,c_experiment_id',
+        );
+        $validated_msg = array(
+            'id.required' => "实验ID不能为空",
+            'id.string' => "实验ID类型错误",
+            'id.exists' => "实验ID不存在",
+        );
+        $request->validate($validated_data, $validated_msg);
+
+        // 开启事务
+        DB::beginTransaction();
+
+        // 统计关联用户数据数量
+        $userCount = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->count();
+        DLOG("准备删除实验，关联用户数量: {$userCount}, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
+
+        // 删除关联用户数据
+        $deleteUsersResult = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->delete();
+        if ($deleteUsersResult === false) {
+            DB::rollBack();
+            DLOG("删除关联用户数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联用户数据失败");
+        }
+
+        // 删除关联资源数据
+        $resources = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->get();
+        foreach ($resources as $resource) {
+            if (Storage::disk('local_resources')->exists($resource->c_resource_path)) {
+                Storage::disk('local_resources')->delete($resource->c_resource_path);
+            }
+        }
+        $deleteResourcesResult = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->delete();
+        if ($deleteResourcesResult === false) {
+            DB::rollBack();
+            DLOG("删除关联资源数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联资源数据失败");
+        }
+
+        // 获取实验所属课程ID并删除实验文件夹
+        $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->first();
+        if ($experiment) {
+            $courseId = $experiment->c_course_id;
+            $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
+            if ($course) {
+                $experimentFolder = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$c_experiment_id}";
+                if (Storage::disk('local_resources')->exists($experimentFolder)) {
+                    Storage::disk('local_resources')->deleteDirectory($experimentFolder);
+                }
+            }
+        }
+
+        // 删除实验主表数据
+        $deleteExperimentResult = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->delete();
+        if ($deleteExperimentResult === false || $deleteExperimentResult === 0) {
+            DB::rollBack();
+            DLOG("删除实验主表数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除实验失败");
+        }
+
+        // 提交事务
+        DB::commit();
+        DLOG("实验删除成功, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
+
+        // 返回成功提示，包含删除的关联用户数量
+        $message = "实验及关联的 {$userCount} 个用户数据已删除";
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
+
+    } catch (ValidationException $e) {
+        DLOG("验证异常: {$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        DB::rollBack();
+        DLOG("实验删除异常: [{$e->getLine()}]{$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+        return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
+    }
+}
+
+
+   /**
+ * Notes: 测试列表
+ * User: zhangnan
+ * DateTime: 2025/7/11 16:54
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function test_list(Request $request)
+{
+    $page     = intval($request->input('page'));
+    $pageSize     = intval($request->input('pageSize'));
+    $mod = new TestsModel();
+    $res = $mod->get_test_list($pageSize, $page);
+
+    return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $res);
+}
 
 
     /**
@@ -3507,7 +3658,7 @@ public function batch_answers_name(Request $request)
         }
     }
 
-    /**
+   /**
  * Notes: 获取课程下所有测试/实验成绩
  * User: assistant
  * DateTime: 2025/9/16 20:00
@@ -3612,11 +3763,18 @@ public function get_test_scores(Request $request)
             ->get();
 
         foreach ($experiments as $experiment) {
-            $usernames = DB::table('c_test_users')
+            // 修改：直接从 c_test_users 获取 usernames 和 c_scene_instance_id，按 c_scene_instance_id 降序取每个用户最新的
+            $testUsers = DB::table('c_test_users')
                 ->where('c_test_id', $experiment->c_experiment_id)
-                ->distinct()
-                ->pluck('c_username')
-                ->toArray();
+                ->select('c_username', 'c_scene_instance_id')
+                ->orderBy('c_scene_instance_id', 'desc')
+                ->get()
+                ->groupBy('c_username')
+                ->map(function ($group) {
+                    return $group->first()->c_scene_instance_id;
+                })->toArray();
+
+            $usernames = array_keys($testUsers);
 
             Log::debug('实验 usernames 和 c_config_id', [
                 'experiment_id' => $experiment->c_experiment_id,
@@ -3626,16 +3784,8 @@ public function get_test_scores(Request $request)
 
             $submissionHistory = [];
             if (!empty($usernames)) {
-                // 查询场景实例
-                $sceneInstances = SceneInstanceModel::where('c_config_id', $experiment->c_config_id)
-                    ->whereIn('c_username', $usernames)
-                    ->select('c_username', 'c_scene_instances_id')
-                    ->orderBy('c_scene_instances_id', 'desc')
-                    ->get()
-                    ->groupBy('c_username')
-                    ->map(function ($group) {
-                        return $group->first()->c_scene_instances_id;
-                    })->toArray();
+                // 修改：直接使用从 c_test_users 获取的 sceneInstances
+                $sceneInstances = $testUsers;
 
                 Log::debug('sceneInstances 数据', [
                     'experiment_id' => $experiment->c_experiment_id,
@@ -3864,11 +4014,18 @@ public function download_test_scores(Request $request)
             ->get();
 
         foreach ($experiments as $experiment) {
-            $usernames = DB::table('c_test_users')
+            // 修改：直接从 c_test_users 获取 usernames 和 c_scene_instance_id，按 c_scene_instance_id 降序取每个用户最新的
+            $testUsers = DB::table('c_test_users')
                 ->where('c_test_id', $experiment->c_experiment_id)
-                ->distinct()
-                ->pluck('c_username')
-                ->toArray();
+                ->select('c_username', 'c_scene_instance_id')
+                ->orderBy('c_scene_instance_id', 'desc')
+                ->get()
+                ->groupBy('c_username')
+                ->map(function ($group) {
+                    return $group->first()->c_scene_instance_id;
+                })->toArray();
+
+            $usernames = array_keys($testUsers);
 
             Log::debug('实验 usernames 和 c_config_id', [
                 'experiment_id' => $experiment->c_experiment_id,
@@ -3879,15 +4036,8 @@ public function download_test_scores(Request $request)
             $csvData[] = "实验: {$experiment->c_experiment_name}";
             $csvData[] = '用户名,提交时间,是否正确,尝试次数,获得积分,提交的Flag,靶机ID,靶机IP,靶机名称,靶机类型';
             if (!empty($usernames)) {
-                $sceneInstances = SceneInstanceModel::where('c_config_id', $experiment->c_config_id)
-                    ->whereIn('c_username', $usernames)
-                    ->select('c_username', 'c_scene_instances_id')
-                    ->orderBy('c_scene_instances_id', 'desc')
-                    ->get()
-                    ->groupBy('c_username')
-                    ->map(function ($group) {
-                        return $group->first()->c_scene_instances_id;
-                    })->toArray();
+                // 修改：直接使用从 c_test_users 获取的 sceneInstances
+                $sceneInstances = $testUsers;
 
                 Log::debug('sceneInstances 数据', [
                     'experiment_id' => $experiment->c_experiment_id,
@@ -4028,6 +4178,272 @@ public function download_test_scores(Request $request)
     }
 }
 
+/**
+ * Notes: 获取指定用户在指定测试下的成绩
+ * User: assistant
+ * DateTime: 2025/9/29 20:00
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function get_user_test_score(Request $request)
+{
+    try {
+        $courseId = trim($request->input('course_id'));
+        $username = trim($request->input('username'));
+        $testId = trim($request->input('c_test_id'));
+
+        $validated_data = [
+            'course_id' => 'required|string',
+            'username' => 'required|string',
+            'c_test_id' => 'required|string',
+        ];
+        $validated_msg = [
+            'course_id.required' => '课程ID不能为空',
+            'username.required' => '用户名不能为空',
+            'c_test_id.required' => '测试ID不能为空',
+        ];
+        $request->validate($validated_data, $validated_msg);
+
+        $optionalTables = ['c_scene_container_instances', 'c_scene_vm_instances'];
+        foreach ($optionalTables as $table) {
+            if (!\Illuminate\Support\Facades\Schema::hasTable($table)) {
+                Log::warning("可选表缺失: {$table}, 将使用默认值 '空'");
+            }
+        }
+
+        $result = ['course_id' => $courseId, 'tests' => [], 'experiments' => []];
+
+        // 查询课程名称
+        $course = DB::table('c_courses')
+            ->where('c_course_id', $courseId)
+            ->select('c_course_name')
+            ->first();
+        if (!$course) {
+            Log::warning('课程不存在', ['course_id' => $courseId]);
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '课程不存在');
+        }
+        $result['course_name'] = $course->c_course_name;
+
+        // 查询理论测试成绩
+        $test = DB::table('c_tests')
+            ->where('c_course_id', $courseId)
+            ->where('c_type', '考试')
+            ->where('c_id', $testId)
+            ->select('c_id', 'c_name')
+            ->first();
+
+        if ($test) {
+            $userScores = DB::table('c_test_users')
+                ->where('c_test_id', $test->c_id)
+                ->where('c_username', $username)
+                ->select('c_username', 'c_paper_id', 'c_start', 'c_submit', 'c_score', 'c_objective_score', 'c_subjective_score')
+                ->orderBy('c_paper_id')
+                ->get();
+
+            Log::debug('userScores 数据', ['test_id' => $test->c_id, 'scores' => $userScores->toArray()]);
+
+            $papers = DB::table('c_papers')
+                ->whereIn('c_id', $userScores->pluck('c_paper_id')->unique())
+                ->select('c_id')
+                ->orderBy('c_id')
+                ->get()
+                ->values()
+                ->map(function ($paper, $index) {
+                    return [
+                        'paper_id' => $paper->c_id,
+                        'paper_name' => '试卷' . ($index + 1)
+                    ];
+                })->keyBy('paper_id')->toArray();
+
+            Log::debug('papers 数据', ['test_id' => $test->c_id, 'papers' => $papers]);
+
+            $formattedScores = $userScores->groupBy('c_username')->map(function ($userPapers, $username) use ($papers) {
+                return [
+                    'username' => $username,
+                    'papers' => $userPapers->map(function ($score) use ($papers) {
+                        $paperName = isset($papers[$score->c_paper_id]) ? $papers[$score->c_paper_id]['paper_name'] : '未知试卷';
+                        return [
+                            'paper_id' => $score->c_paper_id,
+                            'paper_name' => $paperName,
+                            'start_time' => $score->c_start,
+                            'submit_time' => $score->c_submit,
+                            'total_score' => isset($score->c_score) ? $score->c_score : 0,
+                            'objective_score' => isset($score->c_objective_score) ? $score->c_objective_score : 0,
+                            'subjective_score' => isset($score->c_subjective_score) ? $score->c_subjective_score : 0
+                        ];
+                    })->values()->toArray()
+                ];
+            })->values()->toArray();
+
+            $result['tests'][] = [
+                'test_id' => $test->c_id,
+                'test_name' => $test->c_name,
+                'category' => '理论测试',
+                'scores' => $formattedScores
+            ];
+        }
+
+        // 查询实验 Flag 提交历史
+        $experiment = DB::table('c_course_experiments')
+            ->where('c_experiment_id', $testId)
+            ->select('c_experiment_id', 'c_experiment_name', 'c_config_id')
+            ->first();
+
+        if ($experiment) {
+            // 获取指定用户的最新 c_scene_instance_id
+            $testUser = DB::table('c_test_users')
+                ->where('c_test_id', $experiment->c_experiment_id)
+                ->where('c_username', $username)
+                ->select('c_username', 'c_scene_instance_id')
+                ->orderBy('c_scene_instance_id', 'desc')
+                ->first();
+
+            Log::debug('实验 username 和 c_config_id', [
+                'experiment_id' => $experiment->c_experiment_id,
+                'username' => $username,
+                'c_config_id' => $experiment->c_config_id
+            ]);
+
+            $submissionHistory = [];
+            if ($testUser && $testUser->c_scene_instance_id !== null) {
+                $sceneInstanceId = $testUser->c_scene_instance_id;
+
+                Log::debug('sceneInstance 数据', [
+                    'experiment_id' => $experiment->c_experiment_id,
+                    'scene_instance' => $sceneInstanceId
+                ]);
+
+                // 查询容器和虚拟机 ID
+                $containerIds = SceneContainerInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                    ->pluck('c_container_id')
+                    ->toArray();
+                $vmIds = SceneVmInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                    ->pluck('c_vm_id')
+                    ->toArray();
+
+                Log::debug('容器和虚拟机 ID', [
+                    'username' => $username,
+                    'scene_instance_id' => $sceneInstanceId,
+                    'container_ids' => $containerIds,
+                    'vm_ids' => $vmIds
+                ]);
+
+                // 查询 c_flag_submissions，添加 c_scene_instances_id 条件
+                $history = FlagSubmissionModel::select([
+                        'c_submission_id',
+                        'c_username',
+                        'c_submitted_at',
+                        'c_is_correct',
+                        'c_attempt_count',
+                        'c_points_earned',
+                        'c_container_instance_id',
+                        'c_vm_instance_id',
+                        'c_submitted_flag',
+                        'c_scene_instances_id'
+                    ])
+                    ->with([
+                        'containerInstance:c_container_id,c_container_name,c_ip,c_scene_instances_id',
+                        'vmInstance:c_vm_id,c_vm_name,c_ip,c_scene_instances_id'
+                    ])
+                    ->where('c_username', $username)
+                    ->where('c_scene_instances_id', $sceneInstanceId)
+                    ->where(function ($q) use ($containerIds, $vmIds) {
+                        $q->whereIn('c_container_instance_id', $containerIds)
+                          ->orWhereIn('c_vm_instance_id', $vmIds)
+                          ->orWhereNull('c_container_instance_id')
+                          ->orWhereNull('c_vm_instance_id');
+                    })
+                    ->orderBy('c_submitted_at', 'desc')
+                    ->get()
+                    ->map(function ($record) {
+                        $instanceId = isset($record->c_container_instance_id) ? $record->c_container_instance_id : (isset($record->c_vm_instance_id) ? $record->c_vm_instance_id : '空');
+                        $instanceType = isset($record->c_container_instance_id) ? 'docker' : (isset($record->c_vm_instance_id) ? 'vm' : '空');
+                        $instanceIp = '空';
+                        $instanceName = '空';
+                        $sceneId = $record->c_scene_instances_id;
+
+                        if ($record->containerInstance) {
+                            $instanceIp = isset($record->containerInstance->c_ip) ? $record->containerInstance->c_ip : '空';
+                            $instanceName = isset($record->containerInstance->c_container_name) ? $record->containerInstance->c_container_name : '空';
+                            Log::info('Container Instance Debug', [
+                                'container_id' => $record->c_container_instance_id,
+                                'container_data' => $record->containerInstance ? $record->containerInstance->toArray() : 'null',
+                                'extracted_ip' => $instanceIp,
+                                'extracted_name' => $instanceName
+                            ]);
+                        } elseif ($record->vmInstance) {
+                            $instanceIp = isset($record->vmInstance->c_ip) ? $record->vmInstance->c_ip : '空';
+                            $instanceName = isset($record->vmInstance->c_vm_name) ? $record->vmInstance->c_vm_name : '空';
+                            Log::info('VM Instance Debug', [
+                                'vm_id' => $record->c_vm_instance_id,
+                                'vm_data' => $record->vmInstance ? $record->vmInstance->toArray() : 'null',
+                                'extracted_ip' => $instanceIp,
+                                'extracted_name' => $instanceName
+                            ]);
+                        }
+
+                        return [
+                            'c_submission_id' => $record->c_submission_id,
+                            'c_username' => $record->c_username,
+                            'c_submitted_at' => $record->c_submitted_at,
+                            'c_is_correct' => isset($record->c_is_correct) ? $record->c_is_correct : false,
+                            'c_attempt_count' => isset($record->c_attempt_count) ? $record->c_attempt_count : 0,
+                            'c_points_earned' => isset($record->c_points_earned) ? $record->c_points_earned : 0,
+                            'c_submitted_flag' => isset($record->c_submitted_flag) ? $record->c_submitted_flag : '',
+                            'instance_id' => $instanceId,
+                            'instance_ip' => $instanceIp,
+                            'instance_name' => $instanceName,
+                            'instance_type' => $instanceType,
+                            'c_scene_instances_id' => $sceneId,
+                        ];
+                    })->toArray();
+
+                Log::debug('Flag 提交历史', [
+                    'username' => $username,
+                    'scene_instance_id' => $sceneInstanceId,
+                    'history' => $history
+                ]);
+
+                if (!empty($history)) {
+                    $submissionHistory[] = [
+                        'username' => $username,
+                        'history' => $history
+                    ];
+                }
+            } else {
+                Log::warning('未找到用户场景实例或 c_scene_instance_id 为空', [
+                    'username' => $username,
+                    'experiment_id' => $experiment->c_experiment_id,
+                    'test_user_exists' => $testUser ? true : false,
+                    'c_scene_instance_id' => $testUser ? $testUser->c_scene_instance_id : null
+                ]);
+            }
+
+            $result['experiments'][] = [
+                'test_id' => $experiment->c_experiment_id,
+                'test_name' => $experiment->c_experiment_name,
+                'category' => '实验',
+                'history' => $submissionHistory
+            ];
+        }
+
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '成绩获取成功', $result);
+
+    } catch (ValidationException $e) {
+        Log::warning('参数验证失败', ['error' => $e->getMessage(), 'course_id' => $courseId, 'username' => $username, 'test_id' => $testId]);
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        Log::error('获取成绩失败', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'course_id' => $courseId,
+            'username' => $username,
+            'test_id' => $testId
+        ]);
+        return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '获取成绩失败：' . $e->getMessage());
+    }
+}
+
 // 修复后的代码
 public function _response($code = '', $message = 0, $data = [])
     {
@@ -4146,19 +4562,376 @@ public function _response($code = '', $message = 0, $data = [])
         }
     }
 
-   public function index(Request $request)
+/**
+ * 接受指令启动一个演练场景.
+ *
+ * @param Request $request
+ * @param SceneConfig $scenario
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function startDrill(Request $request, SceneConfig $scenario)
+{
+    // 在执行任何操作前，首先检查系统资源
+    $resourceCheckResponse = $this->checkSystemResources();
+    if ($resourceCheckResponse !== null) {
+        return $resourceCheckResponse;
+    }
+
+    $validator = Validator::make($request->all(), [
+        'username' => 'required|string|max:50',
+        'test_id' => 'required|string|max:50'
+    ]);
+    if ($validator->fails()) {
+        return response()->json(['message' => '请求参数验证失败', 'errors' => $validator->errors()], 422);
+    }
+    
+    $userName = $request->input('username');
+    $testId = $request->input('test_id');
+    $topologyJson = $scenario->c_scene;
+
+    $parsedTopology = TopologyParser::parse($topologyJson);
+    $nodesById = collect($topologyJson['nodes'])->keyBy('id');
+
+    $connections = &$parsedTopology['connections'];
+
+    $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
+    $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
+    $createdSwitchesInfo = [];
+    $createdItemsInfo = [];
+    $sceneInstance = null;
+
+    try {
+        $this->assignIpAddresses($connections);
+    } catch (\Exception $e) {
+        Log::error("IP地址自动分配失败: " . $e->getMessage());
+        return response()->json(['message' => 'IP地址分配失败：' . $e->getMessage()], 500);
+    }
+
+    $containerIps = [];
+    foreach ($connections as $conn) {
+        if ($conn['source']['type'] === 'container' && !empty($conn['source']['ip'])) {
+            $containerIps[$conn['source']['id']] = $conn['source']['ip'];
+        }
+        if ($conn['target']['type'] === 'container' && !empty($conn['target']['ip'])) {
+            $containerIps[$conn['target']['id']] = $conn['target']['ip'];
+        }
+    }
+
+    try {
+        $sceneInstance = SceneInstance::create([
+            'c_config_id'     => $scenario->c_config_id,
+            'c_username'      => $userName,
+            'c_status'        => 'CREATING',
+            // 将场景模板 JSON 直接写入实例表的 c_scene_config
+            'c_scene_config'  => $topologyJson,
+        ]);
+        Log::info("创建场景实例记录成功", ['instance_id' => $sceneInstance->c_scene_instances_id]);
+
+        // 查询并更新 c_test_users 表
+        $updated = \DB::table('c_test_users')
+            ->where('c_test_id', $testId)
+            ->where('c_username', $userName)
+            ->update(['c_scene_instance_id' => $sceneInstance->c_scene_instances_id]);
+
+        if ($updated) {
+            Log::info("成功更新c_test_users表", [
+                'test_id' => $testId,
+                'username' => $userName,
+                'scene_instance_id' => $sceneInstance->c_scene_instances_id
+            ]);
+        } else {
+            Log::warning("未找到对应的c_test_users记录", [
+                'test_id' => $testId,
+                'username' => $userName
+            ]);
+        }
+
+        $instanceShortId = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -8);
+        $switchIdSuffix = substr(str_replace('-', '', $sceneInstance->c_scene_instances_id), -5);
+
+        foreach ($parsedTopology['switches'] as $switchData) {
+            $switchName = str_replace([' '], '_', $switchData['label']) . '_' . $switchIdSuffix;
+            $this->cliService->createSwitch($switchName, null, true);
+            $this->cliService->connectSwitchToSwitch($switchName, 'ovs-switch');
+            $createdSwitchesInfo[$switchData['id']] = ['actual_name' => $switchName, 'label' => $switchData['label']];
+            SceneSwitchInstance::create([
+                'c_switch_name' => $switchName, 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+            ]);
+        }
+
+        foreach ($parsedTopology['containers'] as $containerData) {
+             $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
+             $options = [
+                'image' => $containerData['image'],
+                'name'  => $containerName,
+                'ports' => $containerData['portMappings'],
+                'env'   => $containerData['env'],
+                'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+             ];
+
+            $flagUuid = null;
+            if ($containerData['isTarget']) {
+                $flagUuid = Str::uuid()->toString();
+                $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+            }
+
+             $containerId = $this->cliService->createContainer($options);
+             $containerIp = $containerIps[$containerData['id']] ?? null;
+             SceneContainerInstance::create([
+                 'c_container_id' => $containerId,
+                 'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                 'c_flag' => $flagUuid,
+                 'c_ip' => $containerIp,
+                 'c_container_name' => $containerName,
+             ]);
+             $createdItemsInfo[$containerData['id']] = [
+                 'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
+             ];
+        }
+
+        Log::info("================== 开始创建虚拟机并建立连接 ==================");
+
+        $baseDir = $this->_get_global_directory();
+        $imageDir = $baseDir . '/virsh/images';
+        $instanceBaseDir = $baseDir . '/virsh/instances/' . $sceneInstance->c_scene_instances_id;
+
+        foreach ($connections as $conn) {
+            $itemNode = null; $switchNode = null; $ip = null;
+
+            if ($conn['source']['type'] === 'virtual_machine' && $conn['target']['type'] === 'switch') {
+                $itemNode = $nodesById[$conn['source']['id']];
+                $switchNode = $nodesById[$conn['target']['id']];
+                $ip = $conn['source']['ip'];
+            } elseif ($conn['target']['type'] === 'virtual_machine' && $conn['source']['type'] === 'switch') {
+                $itemNode = $nodesById[$conn['target']['id']];
+                $switchNode = $nodesById[$conn['source']['id']];
+                $ip = $conn['target']['ip'];
+            }
+
+            if (!$itemNode || !$switchNode) continue;
+
+            $parsedVmNode = $vmsParsed[$itemNode['id']];
+            $correctImageName = $parsedVmNode['image'];
+
+            if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
+                $correctImageName = 'v_att_tcpScanning';
+                Log::info("节点 {$itemNode['label']} 未指定镜像或镜像无效, 将使用默认镜像: {$correctImageName}");
+            }
+
+            $imageFileName = Str::endsWith($correctImageName, '.qcow2') ? $correctImageName : $correctImageName . '.qcow2';
+
+            $osData = $this->vmImageOsMap[$imageFileName] ?? null;
+            $osType = strtolower($osData['osType'] ?? 'ubuntu'); // 默认为ubuntu
+            Log::info("正在为镜像 '{$imageFileName}' 查找操作系统类型", [
+                'found_data' => $osData,
+                'determined_os_type' => $osType
+            ]);
+
+            $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
+
+            $flagUuid = null;
+            if ($parsedVmNode['isTarget'] ?? false) {
+                $flagUuid = Str::uuid()->toString();
+            }
+
+            $vmInstance = SceneVmInstance::create([
+                'c_vm_name'            => $vmName,
+                'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                'c_ip'                 => $ip,
+                'c_flag'               => $flagUuid,
+            ]);
+            $vmDbId = $vmInstance->c_vm_id;
+            Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
+
+            $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
+
+            if ($osType === 'win7') {
+                $this->cliService->createVmWin7([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'ip'                  => $ip,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                    'flag'                => $flagUuid ?? 'NULL',
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } elseif ($osType === 'win7_1') {
+                $this->cliService->createVmWin7_1([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } elseif ($osType === 'win2003') {
+                $this->cliService->createVmWin2003([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } elseif ($osType === 'win10') {
+                $this->cliService->createVmWin10([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } elseif ($osType === 'kylin' || $osType === 'kylin10' || $osType === 'kylin_v10') {
+                $this->cliService->createVmKylin([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } elseif ($osType === 'kali') {
+                $this->cliService->createVmKali([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'ip'                  => $ip,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                    'flag'                => $flagUuid ?? 'NULL',
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            } else { // 默认为 ubuntu
+                $this->cliService->createVm([
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'ip'                  => $ip,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                    'flag'                => $flagUuid ?? 'NULL',
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                ]);
+            }
+
+            $createdItemsInfo[$itemNode['id']] = [
+                'id' => $vmDbId, 'actual_name' => $vmName, 'type' => 'virtual_machine'
+            ];
+        }
+
+        Log::info("================== 开始建立剩余网络连接 ==================");
+        foreach ($connections as $conn) {
+            $source = $conn['source'];
+            $target = $conn['target'];
+
+            if ($source['type'] === 'switch' && $target['type'] === 'switch') {
+                $this->cliService->connectSwitchToSwitch(
+                    $createdSwitchesInfo[$source['id']]['actual_name'],
+                    $createdSwitchesInfo[$target['id']]['actual_name']
+                );
+            }
+            elseif (($source['type'] === 'container' && $target['type'] === 'switch') || ($source['type'] === 'switch' && $target['type'] === 'container')) {
+                $containerNode = $source['type'] === 'container' ? $source : $target;
+                $switchNode = $source['type'] === 'switch' ? $source : $target;
+
+                $this->cliService->connectContainerToSwitch(
+                    $createdSwitchesInfo[$switchNode['id']]['actual_name'],
+                    $createdItemsInfo[$containerNode['id']]['actual_name'],
+                    $containerNode['ip']
+                );
+            }
+            elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
+                $switchNode = $source['type'] === 'switch' ? $source : $target;
+                $bridgeNode = $source['type'] === 'nat_bridge' ? $source : $target;
+
+                $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
+                $bridgeName = $bridgeNode['label'];
+
+                Log::info("正在连接 OVS 交换机 '{$actualSwitchName}' 到 Linux Bridge '{$bridgeName}");
+
+                $this->cliService->connectSwitchToBr0($actualSwitchName, $bridgeName);
+            }
+        }
+        //添加iptables转发
+        if (!empty($parsedTopology['iptablesRules'])) {
+            Log::info("================== Applying iptables rules ==================");
+            $this->cliService->applyIptablesRules($parsedTopology['iptablesRules'], $createdItemsInfo, $connections);
+        }
+        // 配置网关IP和所有容器的路由
+        $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
+
+        $containersToRoute = [];
+
+        $switchesConnectedToBridge = [];
+        foreach ($connections as $conn) {
+            if ($conn['source']['type'] === 'nat_bridge' && $conn['target']['type'] === 'switch') {
+                $switchesConnectedToBridge[$conn['target']['id']] = true;
+            } elseif ($conn['target']['type'] === 'nat_bridge' && $conn['source']['type'] === 'switch') {
+                $switchesConnectedToBridge[$conn['source']['id']] = true;
+            }
+        }
+
+        if (!empty($switchesConnectedToBridge)) {
+            foreach ($connections as $conn) {
+                $containerNode = null;
+                $switchNode = null;
+
+                if ($conn['source']['type'] === 'container' && $conn['target']['type'] === 'switch') {
+                    $containerNode = $conn['source'];
+                    $switchNode = $conn['target'];
+                } elseif ($conn['target']['type'] === 'container' && $conn['source']['type'] === 'switch') {
+                    $containerNode = $conn['target'];
+                    $switchNode = $conn['source'];
+                }
+
+                if ($containerNode && isset($switchesConnectedToBridge[$switchNode['id']])) {
+                    $actualContainerName = $createdItemsInfo[$containerNode['id']]['actual_name'];
+                    $containersToRoute[] = ['name' => $actualContainerName];
+                }
+            }
+        }
+
+        if (!empty($containersToRoute)) {
+            $this->cliService->configureBridgeAndRoutes('br0', $gatewayIp, $containersToRoute);
+            Log::info("================== 网关和路由配置完成 ==================");
+        }
+        $sceneInstance->c_status = 'RUNNING';
+        $sceneInstance->save();
+        return response()->json([
+            'message' => '演练场景已成功启动！', 'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+            'created_items' => $createdItemsInfo, 'created_switches' => $createdSwitchesInfo,
+        ]);
+
+    } catch (\Exception $e) {
+        if ($sceneInstance) {
+            $sceneInstance->c_status = 'FAILED';
+            $sceneInstance->save();
+        }
+        $errorMessage = $e->getMessage();
+        Log::error("启动场景时发生严重错误: " . $errorMessage, ['trace' => $e->getTraceAsString()]);
+        return response()->json(['message' => '启动场景时发生错误：' . $errorMessage], 500);
+    }
+}
+
+  public function index(Request $request)
 {
     try {
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
+        $auth = $request->header("Authorization", null);
+        $jwtRes = JWTControll::decodeJWT($auth);
         if ($jwtRes["err"] != null) {
             return response()->json([
-                        "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
-                        "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                "code" => GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                "message" => GlobalResponse::$HTTP_TOKEN_ERROR_MES
             ]);
-                }
+        }
+
         // 从 Request 对象获取用户信息
-        $token_data  = $jwtRes["data"];
+        $token_data = $jwtRes["data"];
         Log::info($token_data);
         if (!$token_data) {
             return response()->json([
@@ -4167,25 +4940,64 @@ public function _response($code = '', $message = 0, $data = [])
                 'data' => []
             ], 401);
         }
-        
+
         $username = $token_data['id'];
+        
+        // 获取前端传入的测试id
+        $testId = $request->input('test_id');
+        if (!$testId) {
+            return response()->json([
+                'code' => 400,
+                'message' => '缺少测试ID参数',
+                'data' => []
+            ], 400);
+        }
 
-        // 查询数据
-        $instances = SceneInstance::with('sceneConfig')
+        // 查询c_test_users表获取场景实例ID
+        $testUser = \DB::table('c_test_users')
+            ->where('c_test_id', $testId)
             ->where('c_username', $username)
-            ->latest('c_runtime')
-            ->get();
+            ->first();
 
-        $data = $instances->map(function ($instance) {
-            return [
-                'instance_id'   => $instance->c_scene_instances_id,
-                'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
-                'username'      => $instance->c_username,
-                'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
-                'status'        => $instance->c_status,
-                'c_scene_config' => $instance->c_scene_config,
-            ];
-        });
+        if (!$testUser) {
+            return response()->json([
+                'code' => 404,
+                'message' => '未找到对应的测试用户记录',
+                'data' => []
+            ], 404);
+        }
+
+        if (!$testUser->c_scene_config_id) {
+            return response()->json([
+                'code' => 404,
+                'message' => '该测试用户未关联任何场景实例',
+                'data' => []
+            ], 404);
+        }
+
+        // 根据场景实例ID查询场景实例表
+        $instance = SceneInstance::with('sceneConfig')
+            ->where('c_scene_instances_id', $testUser->c_scene_config_id)
+            ->first();
+
+        if (!$instance) {
+            return response()->json([
+                'code' => 404,
+                'message' => '未找到对应的场景实例',
+                'data' => []
+            ], 404);
+        }
+
+        // 构建返回数据
+        $data = [
+            'instance_id'   => $instance->c_scene_instances_id,
+            'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
+            'username'      => $instance->c_username,
+            'runtime'       => $instance->c_runtime ? $instance->c_runtime->toIso8601String() : null,
+            'status'        => $instance->c_status,
+            'c_scene_config' => $instance->c_scene_config,
+            'test_id'       => $testId // 同时返回测试ID
+        ];
 
         // 返回干净的JSON响应
         return response()->json([

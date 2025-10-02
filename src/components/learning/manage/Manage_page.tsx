@@ -35,7 +35,7 @@ interface ScenarioManagementPageProps {
   testId?: string; // 新增：可选的 testId，用于获取关联场景
   username: string; // 新增：用户名
   onBack: () => void; // 新增：返回回调
-  onViewInstances: (name: string) => void; // 新增：查看实例回调
+  onViewInstances: (name: string, testId: string) => void; // 修改：增加testId参数
 }
 
 const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId, username, onBack, onViewInstances }) => {
@@ -110,12 +110,17 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
         fetchScenarios();
     };
 
-    // 启动场景
+    // 启动场景 - 修改：需要传入test_id
     const handleStartDrill = async (scenario: Scenario) => {
         const currentUsername = username || (user?.user as any)?.c_username;
 
         if (!currentUsername) {
             alert('无法获取当前用户名，请确保您已登录。');
+            return;
+        }
+
+        if (!testId) {
+            alert('缺少测试ID参数');
             return;
         }
 
@@ -127,13 +132,16 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
         setError(null);
 
         try {
-            const response = await customFetch(`/back/api/scenarios/${scenario.id}/start`, {
+            const response = await customFetch(`/back/api/study/test/startDrill`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ username: currentUsername }),
+                body: JSON.stringify({ 
+                    username: currentUsername,
+                    test_id: testId  // 新增：传入test_id
+                }),
             });
 
             const result = await response.json();
@@ -249,7 +257,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                 <IconButton
                   color="info"
                   size="small"
-                  onClick={() => onViewInstances(scenario.name)}
+                  onClick={() => onViewInstances(scenario.name, testId || '')}
                 >
                   <ViewInstancesIcon />
                 </IconButton>
