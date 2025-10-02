@@ -4672,19 +4672,13 @@ public function startDrill(Request $request, SceneConfig $scenario)
     
     $userName = $request->input('username');
     $testId = $request->input('test_id');
-    $topologyJson = $scenario->c_scene;
-
-    $parsedTopology = TopologyParser::parse($topologyJson);
-    $nodesById = collect($topologyJson['nodes'])->keyBy('id');
-
-    $connections = &$parsedTopology['connections'];
-
-    $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
-    $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
-    $createdSwitchesInfo = [];
-    $createdItemsInfo = [];
-    $sceneInstance = null;
-
+ // --- 解析拓扑 ---
+        $topologyJson = is_string($scenario->c_scene) ? json_decode($scenario->c_scene, true) : $scenario->c_scene;
+        $parsedTopology = TopologyParser::parse($topologyJson);
+        $nodesById = collect($topologyJson['nodes'])->keyBy('id');
+        $connections = &$parsedTopology['connections'];
+        $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
+        $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
     try {
         $this->assignIpAddresses($connections);
     } catch (\Exception $e) {
