@@ -4601,7 +4601,8 @@ public function _response($code = '', $message = 0, $data = [])
         }
     }
 
-  /**
+
+    /**
      * 检查系统CPU和内存资源是否在可接受的范围内。
      *
      * @return \Illuminate\Http\JsonResponse|null 如果资源超限则返回JSON响应，否则返回null。
@@ -4645,9 +4646,10 @@ public function _response($code = '', $message = 0, $data = [])
             // 如果检查过程出错，为安全起见，阻止场景启动
             return response()->json(['message' => '检查系统资源时发生错误，无法启动场景。'], 500);
         }
-    }  
-    
-/**
+    }
+
+
+       /**
  * 接受指令启动一个演练场景.
  *
  * @param Request $request
@@ -4672,13 +4674,19 @@ public function startDrill(Request $request, SceneConfig $scenario)
     
     $userName = $request->input('username');
     $testId = $request->input('test_id');
- // --- 解析拓扑 ---
-        $topologyJson = is_string($scenario->c_scene) ? json_decode($scenario->c_scene, true) : $scenario->c_scene;
-        $parsedTopology = TopologyParser::parse($topologyJson);
-        $nodesById = collect($topologyJson['nodes'])->keyBy('id');
-        $connections = &$parsedTopology['connections'];
-        $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
-        $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
+    $topologyJson = $scenario->c_scene;
+
+    $parsedTopology = TopologyParser::parse($topologyJson);
+    $nodesById = collect($topologyJson['nodes'])->keyBy('id');
+
+    $connections = &$parsedTopology['connections'];
+
+    $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
+    $containersParsed = collect($parsedTopology['containers'])->keyBy('id');
+    $createdSwitchesInfo = [];
+    $createdItemsInfo = [];
+    $sceneInstance = null;
+
     try {
         $this->assignIpAddresses($connections);
     } catch (\Exception $e) {
@@ -4997,7 +5005,7 @@ public function startDrill(Request $request, SceneConfig $scenario)
     }
 }
 
- private function assignIpAddresses(array &$connections): void
+    private function assignIpAddresses(array &$connections): void
     {
         $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
         $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
