@@ -755,69 +755,84 @@ const handleAddSelectedUsers = () => {
                 
                 return (
                   <ListItem 
-                    key={currentDeleteKey}
-                    sx={{
-                      borderBottom: `1px solid ${getBorderColor()}`,
-                      '&:last-child': {
-                        borderBottom: 'none'
-                      },
-                      backgroundColor: getCardBgColor(),
-                      '&:hover': {
-                        backgroundColor: isDarkMode ? '#333' : '#f0f0f0'
-                      }
-                    }}
-                  >
-                    <Avatar sx={{ 
-                      bgcolor: isDarkMode ? '#3f51b5' : '#3f51b5', 
-                      mr: 2,
-                      color: '#fff'
-                    }}>
-                      {user.name.charAt(0).toUpperCase()}
-                    </Avatar>
-                    <ListItemText
-                      primary={<Typography sx={{ color: getTextColor() }}>{user.name}</Typography>}
-                      secondary={
-                        <>
-                          <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
-                            用户名: {user.username}
-                          </Typography>
-                          {!isExperiment && (
-                            <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
-                              试卷: {paper?.paperName || user.c_paper_id}
-                            </Typography>
-                          )}
-                        </>
-                      }
-                    />
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', mr: 10 }}>
-                      <Chip 
-                        label={user.correct_status_text || getStatusLabel(user.correct_status)} 
-                        size="small" 
-                        color={getStatusColor(user.correct_status)}
-                        sx={{ mb: 1 }}
-                      />
-                      {renderScore(user)}
-                    </Box>
-                    <ListItemSecondaryAction>
-                      <IconButton 
-                        edge="end" 
-                        onClick={(e) => handleOpenDetail(user, e)}
-                        sx={{ mr: 1 }}
-                        disabled={isDeleting}
-                      >
-                        <InfoIcon color="info" />
-                      </IconButton>
-                      
-                      <IconButton 
-                        edge="end" 
-                        onClick={(e) => onDeleteUser(user, e)}
-                        sx={{ color: isDarkMode ? '#f44336' : '#d32f2f' }}
-                        disabled={isDeleting || !!user.submit_time || user.correct_status === 2}
-                      >
-                        {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
+  key={currentDeleteKey}
+  sx={{
+    borderBottom: `1px solid ${getBorderColor()}`,
+    '&:last-child': {
+      borderBottom: 'none'
+    },
+    backgroundColor: getCardBgColor(),
+    '&:hover': {
+      backgroundColor: isDarkMode ? '#333' : '#f0f0f0'
+    }
+  }}
+>
+  <Avatar sx={{ 
+    bgcolor: isDarkMode ? '#3f51b5' : '#3f51b5', 
+    mr: 2,
+    color: '#fff'
+  }}>
+    {user.name.charAt(0).toUpperCase()}
+  </Avatar>
+  <ListItemText
+    primary={<Typography sx={{ color: getTextColor() }}>{user.name}</Typography>}
+    secondary={
+      <>
+        <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
+          用户名: {user.username}
+        </Typography>
+        {!isExperiment && (
+          <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
+            试卷: {paper?.paperName || user.c_paper_id}
+          </Typography>
+        )}
+      </>
+    }
+  />
+  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', mr: 10 }}>
+    {/* 实验类型不显示状态和分数 */}
+    {!isExperiment && (
+      <>
+        <Chip 
+          label={user.correct_status_text || getStatusLabel(user.correct_status)} 
+          size="small" 
+          color={getStatusColor(user.correct_status)}
+          sx={{ mb: 1 }}
+        />
+        {renderScore(user)}
+      </>
+    )}
+    {/* 实验类型显示特定的提示 */}
+    {isExperiment && (
+      <Typography variant="body2" sx={{ color: getSecondaryTextColor(), fontStyle: 'italic' }}>
+        实验用户
+      </Typography>
+    )}
+  </Box>
+  <ListItemSecondaryAction>
+    <IconButton 
+      edge="end" 
+      onClick={(e) => handleOpenDetail(user, e)}
+      sx={{ mr: 1 }}
+      disabled={isDeleting}
+    >
+      <InfoIcon color="info" />
+    </IconButton>
+    
+    <IconButton 
+      edge="end" 
+      onClick={(e) => onDeleteUser(user, e)}
+      sx={{ color: isDarkMode ? '#f44336' : '#d32f2f' }}
+      disabled={
+        isDeleting || 
+        // 实验类型不检查交卷状态，理论测试才检查
+        (!isExperiment && (!!user.submit_time || user.correct_status === 2))
+      }
+    >
+      {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+    </IconButton>
+  </ListItemSecondaryAction>
+</ListItem>
                 );
               })}
             </List>
