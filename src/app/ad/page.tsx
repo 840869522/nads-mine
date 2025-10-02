@@ -417,8 +417,8 @@ const AdManagementPage: React.FC = () => {
     const handleOpenView = (adConfig: AdConfig) => {
         if (adConfig.c_scene_instance_id && adConfig.c_status === "running") {
             const data = {
-                id: adConfig.c_scene_instance_id, 
-                blueTeamId: adConfig.c_blue_team_id, 
+                id: adConfig.c_scene_instance_id,
+                blueTeamId: adConfig.c_blue_team_id,
                 redTeamId: adConfig.c_red_team_id,
                 type: adConfig.c_type,
                 showAttack: adConfig.c_show_attack
@@ -525,7 +525,7 @@ const AdManagementPage: React.FC = () => {
                                                 <TableCell>{findTeamNameById(adConfig.c_blue_team_id)}</TableCell>
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                                        {adConfig.referees.map(referee => {
+                                                        {adConfig.referees.map((referee ) => {
                                                             const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户';
                                                             return (
                                                                 <Chip

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     Typography,
     Box,
@@ -70,6 +70,8 @@ const RoleManagementPage: React.FC = () => {
     // State for viewing permissions modal
     const [isViewPermsModalOpen, setIsViewPermsModalOpen] = useState(false);
     const [viewingRolePerms, setViewingRolePerms] = useState<{ nameDisplay: string; permissions: string[] } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
 
     useEffect(() => {
         if (searchTerm.data.trim()) getRoleDataSeearch(page, rowsPerPage);
@@ -287,6 +289,110 @@ const RoleManagementPage: React.FC = () => {
         });
     };
 
+    const handleInputExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            // 1. 文件类型验证
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                throw new Error("仅支持 .xlsx 或 .xls 格式");
+            }
+
+            // 2. 读取文件内容
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = event.target?.result;
+                if (!data) throw new Error("文件读取失败");
+
+                // 3. 解析 Excel 数据
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const allRoelSheetName = workbook.SheetNames[0];
+                const r2pSheetName = workbook.SheetNames[1];
+                const allRoleWorksheet = workbook.Sheets[allRoelSheetName];
+                const r2pWorkSheet = workbook.Sheets[r2pSheetName];
+
+                // 4. 转换为 JSON 数组（跳过空行）
+                const allRoleJsonData = XLSX.utils.sheet_to_json(allRoleWorksheet, { header: 1 }).filter(
+                    row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
+                );
+                const r2pJsonData = XLSX.utils.sheet_to_json(r2pWorkSheet, { header: 1 }).filter(
+                    row => Array.isArray(row) && row.some(cell => cell?.toString().trim())
+                );
+
+                // 5. 验证表头是否匹配
+                const expectedHeaders = [
+                    ['角色名称', '描述', '创建时间', '最后更新时间'],
+                    ["角色名称", "权限id"]
+                ];
+                const allRoleFileHeaders = allRoleJsonData[0] as string[];
+                if (!expectedHeaders[0].every((h, i) => h === allRoleFileHeaders[i])) {
+                    throw new Error("Excel 表头格式不正确，请使用标准模板");
+                }
+                const r2pFilterHeader = r2pJsonData[0] as string[];
+                if (!expectedHeaders[1].every((h, i) => h === r2pFilterHeader[i])) {
+                    throw new Error("Excel 表头格式不正确，请使用标准模板");
+                }
+
+                // 6. 转换数据格式
+                var rolesToImport = allRoleJsonData.slice(1).map(row => ({
+                    id: row[0],
+                    name: row[1],
+                    create_at: row[2],
+                    update_at: row[3]
+                }));
+
+                const r2pToImport = r2pJsonData.slice(1).map(row => ({
+                    role_id: row[0],
+                    permission_id: row[1]
+                }));
+
+                rolesToImport = rolesToImport.map(role => {
+                    const permissions = r2pToImport.filter(r2p =>r2p.role_id === role.id).map(r2p => r2p.permission_id);
+                    return {
+                        ...role,
+                        permissions: permissions
+                    }
+                });
+                console.log(rolesToImport);
+
+                // 7. 调用 API 批量导入
+                apiClientWithToken.post(`/back/api/support/role/batch_add`, {
+                  roles: rolesToImport
+                }).then(res => {
+                  if (res.data.code === 200) {
+                    toast.success(`共${rolesToImport.length}, 成功 : ${res.data.data.success_count} 失败: ${res.data.data.error_count} `, {
+                      autoClose: 3000,
+                      closeOnClick: true,
+                      pauseOnHover: true,
+                      draggable: true,
+                    });
+                    getRoleData(1, rowsPerPage); // 刷新数据
+                  } else {
+                    throw new Error(res.data.message || "导入失败");
+                  }
+                }).catch(error => {
+                  toast.error(`导入失败: ${error.message}`, {
+                    autoClose: 3000,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                  });
+                });
+            };
+
+            reader.readAsBinaryString(file);
+        } catch (error) {
+            toast.error(`导入失败: ${error.message}`, {
+                autoClose: 3000,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+            });
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = ''; // 重置文件输入
+        }
+    };
 
     const handleOutputExcel = async () => {
         // 1. 定义表头和数据映射
@@ -327,15 +433,15 @@ const RoleManagementPage: React.FC = () => {
         const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
         const role2perWorkSheet = XLSX.utils.aoa_to_sheet(role2PerData)
 
-        const autoWidth = (ws, data) =>{
+        const autoWidth = (ws, data) => {
             const colWidths = data[0].map((_, colIndex) => {
-              const maxLen = Math.max(...data.map(row => row[colIndex]?.toString().length || 0));
-              return { wch: maxLen + 2 };
+                const maxLen = Math.max(...data.map(row => row[colIndex]?.toString().length || 0));
+                return { wch: maxLen + 2 };
             });
             ws['!cols'] = colWidths;
-          }
-          autoWidth(role2perWorkSheet,role2PerData);
-          autoWidth(worksheet,worksheetData);
+        }
+        autoWidth(role2perWorkSheet, role2PerData);
+        autoWidth(worksheet, worksheetData);
 
         // 5. 创建工作簿并导出
         const workbook = XLSX.utils.book_new();
@@ -420,7 +526,7 @@ const RoleManagementPage: React.FC = () => {
                 </Box>
 
                 <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2, flexWrap: "wrap" }}>
-                    {/* <Box>
+                    <Box>
                         <Button
                             variant="contained"
                             startIcon={<AddCircleOutlineIcon />}
@@ -435,7 +541,7 @@ const RoleManagementPage: React.FC = () => {
                             ref={fileInputRef}
                             style={{ display: 'none' }}
                         />
-                    </Box> */}
+                    </Box>
                     <Button
                         variant='contained'
                         startIcon={<DownloadOutlined />}

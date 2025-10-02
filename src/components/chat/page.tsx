@@ -20,6 +20,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { fixIncompleteMarkdown, isSafeToRender } from "@/utils/markdwonFixer";
+import { apiClientWithToken } from "@/utils/axios";
+import { resolveMetadata } from "next/dist/lib/metadata/resolve-metadata";
 
 interface Message {
     id: string;
@@ -69,6 +71,40 @@ const ChatDialog = () => {
         };
     }, [])
 
+
+    useEffect(() => {
+
+        if (!document.getElementById('chat-loading-animations')) {
+            const style = document.createElement('style');
+            style.id = 'chat-loading-animations';
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes pulse {
+                    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+                    50% { opacity: 1; transform: scale(1); }
+                }
+                @keyframes wave {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-5px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        return () => {
+            const existingStyle = document.getElementById('chat-loading-animations');
+            if (existingStyle) {
+                document.head.removeChild(existingStyle);
+            }
+        };
+    }, []);
+
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
@@ -91,51 +127,29 @@ const ChatDialog = () => {
         if (streamUpdateTimeout.current) {
             clearTimeout(streamUpdateTimeout.current);
         }
-
-        streamPostRequest(
-            '/chat/chat',
-            { message: newMessage.text },
-            (chunk) => {
-                currentMessage.current += chunk;
-                setPendingStream(prev => prev + chunk);
-                if (streamUpdateTimeout.current) {
-                    clearTimeout(streamUpdateTimeout.current);
-                }
-                const lastTime = lastUpdateRef.current ?? 0
-                const delay = Math.min(300, Math.max(50, 100 - (Date.now() - lastTime)))
-                lastUpdateRef.current = Date.now();
-                streamUpdateTimeout.current = setTimeout(() => {
-                    // 1. 优先修复语法
-                    const fixedText = fixIncompleteMarkdown(currentMessage.current);
-
-                    // 2. 仅当处于安全状态时才更新（可选）
-                    // if (isSafeToRender(fixedText)) {
-                    setMessages((prev) => {
-                        const newMessages = [...prev];
-                        const lastMessage = newMessages[newMessages.length - 1];
-                        if (lastMessage?.role === 'assistant') {
-                            lastMessage.text = fixedText;
-                        } else {
-                            newMessages.push({
-                                id: (Date.now() + 1).toString(),
-                                role: 'assistant',
-                                text: fixedText,
-                            });
-                        }
-                        return newMessages;
+        apiClientWithToken.post("/chat/chat", JSON.stringify({ "message": newMessage.text })).then(res => {
+            setMessages((prev) => {
+                const newMessages = [...prev];
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (lastMessage?.role === 'assistant') {
+                    lastMessage.text = res.data.data;
+                } else {
+                    newMessages.push({
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        text: res.data.data,
                     });
-                    setPendingStream(''); // 清空待处理流
-                    // }
-                }, delay);
-            },
-            (error) => {
-                setMessages((prev) => [
-                    ...prev,
-                    { id: (Date.now() + 1).toString(), role: 'assistant', text: `错误：${error.message}` },
-                ]);
-                setIsLoading(false);
-            }
-        ).finally(() => setIsLoading(false));
+                }
+                return newMessages;
+            });
+            setIsLoading(false);
+        }).catch((error) => {
+            setMessages((prev) => [
+                ...prev,
+                { id: (Date.now() + 1).toString(), role: 'assistant', text: `错误：${error.message}` },
+            ]);
+            setIsLoading(false);
+        }).finally(() => setIsLoading(false));
     };
 
     useEffect(() => {
@@ -144,7 +158,6 @@ const ChatDialog = () => {
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* 消息列表 */}
             <List
                 sx={{
                     flex: 1,
@@ -283,34 +296,62 @@ const ChatDialog = () => {
                                 animation: 'fadeIn 0.3s ease-in'
                             }}
                         >
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Box sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                py: 0.5
+                            }}>
+                                {/* 环形加载器 */}
                                 <Box sx={{
-                                    width: 4,
-                                    height: 4,
-                                    bgcolor: 'text.secondary',
+                                    width: 24,
+                                    height: 24,
+                                    border: '2px solid',
+                                    borderColor: 'primary.100',
+                                    borderTopColor: 'primary.main',
                                     borderRadius: '50%',
-                                    animation: 'dot 1.4s infinite ease-in-out both'
-                                }}
-                                    style={{ animationDelay: '0s' }}
-                                />
+                                    animation: 'spin 1s linear infinite',
+                                    '@keyframes spin': {
+                                        '0%': { transform: 'rotate(0deg)' },
+                                        '100%': { transform: 'rotate(360deg)' }
+                                    }
+                                }} />
+
+                                {/* 文字提示 */}
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        color: 'text.secondary',
+                                        fontWeight: 500,
+                                        letterSpacing: '0.5px'
+                                    }}
+                                >
+                                    正在思考中...
+                                </Typography>
+
+                                {/* 微型呼吸点动画 */}
                                 <Box sx={{
-                                    width: 4,
-                                    height: 4,
-                                    bgcolor: 'text.secondary',
-                                    borderRadius: '50%',
-                                    animation: 'dot 1.4s infinite ease-in-out both'
-                                }}
-                                    style={{ animationDelay: '0.2s' }}
-                                />
-                                <Box sx={{
-                                    width: 4,
-                                    height: 4,
-                                    bgcolor: 'text.secondary',
-                                    borderRadius: '50%',
-                                    animation: 'dot 1.4s infinite ease-in-out both'
-                                }}
-                                    style={{ animationDelay: '0.4s' }}
-                                />
+                                    display: 'flex',
+                                    gap: 0.5
+                                }}>
+                                    {[0, 0.1, 0.2].map((delay, index) => (
+                                        <Box
+                                            key={index}
+                                            sx={{
+                                                width: 4,
+                                                height: 4,
+                                                bgcolor: 'text.secondary',
+                                                borderRadius: '50%',
+                                                opacity: 0.3,
+                                                animation: `pulse 1.5s ${delay}s infinite cubic-bezier(0.4, 0, 0.6, 1)`,
+                                                '@keyframes pulse': {
+                                                    '0%, 100%': { opacity: 0.3, transform: 'scale(0.8)' },
+                                                    '50%': { opacity: 1, transform: 'scale(1)' }
+                                                }
+                                            }}
+                                        />
+                                    ))}
+                                </Box>
                             </Box>
                         </Paper>
                     </ListItem>

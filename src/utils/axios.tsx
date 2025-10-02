@@ -56,15 +56,15 @@ apiClientWithToken.interceptors.response.use(
             setTimeout(()=>{},200);
             window.location.href = "/login"
         }
-        if (res.data.code == 405){
-            toast.error(res.data.message,{
-                autoClose: 3000,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-            });
-        }
+        // if (res.data.code == 405){
+        //     toast.error(res.data.message,{
+        //         autoClose: 3000,
+        //         closeOnClick: true,
+        //         pauseOnHover: true,
+        //         draggable: true,
+        //     });
+        // }
         return res
     }
-    
+
 )

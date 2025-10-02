@@ -12,18 +12,11 @@ use App\Models\Flag\FlagSubmissionModel;
 use App\Models\scenario\SceneInstanceModel;
 use App\Models\scenario\SceneContainerInstanceModel;
 use App\Models\scenario\SceneVmInstanceModel;
-use App\Services\WorkermanService; // 确保这个use语句正确
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Redis; // 添加 Cache facade 用于 Redis
 
 class FlagSubmissionController extends BaseController
 {
-    protected $workermanService;
-
-    public function __construct(WorkermanService $workermanService)
-    {
-        $this->workermanService = $workermanService;
-    }
 
     /**
      * 统一返回值方法（从基础Controller复制）
@@ -405,38 +398,14 @@ class FlagSubmissionController extends BaseController
 
             DB::commit();
 
-            Log::info("💾 数据库事务提交成功，准备发送WebSocket消息", [
+            Log::info("💾 数据库事务提交成功", [
                 'submission_id' => $submission->c_submission_id,
                 'username' => $submission->c_username,
                 'is_correct' => $submission->c_is_correct,
                 'points_earned' => $submission->c_points_earned
             ]);
 
-            // 发送 Workerman 广播消息
-            $broadcastData = [
-                'type' => 'flag_submission',
-                'submission_id' => $submission->c_submission_id,
-                'c_username' => $submission->c_username,
-                'c_is_correct' => $submission->c_is_correct,
-                'c_points_earned' => $submission->c_points_earned,
-                'c_submitted_at' => $submission->c_submitted_at->toDateTimeString(),
-                'c_scene_instances_id' => $submission->c_scene_instances_id,
-                'c_container_instance_id' => $submission->c_container_instance_id,
-                'c_vm_instance_id' => $submission->c_vm_instance_id,
-                'instance_type' => $instance_type,
-            ];
-
-            Log::info("📱 即将发送WebSocket消息", [
-                'workerman_service_exists' => !is_null($this->workermanService),
-                'broadcast_data' => $broadcastData
-            ]);
-
-            $sendResult = $this->workermanService->send($broadcastData);
-
-            Log::info("📱 WebSocket消息发送结果", [
-                'send_result' => $sendResult,
-                'message_type' => $broadcastData['type']
-            ]);
+            // WebSocket消息发送已移除，现在使用轮询机制
 
             // 发送 Redis 消息
             $instance_name = 'Unknown Instance';
@@ -647,6 +616,135 @@ class FlagSubmissionController extends BaseController
         } catch (\Exception $e) {
             Log::error("获取历史记录失败: " . $e->getMessage());
             return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, '查询历史记录失败');
+        }
+    }
+
+    /**
+     * 获取最新的Flag提交记录（用于轮询）
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getLatestSubmissions(Request $request)
+    {
+        // 1. JWT token验证
+        $authHeader = $request->header('Authorization');
+        
+        if (!$authHeader) {
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '请先登录后再查看最新提交记录。'
+            );
+        }
+        
+        $token = str_replace('Bearer ', '', $authHeader);
+        
+        try {
+            $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
+            if ($jwtResult['err'] !== null || !isset($jwtResult['data']['id'])) {
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    'Token已过期，请重新登录。'
+                );
+            }
+            $username = $jwtResult['data']['id'];
+        } catch (\Exception $e) {
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '身份验证失败，请重新登录。'
+            );
+        }
+
+        // 2. 参数验证
+        $validator = Validator::make($request->all(), [
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'since' => ['nullable', 'string'], // 时间戳，获取此时间之后的记录
+            'scene_instance_id' => ['nullable', 'string', 'exists:c_scene_instances,c_scene_instances_id'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->_response(GlobalResponse::$HTTP_STATUS_ERROR_CODE, $validator->errors()->first());
+        }
+
+        $limit = $request->input('limit', 10); // 默认返回最新10条
+        $since = $request->input('since'); // 可选的时间戳
+        $sceneInstanceId = $request->input('scene_instance_id'); // 可选的场景实例ID
+
+        try {
+            // 3. 构建查询
+            $query = FlagSubmissionModel::query()
+                ->select([
+                    'c_submission_id',
+                    'c_username', 
+                    'c_submitted_at',
+                    'c_is_correct',
+                    'c_points_earned',
+                    'c_container_instance_id',
+                    'c_vm_instance_id',
+                    'c_scene_instances_id',
+                    'c_attempt_count'
+                ])
+                ->with([
+                    'containerInstance:c_container_id,c_container_name,c_ip',
+                    'vmInstance:c_vm_id,c_vm_name,c_ip'
+                ])
+                ->orderBy('c_submitted_at', 'desc')
+                ->limit($limit);
+
+            // 如果指定了时间戳，只返回此时间之后的记录
+            if ($since) {
+                $query->where('c_submitted_at', '>', $since);
+            }
+
+            // 如果指定了场景实例ID，只返回该场景的记录
+            if ($sceneInstanceId) {
+                $query->where('c_scene_instances_id', $sceneInstanceId);
+            }
+
+            $submissions = $query->get();
+
+            // 4. 格式化数据
+            $formattedSubmissions = $submissions->map(function ($record) {
+                $instanceType = $record->c_container_instance_id ? 'docker' : 'vm';
+                $instanceName = 'Unknown Instance';
+                
+                if ($record->containerInstance) {
+                    $instanceName = $record->containerInstance->c_container_name ?? 'Unknown Container';
+                } elseif ($record->vmInstance) {
+                    $instanceName = $record->vmInstance->c_vm_name ?? 'Unknown VM';
+                }
+
+                return [
+                    'submission_id' => $record->c_submission_id,
+                    'c_username' => $record->c_username,
+                    'c_is_correct' => $record->c_is_correct,
+                    'c_points_earned' => $record->c_points_earned,
+                    'c_submitted_at' => $record->c_submitted_at->toDateTimeString(),
+                    'c_scene_instances_id' => $record->c_scene_instances_id,
+                    'c_container_instance_id' => $record->c_container_instance_id,
+                    'c_vm_instance_id' => $record->c_vm_instance_id,
+                    'instance_type' => $instanceType,
+                    'instance_name' => $instanceName,
+                    'attempt_count' => $record->c_attempt_count,
+                ];
+            });
+
+            // 5. 返回统计信息
+            $stats = [
+                'total_returned' => $formattedSubmissions->count(),
+                'latest_timestamp' => $formattedSubmissions->isNotEmpty() ? 
+                    $formattedSubmissions->first()['c_submitted_at'] : null,
+                'server_time' => now()->toDateTimeString(),
+            ];
+
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '最新提交记录获取成功', [
+                'submissions' => $formattedSubmissions,
+                'stats' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("获取最新提交记录失败: " . $e->getMessage());
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '查询最新提交记录失败');
         }
     }
 

@@ -33,9 +33,17 @@ echo "[SETUP] 基础镜像路径: ${SOURCE_IMAGE_PATH}"
 
 # 内存大小（单位：MB）
 MEMORY_SIZE=4096
+if [[ "$NADS_VM_MEMORY" =~ ^[0-9]+$ ]]; then
+    MEMORY_SIZE=$NADS_VM_MEMORY
+    echo "[CONFIG] 使用覆盖的内存大小: ${MEMORY_SIZE}MB (来自 NADS_VM_MEMORY)"
+fi
 
 # CPU核心数
 CPU_CORES=4
+if [[ "$NADS_VM_CPU" =~ ^[0-9]+$ ]]; then
+    CPU_CORES=$NADS_VM_CPU
+    echo "[CONFIG] 使用覆盖的 CPU 核心数: ${CPU_CORES} (来自 NADS_VM_CPU)"
+fi
 
 # 图形界面配置（VNC）
 GRAPHICS="vnc,listen=0.0.0.0"

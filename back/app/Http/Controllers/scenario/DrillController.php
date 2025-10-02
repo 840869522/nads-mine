@@ -25,8 +25,10 @@ class DrillController extends Controller
     private CommandLineService $cliService;
     private array $vmImageOsMap = []; // 用于存储镜像操作系统映射
 
-    public function __construct(CommandLineService $cliService)
+    public function __construct(CommandLineService $cliService, Request $req)
     {
+        // 加载父类的构造方法
+        parent::__construct($req);
         $this->cliService = $cliService;
         // 在构造函数中加载并解析JSON映射文件
         $this->loadVmImageOsMap();
@@ -266,78 +268,35 @@ class DrillController extends Controller
 
                 $actualSwitchName = $createdSwitchesInfo[$switchNode['id']]['actual_name'];
 
+                $vmOptionsBase = [
+                    'id'                  => $vmDbId,
+                    'vm_name'             => $vmName,
+                    'image'               => $correctImageName,
+                    'ip'                  => $ip,
+                    'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
+                    'flag'                => $flagUuid ?? 'NULL',
+                    'switch_name'         => $actualSwitchName,
+                    'image_dir'           => $imageDir,
+                    'instance_base_dir'   => $instanceBaseDir,
+                    'memory'              => $parsedVmNode['memory'] ?? null,
+                    'cpu'                 => $parsedVmNode['cpu'] ?? null,
+                    'env'                 => $parsedVmNode['env'] ?? [],
+                ];
+
                 if ($osType === 'win7') {
-                    $this->cliService->createVmWin7([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'ip'                  => $ip,
-                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                        'flag'                => $flagUuid ?? 'NULL',
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmWin7($vmOptionsBase);
                 } elseif ($osType === 'win7_1') {
-                    $this->cliService->createVmWin7_1([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmWin7_1($vmOptionsBase);
                 } elseif ($osType === 'win2003') {
-                    $this->cliService->createVmWin2003([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmWin2003($vmOptionsBase);
                 } elseif ($osType === 'win10') {
-                    $this->cliService->createVmWin10([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmWin10($vmOptionsBase);
                 } elseif ($osType === 'kylin' || $osType === 'kylin10' || $osType === 'kylin_v10') {
-                    $this->cliService->createVmKylin([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmKylin($vmOptionsBase);
                 } elseif ($osType === 'kali') {
-                    $this->cliService->createVmKali([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'ip'                  => $ip,
-                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                        'flag'                => $flagUuid ?? 'NULL',
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVmKali($vmOptionsBase);
                 } else { // 默认为 ubuntu
-                    $this->cliService->createVm([
-                        'id'                  => $vmDbId,
-                        'vm_name'             => $vmName,
-                        'image'               => $correctImageName,
-                        'ip'                  => $ip,
-                        'scene_instance_id'   => $sceneInstance->c_scene_instances_id,
-                        'flag'                => $flagUuid ?? 'NULL',
-                        'switch_name'         => $actualSwitchName,
-                        'image_dir'           => $imageDir,
-                        'instance_base_dir'   => $instanceBaseDir,
-                    ]);
+                    $this->cliService->createVm($vmOptionsBase);
                 }
 
                 $createdItemsInfo[$itemNode['id']] = [

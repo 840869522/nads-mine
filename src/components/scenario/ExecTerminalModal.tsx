@@ -59,9 +59,11 @@ export default function ExecTerminalModal({ open, containerId, onClose, zIndex }
       fitAddonRef.current = fitAddon;
 
       const socket = io({
-        path: '/api/terminal',
+        path: '/socketio/terminal',
         query: { id: containerId },
-        transports: ['websocket'],
+        //transports: ['websocket'],
+          withCredentials: true,
+          forceNew: true,
       });
       socketRef.current = socket;
 

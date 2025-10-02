@@ -85,13 +85,13 @@ const LoginPage: React.FC = () => {
             {submitting ? '登录中...' : '登录'}
           </Button>
         </Box>
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
+        {/* <Box sx={{ mt: 2, textAlign: 'center' }}>
           <Typography variant="caption" display="block">管理员: admin / admin123</Typography>
           <Typography variant="caption" display="block">学生: student / student123</Typography>
           <Typography variant="caption" display="block">裁判: referee / referee123</Typography>
           <Typography variant="caption" display="block">导调: guidance / guidance123</Typography>
           <Typography variant="caption" display="block">运维: operations / operations123</Typography>
-        </Box>
+        </Box> */}
       </Paper>
     </Box>
   );

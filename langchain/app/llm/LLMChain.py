@@ -18,7 +18,7 @@ from app import config
 
 system_template = """
     你是一个非常有用的问答助手，根据下面给出的知识和以往的对话，
-    回答给出的问题,当你知道问题的答案时，准确的回答问题；如果你不知道答案，那么直接回答“我不知道”。
+    回答给出的问题,当你知道问题的答案时，准确的回答问题，不要是用表格尽量简短；如果你不知道答案，那么直接回答“我不知道”。
     知识：{knowledge}
 """
 
@@ -91,6 +91,16 @@ rag_chain_memory = RunnableWithMessageHistory(
 )
 
 
-async def generate_response(message: str):
+async def agenerate_response(message: str):
     async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
         yield f"data: {chunk}\n\n"
+
+async def generate_response(message: str):
+    try:
+        responses = await rag_chain_memory.ainvoke(
+            {"question": message},
+            {"configurable": {"session_id": "session_123"}}
+        )
+        return responses
+    except Exception as e:
+        return f"发生错误: {str(e)}"

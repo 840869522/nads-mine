@@ -23,10 +23,11 @@ class Controller extends BaseController
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
-//        Log::info($controllerName);
+        Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 
+        Log::info($res);
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
             if ($res['data']['found']){
                 $auth = $request->header("Authorization",null);
@@ -46,8 +47,18 @@ class Controller extends BaseController
                 $request->merge([
                     "token_data"=>$jwtRes["data"]
                 ]);
-                if ($res['data']['status']){
-                    if (!in_array($res['data']['permission'], $jwtRes["data"]["permission"])){
+                if ($this->array_every($res['data']['status'],function($value){
+                    if($value == 1){
+                        return true;
+                    }
+                    return false;
+                })){
+                    if (!$this->array_some($res['data']['permission'],function($item) use ($jwtRes){
+                        if (in_array($item,$jwtRes["data"]["permission"])){
+                            return true;
+                        }
+                        return false;
+                    })){
                         response()->json([
                             'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
                             "message"=>GlobalResponse::$HTTP_USER_NOT_RIGHT_MES
@@ -56,12 +67,7 @@ class Controller extends BaseController
                     }
                 }
             }else {
-                // 暂时恢复默认 放行未添加权限的请求
-                // response()->json([
-                //     'code'=>GlobalResponse::$HTTP_NOT_AUTH_CODE,
-                //     "message"=>GlobalResponse::$HTTP_PERMISSION_NOT_FOUND
-                // ])->send();
-                // exit();
+                Log::info(in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission']));
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();
@@ -110,5 +116,24 @@ class Controller extends BaseController
                 return $directory;
             }
         }
+    }
+
+    private function array_some($array, $callback) {
+        foreach($array as $value) {
+            if ($callback($value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    private function array_every($array, $callback){
+        foreach ($array as $value) {
+            if (!$callback($value)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

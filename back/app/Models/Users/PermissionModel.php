@@ -195,6 +195,57 @@ class PermissionModel extends Model
         }
     }
 
+    public static function batchAddPermissions(array $permissions) : array {
+        try {
+            $successCount = 0;
+            $errorCount = 0;
+            
+            foreach ($permissions as $index => $permission) {
+                try {
+                    DB::beginTransaction();
+                    
+                    // 1. 插入角色基本信息
+                    $value = [
+                        "c_id" => $permission["id"],
+                        "c_des"=>$permission['des'],
+                        "c_api_src"=>$permission['api_src'],
+                        "c_pid"=>$permission['pid'],
+                        "c_src"=>$permission['src'],
+                        "c_is_menu"=> $permission['is_menu'],
+                        "c_label"=>$permission['label'],
+                        "c_icon"=>$permission['icon'],
+                        "c_status"=> $permission['status'],
+                        "sort"=>$permission['status'] ?? 100
+                    ];
+                    
+                    $insertResult = DB::table("c_permissions")->insert($value);
+                    
+                    if (!$insertResult) {
+                        throw new \Exception("权限插入失败");
+                    }
+                    DB::commit();
+                    $successCount++;
+                    
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    $errorCount++;
+                }
+            }
+            return [
+                'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                'data' => [
+                    'success_count' => $successCount,
+                    'error_count' => $errorCount,
+                ]
+            ];
+        } catch (Exception $e) {
+            Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            return [
+                "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+            ];
+        } 
+    }
+
 
     public static function updatePermission(string $id, array $data): array
     {
@@ -348,14 +399,18 @@ class PermissionModel extends Model
 
     public static function getPermissionByApi($api){
         try {
-            $res = db::table("c_permissions")->select(["c_id as id",'c_status as status'])->where("c_api_src","=",$api)->limit(1)->get()->toArray();
+            $res = db::table("c_permissions")->select(["c_id as id",'c_status as status'])->where("c_api_src","=",$api)->get()->toArray();
             if (!empty($res)){
                 return [
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE,
                     "data"=>[
-                        "permission"=>$res[0]->id,
+                        "permission"=>array_map(function($item){
+                            return $item->id;
+                        },$res),
                         "found"=>true,
-                        "status"=>$res[0]->status
+                        "status"=>array_map(function($item) {
+                            return $item->status;
+                        }, $res)
                     ]
                 ];
             }else{

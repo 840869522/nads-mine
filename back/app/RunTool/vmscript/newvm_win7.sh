@@ -57,6 +57,20 @@ DESTINATION_IMAGE_PATH="${INSTANCE_DIR}/disk.qcow2"
 echo "[SETUP] 目标差分镜像路径: ${DESTINATION_IMAGE_PATH}"
 
 
+# --- 资源配置（允许通过环境变量覆盖） ---
+MEMORY_SIZE=4096
+if [[ "$NADS_VM_MEMORY" =~ ^[0-9]+$ ]]; then
+  MEMORY_SIZE=$NADS_VM_MEMORY
+  echo "[CONFIG] 使用覆盖的内存大小: ${MEMORY_SIZE}MB (来自 NADS_VM_MEMORY)"
+fi
+
+CPU_CORES=4
+if [[ "$NADS_VM_CPU" =~ ^[0-9]+$ ]]; then
+  CPU_CORES=$NADS_VM_CPU
+  echo "[CONFIG] 使用覆盖的 CPU 核心数: ${CPU_CORES} (来自 NADS_VM_CPU)"
+fi
+
+
 # --- 4. 生成 Cloud-Init ISO ---
 echo "[CONFIG] 正在生成 user-data..."
 cat <<EOF > "${INSTANCE_DIR}/user-data"
@@ -87,8 +101,8 @@ echo "[IMAGE] 差分镜像创建成功。"
 echo "[VIRT] 正在执行 virt-install 命令..."
 virt-install --virt-type kvm \
   --name "${VM_NAME}" \
-  --ram=4096 \
-  --vcpus=4 \
+  --ram=${MEMORY_SIZE} \
+  --vcpus=${CPU_CORES} \
   --os-variant win7 \
   --disk path="${DESTINATION_IMAGE_PATH}",device=disk,bus=sata,format=qcow2 \
   --disk path="${INSTANCE_DIR}/config.iso",device=cdrom \
@@ -102,4 +116,3 @@ echo "--- [SUCCESS] 虚拟机 ${VM_NAME} 已成功启动 ---"
 
 echo "VNC 连接信息:"
 virsh domdisplay "${VM_NAME}"
-

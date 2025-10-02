@@ -82,7 +82,17 @@ elif [[ "$IMAGE_BASE_NAME" == *"kalinew"* ]]; then
 elif [[ "$IMAGE_BASE_NAME" == *"Report-tools"* ]]; then
   RAM_SIZE=8192; VCPU_NUM=4; echo "DEBUG: Report-tools -> RAM 8G, vCPU 4"
 else
-  RAM_SIZE=4096; VCPU_NUM=4; echo "DEBUG: Standard -> RAM 4G, vCPU 4"
+  RAM_SIZE=8192; VCPU_NUM=4; echo "DEBUG: Standard -> RAM 8G, vCPU 4"
+fi
+
+if [[ "$NADS_VM_MEMORY" =~ ^[0-9]+$ ]]; then
+  RAM_SIZE=$NADS_VM_MEMORY
+  echo "DEBUG: Overriding RAM to ${RAM_SIZE}MB from NADS_VM_MEMORY"
+fi
+
+if [[ "$NADS_VM_CPU" =~ ^[0-9]+$ ]]; then
+  VCPU_NUM=$NADS_VM_CPU
+  echo "DEBUG: Overriding vCPUs to ${VCPU_NUM} from NADS_VM_CPU"
 fi
 
 # ---------- 解析 IP/CIDR ----------

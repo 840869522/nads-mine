@@ -28,21 +28,15 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 SESSION_BACK="nads_project_back"
 SESSION_FRONT="nads_project_front"
 SESSION_PYTHON="nads_project_python"
-SESSION_WEBSOCKET="nads_project_websocket"
-SESSION_REDIS="nads_project_redis"
 FRONTEND_PORT=3000      # Node 服务端口
 BACKEND_PORT=8000       # PHP 服务端口
-WEBSOCKET_PORT=8080     # WebSocket 服务端口
-WEBSOCKET_INTERNAL_PORT=2347  # WebSocket 内部通信端口
 CHAT_PORT=9009
 FRONTEND_DIR="$SCRIPT_DIR/src"
 BACKEND_DIR="$SCRIPT_DIR/back"
 CHAT_DIR="$SCRIPT_DIR/langchain"
 FRONTEND_LOG="$FRONTEND_DIR/front.log"
 BACKEND_LOG="$BACKEND_DIR/back.log"
-WEBSOCKET_LOG="$BACKEND_DIR/websocket.log"
 CHAT_LOG="$BACKEND_DIR/chat.log"
-REDIS_LOG="$BACKEND_DIR/redis.log"
 
 # ====== 检测并终止单个服务函数 ======
 confirm_and_kill() {
@@ -109,19 +103,7 @@ test_services() {
         url="$url:3000"
         port=3000
     fi
-    if [ "$app_name" = "WebSocket" ]; then
-        # WebSocket测试需要特殊处理
-        port=8080
-        echo "测试 $app_name 服务, 端口为 $port ..."
-        pid_test=$(sudo lsof -t -i:$port 2>/dev/null)
-        if [ -z "$pid_test" ]; then
-            echo -e "${ICON_CROSS} 未发现 ${app_name} 服务运行"
-        else
-            echo -e "${ICON_CHECK} 发现 ${app_name} 服务正在运行（PID: $pid_test）"
-        fi
-        return
-    fi
-    if [ "$app_name" = "Python"]; then
+    if [ "$app_name" = "Python" ]; then
         url="$url:9009"
         port=9009
     fi
@@ -169,18 +151,10 @@ start_services() {
             command="cd $FRONTEND_DIR && npm run dev >> $FRONTEND_LOG"
         fi
         log_file="$FRONTEND_LOG"
-    elif [ "$service_name" = "WEBSOCKET" ]; then
-        session_name="$SESSION_WEBSOCKET"
-        command="cd $BACKEND_DIR && php artisan websocket:server start >> $WEBSOCKET_LOG"
-        log_file="$WEBSOCKET_LOG"
     elif [ "$service_name" = "Python" ]; then
         session_name="$SESSION_PYTHON"
         command="cd $CHAT_DIR && source /var/www/chatenv/bin/activate && python main.py >> $CHAT_LOG"
         log_file="$CHAT_LOG"
-    elif [ "$service_name" = "REDIS" ]; then
-        session_name="$SESSION_REDIS"
-        command="cd $BACKEND_DIR && php artisan redis:subscribe >> $REDIS_LOG"
-        log_file="$REDIS_LOG"
     else
         echo -e "${ICON_CROSS} 未知服务类型：$service_name"
         return 1
@@ -253,9 +227,7 @@ if [ "$command_choice" = "start" ]; then
 
     PHP_NEW=false
     NODE_NEW=false
-    WEBSOCKET_NEW=false
     PYTHON_NEW=false
-    REDIS_NEW=false
 
     # 检查并停止现有服务
     confirm_and_kill $FRONTEND_PORT "Node"
@@ -282,38 +254,10 @@ if [ "$command_choice" = "start" ]; then
         echo -e "${ICON_WARN} CHAT 服务未终止，跳过启动"
     fi
 
-    confirm_and_kill $WEBSOCKET_PORT "WebSocket"
-    if [ $? -eq 0 ]; then
-        echo -e "${ICON_CHECK} WebSocket 服务已终止，准备启动新服务"
-        WEBSOCKET_NEW=true
-    else
-        echo -e "${ICON_WARN} WebSocket 服务未终止，跳过启动"
-    fi
-
-    # 检查 redis:subscribe 是否已有 screen
-    if check_screen_session "$SESSION_REDIS"; then
-        echo -e "${ICON_WARN} Redis 订阅服务已在运行，跳过启动"
-    else
-        echo -e "${ICON_CHECK} Redis 订阅服务未运行，准备启动新服务"
-        REDIS_NEW=true
-    fi
-
     # 按顺序启动服务
     if [ "$PHP_NEW" = "true" ]; then
         echo -e "${ICON_INFO} 步骤 1/3: 启动 Laravel 后端服务..."
         start_services "PHP"
-        sleep 3
-    fi
-
-    if [ "$WEBSOCKET_NEW" = "true" ]; then
-        echo -e "${ICON_INFO} 步骤 2/3: 启动 WebSocket 服务..."
-        start_services "WEBSOCKET"
-        sleep 3
-    fi
-
-    if [ "$REDIS_NEW" = "true" ]; then
-        echo -e "${ICON_INFO} 步骤 3/4: 启动 Redis 订阅服务..."
-        start_services "REDIS"
         sleep 3
     fi
 
@@ -330,7 +274,6 @@ if [ "$command_choice" = "start" ]; then
     echo -e "${ICON_INFO} 访问地址:"
     echo -e "  - 前端: http://localhost:$FRONTEND_PORT"
     echo -e "  - 后端 API: http://localhost:$BACKEND_PORT"
-    echo -e "  - WebSocket: ws://localhost:$WEBSOCKET_PORT"
     echo -e "  - Flag历史: http://localhost:$FRONTEND_PORT/flag-history"
 elif [ "$command_choice" = "stop" ]; then
     confirm_and_kill $BACKEND_PORT "PHP"
@@ -338,29 +281,16 @@ elif [ "$command_choice" = "stop" ]; then
         cleanup_screen_session "$SESSION_BACK"
     fi
 
-    confirm_and_kill $WEBSOCKET_PORT "WebSocket"
-    if [ $? -eq 0 ]; then
-        cleanup_screen_session "$SESSION_WEBSOCKET"
-    fi
 
     confirm_and_kill $FRONTEND_PORT "NODE"
     if [ $? -eq 0 ]; then 
         cleanup_screen_session "$SESSION_FRONT"
     fi
 
-    # 停止 redis:subscribe
-    cleanup_screen_session "nads_project_redis"
-
     echo -e "${ICON_HAPPY} Happy! 停止流程已结束！"
 elif [ "$command_choice" = "test" ]; then
     test_services "PHP"
-    test_services "WebSocket"
     test_services "Node"
-    if check_screen_session "nads_project_redis"; then
-        echo -e "${ICON_CHECK} Redis 订阅服务正在运行"
-    else
-        echo -e "${ICON_WARN} Redis 订阅服务未运行"
-    fi
 
 else
     show_help
