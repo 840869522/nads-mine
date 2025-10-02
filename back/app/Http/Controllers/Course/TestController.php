@@ -4562,6 +4562,45 @@ public function _response($code = '', $message = 0, $data = [])
         }
     }
 
+ private CommandLineService $cliService;
+    private array $vmImageOsMap = []; // 用于存储镜像操作系统映射
+
+    public function __construct(CommandLineService $cliService, Request $req)
+    {
+        // 加载父类的构造方法
+        parent::__construct($req);
+        $this->cliService = $cliService;
+        // 在构造函数中加载并解析JSON映射文件
+        $this->loadVmImageOsMap();
+    }
+
+    /**
+     * 加载 vmImageOverrides.json 文件内容到类属性
+     */
+    private function loadVmImageOsMap(): void
+    {
+        try {
+            // ★★★ 核心修复：修正文件路径 ★★★
+            // base_path() -> /var/www/nads/back
+            // .. -> /var/www/nads
+            // 最终路径 -> /var/www/nads/src/data/vmImageOverrides.json
+            $path = base_path('../src/data/vmImageOverrides.json');
+
+            Log::info("正在尝试从以下路径加载虚拟机镜像操作系统映射: {$path}");
+
+            if (File::exists($path)) {
+                $jsonContent = File::get($path);
+                $this->vmImageOsMap = json_decode($jsonContent, true);
+                Log::info('成功加载虚拟机镜像操作系统映射。');
+                Log::debug('加载到的 vmImageOsMap 内容:', $this->vmImageOsMap);
+            } else {
+                Log::warning('虚拟机镜像操作系统映射文件 (vmImageOverrides.json) 不存在。', ['path' => $path]);
+            }
+        } catch (\Exception $e) {
+            Log::error('加载虚拟机镜像操作系统映射失败: ' . $e->getMessage());
+        }
+    }
+
   /**
      * 检查系统CPU和内存资源是否在可接受的范围内。
      *
@@ -4607,7 +4646,7 @@ public function _response($code = '', $message = 0, $data = [])
             return response()->json(['message' => '检查系统资源时发生错误，无法启动场景。'], 500);
         }
     }  
-
+    
 /**
  * 接受指令启动一个演练场景.
  *
@@ -4963,6 +5002,58 @@ public function startDrill(Request $request, SceneConfig $scenario)
         return response()->json(['message' => '启动场景时发生错误：' . $errorMessage], 500);
     }
 }
+
+ private function assignIpAddresses(array &$connections): void
+    {
+        $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
+        $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');
+
+        $existingIps = $vmIps->merge($containerIps)->map(function ($ip) {
+            return explode('/', $ip)[0];
+        })->unique()->flip();
+
+        Log::info('Found existing IPs in DB', $existingIps->keys()->toArray());
+
+        $octet3 = 0;
+        $octet4 = 0;
+
+        $getNextIp = function() use (&$octet3, &$octet4, &$existingIps) {
+            do {
+                if ($octet4 >= 254) {
+                    $octet4 = 1;
+                    $octet3++;
+                } else {
+                    $octet4++;
+                }
+
+                if ($octet3 >= 255) {
+                    throw new \Exception("IP地址池 10.100.0.0/16 已耗尽。");
+                }
+
+                $newIp = "10.100.{$octet3}.{$octet4}";
+
+            } while (isset($existingIps[$newIp]));
+
+            $existingIps[$newIp] = true;
+
+            Log::info("Assigned new IP: {$newIp}");
+            return $newIp . "/16";
+        };
+
+        foreach ($connections as &$connection) {
+            if ($connection['source']['type'] === 'nat_bridge' || $connection['target']['type'] === 'nat_bridge') {
+                continue;
+            }
+
+            if (empty($connection['source']['ip'])) {
+                $connection['source']['ip'] = $getNextIp();
+            }
+            if (empty($connection['target']['ip'])) {
+                $connection['target']['ip'] = $getNextIp();
+            }
+        }
+    }
+
 
   public function index(Request $request)
 {
