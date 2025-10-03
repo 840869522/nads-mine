@@ -30,6 +30,31 @@ class CommandLineService
             $env['NADS_VM_CPU'] = (string) $cpu;
         }
 
+        $envLookup = [];
+        if (!empty($options['env_lookup']) && is_array($options['env_lookup'])) {
+            $envLookup = $options['env_lookup'];
+        } elseif (!empty($options['env']) && is_array($options['env'])) {
+            foreach ($options['env'] as $pair) {
+                $key = trim((string)($pair['key'] ?? ''));
+                if ($key === '') {
+                    continue;
+                }
+                $envLookup[$key] = isset($pair['value']) ? (string) $pair['value'] : '';
+            }
+        }
+
+        if (!empty($options['elasticsearch_env']) && is_array($options['elasticsearch_env'])) {
+            $envLookup = array_merge($envLookup, $options['elasticsearch_env']);
+        }
+
+        foreach ($envLookup as $key => $value) {
+            $normalizedKey = trim((string) $key);
+            if ($normalizedKey === '' || array_key_exists($normalizedKey, $env)) {
+                continue;
+            }
+            $env[$normalizedKey] = (string) $value;
+        }
+
         return $env;
     }
 

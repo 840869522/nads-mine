@@ -35,6 +35,37 @@ class DrillController extends Controller
     }
 
     /**
+     * 将 TopologyParser 返回的环境变量数组转换为键值映射，便于后续查找。
+     */
+    private function buildEnvLookup(array $envPairs): array
+    {
+        $lookup = [];
+        foreach ($envPairs as $pair) {
+            $key = trim($pair['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $lookup[$key] = isset($pair['value']) ? (string) $pair['value'] : '';
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * 统一解析并补全 Elasticsearch 相关的环境变量，缺失时回退到默认值。
+     */
+    private function resolveElasticsearchEnv(array $envLookup): array
+    {
+        $host = trim($envLookup['ELASTICSEARCH_HOST'] ?? '') ?: '10.100.88.88';
+        $port = trim($envLookup['ELASTICSEARCH_PORT'] ?? '') ?: '9200';
+
+        return [
+            'ELASTICSEARCH_HOST' => $host,
+            'ELASTICSEARCH_PORT' => $port,
+        ];
+    }
+
+    /**
      * 加载 vmImageOverrides.json 文件内容到类属性
      */
     private function loadVmImageOsMap(): void
@@ -234,6 +265,11 @@ class DrillController extends Controller
                 if (!$itemNode || !$switchNode) continue;
 
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
+                $vmEnvPairs = $parsedVmNode['env'] ?? [];
+                $vmEnvLookup = $this->buildEnvLookup($vmEnvPairs);
+                $elasticsearchEnv = $this->resolveElasticsearchEnv($vmEnvLookup);
+                $vmEnvLookup = array_merge($vmEnvLookup, $elasticsearchEnv);
+
                 $correctImageName = $parsedVmNode['image'];
 
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
@@ -251,6 +287,11 @@ class DrillController extends Controller
                 ]);
 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
+                Log::debug('解析到虚拟机 Elasticsearch 环境变量', [
+                    'vm_name' => $vmName,
+                    'elasticsearch_host' => $elasticsearchEnv['ELASTICSEARCH_HOST'],
+                    'elasticsearch_port' => $elasticsearchEnv['ELASTICSEARCH_PORT'],
+                ]);
 
                 $flagUuid = null;
                 if ($parsedVmNode['isTarget'] ?? false) {
@@ -280,7 +321,9 @@ class DrillController extends Controller
                     'instance_base_dir'   => $instanceBaseDir,
                     'memory'              => $parsedVmNode['memory'] ?? null,
                     'cpu'                 => $parsedVmNode['cpu'] ?? null,
-                    'env'                 => $parsedVmNode['env'] ?? [],
+                    'env'                 => $vmEnvPairs,
+                    'env_lookup'          => $vmEnvLookup,
+                    'elasticsearch_env'   => $elasticsearchEnv,
                 ];
 
                 if ($osType === 'win7') {
