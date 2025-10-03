@@ -310,8 +310,8 @@ Route::prefix('study')->group(function () {
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
         Route::get('index', [TestController::class, 'index']);
-          // 根据用户名查找用户的场景实例
-        Route::post('startDrill', [TestController::class, 'startDrill']);
+          // 启动场景
+        Route::post('startDrill/{scenario}', [TestController::class, 'startDrill']);
     });
 });
 
