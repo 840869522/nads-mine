@@ -5106,7 +5106,7 @@ public function startDrill(Request $request, SceneConfig $scenario)
             ], 404);
         }
 
-        if (!$testUser->c_scene_config_id) {
+        if (!$testUser->c_scene_instance_id) {
             return response()->json([
                 'code' => 404,
                 'message' => '该测试用户未关联任何场景实例',
@@ -5116,7 +5116,7 @@ public function startDrill(Request $request, SceneConfig $scenario)
 
         // 根据场景实例ID查询场景实例表
         $instance = SceneInstance::with('sceneConfig')
-            ->where('c_scene_instances_id', $testUser->c_scene_config_id)
+            ->where('c_scene_instances_id', $testUser->c_scene_instance_id)
             ->first();
 
         if (!$instance) {

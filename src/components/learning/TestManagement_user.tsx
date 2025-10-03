@@ -781,9 +781,10 @@ const handleCancelEnterTest = () => {
     );
   }
 
-  if (currentView === 'scenario-instances' && username) {
+  if (currentView === 'scenario-instances' && currentTest && username) {
     return (
       <ScenarioInstanceManagementPage
+        testId={currentTest.test_id}
         username={username}
         scenarioName={selectedScenarioName}
         onBack={() => setCurrentView('scenario-management')}

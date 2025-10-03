@@ -61,11 +61,13 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
     setIsLoading(true);
     setError(null);
     try {
-        // 修改：根据是否有testId选择不同的API
-        let url = '/back/api/study/test/index';
+        // 构建查询参数
+        const params = new URLSearchParams();
         if (testId) {
-            url = `/back/api/study/test/index?test_id=${testId}`;
+            params.append('test_id', testId);
         }
+        
+        const url = `/back/api/study/test/index${params.toString() ? `?${params.toString()}` : ''}`;
         
         const response = await customFetch(url, {
             method: 'GET',
@@ -82,7 +84,6 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
         
         const result = await response.json();
         
-        // 修改：处理新的返回格式
         if (result.code !== 200) {
             throw new Error(result.message || '获取场景实例失败');
         }
@@ -91,11 +92,9 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
         if (Array.isArray(result.data)) {
             data = result.data;
         } else if (result.data && typeof result.data === 'object') {
-            // 如果是单个对象，转换为数组
             data = [result.data];
         }
         
-        // 根据场景名称过滤
         const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
         setInstances(filteredData);
     } catch (err: any) {
