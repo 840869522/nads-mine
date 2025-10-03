@@ -112,53 +112,54 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
 
     // 启动场景 - 修改：需要传入test_id
     const handleStartDrill = async (scenario: Scenario) => {
-        const currentUsername = username || (user?.user as any)?.c_username;
+    const currentUsername = username || (user?.user as any)?.c_username;
 
-        if (!currentUsername) {
-            alert('无法获取当前用户名，请确保您已登录。');
-            return;
+    if (!currentUsername) {
+        alert('无法获取当前用户名，请确保您已登录。');
+        return;
+    }
+
+    if (!testId) {
+        alert('缺少测试ID参数');
+        return;
+    }
+
+    if (!window.confirm(`您确定要启动场景 "${scenario.name}" 的演练吗？`)) {
+        return;
+    }
+
+    setStartingScenarioId(scenario.id);
+    setError(null);
+
+    try {
+        // 关键修改：在URL中包含场景ID
+        const response = await customFetch(`/back/api/study/test/startDrill/${scenario.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ 
+                username: currentUsername,
+                test_id: testId
+            }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || '启动失败');
         }
 
-        if (!testId) {
-            alert('缺少测试ID参数');
-            return;
-        }
-
-        if (!window.confirm(`您确定要启动场景 "${scenario.name}" 的演练吗？`)) {
-            return;
-        }
-
-        setStartingScenarioId(scenario.id);
-        setError(null);
-
-        try {
-            const response = await customFetch(`/back/api/study/test/startDrill`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    username: currentUsername,
-                    test_id: testId  // 新增：传入test_id
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || '启动失败');
-            }
-
-            alert(result.message);
-            fetchScenarios();
-        } catch (err: any) {
-            setError(err.message || '发生未知网络错误');
-            alert(`启动失败: ${err.message}`);
-        } finally {
-            setStartingScenarioId(null);
-        }
-    };
+        alert(result.message);
+        fetchScenarios();
+    } catch (err: any) {
+        setError(err.message || '发生未知网络错误');
+        alert(`启动失败: ${err.message}`);
+    } finally {
+        setStartingScenarioId(null);
+    }
+};
 
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
