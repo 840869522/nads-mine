@@ -31,16 +31,22 @@ bootcmd:
  - /opt/zeek/bin/zeekctl deploy
  - /opt/zeek/bin/zeekctl start
  - echo "FLAG=$flag" >> /etc/ctf-config
- - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
- - "ES_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}"
- - "ES_PORT=${ELASTICSEARCH_PORT:-9200}"
- - 'sed -i "/^\[Service\]/a Environment=\"ELASTICSEARCH_HOST=${ES_HOST}\"" /lib/systemd/system/td-agent.service'
- - 'sed -i "/^\[Service\]/a Environment=\"ELASTICSEARCH_PORT=${ES_PORT}\"" /lib/systemd/system/td-agent.service'
- - systemctl daemon-reload
  - if ! id -u ubuntu &>/dev/null; then useradd -m -s /bin/bash -G sudo ubuntu; fi
  - echo "ubuntu:123456" | chpasswd
  - echo "root:123456" | chpasswd
  - echo "127.0.0.1 ns$n" | sudo tee -a /etc/hosts
 
 runcmd:
- - export FLAG=$flag
+ - |
+   set -e
+   ES_HOST="${ELASTICSEARCH_HOST:-10.100.88.88}"
+   ES_PORT="${ELASTICSEARCH_PORT:-9200}"
+   mkdir -p /etc/systemd/system/td-agent.service.d
+   cat >/etc/systemd/system/td-agent.service.d/10-env.conf <<EOF
+   [Service]
+   Environment=SCENE_ID=${SCENE_ID}
+   Environment=ELASTICSEARCH_HOST=${ES_HOST}
+   Environment=ELASTICSEARCH_PORT=${ES_PORT}
+   EOF
+   systemctl daemon-reload
+   systemctl restart td-agent || true

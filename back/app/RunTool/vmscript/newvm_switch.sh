@@ -68,12 +68,21 @@ echo "DEBUG: Template files found."
 ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}
 ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
 
-n=$1 ip=$3 SCENE_ID=$4 flag=$5 \
-  ELASTICSEARCH_HOST=$ELASTICSEARCH_HOST ELASTICSEARCH_PORT=$ELASTICSEARCH_PORT \
-  eval "echo \"$(cat \"$TEMPLATE_DIR/network-config\")\"" > "$INSTANCE_DIR/network-config"
-n=$1 ip=$3 SCENE_ID="$4_$7" flag=$5 \
-  ELASTICSEARCH_HOST=$ELASTICSEARCH_HOST ELASTICSEARCH_PORT=$ELASTICSEARCH_PORT \
-  eval "echo \"$(cat \"$TEMPLATE_DIR/user-data\")\"" > "$INSTANCE_DIR/user-data"
+
+# 验证IP地址格式
+IP_PARAM="$3"
+echo "DEBUG: IP parameter received: '$IP_PARAM'"
+if [[ ! "$IP_PARAM" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
+    echo "ERROR: Invalid IP format: '$IP_PARAM'. Expected format: x.x.x.x or x.x.x.x/xx"
+    exit 1
+fi
+echo "DEBUG: IP validation passed: $IP_PARAM"
+
+# 使用envsubst进行白名单变量替换
+export n=$1 ip=$3 flag=$5 SCENE_ID="$4_$7" ELASTICSEARCH_HOST ELASTICSEARCH_PORT
+VARS='${n} ${ip} ${flag} ${SCENE_ID} ${ELASTICSEARCH_HOST} ${ELASTICSEARCH_PORT}'
+envsubst "$VARS" < "$TEMPLATE_DIR/network-config" > "$INSTANCE_DIR/network-config"
+envsubst "$VARS" < "$TEMPLATE_DIR/user-data" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 
 
