@@ -64,27 +64,17 @@ if [ ! -f "$TEMPLATE_DIR/network-config" ] || [ ! -f "$TEMPLATE_DIR/user-data" ]
 fi
 echo "DEBUG: Template files found."
 
-# 使用模板生成配置文件
+# ====== 最小改动开始：读取 ES 环境变量并用于渲染 ======
 ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}
 ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+# ====== 最小改动结束 ======
 
-
-# 验证IP地址格式
-IP_PARAM="$3"
-echo "DEBUG: IP parameter received: '$IP_PARAM'"
-if [[ ! "$IP_PARAM" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
-    echo "ERROR: Invalid IP format: '$IP_PARAM'. Expected format: x.x.x.x or x.x.x.x/xx"
-    exit 1
-fi
-echo "DEBUG: IP validation passed: $IP_PARAM"
-
-# 使用envsubst进行白名单变量替换
-export n=$1 ip=$3 flag=$5 SCENE_ID="$4_$7" ELASTICSEARCH_HOST ELASTICSEARCH_PORT
-VARS='${n} ${ip} ${flag} ${SCENE_ID} ${ELASTICSEARCH_HOST} ${ELASTICSEARCH_PORT}'
-envsubst "$VARS" < "$TEMPLATE_DIR/network-config" > "$INSTANCE_DIR/network-config"
-envsubst "$VARS" < "$TEMPLATE_DIR/user-data" > "$INSTANCE_DIR/user-data"
+# 使用模板生成配置文件（保持原有 eval 渲染方式）
+n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config")\"" > "$INSTANCE_DIR/network-config"
+# 将 ES 变量注入到 eval 的环境中；保持 SCENE_ID="$4_$7" 的既有行为
+n=$1 ip=$3 SCENE_ID="$4_$7" flag=$5 ELASTICSEARCH_HOST="$ELASTICSEARCH_HOST" ELASTICSEARCH_PORT="$ELASTICSEARCH_PORT" \
+  eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
-
 
 # --- MODIFICATION: The following commands will now run in the foreground ---
 
@@ -150,5 +140,4 @@ virt-install --virt-type kvm \
   --import
 
 echo "FOREGROUND: virt-install command for $7 completed."
-
 echo "DEBUG: All tasks for VM '$7' have completed."
