@@ -29,7 +29,12 @@ bootcmd:
  - ip route add default via 10.100.0.254 dev enp1s0
  - echo "nameserver 8.8.8.8" > /etc/resolv.conf
  - /opt/zeek/bin/zeekctl deploy
- - /opt/zeek/bin/zeekctl start
+ - if [ "$zeek" -eq 1 ]; then /opt/zeek/bin/zeekctl start; fi
+ - if [ "$zeek" -eq 0 ]; then /opt/zeek/bin/zeekctl stop; fi
+ - if [ "$sysdig" -eq 0 ]; then systemctl stop sysdig; fi
+ - /bin/bash -c '> /var/log/snoopy.log'
+ - /bin/bash -c '> /opt/zeek/logs/current/conn.log'
+ - /bin/bash -c '> /var/log/sysdig.log'
  - echo "FLAG=$flag" >> /etc/ctf-config
  - sed -i '/^\[Service\]/a Environment="SCENE_ID=${SCENE_ID}"' /lib/systemd/system/td-agent.service
  # ====== 最小改动：用变量占位，值由 newvm 渲染注入 ======

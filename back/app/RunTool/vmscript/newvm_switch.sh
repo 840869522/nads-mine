@@ -69,10 +69,29 @@ ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST:-10.100.88.88}
 ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
 # ====== 最小改动结束 ======
 
+# ====== 采集策略：解析 Zeek/Sysdig 开关 ======
+ZEEK_ENABLED=${ZEEK_ENABLED:-0}
+SYSDIG_ENABLED=${SYSDIG_ENABLED:-0}
+
+if [[ "${ZEEK_ENABLED,,}" =~ ^(1|true|yes|on)$ ]]; then
+  ZEEK_FLAG=1
+else
+  ZEEK_FLAG=0
+fi
+echo "DEBUG: Zeek collection flag resolved to $ZEEK_FLAG (raw: $ZEEK_ENABLED)"
+
+if [[ "${SYSDIG_ENABLED,,}" =~ ^(1|true|yes|on)$ ]]; then
+  SYSDIG_FLAG=1
+else
+  SYSDIG_FLAG=0
+fi
+echo "DEBUG: Sysdig collection flag resolved to $SYSDIG_FLAG (raw: $SYSDIG_ENABLED)"
+
 # 使用模板生成配置文件（保持原有 eval 渲染方式）
 n=$1 ip=$3 SCENE_ID=$4 flag=$5 eval "echo \"$(cat "$TEMPLATE_DIR/network-config")\"" > "$INSTANCE_DIR/network-config"
 # 将 ES 变量注入到 eval 的环境中；保持 SCENE_ID="$4_$7" 的既有行为
 n=$1 ip=$3 SCENE_ID="$4_$7" flag=$5 ELASTICSEARCH_HOST="$ELASTICSEARCH_HOST" ELASTICSEARCH_PORT="$ELASTICSEARCH_PORT" \
+  zeek="$ZEEK_FLAG" sysdig="$SYSDIG_FLAG" \
   eval "echo \"$(cat "$TEMPLATE_DIR/user-data")\"" > "$INSTANCE_DIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$INSTANCE_DIR/"
 

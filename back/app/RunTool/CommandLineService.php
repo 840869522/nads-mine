@@ -55,6 +55,10 @@ class CommandLineService
             $env[$normalizedKey] = (string) $value;
         }
 
+        // 统一为 cloud-init 模板提供 zeek/sysdig 的开关标记
+        $env['zeek'] = $this->normalizeToggleFlag($envLookup['ZEEK_ENABLED'] ?? null);
+        $env['sysdig'] = $this->normalizeToggleFlag($envLookup['SYSDIG_ENABLED'] ?? null);
+
         return $env;
     }
 
@@ -86,6 +90,28 @@ class CommandLineService
         }
 
         return null;
+    }
+
+    /**
+     * 将布尔/开关型的值标准化为 '1' 或 '0'（默认为 '0'）。
+     */
+    private function normalizeToggleFlag($value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if ($value === null) {
+            return '0';
+        }
+
+        $stringValue = strtolower(trim((string) $value));
+
+        if ($stringValue === '1' || $stringValue === 'true' || $stringValue === 'yes' || $stringValue === 'on') {
+            return '1';
+        }
+
+        return '0';
     }
 
     /**
