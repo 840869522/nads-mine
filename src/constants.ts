@@ -323,6 +323,13 @@ export const TRAFFIC_MIRRORING_IMAGES = {
   SURICATA: 'suricata:v2'
 } as const;
 
+// 特殊镜像列表 - 这些镜像的容器可以连接任何节点
+export const SPECIAL_IMAGES = [
+  'routertar2:v1',
+
+  // 可以在这里添加更多特殊镜像
+] as const;
+
 export const NODE_SIZE = 60;
 export const NODE_ICON_SIZE = 30;
 

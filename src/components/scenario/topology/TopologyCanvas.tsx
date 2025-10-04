@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { TopologyNode, TopologyEdge, DeviceType } from '../../../types';
-import { NODE_SIZE, NODE_ICON_SIZE } from '../../../constants';
+import { NODE_SIZE, NODE_ICON_SIZE, SPECIAL_IMAGES } from '../../../constants';
 import { 
   CubeIcon, 
   ComputerDesktopIcon, 
@@ -13,6 +13,15 @@ import {
 const DRAG_THRESHOLD = 5; // Pixels threshold to differentiate click from drag
 const EDGE_TEXT_OFFSET = 10; // Pixels to offset text from the edge line
 const EDGE_TEXT_FONT_SIZE = 10;
+
+// 判断是否为特定镜像的容器
+const isSpecialImageContainer = (node?: TopologyNode): boolean => {
+  if (!node || node.type !== 'container') return false;
+  
+  const image = node.config?.Image || '';
+  
+  return SPECIAL_IMAGES.some(img => image.includes(img));
+};
 
 interface TopologyCanvasProps {
   nodes: TopologyNode[];
@@ -202,8 +211,9 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           const sourceNode = nodes.find(n => n.id === edge.source);
           const targetNode = nodes.find(n => n.id === edge.target);
           if (!sourceNode || !targetNode) return null;
-          // 安全过滤：仅渲染“至少一端为交换机”的边
-          const edgeAllowed = sourceNode.type === 'switch' || targetNode.type === 'switch';
+          // 安全过滤：仅渲染"至少一端为交换机"或"特定镜像容器可以连接任何节点"的边
+          const edgeAllowed = sourceNode.type === 'switch' || targetNode.type === 'switch' || 
+                             isSpecialImageContainer(sourceNode) || isSpecialImageContainer(targetNode);
           if (!edgeAllowed) return null;
 
           const isSelected = selectedElement?.type === 'edge' && selectedElement.id === edge.id;
