@@ -312,6 +312,17 @@ export const DEFAULT_EDGE_CONFIG: EdgeConfig = {
   targetIp: '10.0.0.2/24'
 };
 
+// 流量模拟和镜像相关镜像名称
+export const TRAFFIC_SIMULATION_IMAGES = {
+  SURICATA: 'suricata:v2',
+  IPERF: 'iperf-docker:v1'
+} as const;
+
+// 流量镜像相关镜像名称
+export const TRAFFIC_MIRRORING_IMAGES = {
+  SURICATA: 'suricata:v2'
+} as const;
+
 export const NODE_SIZE = 60;
 export const NODE_ICON_SIZE = 30;
 

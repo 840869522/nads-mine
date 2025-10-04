@@ -9,7 +9,7 @@ import {
     TopologyAction,
     TopologyData,
 } from '../../../types';
-import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES } from '../../../constants';
+import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES, TRAFFIC_SIMULATION_IMAGES, TRAFFIC_MIRRORING_IMAGES } from '../../../constants';
 import TopologyToolbar from './TopologyToolbar';//包含一个 TopologyToolbar，提供撤销、重做、保存、导入/导出等高级功能。
 import TopologyCanvas from './TopologyCanvas';//可视化画布
 import NodeEditModal from './NodeEditModal';
@@ -424,7 +424,6 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         }
 
         // 创建默认的Docker镜像容器
-        const defaultImageName = 'suricata:v2'; // 默认镜像名称
         const containerCount = nodes.filter(n => n.type === 'container').length + 1;
         const containerLabel = `Mirror-${containerCount}`;
         
@@ -437,7 +436,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: TRAFFIC_MIRRORING_IMAGES.SURICATA,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
@@ -493,7 +492,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y - 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: 'suricata:v2',
+                Image: TRAFFIC_SIMULATION_IMAGES.SURICATA,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
@@ -506,7 +505,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y + 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: 'iperf-docker:v1',
+                Image: TRAFFIC_SIMULATION_IMAGES.IPERF,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
