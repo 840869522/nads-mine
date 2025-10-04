@@ -481,8 +481,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             return;
         }
 
-        // 创建默认的Docker镜像名称
-        const defaultImageName = 'nicolaka/netshoot:latest';
+        // 创建两个不同的Docker镜像名称
         const containerCount = nodes.filter(n => n.type === 'container').length;
         
         // 创建两个模拟容器
@@ -494,7 +493,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y - 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: 'suricata:v2',
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
@@ -507,7 +506,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y + 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: 'iperf-docker:v1',
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
