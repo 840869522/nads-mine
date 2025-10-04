@@ -9,7 +9,8 @@ import {
     TopologyAction,
     TopologyData,
 } from '../../../types';
-import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES, TRAFFIC_SIMULATION_IMAGES, TRAFFIC_MIRRORING_IMAGES, SPECIAL_IMAGES } from '../../../constants';
+import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES, TRAFFIC_SIMULATION_IMAGES, TRAFFIC_MIRRORING_IMAGES } from '../../../constants';
+import { canDirectlyLinkNodes, wouldViolateSingleSwitchRule } from './topologyRules';
 import TopologyToolbar from './TopologyToolbar';//包含一个 TopologyToolbar，提供撤销、重做、保存、导入/导出等高级功能。
 import TopologyCanvas from './TopologyCanvas';//可视化画布
 import NodeEditModal from './NodeEditModal';
@@ -36,46 +37,7 @@ interface TopologyState {
     selectedElement: { id: string; type: 'node' | 'edge' } | null;
     linkingState: { startNodeId: string } | null;
 }
-// 辅助：判断两节点是否允许直连（至少一端为交换机，或特定镜像的容器可以连接任何节点）
-const canDirectlyLinkNodes = (a?: TopologyNode, b?: TopologyNode): boolean => {
-    if (!a || !b) return false;
-    
-    // 原有逻辑：至少一端为交换机
-    if (a.type === 'switch' || b.type === 'switch') {
-        return true;
-    }
-    
-    // 新增逻辑：特定镜像的容器可以连接任何节点
-    if (isSpecialImageContainer(a) || isSpecialImageContainer(b)) {
-        return true;
-    }
-    
-    return false;
-};
-
-// 新增：判断是否为特定镜像的容器
-const isSpecialImageContainer = (node?: TopologyNode): boolean => {
-    if (!node || node.type !== 'container') return false;
-    
-    const image = node.config?.Image || '';
-    
-    return SPECIAL_IMAGES.some(img => image.includes(img));
-};
-
-// 新增：限制规则 - 同一个容器或虚拟机只能连接一个交换机（即仅允许一条边）
-const isContainerOrVM = (n?: TopologyNode): boolean => !!n && (n.type === 'container' || n.type === 'virtual_machine');
-const wouldViolateSingleSwitchRule = (a: TopologyNode | undefined, b: TopologyNode | undefined, edges: TopologyEdge[]): boolean => {
-    if (!a || !b) return true;
-    
-    // 如果是特定镜像的容器，不应用单交换机限制
-    if (isSpecialImageContainer(a) || isSpecialImageContainer(b)) {
-        return false;
-    }
-    
-    const aHasEdge = isContainerOrVM(a) && edges.some(e => e.source === a.id || e.target === a.id);
-    const bHasEdge = isContainerOrVM(b) && edges.some(e => e.source === b.id || e.target === b.id);
-    return aHasEdge || bHasEdge;
-};
+// 直连与限制规则：改为使用共享规则（topologyRules）
 
 // 函数: 这是一个纯函数，是状态管理的核心。它接收当前的状态 (state)
 // 和一个动作 (action)，然后根据动作的类型（如 'ADD_NODE', 'MOVE_NODE'）
@@ -109,15 +71,13 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'START_LINKING': return { ...state, linkingState: { startNodeId: action.payload.startNodeId } };
         case 'LOAD_TOPOLOGY': {
             const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData;
-            // 顺序过滤：先满足“至少一端为交换机”，再确保每个容器/虚拟机最多仅保留一条边
+            // 顺序过滤：与运行期规则保持一致
             const filtered: TopologyEdge[] = [];
             for (const e of loadedEdges) {
                 const s = loadedNodes.find(n => n.id === e.source);
                 const t = loadedNodes.find(n => n.id === e.target);
-                if (!canDirectlyLinkNodes(s, t)) continue;
-                const violates = (isContainerOrVM(s) && filtered.some(x => x.source === s!.id || x.target === s!.id))
-                              || (isContainerOrVM(t) && filtered.some(x => x.source === t!.id || x.target === t!.id));
-                if (violates) continue;
+                if (!canDirectlyLinkNodes(s, t)) continue; // 允许：switch 或 特殊镜像容器
+                if (wouldViolateSingleSwitchRule(s, t, filtered)) continue; // 特殊镜像容器不受单边限制
                 filtered.push(e);
             }
             return { ...initialTopologyState, nodes: loadedNodes, edges: filtered };

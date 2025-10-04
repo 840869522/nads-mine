@@ -1,7 +1,8 @@
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { TopologyNode, TopologyEdge, DeviceType } from '../../../types';
-import { NODE_SIZE, NODE_ICON_SIZE, SPECIAL_IMAGES } from '../../../constants';
+import { NODE_SIZE, NODE_ICON_SIZE } from '../../../constants';
+import { isSpecialImageContainer } from './topologyRules';
 import { 
   CubeIcon, 
   ComputerDesktopIcon, 
@@ -14,14 +15,7 @@ const DRAG_THRESHOLD = 5; // Pixels threshold to differentiate click from drag
 const EDGE_TEXT_OFFSET = 10; // Pixels to offset text from the edge line
 const EDGE_TEXT_FONT_SIZE = 10;
 
-// 判断是否为特定镜像的容器
-const isSpecialImageContainer = (node?: TopologyNode): boolean => {
-  if (!node || node.type !== 'container') return false;
-  
-  const image = node.config?.Image || '';
-  
-  return SPECIAL_IMAGES.some(img => image.includes(img));
-};
+// 使用共享规则：isSpecialImageContainer
 
 interface TopologyCanvasProps {
   nodes: TopologyNode[];
