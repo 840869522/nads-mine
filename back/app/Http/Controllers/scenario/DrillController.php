@@ -213,8 +213,16 @@ class DrillController extends Controller
                 ]);
             }
 
+            // 优先创建非 suricata:v2 容器，suricata:v2 最后创建
+            $suricataToCreate = [];
             foreach ($parsedTopology['containers'] as $containerData) {
                  $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
+
+                 if ($this->cliService->isSuricataV2Image($containerData['image'])) {
+                     $suricataToCreate[] = ['data' => $containerData, 'name' => $containerName];
+                     continue; // 跳过，稍后创建
+                 }
+
                  $options = [
                     'image' => $containerData['image'],
                     'name'  => $containerName,
@@ -347,6 +355,59 @@ class DrillController extends Controller
                 ];
             }
 
+            // 最后创建 suricata:v2 容器，并计算其监听网口列表
+            foreach ($suricataToCreate as $item) {
+                $containerData = $item['data'];
+                $containerName = $item['name'];
+
+                $options = [
+                    'image' => $containerData['image'],
+                    'name'  => $containerName,
+                    'ports' => $containerData['portMappings'],
+                    'env'   => $containerData['env'],
+                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                ];
+
+                // 计算 suricata 监听的容器内接口名（一个连接一个接口）
+                $monitorInterfaces = [];
+                foreach ($connections as $conn) {
+                    if ($conn['source']['type'] === 'container' && $conn['source']['id'] === $containerData['id'] && $conn['target']['type'] === 'switch') {
+                        $switchInfo = $createdSwitchesInfo[$conn['target']['id']] ?? null;
+                        if ($switchInfo) {
+                            $monitorInterfaces[] = $this->cliService->generateOvsPortName($switchInfo['actual_name'], $containerName);
+                        }
+                    } elseif ($conn['target']['type'] === 'container' && $conn['target']['id'] === $containerData['id'] && $conn['source']['type'] === 'switch') {
+                        $switchInfo = $createdSwitchesInfo[$conn['source']['id']] ?? null;
+                        if ($switchInfo) {
+                            $monitorInterfaces[] = $this->cliService->generateOvsPortName($switchInfo['actual_name'], $containerName);
+                        }
+                    }
+                }
+                $monitorInterfaces = array_values(array_unique(array_filter($monitorInterfaces)));
+                if (!empty($monitorInterfaces)) {
+                    $options['monitorInterfaces'] = $monitorInterfaces;
+                }
+
+                $flagUuid = null;
+                if ($containerData['isTarget']) {
+                    $flagUuid = Str::uuid()->toString();
+                    $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+                }
+
+                $containerId = $this->cliService->createContainer($options);
+                $containerIp = $containerIps[$containerData['id']] ?? null;
+                SceneContainerInstance::create([
+                    'c_container_id' => $containerId,
+                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                    'c_flag' => $flagUuid,
+                    'c_ip' => $containerIp,
+                    'c_container_name' => $containerName,
+                ]);
+                $createdItemsInfo[$containerData['id']] = [
+                    'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
+                ];
+            }
+
             Log::info("================== 开始建立剩余网络连接 ==================");
             foreach ($connections as $conn) {
                 $source = $conn['source'];
@@ -367,6 +428,36 @@ class DrillController extends Controller
                         $createdItemsInfo[$containerNode['id']]['actual_name'],
                         $containerNode['ip']
                     );
+
+                    // 如果该容器是 suricata:v2，则在其端口接入后，立即为所在交换机配置 Mirror
+                    try {
+                        $containerParsed = $containersParsed[$containerNode['id']] ?? null;
+                        if ($containerParsed && $this->cliService->isSuricataV2Image($containerParsed['image'] ?? '')) {
+                            $switchActualName = $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? null;
+                            $containerActualName = $createdItemsInfo[$containerNode['id']]['actual_name'] ?? null;
+                            if ($switchActualName && $containerActualName) {
+                                // 通过 OVS 查询实际的 Port 名称，避免与容器内接口名混淆
+                                $monitorPort = $this->cliService->resolveOvsPortNameForContainerOnBridge($switchActualName, $containerActualName);
+                                if (!$monitorPort) {
+                                    // 兜底：退回到生成的命名（可能不匹配），同时留日志
+                                    $monitorPort = $this->cliService->generateOvsPortName($switchActualName, $containerActualName);
+                                    Log::warning('Fallback to generated monitor port name for mirror.', [
+                                        'bridge' => $switchActualName,
+                                        'container' => $containerActualName,
+                                        'monitor_port' => $monitorPort,
+                                    ]);
+                                }
+                                $mirrorName = 'mirror-' . $containerActualName . '-' . $switchActualName;
+                                $this->cliService->createOrReplaceMirrorAllToPort($switchActualName, $monitorPort, $mirrorName);
+                                Log::info("已在 {$switchActualName} 上创建镜像 {$mirrorName} -> {$monitorPort}");
+                            }
+                        }
+                    } catch (\Exception $ex) {
+                        Log::warning("创建 OVS Mirror 失败(连接阶段): " . $ex->getMessage(), [
+                            'switch' => $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? 'unknown',
+                            'container' => $createdItemsInfo[$containerNode['id']]['actual_name'] ?? 'unknown',
+                        ]);
+                    }
                 }
                 elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
                     $switchNode = $source['type'] === 'switch' ? $source : $target;
@@ -385,6 +476,8 @@ class DrillController extends Controller
                 Log::info("================== Applying iptables rules ==================");
                 $this->cliService->applyIptablesRules($parsedTopology['iptablesRules'], $createdItemsInfo, $connections);
             }
+
+            // 注：Suricata 的 OVS Mirror 已在“连接阶段”就位于对应容器接入后即时创建
             // 配置网关IP和所有容器的路由
             $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
 

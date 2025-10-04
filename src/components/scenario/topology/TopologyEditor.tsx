@@ -424,7 +424,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         }
 
         // 创建默认的Docker镜像容器
-        const defaultImageName = 'suricata:v1'; // 默认镜像名称
+        const defaultImageName = 'suricata:v2'; // 默认镜像名称
         const containerCount = nodes.filter(n => n.type === 'container').length + 1;
         const containerLabel = `Mirror-${containerCount}`;
         
