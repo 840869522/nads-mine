@@ -479,3 +479,6 @@ git apply /path/to/fix_login.patch #
 ```
 
 在启动中出现问题，请见 [2 维护](README.md#2-维护)
+
+### 3.3 其他问题
+拷贝日志文件，位置为 src/front.log 和 back/back.log ，查看并与开发人员联系
