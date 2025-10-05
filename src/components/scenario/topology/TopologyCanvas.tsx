@@ -240,7 +240,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
                 x2={targetNode.x}
                 y2={targetNode.y}
                 stroke={isSelected ? 'var(--color-primary-500, #3b82f6)' : 'var(--color-neutral-400, #a3a3a3)'}
-                strokeWidth={isSelected ? 3 : 2}
+                strokeWidth={isSelected ? 5 : 4}
                 onClick={(e) => handleEdgeClick(e, edge.id)}
                 onDoubleClick={(e) => { e.stopPropagation(); if (!isDraggingInternally) onEdgeDoubleClick(edge.id); }}
                 className="cursor-pointer"
