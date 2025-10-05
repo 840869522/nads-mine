@@ -35,7 +35,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat, InstanceStatus } from '@/types';
 import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
-import CourseLearnPermissionDialog from '@/components/coursecases/CourseLearnPermissionDialog'; // 替换为新组件
+import CourseLearnPermissionDialog from '@/components/coursecases/CourseLearnPermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
 import { getCookie } from '@/utils/cookie';
 
@@ -233,6 +233,92 @@ const CourseLearningPage: React.FC = () => {
         return () => debouncedFetchData.cancel();
     }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
+    const handleOpenResourcesDialog = async (courseCase: CourseCase, tabIndex: number = 0) => {
+        setIsResourcesDialogOpen(true);
+        setTabValue(tabIndex);
+        setErrorMessage('');
+
+        try {
+            const token = getCookie('_auth');
+            if (!token) {
+                throw new Error('未登录，请先登录');
+            }
+
+            // 获取课程资源
+            const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/resources`, {
+                headers: { Authorization: `${token}` },
+                params: { page: 1, pageSize: 10 },
+            });
+            const resourcesData = resourcesResponse.data;
+            let resources: CourseCaseResource[] = [];
+            if (resourcesData.code === 200) {
+                resources = (resourcesData.data.resources || []).map((res: any) => ({
+                    c_resource_id: res.c_resource_id,
+                    c_resource_name: res.c_resource_name,
+                    c_type: getFileType(res.c_type),
+                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
+                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                    isExperimentResource: false,
+                }));
+            } else {
+                console.warn(`获取课程 ${courseCase.c_course_id} 的资源失败: ${resourcesData.message || '无资源'}`);
+            }
+
+            // 获取实验资源
+            const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/experiments`, {
+                headers: { Authorization: `${token}` },
+            });
+            const experimentsData = experimentsResponse.data;
+            let experiments: Experiment[] = [];
+            if (experimentsData.code === 200) {
+                experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
+                    c_experiment_id: exp.c_experiment_id,
+                    c_experiment_name: exp.c_experiment_name,
+                    c_description: exp.c_description || '',
+                    c_config_id: exp.c_config_id,
+                    c_scene_config_id: exp.c_config_id,
+                    c_name: exp.c_name || '',
+                    resources: (exp.resources || []).map((res: any) => ({
+                        c_resource_id: res.c_resource_id,
+                        c_resource_name: res.c_resource_name,
+                        c_type: getFileType(res.c_type),
+                        c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+                        c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                        isExperimentResource: true,
+                    })),
+                    created_at: exp.created_at || new Date().toISOString(),
+                    status: experimentStatuses[exp.c_experiment_id] || 'stopped',
+                }));
+            } else {
+                console.warn(`获取课程 ${courseCase.c_course_id} 的实验失败: ${experimentsData.message || '无实验'}`);
+            }
+
+            // 更新 selectedCaseForResources
+            setSelectedCaseForResources({
+                ...courseCase,
+                resources,
+                experiments,
+            });
+
+            // 更新 courseCases 以保持状态一致
+            setCourseCases(prev =>
+                prev.map(course =>
+                    course.c_course_id === courseCase.c_course_id
+                        ? { ...course, resources, experiments }
+                        : course
+                )
+            );
+        } catch (error: any) {
+            const message = error.response?.data?.message || error.message || '获取资源或实验失败';
+            setErrorMessage(message);
+            console.error('Error fetching resources or experiments:', {
+                message,
+                status: error.response?.status,
+                data: error.response?.data,
+                url: error.config?.url,
+            });
+        }
+    };
 
     const handleOpenPermissionDialog = (course: CourseCase) => {
         setSelectedCourse(course);
@@ -270,12 +356,6 @@ const CourseLearningPage: React.FC = () => {
 
     const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
         setCurrentPage(page);
-    };
-
-    const handleOpenResourcesDialog = (courseCase: CourseCase, tabIndex: number = 0) => {
-        setSelectedCaseForResources(courseCase);
-        setIsResourcesDialogOpen(true);
-        setTabValue(tabIndex);
     };
 
     const handleCloseResourcesDialog = () => {
@@ -504,7 +584,6 @@ const CourseLearningPage: React.FC = () => {
                             )}
                         </Box>
                     )}
-
                     {tabValue === 1 && (
                         <Box sx={{ mt: 2 }}>
                             <Typography variant="subtitle1">实验资源</Typography>
@@ -539,7 +618,6 @@ const CourseLearningPage: React.FC = () => {
                                                             <VisibilityIcon />
                                                         </IconButton>
                                                     </TableCell>
-
                                                 </TableRow>
                                             ))}
                                     </TableBody>
