@@ -156,6 +156,13 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         is_target: true, // Added for the new column
     });
 
+    const selectedVm = React.useMemo(() => {
+        if (!actionAnchor.id) {
+            return null;
+        }
+        return data?.find(vm => vm.id === actionAnchor.id) ?? null;
+    }, [actionAnchor.id, data]);
+
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
@@ -304,7 +311,13 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                     </IconButton>
                                 </span>
                             </Tooltip>
-                            <Tooltip title="更多操作"><IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}><ArrowDownIcon fontSize="small" /></IconButton></Tooltip>
+                            {!isTarget && (
+                                <Tooltip title="更多操作">
+                                    <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}>
+                                        <ArrowDownIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
                         </Box>
                     );
                 },
@@ -382,7 +395,11 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 />
             </Box>
 
-            <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
+            <Menu
+                anchorEl={selectedVm && !selectedVm.is_target ? actionAnchor.anchor : null}
+                open={Boolean(selectedVm && !selectedVm.is_target && actionAnchor.anchor)}
+                onClose={() => setActionAnchor({ anchor: null, id: null })}
+            >
                 {/*<MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
                     <SshIcon fontSize="small" sx={{ mr: 1 }} />
                     SSH

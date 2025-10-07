@@ -200,9 +200,6 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
               <Typography variant="h6" color="text.secondary">
                 暂无实验资源
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                点击上传按钮添加实验资源
-              </Typography>
             </Box>
           ) : (
             <Grid container spacing={2}>

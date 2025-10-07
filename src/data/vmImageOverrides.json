@@ -352,5 +352,12 @@
   "v_tar_IPCremote.qcow2": {
     "osType": "win7_1",
     "description": "IPC植入远控靶机镜像"
+  },
+  "defend.qcow2": {
+    "osType": "ubuntu"
+  },
+  "openwrt-combined.qcow2": {
+    "osType": "ubuntu",
+    "description": "路由器靶机"
   }
 }

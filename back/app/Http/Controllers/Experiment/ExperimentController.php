@@ -11,67 +11,125 @@ use Illuminate\Support\Facades\Storage;
 
 class ExperimentController extends Controller
 {
-    public function index()
-    {
-        try {
-            // 1. 补充查询 c_start、c_end、c_duration 字段
-            $experiments = DB::table('c_course_experiments')
-                ->leftJoin('c_scene_configs', 'c_course_experiments.c_config_id', '=', 'c_scene_configs.c_config_id')
-                ->select(
-                    'c_course_experiments.c_experiment_id',
-                    'c_course_experiments.c_course_id',
-                    'c_course_experiments.c_experiment_name',
-                    'c_course_experiments.c_description',
-                    'c_course_experiments.c_config_id',
-                    'c_course_experiments.c_start', // 新增：实验开始时间
-                    'c_course_experiments.c_end',   // 新增：实验结束时间
-                    'c_course_experiments.c_duration', // 新增：实验时长
-                    'c_scene_configs.c_name',
-                    'c_course_experiments.created_at'
-                )
-                ->get()
-                ->map(function ($exp) {
-                    $resources = DB::table('c_experiment_resources')
-                        ->where('c_experiment_id', $exp->c_experiment_id)
-                        ->select(
-                            'c_resource_id',
-                            'c_resource_name',
-                            'c_resource_path',
-                            'c_type',
-                            'c_size'
-                        )
-                        ->get()
-                        ->toArray();
-                    return [
-                        'c_experiment_id' => $exp->c_experiment_id,
-                        'c_course_id' => $exp->c_course_id,
-                        'c_experiment_name' => $exp->c_experiment_name,
-                        'c_description' => $exp->c_description,
-                        'c_config_id' => $exp->c_config_id,
-                        'c_start' => $exp->c_start, // 新增：返回开始时间
-                        'c_end' => $exp->c_end,     // 新增：返回结束时间
-                        'c_duration' => $exp->c_duration, // 新增：返回实验时长
-                        'c_name' => $exp->c_name,
-                        'created_at' => $exp->created_at,
-                        'resources' => $resources,
-                    ];
-                });
+   /**
+ * Notes: 获取实验列表
+ * User: zhangnan
+ * DateTime: 2025/10/02
+ * @return JsonResponse
+ */
+public function index(Request $request)
+{
+    try {
+        // 获取请求参数
+        $page = $request->get('page', 1);
+        $pageSize = $request->get('pageSize', 5);
+        $search = $request->get('search', '');
+        $startDate = $request->get('startDate', '');
+        $endDate = $request->get('endDate', '');
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
 
-            return response()->json([
-                'code' => 200,
-                'message' => 'All experiments retrieved successfully.',
-                'data' => ['experiments' => $experiments],
-            ], 200);
-        } catch (\Exception $e) {
-            Log::error('[GENERAL] getExperiments: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'code' => 500,
-                'message' => 'Unexpected error occurred: ' . $e->getMessage(),
-            ], 500);
+        // 构建查询
+        $query = DB::table('c_course_experiments')
+            ->leftJoin('c_scene_configs', 'c_course_experiments.c_config_id', '=', 'c_scene_configs.c_config_id')
+            ->leftJoin('c_courses', 'c_course_experiments.c_course_id', '=', 'c_courses.c_course_id')
+            ->select(
+                'c_course_experiments.c_experiment_id',
+                'c_course_experiments.c_course_id',
+                'c_course_experiments.c_experiment_name',
+                'c_course_experiments.c_description',
+                'c_course_experiments.c_config_id',
+                'c_course_experiments.c_start',
+                'c_course_experiments.c_end',
+                'c_course_experiments.c_duration',
+                'c_scene_configs.c_name',
+                'c_courses.c_course_name',
+                'c_course_experiments.created_at'
+            );
+
+        // 搜索条件
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('c_course_experiments.c_experiment_name', 'like', "%{$search}%")
+                  ->orWhere('c_course_experiments.c_description', 'like', "%{$search}%")
+                  ->orWhere('c_courses.c_course_name', 'like', "%{$search}%");
+            });
         }
+
+        // 日期范围条件
+        if (!empty($startDate)) {
+            $query->whereDate('c_course_experiments.c_start', '>=', $startDate);
+        }
+        if (!empty($endDate)) {
+            $query->whereDate('c_course_experiments.c_end', '<=', $endDate);
+        }
+
+        // 排序
+        $allowedSortFields = ['created_at', 'c_experiment_name', 'c_course_name', 'c_start', 'c_end'];
+        $sortField = in_array($sort, $allowedSortFields) ? $sort : 'created_at';
+        $sortOrder = $order === 'asc' ? 'asc' : 'desc';
+        
+        $query->orderBy($sortField, $sortOrder);
+
+        // 获取总数
+        $total = $query->count();
+
+        // 分页
+        $offset = ($page - 1) * $pageSize;
+        $experiments = $query->offset($offset)
+            ->limit($pageSize)
+            ->get()
+            ->map(function ($exp) {
+                $resources = DB::table('c_experiment_resources')
+                    ->where('c_experiment_id', $exp->c_experiment_id)
+                    ->select(
+                        'c_resource_id',
+                        'c_resource_name',
+                        'c_resource_path',
+                        'c_type',
+                        'c_size'
+                    )
+                    ->get()
+                    ->toArray();
+                
+                return [
+                    'c_experiment_id' => $exp->c_experiment_id,
+                    'c_course_id' => $exp->c_course_id,
+                    'c_experiment_name' => $exp->c_experiment_name,
+                    'c_description' => $exp->c_description,
+                    'c_config_id' => $exp->c_config_id,
+                    'c_start' => $exp->c_start,
+                    'c_end' => $exp->c_end,
+                    'c_duration' => $exp->c_duration,
+                    'c_name' => $exp->c_name,
+                    'c_course_name' => $exp->c_course_name ?? '未知课程',
+                    'created_at' => $exp->created_at,
+                    'resources' => $resources,
+                ];
+            });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Experiments retrieved successfully.',
+            'data' => [
+                'experiments' => $experiments,
+                'total' => $total,
+                'current_page' => (int)$page,
+                'page_size' => (int)$pageSize,
+                'total_pages' => ceil($total / $pageSize)
+            ],
+        ], 200);
+        
+    } catch (\Exception $e) {
+        Log::error('[GENERAL] getExperiments: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'code' => 500,
+            'message' => 'Unexpected error occurred: ' . $e->getMessage(),
+        ], 500);
     }
+}
 
     public function store(Request $request)
     {

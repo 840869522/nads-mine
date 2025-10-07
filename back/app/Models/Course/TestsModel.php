@@ -174,35 +174,43 @@ public function del_test_info($c_id="")
     }
 }
 
-    /**
-     * Notes:获取测试列表
-     * User: zhangnan
-     * DateTime: 2025/7/11 13:46
-     * @param $pageSize
-     * @param $page
-     * @return array
-     */
-    public function get_test_list($pageSize=0,$page=0)
-    {
-        if(empty($pageSize)){
-            $pageSize = $this->pageSize;
-        }
-        $mod = new TestsModel();
-        $count = $mod->count();
-        if(empty($page)){
-            $list = $mod->paginate($pageSize);
-        }else{
-            $list = $mod->paginate($pageSize, ['*'], 'page', $page);
-        }
-        $data = $list->items();
-        $res = array(
-            'page'=>$page,
-            'pageSize'=>$pageSize,
-            'count'=>$count,
-            'data'=>$data
-        );
-        return $res;
+   /**
+ * Notes: 获取测试列表
+ * User: zhangnan
+ * DateTime: 2025/7/11 13:46
+ * @param int $pageSize
+ * @param int $page
+ * @return array
+ */
+public function get_test_list($pageSize = 0, $page = 0)
+{
+    if (empty($pageSize)) {
+        $pageSize = $this->pageSize;
     }
+
+    $mod = new TestsModel();
+    // 使用 JOIN 查询 c_courses 表获取 c_course_name
+    $query = $mod->select('c_tests.*', 'c_courses.c_course_name')
+                 ->leftJoin('c_courses', 'c_tests.c_course_id', '=', 'c_courses.c_course_id');
+
+    $count = $query->count();
+    
+    if (empty($page)) {
+        $list = $query->paginate($pageSize);
+    } else {
+        $list = $query->paginate($pageSize, ['*'], 'page', $page);
+    }
+
+    $data = $list->items();
+    $res = array(
+        'page' => $page,
+        'pageSize' => $pageSize,
+        'count' => $count,
+        'data' => $data
+    );
+
+    return $res;
+}
 
 }
 ?>

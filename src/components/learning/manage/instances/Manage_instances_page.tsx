@@ -22,6 +22,7 @@ interface ScenarioInstance {
     username: string;
     runtime: string;
     status: 'CREATING' | 'RUNNING' | 'FAILED' | 'STOPPED';
+    test_id?: string; // 新增：测试ID字段
 }
 
 type Order = 'asc' | 'desc';
@@ -37,10 +38,11 @@ const statusColors: Record<ScenarioInstance['status'], 'success' | 'warning' | '
 interface ScenarioInstanceManagementPageProps {
   username: string;
   scenarioName: string;
+  testId?: string; // 新增：测试ID
   onBack: () => void;
 }
 
-const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPageProps> = ({ username, scenarioName, onBack }) => {
+const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPageProps> = ({ username, scenarioName, testId, onBack }) => {
     const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -59,19 +61,41 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
     setIsLoading(true);
     setError(null);
     try {
-        const response = await customFetch('/back/api/study/test/index', {
+        // 构建查询参数
+        const params = new URLSearchParams();
+        if (testId) {
+            params.append('test_id', testId);
+        }
+        
+        const url = `/back/api/study/test/index${params.toString() ? `?${params.toString()}` : ''}`;
+        
+        const response = await customFetch(url, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             },
         });
+        
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: '获取场景实例列表失败' }));
             throw new Error(errorData.message);
         }
-        const data: ScenarioInstance[] = await response.json();
-        const filteredData = scenarioName ? data.data.filter(inst => inst.scenario_name === scenarioName) : data;
+        
+        const result = await response.json();
+        
+        if (result.code !== 200) {
+            throw new Error(result.message || '获取场景实例失败');
+        }
+        
+        let data: ScenarioInstance[] = [];
+        if (Array.isArray(result.data)) {
+            data = result.data;
+        } else if (result.data && typeof result.data === 'object') {
+            data = [result.data];
+        }
+        
+        const filteredData = scenarioName ? data.filter(inst => inst.scenario_name === scenarioName) : data;
         setInstances(filteredData);
     } catch (err: any) {
         setError(err.message || '发生未知错误');
@@ -79,7 +103,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
     } finally {
         setIsLoading(false);
     }
-}, [username, scenarioName]);
+}, [username, scenarioName, testId]);
 
     useEffect(() => {
         fetchInstances();
@@ -104,7 +128,8 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
 
     const filteredAndSortedInstances = useMemo(() => {
         let filtered = instances.filter(inst =>
-            (inst.username || '').toLowerCase().includes(searchText.toLowerCase())
+            (inst.username || '').toLowerCase().includes(searchText.toLowerCase()) ||
+            (inst.scenario_name || '').toLowerCase().includes(searchText.toLowerCase())
         );
         filtered.sort((a, b) => {
             const valA = a[orderBy];
@@ -126,7 +151,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
                         返回场景管理
                     </Button>
                     <Typography variant="h4" component="h1" fontWeight="bold">
-                        场景: {scenarioName || '所有'}
+                        场景: {scenarioName || '所有'} {testId && `(测试ID: ${testId})`}
                     </Typography>
                 </Box>
                 <Button
@@ -142,7 +167,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
             <Paper elevation={2}>
                 <Box sx={{ p: 2 }}>
                     <TextField
-                        fullWidth variant="outlined" placeholder="搜索启动用户..." value={searchText}
+                        fullWidth variant="outlined" placeholder="搜索场景名称或用户..." value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>),}}
                     />
@@ -155,6 +180,7 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
                         <TableHead>
                            <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 'bold' } }}>
                                 <TableCell>实例 ID</TableCell>
+                                <TableCell>场景名称</TableCell>
                                 <TableCell>
                                     <TableSortLabel active={orderBy === 'username'} direction={orderBy === 'username' ? order : 'asc'} onClick={() => handleRequestSort('username')}>
                                         启动用户
@@ -175,13 +201,14 @@ const ScenarioInstanceManagementPage: React.FC<ScenarioInstanceManagementPagePro
                         </TableHead>
                         <TableBody>
                             {isLoading && instances.length === 0 ? (
-                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
                             ) : paginatedInstances.length === 0 ? (
-                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
                             ) : (
                                 paginatedInstances.map((instance) => (
                                     <TableRow key={instance.instance_id} hover>
                                         <TableCell><Tooltip title={instance.instance_id}><code>{(instance.instance_id || '').substring(0, 8)}...</code></Tooltip></TableCell>
+                                        <TableCell>{instance.scenario_name}</TableCell>
                                         <TableCell>{instance.username}</TableCell>
                                         <TableCell>{new Date(instance.runtime).toLocaleString()}</TableCell>
                                         <TableCell>

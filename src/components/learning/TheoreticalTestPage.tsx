@@ -415,7 +415,9 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
       });
 
       if (answerGroups.length === 0) {
-        throw new Error('没有提交任何答案，请至少回答一道题目');
+        showSnackbar('没有提交任何答案，请至少回答一道题目', 'error');
+        setLoading(false);
+        return;
       }
 
       submitParams = {
@@ -425,9 +427,9 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         answers: answerGroups
       };
       
-      console.log('提交试卷参数:', JSON.stringify(submitParams, null, 2));
+
     const res = await theoryTestApi.submitPaper(submitParams);
-    console.log('提交试卷响应:', JSON.stringify(res, null, 2));
+
     
     if (!res || typeof res !== 'object' || res.code !== 200) {
       throw new Error(res?.message || `交卷失败 (错误码: ${res?.code || '未知'})`);

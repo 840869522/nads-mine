@@ -154,7 +154,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails, user]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const base =
+            typeof window !== 'undefined'
+                ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
         const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
         const id = uuidv4();
         const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
