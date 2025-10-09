@@ -372,12 +372,48 @@ class CommandLineService
         foreach ($rules as $rule) {
             $instanceName = $rule['instanceName'] ?? null;
             $instancePort = $rule['instancePort'] ?? null;
+            $hostPort = $rule['hostPort'] ?? null;
             $instanceIp = $instanceName ? ($instanceIps[$instanceName] ?? null) : null;
+
+            // 若无法通过拓扑映射得到 IP，则从当前系统规则中按 hostPort 反查 DNAT 的 --to-destination
+            if ((!$instanceIp || !$instancePort) && $hostPort) {
+                $dump = new Process(['sudo', 'iptables-save', '-t', 'nat']);
+                $dump->run();
+                if ($dump->isSuccessful()) {
+                    $lines = preg_split('/\r?\n/', $dump->getOutput());
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if ($line === '' || !str_starts_with($line, '-A ')) continue;
+                        if (!str_starts_with($line, '-A PREROUTING')) continue;
+                        if (strpos($line, '-j DNAT') === false) continue;
+                        if (!preg_match('/--dport\s+' . preg_quote((string)$hostPort, '/') . '\b/', $line)) continue;
+                        // 提取 --to-destination ip:port
+                        if (preg_match('/--to-destination\s+([^\s]+)/', $line, $m)) {
+                            $to = $m[1] ?? '';
+                            if ($to && str_contains($to, ':')) {
+                                [$ipFound, $portFound] = explode(':', $to, 2);
+                                if (!$instanceIp && !empty($ipFound)) {
+                                    $instanceIp = $ipFound;
+                                }
+                                if (!$instancePort && !empty($portFound)) {
+                                    $instancePort = $portFound;
+                                }
+                            }
+                        }
+                        if ($instanceIp && $instancePort) break;
+                    }
+                }
+            }
+
             if (!$instanceIp || !$instancePort) {
+                Log::warning('[iptables] Skip MASQUERADE delete: missing instanceIp/instancePort', [
+                    'instanceName' => $instanceName,
+                    'hostPort' => $hostPort,
+                ]);
                 continue;
             }
 
-            // 与添加时一致的匹配参数，按规格删除一条规则
+            // 与添加时一致的匹配参数，按规格删除一条规则（优先路径）
             $delCmd = [
                 'sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING',
                 '-p', 'tcp', '-d', (string)$instanceIp, '--dport', (string)$instancePort,
@@ -387,9 +423,42 @@ class CommandLineService
             $p = new Process($delCmd);
             $p->run();
             if (!$p->isSuccessful()) {
-                Log::warning('[iptables] Failed to delete MASQUERADE rule (may be already gone)', [
-                    'error' => $p->getErrorOutput(),
+                // 回退：解析 iptables-save -t nat，按精确参数删除（考虑内核自动插入的匹配模块）
+                Log::warning('[iptables] MASQUERADE delete by fixed args failed, fallback to exact-args from iptables-save', [
+                    'stderr' => $p->getErrorOutput(),
                 ]);
+
+                $dump = new Process(['sudo', 'iptables-save', '-t', 'nat']);
+                $dump->run();
+                if ($dump->isSuccessful()) {
+                    $lines = preg_split('/\r?\n/', $dump->getOutput());
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if ($line === '' || !str_starts_with($line, '-A ')) continue;
+                        if (!str_starts_with($line, '-A POSTROUTING')) continue;
+                        if (strpos($line, '-j MASQUERADE') === false) continue;
+                        if (strpos($line, '-p tcp') === false) continue;
+                        if (strpos($line, '-d ' . (string)$instanceIp) === false) continue;
+                        if (!preg_match('/--dport\s+' . preg_quote((string)$instancePort, '/') . '\b/', $line)) continue;
+                        // 可选匹配 -o outInterface；若缺失也尝试删除
+                        $parts = preg_split('/\s+/', $line);
+                        $argsExact = array_slice($parts, 2); // 去掉 "-A POSTROUTING"
+                        $cmdExact = array_merge(['sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING'], $argsExact);
+                        Log::info('[iptables] Fallback deleting MASQUERADE via exact args: ' . implode(' ', $cmdExact));
+                        $pex = new Process($cmdExact);
+                        $pex->run();
+                        if (!$pex->isSuccessful()) {
+                            Log::warning('[iptables] Fallback delete failed or rule already gone', [
+                                'stderr' => $pex->getErrorOutput(),
+                                'raw' => $line,
+                            ]);
+                        }
+                    }
+                } else {
+                    Log::warning('[iptables] iptables-save fallback failed', [
+                        'stderr' => $dump->getErrorOutput(),
+                    ]);
+                }
             }
         }
     }
