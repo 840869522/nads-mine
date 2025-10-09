@@ -354,10 +354,16 @@
     "description": "IPC植入远控靶机镜像"
   },
   "defend.qcow2": {
-    "osType": "ubuntu"
+    "osType": "Linux"
   },
   "openwrt-combined.qcow2": {
     "osType": "ubuntu",
     "description": "路由器靶机"
+  },
+  "defend3.qcow2": {
+    "osType": "Linux"
+  },
+  "defend5.qcow2": {
+    "osType": "Linux"
   }
 }
