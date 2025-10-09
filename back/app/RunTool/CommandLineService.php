@@ -349,6 +349,52 @@ class CommandLineService
     }
 
     /**
+     * 删除在 applyIptablesRules 中为每条转发添加的 POSTROUTING MASQUERADE 规则。
+     * 基于拓扑 connections 反查实例 IP，再用与添加时一致的参数删除。
+     *
+     * @param array $rules       形如 [['hostPort'=>..., 'instanceName'=>..., 'instancePort'=>...], ...]
+     * @param array $connections TopologyParser::parse($topology)['connections']
+     * @param string $outInterface 出口网卡，默认 br0
+     */
+    public function removePostroutingMasqueradeForRules(array $rules, array $connections, string $outInterface = 'br0'): void
+    {
+        // 重建 instanceName => ip 映射
+        $instanceIps = [];
+        foreach ($connections as $conn) {
+            if (!empty($conn['source']['label']) && !empty($conn['source']['ip'])) {
+                $instanceIps[$conn['source']['label']] = explode('/', $conn['source']['ip'])[0];
+            }
+            if (!empty($conn['target']['label']) && !empty($conn['target']['ip'])) {
+                $instanceIps[$conn['target']['label']] = explode('/', $conn['target']['ip'])[0];
+            }
+        }
+
+        foreach ($rules as $rule) {
+            $instanceName = $rule['instanceName'] ?? null;
+            $instancePort = $rule['instancePort'] ?? null;
+            $instanceIp = $instanceName ? ($instanceIps[$instanceName] ?? null) : null;
+            if (!$instanceIp || !$instancePort) {
+                continue;
+            }
+
+            // 与添加时一致的匹配参数，按规格删除一条规则
+            $delCmd = [
+                'sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING',
+                '-p', 'tcp', '-d', (string)$instanceIp, '--dport', (string)$instancePort,
+                '-o', $outInterface, '-j', 'MASQUERADE'
+            ];
+            Log::info('[iptables] Deleting MASQUERADE rule: ' . implode(' ', $delCmd));
+            $p = new Process($delCmd);
+            $p->run();
+            if (!$p->isSuccessful()) {
+                Log::warning('[iptables] Failed to delete MASQUERADE rule (may be already gone)', [
+                    'error' => $p->getErrorOutput(),
+                ]);
+            }
+        }
+    }
+
+    /**
      * Build per-scene NAT chain name.
      */
     private function getNatChainName(string $sceneInstanceId): string

@@ -168,6 +168,13 @@ class InstanceController extends Controller
                     ]);
                     // 注意：这里按 hostPort 解析系统现有规则删除，不依赖动态分配的实例IP
                     $this->cliService->removeIptablesRulesByHostPorts($iptablesRules, $instanceId);
+
+                    // 同步删除在 applyIptablesRules 中添加的 POSTROUTING MASQUERADE 回程规则
+                    try {
+                        $this->cliService->removePostroutingMasqueradeForRules($iptablesRules, $parsed['connections'] ?? [], 'br0');
+                    } catch (\Throwable $e) {
+                        Log::warning('删除 MASQUERADE 回程规则时出现警告: ' . $e->getMessage());
+                    }
                 } else {
                     Log::info('该实例场景未配置 iptablesRules，跳过转发规则清理。');
                 }
