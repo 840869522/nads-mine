@@ -248,6 +248,15 @@ class CommandLineService
                 ];
                 Log::info('Executing [iptables]: ' . implode(' ', $command));
                 (new Process($command))->mustRun();
+
+                // 最小改动：为回程添加对应的 MASQUERADE，确保返回流量经本机回到外部
+                $masqCmd = [
+                    'sudo', 'iptables', '-t', 'nat', '-A', 'POSTROUTING',
+                    '-p', 'tcp', '-d', $instanceIp, '--dport', (string)$instancePort,
+                    '-o', 'br0', '-j', 'MASQUERADE'
+                ];
+                Log::info('Executing [iptables]: ' . implode(' ', $masqCmd));
+                (new Process($masqCmd))->mustRun();
             } else {
                 Log::warning('[iptables] Skipping invalid rule', ['rule' => $rule, 'found_ip' => $instanceIp]);
             }
