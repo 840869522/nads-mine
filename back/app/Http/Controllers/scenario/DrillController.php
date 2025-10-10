@@ -163,6 +163,17 @@ class DrillController extends Controller
         $topologyJson = $scenario->c_scene;
 
         $parsedTopology = TopologyParser::parse($topologyJson);
+
+        $teamValidation = $this->validateTeamAssignments(
+            $parsedTopology['containers'] ?? [],
+            $parsedTopology['vms'] ?? []
+        );
+        if ($teamValidation['has_conflict']) {
+            return response()->json([
+                'message' => '启动失败：存在队伍成员冲突。',
+                'conflicts' => $teamValidation['conflicts'],
+            ], 422);
+        }
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
 
         $connections = &$parsedTopology['connections'];
@@ -231,6 +242,11 @@ class DrillController extends Controller
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
 
+                $teamId = $containerData['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
+
                 $flagUuid = null;
                 if ($containerData['isTarget']) {
                     $flagUuid = Str::uuid()->toString();
@@ -245,6 +261,7 @@ class DrillController extends Controller
                      'c_flag' => $flagUuid,
                      'c_ip' => $containerIp,
                      'c_container_name' => $containerName,
+                     'c_team_id' => $teamId,
                  ]);
                  $createdItemsInfo[$containerData['id']] = [
                      'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
@@ -277,6 +294,11 @@ class DrillController extends Controller
                 $vmEnvLookup = $this->buildEnvLookup($vmEnvPairs);
                 $elasticsearchEnv = $this->resolveElasticsearchEnv($vmEnvLookup);
                 $vmEnvLookup = array_merge($vmEnvLookup, $elasticsearchEnv);
+
+                $teamId = $parsedVmNode['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
 
                 $correctImageName = $parsedVmNode['image'];
 
@@ -311,6 +333,7 @@ class DrillController extends Controller
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
                     'c_flag'               => $flagUuid,
+                    'c_team_id'            => $teamId,
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
@@ -368,6 +391,11 @@ class DrillController extends Controller
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                 ];
 
+                $teamId = $containerData['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
+
                 // 计算 suricata 监听的容器内接口名（一个连接一个接口）
                 $monitorInterfaces = [];
                 foreach ($connections as $conn) {
@@ -402,6 +430,7 @@ class DrillController extends Controller
                     'c_flag' => $flagUuid,
                     'c_ip' => $containerIp,
                     'c_container_name' => $containerName,
+                    'c_team_id' => $teamId,
                 ]);
                 $createdItemsInfo[$containerData['id']] = [
                     'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
@@ -583,5 +612,77 @@ class DrillController extends Controller
                 $connection['target']['ip'] = $getNextIp();
             }
         }
+    }
+
+    /**
+     * 验证拓扑中的队伍成员是否存在冲突。
+     *
+     * @param array $containers Parsed container definitions including teamId.
+     * @param array $vms Parsed VM definitions including teamId.
+     * @return array{has_conflict: bool, conflicts?: array}
+     */
+    private function validateTeamAssignments(array $containers, array $vms): array
+    {
+        $teamIds = collect($containers)
+            ->merge($vms)
+            ->pluck('teamId')
+            ->filter(function ($teamId) {
+                return $teamId !== null && trim((string) $teamId) !== '';
+            })
+            ->map(fn($id) => trim((string) $id))
+            ->unique()
+            ->values();
+
+        if ($teamIds->isEmpty()) {
+            return ['has_conflict' => false];
+        }
+
+        $members = DB::table('c_teams_users')
+            ->whereIn('team_id', $teamIds)
+            ->get(['team_id', 'user_id']);
+
+        $userTeams = [];
+        foreach ($members as $member) {
+            $teamId = trim((string) $member->team_id);
+            $userId = trim((string) $member->user_id);
+            if ($teamId === '' || $userId === '') {
+                continue;
+            }
+            $userTeams[$userId][$teamId] = true;
+        }
+
+        $conflicts = [];
+        foreach ($userTeams as $userId => $teams) {
+            if (count($teams) > 1) {
+                $conflicts[$userId] = array_keys($teams);
+            }
+        }
+
+        if (empty($conflicts)) {
+            return ['has_conflict' => false];
+        }
+
+        $flatTeamIds = collect($conflicts)->flatten()->unique()->values();
+        $teamNames = DB::table('c_teams')
+            ->whereIn('c_id', $flatTeamIds)
+            ->pluck('c_name', 'c_id');
+
+        $conflictDetails = [];
+        foreach ($conflicts as $userId => $teamList) {
+            $conflictDetails[] = [
+                'user' => $userId,
+                'teams' => array_map(function ($teamId) use ($teamNames) {
+                    return [
+                        'id' => $teamId,
+                        'name' => $teamNames[$teamId] ?? null,
+                    ];
+                }, $teamList),
+            ];
+        }
+
+        return [
+            'has_conflict' => true,
+            'conflicts' => $conflictDetails,
+        ];
     }
 }
