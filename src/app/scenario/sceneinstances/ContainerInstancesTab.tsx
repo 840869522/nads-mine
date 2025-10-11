@@ -46,6 +46,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
+    const [permissionAlert, setPermissionAlert] = useState<{ type: 'info' | 'error'; message: string } | null>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
         is_target: true, // Added for the new column
@@ -264,8 +265,41 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         );
     }, [instances, searchTerm]);
 
+    const handleOpenTerminalWithAuthority = useCallback(async (containerId: string) => {
+        try {
+            const response = await customFetch(`${API_BASE}/api/containers/${containerId}/terminal-with-authority`);
+            let data: any = null;
+            try {
+                data = await response.clone().json();
+            } catch (err) {
+                data = null;
+            }
+
+            if (!response.ok || (data && data.allowed === false)) {
+                const message = data?.message || data?.error || '无权访问该容器终端';
+                setPermissionAlert({ type: 'error', message });
+                return;
+            }
+
+            if (data?.message) {
+                setPermissionAlert({ type: 'info', message: data.message });
+            } else {
+                setPermissionAlert(null);
+            }
+
+            openTerminal(containerId);
+        } catch (error) {
+            setPermissionAlert({ type: 'error', message: '终端权限校验失败，请稍后重试。' });
+        }
+    }, [openTerminal]);
+
     return (
         <Box>
+            {permissionAlert && (
+                <MuiAlert severity={permissionAlert.type} sx={{ mb: 2 }}>
+                    {permissionAlert.message}
+                </MuiAlert>
+            )}
              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                   <Typography variant="h6">容器列表</Typography>
                   <TextField
@@ -337,7 +371,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Bind mounts
                 </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => {
+                    const id = moreMenuAnchor.id;
+                    setMoreMenuAnchor({ anchor: null, id: null });
+                    if (id) {
+                        void handleOpenTerminalWithAuthority(id);
+                    }
+                }}>
                     Terminal
                 </MenuItem>
             </Menu>

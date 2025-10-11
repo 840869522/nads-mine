@@ -237,6 +237,7 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/info', [ContainersController::class, 'info']);
     // 新增路由：检查容器操作权限
     Route::get('/{containerId}/can-operate', [ContainersController::class, 'checkPermission']);
+    Route::get('/{id}/terminal-with-authority', [ContainersController::class, 'terminalWithAuthority']);
 });
 
 

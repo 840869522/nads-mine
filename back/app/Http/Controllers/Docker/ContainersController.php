@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\DockerService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ContainersController extends Controller
 {
@@ -138,6 +139,108 @@ class ContainersController extends Controller
             'createdAt' => date('c', $detail->getCreated() ? strtotime($detail->getCreated()) : time()),
         ]);
     }
+
+    public function terminalWithAuthority(string $containerId, Request $request)
+    {
+        try {
+            $record = DB::table('c_scene_container_instances')
+                ->where('c_container_id', $containerId)
+                ->select('c_team_id')
+                ->first();
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch container record for authority check: ' . $e->getMessage());
+            return response()->json([
+                'error' => '数据库查询失败',
+                'message' => '数据库查询失败',
+            ], 500);
+        }
+
+        if (!$record) {
+            return response()->json([
+                'error' => '未找到容器实例',
+                'message' => '未找到容器实例',
+            ], 404);
+        }
+
+        $teamId = $record->c_team_id ?? null;
+        $normalizedTeamId = $teamId !== null ? trim((string) $teamId) : '';
+
+        if ($normalizedTeamId === '') {
+            return response()->json([
+                'allowed' => true,
+            ]);
+        }
+
+        $tokenData = $request->input('token_data');
+        $username = null;
+        if (is_array($tokenData) && isset($tokenData['id'])) {
+            $username = $tokenData['id'];
+        } elseif ($request->has('username')) {
+            $username = $request->input('username');
+        }
+
+        if (!$username) {
+            return response()->json([
+                'error' => '无法识别当前用户',
+                'message' => '用户信息缺失',
+            ], 401);
+        }
+
+        try {
+            $roles = DB::table('c_users_roles')
+                ->where('c_user_id', $username)
+                ->pluck('c_role_id')
+                ->map(fn ($role) => strtolower((string) $role));
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch user roles for container terminal authority check: ' . $e->getMessage());
+            return response()->json([
+                'error' => '数据库查询失败',
+                'message' => '数据库查询失败',
+            ], 500);
+        }
+
+        $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+        foreach ($roles as $role) {
+            if (in_array($role, $privilegedRoles, true)) {
+                return response()->json([
+                    'allowed' => true,
+                    'message' => sprintf('用户角色 %s 拥有跨队伍访问权限', $role),
+                ]);
+            }
+        }
+
+        try {
+            $isMember = DB::table('c_teams_users')
+                ->where('team_id', $normalizedTeamId)
+                ->where('user_id', $username)
+                ->exists();
+        } catch (\Throwable $e) {
+            Log::error('Failed to verify team membership for container terminal authority: ' . $e->getMessage());
+            return response()->json([
+                'error' => '数据库查询失败',
+                'message' => '数据库查询失败',
+            ], 500);
+        }
+
+        if (!$isMember) {
+            Log::warning('User lacks permission to access container terminal.', [
+                'container_id' => $containerId,
+                'team_id' => $normalizedTeamId,
+                'username' => $username,
+            ]);
+
+            return response()->json([
+                'allowed' => false,
+                'error' => '无权限访问该容器',
+                'message' => '用户不在该容器所属队伍中',
+            ], 403);
+        }
+
+        return response()->json([
+            'allowed' => true,
+        ]);
+    }
+
 //    /**
 //     * ★ 新增的方法 ★
 //     * 检查当前认证的用户是否有权操作指定的容器。
