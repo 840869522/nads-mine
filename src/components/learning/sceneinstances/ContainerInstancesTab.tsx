@@ -246,12 +246,23 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </IconButton>
                             </span>
                         </Tooltip>
-                        <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small"><MoreVertIcon fontSize="small" /></IconButton>
+                        {!isTarget && (
+                            <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small">
+                                <MoreVertIcon fontSize="small" />
+                            </IconButton>
+                        )}
                     </Box>
                 );
             }
         }
     ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
+
+    const selectedInstance = useMemo(() => {
+        if (!moreMenuAnchor.id) {
+            return null;
+        }
+        return instances.find(instance => instance.id === moreMenuAnchor.id) || null;
+    }, [instances, moreMenuAnchor.id]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -325,7 +336,11 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 ))}
             </Menu>
 
-            <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
+            <Menu
+                anchorEl={selectedInstance && !selectedInstance.is_target ? moreMenuAnchor.anchor : null}
+                open={Boolean(selectedInstance && !selectedInstance.is_target && moreMenuAnchor.anchor)}
+                onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}
+            >
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Logs
                 </MenuItem>

@@ -51,6 +51,7 @@ class TopologyParser
                         'portMappings' => $ports,
                         'env'          => $envs,
                         'isTarget'     => $config['isTarget'] ?? false,
+                        'teamId'       => self::extractTeamId($config),
                     ];
                     break;
 
@@ -64,6 +65,7 @@ class TopologyParser
                         'isTarget'     => $config['isTarget'] ?? false,
                         'memory'       => self::normalizePositiveInt($config['memory'] ?? null),
                         'cpu'          => self::normalizePositiveInt($config['cpu'] ?? null),
+                        'teamId'       => self::extractTeamId($config),
                     ];
                     break;
 
@@ -159,6 +161,32 @@ class TopologyParser
             }
             $intValue = (int) $filtered;
             return $intValue > 0 ? $intValue : null;
+        }
+
+        return null;
+    }
+
+    private static function extractTeamId(array $config): ?string
+    {
+        $teamId = $config['teamId'] ?? null;
+        if (is_string($teamId) && trim($teamId) !== '') {
+            return trim($teamId);
+        }
+        if (is_numeric($teamId)) {
+            return (string) $teamId;
+        }
+
+        $legacyAssignment = $config['teamAssignment'] ?? null;
+        if (is_array($legacyAssignment)) {
+            $legacyId = $legacyAssignment['id']
+                ?? $legacyAssignment['teamId']
+                ?? $legacyAssignment['c_id']
+                ?? null;
+            if ($legacyId !== null && $legacyId !== '') {
+                return (string) $legacyId;
+            }
+        } elseif (is_string($legacyAssignment) && trim($legacyAssignment) !== '') {
+            return trim($legacyAssignment);
         }
 
         return null;

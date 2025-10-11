@@ -17,7 +17,7 @@ class SceneContainerInstance extends Model
     protected $keyType = 'string';
     public $incrementing = false;
     public $timestamps = false;
-    protected $fillable = ['c_container_id', 'c_scene_instances_id', 'c_flag', 'c_ip', 'c_container_name'];
+    protected $fillable = ['c_container_id', 'c_scene_instances_id', 'c_flag', 'c_ip', 'c_container_name', 'c_team_id'];
 
     public function sceneInstance(): BelongsTo
     {
@@ -93,4 +93,3 @@ class SceneContainerInstance extends Model
 //        return false;
 //    }
 }
-

@@ -207,6 +207,8 @@ sudo ovs-docker add-port ovs-switch 容器内网卡名 容器号 --ipaddress=网
 sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 ```
 
+注意：需要在宿主机上创建一个5601到25601的端口映射！以供访问kibana界面
+
 #### 1.7.2 关于后端配置
 
 `后端配置为项目目录下back/.env`
@@ -477,3 +479,6 @@ git apply /path/to/fix_login.patch #
 ```
 
 在启动中出现问题，请见 [2 维护](README.md#2-维护)
+
+### 3.3 其他问题
+拷贝日志文件，位置为 src/front.log 和 back/back.log ，查看并与开发人员联系

@@ -122,6 +122,7 @@ class InstanceController extends Controller
                         'name' => ltrim($details->getName() ?? '', '/'),
                         'type' => 'container',
                         'ipAddress' => $containerInstance->c_ip,
+                        'team' => $containerInstance->c_team_id,
                         'scene_instance_id' => $containerInstance->c_scene_instances_id,
                         'scene_name' => $instance->sceneConfig->c_name ?? null,
                         'status' => $this->mapStatus($details->getState()->getStatus()),
@@ -166,7 +167,14 @@ class InstanceController extends Controller
                         'instance' => $instanceId,
                         'rule_count' => count($iptablesRules),
                     ]);
-                    // 注意：这里按 hostPort 解析系统现有规则删除，不依赖动态分配的实例IP
+                    // 先删除回程规则（依赖 DNAT 反查时，确保DNAT尚在）
+                    try {
+                        $this->cliService->removePostroutingMasqueradeForRules($iptablesRules, $parsed['connections'] ?? [], 'br0');
+                    } catch (\Throwable $e) {
+                        Log::warning('删除 MASQUERADE 回程规则时出现警告: ' . $e->getMessage());
+                    }
+
+                    // 再删除 PREROUTING DNAT（按 hostPort 精确删除）
                     $this->cliService->removeIptablesRulesByHostPorts($iptablesRules, $instanceId);
                 } else {
                     Log::info('该实例场景未配置 iptablesRules，跳过转发规则清理。');

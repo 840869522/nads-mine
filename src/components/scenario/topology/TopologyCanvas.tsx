@@ -2,6 +2,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { TopologyNode, TopologyEdge, DeviceType } from '../../../types';
 import { NODE_SIZE, NODE_ICON_SIZE } from '../../../constants';
+import { isSpecialImageContainer } from './topologyRules';
 import { 
   CubeIcon, 
   ComputerDesktopIcon, 
@@ -13,6 +14,8 @@ import {
 const DRAG_THRESHOLD = 5; // Pixels threshold to differentiate click from drag
 const EDGE_TEXT_OFFSET = 10; // Pixels to offset text from the edge line
 const EDGE_TEXT_FONT_SIZE = 10;
+
+// 使用共享规则：isSpecialImageContainer
 
 interface TopologyCanvasProps {
   nodes: TopologyNode[];
@@ -202,8 +205,9 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           const sourceNode = nodes.find(n => n.id === edge.source);
           const targetNode = nodes.find(n => n.id === edge.target);
           if (!sourceNode || !targetNode) return null;
-          // 安全过滤：仅渲染“至少一端为交换机”的边
-          const edgeAllowed = sourceNode.type === 'switch' || targetNode.type === 'switch';
+          // 安全过滤：仅渲染"至少一端为交换机"或"特定镜像容器可以连接任何节点"的边
+          const edgeAllowed = sourceNode.type === 'switch' || targetNode.type === 'switch' || 
+                             isSpecialImageContainer(sourceNode) || isSpecialImageContainer(targetNode);
           if (!edgeAllowed) return null;
 
           const isSelected = selectedElement?.type === 'edge' && selectedElement.id === edge.id;
@@ -236,7 +240,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
                 x2={targetNode.x}
                 y2={targetNode.y}
                 stroke={isSelected ? 'var(--color-primary-500, #3b82f6)' : 'var(--color-neutral-400, #a3a3a3)'}
-                strokeWidth={isSelected ? 3 : 2}
+                strokeWidth={isSelected ? 5 : 4}
                 onClick={(e) => handleEdgeClick(e, edge.id)}
                 onDoubleClick={(e) => { e.stopPropagation(); if (!isDraggingInternally) onEdgeDoubleClick(edge.id); }}
                 className="cursor-pointer"

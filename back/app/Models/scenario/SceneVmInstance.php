@@ -19,7 +19,7 @@ class SceneVmInstance extends Model
     public $incrementing = true;
     protected $keyType = 'int';
     public $timestamps = false;
-    protected $fillable = ['c_vm_name', 'c_scene_instances_id', 'c_ip', 'c_flag'];
+    protected $fillable = ['c_vm_name', 'c_scene_instances_id', 'c_ip', 'c_flag', 'c_team_id'];
 
     public function sceneInstance(): BelongsTo
     {

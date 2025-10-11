@@ -35,6 +35,37 @@ class DrillController extends Controller
     }
 
     /**
+     * 将 TopologyParser 返回的环境变量数组转换为键值映射，便于后续查找。
+     */
+    private function buildEnvLookup(array $envPairs): array
+    {
+        $lookup = [];
+        foreach ($envPairs as $pair) {
+            $key = trim($pair['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $lookup[$key] = isset($pair['value']) ? (string) $pair['value'] : '';
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * 统一解析并补全 Elasticsearch 相关的环境变量，缺失时回退到默认值。
+     */
+    private function resolveElasticsearchEnv(array $envLookup): array
+    {
+        $host = trim($envLookup['ELASTICSEARCH_HOST'] ?? '') ?: '10.100.88.88';
+        $port = trim($envLookup['ELASTICSEARCH_PORT'] ?? '') ?: '9200';
+
+        return [
+            'ELASTICSEARCH_HOST' => $host,
+            'ELASTICSEARCH_PORT' => $port,
+        ];
+    }
+
+    /**
      * 加载 vmImageOverrides.json 文件内容到类属性
      */
     private function loadVmImageOsMap(): void
@@ -132,6 +163,17 @@ class DrillController extends Controller
         $topologyJson = $scenario->c_scene;
 
         $parsedTopology = TopologyParser::parse($topologyJson);
+
+        $teamValidation = $this->validateTeamAssignments(
+            $parsedTopology['containers'] ?? [],
+            $parsedTopology['vms'] ?? []
+        );
+        if ($teamValidation['has_conflict']) {
+            return response()->json([
+                'message' => '启动失败：存在队伍成员冲突。',
+                'conflicts' => $teamValidation['conflicts'],
+            ], 422);
+        }
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
 
         $connections = &$parsedTopology['connections'];
@@ -182,8 +224,16 @@ class DrillController extends Controller
                 ]);
             }
 
+            // 优先创建非 suricata:v2 容器，suricata:v2 最后创建
+            $suricataToCreate = [];
             foreach ($parsedTopology['containers'] as $containerData) {
                  $containerName = str_replace([' '], '_', $containerData['label']) . '_' . $instanceShortId;
+
+                 if ($this->cliService->isSuricataV2Image($containerData['image'])) {
+                     $suricataToCreate[] = ['data' => $containerData, 'name' => $containerName];
+                     continue; // 跳过，稍后创建
+                 }
+
                  $options = [
                     'image' => $containerData['image'],
                     'name'  => $containerName,
@@ -191,6 +241,11 @@ class DrillController extends Controller
                     'env'   => $containerData['env'],
                     'scene_instance_id' => $sceneInstance->c_scene_instances_id,
                  ];
+
+                $teamId = $containerData['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
 
                 $flagUuid = null;
                 if ($containerData['isTarget']) {
@@ -206,6 +261,7 @@ class DrillController extends Controller
                      'c_flag' => $flagUuid,
                      'c_ip' => $containerIp,
                      'c_container_name' => $containerName,
+                     'c_team_id' => $teamId,
                  ]);
                  $createdItemsInfo[$containerData['id']] = [
                      'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
@@ -234,6 +290,16 @@ class DrillController extends Controller
                 if (!$itemNode || !$switchNode) continue;
 
                 $parsedVmNode = $vmsParsed[$itemNode['id']];
+                $vmEnvPairs = $parsedVmNode['env'] ?? [];
+                $vmEnvLookup = $this->buildEnvLookup($vmEnvPairs);
+                $elasticsearchEnv = $this->resolveElasticsearchEnv($vmEnvLookup);
+                $vmEnvLookup = array_merge($vmEnvLookup, $elasticsearchEnv);
+
+                $teamId = $parsedVmNode['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
+
                 $correctImageName = $parsedVmNode['image'];
 
                 if (empty($correctImageName) || $correctImageName === 'vm-qemu:latest') {
@@ -251,6 +317,11 @@ class DrillController extends Controller
                 ]);
 
                 $vmName = str_replace([' '], '_', $itemNode['label']) . '_' . $instanceShortId;
+                Log::debug('解析到虚拟机 Elasticsearch 环境变量', [
+                    'vm_name' => $vmName,
+                    'elasticsearch_host' => $elasticsearchEnv['ELASTICSEARCH_HOST'],
+                    'elasticsearch_port' => $elasticsearchEnv['ELASTICSEARCH_PORT'],
+                ]);
 
                 $flagUuid = null;
                 if ($parsedVmNode['isTarget'] ?? false) {
@@ -262,6 +333,7 @@ class DrillController extends Controller
                     'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
                     'c_ip'                 => $ip,
                     'c_flag'               => $flagUuid,
+                    'c_team_id'            => $teamId,
                 ]);
                 $vmDbId = $vmInstance->c_vm_id;
                 Log::info("VM 记录已创建，ID: {$vmDbId}", ['name' => $vmName]);
@@ -280,7 +352,9 @@ class DrillController extends Controller
                     'instance_base_dir'   => $instanceBaseDir,
                     'memory'              => $parsedVmNode['memory'] ?? null,
                     'cpu'                 => $parsedVmNode['cpu'] ?? null,
-                    'env'                 => $parsedVmNode['env'] ?? [],
+                    'env'                 => $vmEnvPairs,
+                    'env_lookup'          => $vmEnvLookup,
+                    'elasticsearch_env'   => $elasticsearchEnv,
                 ];
 
                 if ($osType === 'win7') {
@@ -304,6 +378,65 @@ class DrillController extends Controller
                 ];
             }
 
+            // 最后创建 suricata:v2 容器，并计算其监听网口列表
+            foreach ($suricataToCreate as $item) {
+                $containerData = $item['data'];
+                $containerName = $item['name'];
+
+                $options = [
+                    'image' => $containerData['image'],
+                    'name'  => $containerName,
+                    'ports' => $containerData['portMappings'],
+                    'env'   => $containerData['env'],
+                    'scene_instance_id' => $sceneInstance->c_scene_instances_id,
+                ];
+
+                $teamId = $containerData['teamId'] ?? null;
+                if ($teamId !== null) {
+                    $teamId = trim((string) $teamId) ?: null;
+                }
+
+                // 计算 suricata 监听的容器内接口名（一个连接一个接口）
+                $monitorInterfaces = [];
+                foreach ($connections as $conn) {
+                    if ($conn['source']['type'] === 'container' && $conn['source']['id'] === $containerData['id'] && $conn['target']['type'] === 'switch') {
+                        $switchInfo = $createdSwitchesInfo[$conn['target']['id']] ?? null;
+                        if ($switchInfo) {
+                            $monitorInterfaces[] = $this->cliService->generateOvsPortName($switchInfo['actual_name'], $containerName);
+                        }
+                    } elseif ($conn['target']['type'] === 'container' && $conn['target']['id'] === $containerData['id'] && $conn['source']['type'] === 'switch') {
+                        $switchInfo = $createdSwitchesInfo[$conn['source']['id']] ?? null;
+                        if ($switchInfo) {
+                            $monitorInterfaces[] = $this->cliService->generateOvsPortName($switchInfo['actual_name'], $containerName);
+                        }
+                    }
+                }
+                $monitorInterfaces = array_values(array_unique(array_filter($monitorInterfaces)));
+                if (!empty($monitorInterfaces)) {
+                    $options['monitorInterfaces'] = $monitorInterfaces;
+                }
+
+                $flagUuid = null;
+                if ($containerData['isTarget']) {
+                    $flagUuid = Str::uuid()->toString();
+                    $options['env'][] = ['key' => 'FLAG', 'value' => $flagUuid];
+                }
+
+                $containerId = $this->cliService->createContainer($options);
+                $containerIp = $containerIps[$containerData['id']] ?? null;
+                SceneContainerInstance::create([
+                    'c_container_id' => $containerId,
+                    'c_scene_instances_id' => $sceneInstance->c_scene_instances_id,
+                    'c_flag' => $flagUuid,
+                    'c_ip' => $containerIp,
+                    'c_container_name' => $containerName,
+                    'c_team_id' => $teamId,
+                ]);
+                $createdItemsInfo[$containerData['id']] = [
+                    'id' => $containerId, 'actual_name' => $containerName, 'type' => 'container'
+                ];
+            }
+
             Log::info("================== 开始建立剩余网络连接 ==================");
             foreach ($connections as $conn) {
                 $source = $conn['source'];
@@ -324,6 +457,36 @@ class DrillController extends Controller
                         $createdItemsInfo[$containerNode['id']]['actual_name'],
                         $containerNode['ip']
                     );
+
+                    // 如果该容器是 suricata:v2，则在其端口接入后，立即为所在交换机配置 Mirror
+                    try {
+                        $containerParsed = $containersParsed[$containerNode['id']] ?? null;
+                        if ($containerParsed && $this->cliService->isSuricataV2Image($containerParsed['image'] ?? '')) {
+                            $switchActualName = $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? null;
+                            $containerActualName = $createdItemsInfo[$containerNode['id']]['actual_name'] ?? null;
+                            if ($switchActualName && $containerActualName) {
+                                // 通过 OVS 查询实际的 Port 名称，避免与容器内接口名混淆
+                                $monitorPort = $this->cliService->resolveOvsPortNameForContainerOnBridge($switchActualName, $containerActualName);
+                                if (!$monitorPort) {
+                                    // 兜底：退回到生成的命名（可能不匹配），同时留日志
+                                    $monitorPort = $this->cliService->generateOvsPortName($switchActualName, $containerActualName);
+                                    Log::warning('Fallback to generated monitor port name for mirror.', [
+                                        'bridge' => $switchActualName,
+                                        'container' => $containerActualName,
+                                        'monitor_port' => $monitorPort,
+                                    ]);
+                                }
+                                $mirrorName = 'mirror-' . $containerActualName . '-' . $switchActualName;
+                                $this->cliService->createOrReplaceMirrorAllToPort($switchActualName, $monitorPort, $mirrorName);
+                                Log::info("已在 {$switchActualName} 上创建镜像 {$mirrorName} -> {$monitorPort}");
+                            }
+                        }
+                    } catch (\Exception $ex) {
+                        Log::warning("创建 OVS Mirror 失败(连接阶段): " . $ex->getMessage(), [
+                            'switch' => $createdSwitchesInfo[$switchNode['id']]['actual_name'] ?? 'unknown',
+                            'container' => $createdItemsInfo[$containerNode['id']]['actual_name'] ?? 'unknown',
+                        ]);
+                    }
                 }
                 elseif (($source['type'] === 'switch' && $target['type'] === 'nat_bridge') || ($source['type'] === 'nat_bridge' && $target['type'] === 'switch')) {
                     $switchNode = $source['type'] === 'switch' ? $source : $target;
@@ -342,6 +505,8 @@ class DrillController extends Controller
                 Log::info("================== Applying iptables rules ==================");
                 $this->cliService->applyIptablesRules($parsedTopology['iptablesRules'], $createdItemsInfo, $connections);
             }
+
+            // 注：Suricata 的 OVS Mirror 已在“连接阶段”就位于对应容器接入后即时创建
             // 配置网关IP和所有容器的路由
             $gatewayIp = '10.100.0.254/16'; // 定义一个固定的网关IP
 
@@ -447,5 +612,77 @@ class DrillController extends Controller
                 $connection['target']['ip'] = $getNextIp();
             }
         }
+    }
+
+    /**
+     * 验证拓扑中的队伍成员是否存在冲突。
+     *
+     * @param array $containers Parsed container definitions including teamId.
+     * @param array $vms Parsed VM definitions including teamId.
+     * @return array{has_conflict: bool, conflicts?: array}
+     */
+    private function validateTeamAssignments(array $containers, array $vms): array
+    {
+        $teamIds = collect($containers)
+            ->merge($vms)
+            ->pluck('teamId')
+            ->filter(function ($teamId) {
+                return $teamId !== null && trim((string) $teamId) !== '';
+            })
+            ->map(fn($id) => trim((string) $id))
+            ->unique()
+            ->values();
+
+        if ($teamIds->isEmpty()) {
+            return ['has_conflict' => false];
+        }
+
+        $members = DB::table('c_teams_users')
+            ->whereIn('team_id', $teamIds)
+            ->get(['team_id', 'user_id']);
+
+        $userTeams = [];
+        foreach ($members as $member) {
+            $teamId = trim((string) $member->team_id);
+            $userId = trim((string) $member->user_id);
+            if ($teamId === '' || $userId === '') {
+                continue;
+            }
+            $userTeams[$userId][$teamId] = true;
+        }
+
+        $conflicts = [];
+        foreach ($userTeams as $userId => $teams) {
+            if (count($teams) > 1) {
+                $conflicts[$userId] = array_keys($teams);
+            }
+        }
+
+        if (empty($conflicts)) {
+            return ['has_conflict' => false];
+        }
+
+        $flatTeamIds = collect($conflicts)->flatten()->unique()->values();
+        $teamNames = DB::table('c_teams')
+            ->whereIn('c_id', $flatTeamIds)
+            ->pluck('c_name', 'c_id');
+
+        $conflictDetails = [];
+        foreach ($conflicts as $userId => $teamList) {
+            $conflictDetails[] = [
+                'user' => $userId,
+                'teams' => array_map(function ($teamId) use ($teamNames) {
+                    return [
+                        'id' => $teamId,
+                        'name' => $teamNames[$teamId] ?? null,
+                    ];
+                }, $teamList),
+            ];
+        }
+
+        return [
+            'has_conflict' => true,
+            'conflicts' => $conflictDetails,
+        ];
     }
 }

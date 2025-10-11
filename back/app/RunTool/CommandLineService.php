@@ -30,6 +30,35 @@ class CommandLineService
             $env['NADS_VM_CPU'] = (string) $cpu;
         }
 
+        $envLookup = [];
+        if (!empty($options['env_lookup']) && is_array($options['env_lookup'])) {
+            $envLookup = $options['env_lookup'];
+        } elseif (!empty($options['env']) && is_array($options['env'])) {
+            foreach ($options['env'] as $pair) {
+                $key = trim((string)($pair['key'] ?? ''));
+                if ($key === '') {
+                    continue;
+                }
+                $envLookup[$key] = isset($pair['value']) ? (string) $pair['value'] : '';
+            }
+        }
+
+        if (!empty($options['elasticsearch_env']) && is_array($options['elasticsearch_env'])) {
+            $envLookup = array_merge($envLookup, $options['elasticsearch_env']);
+        }
+
+        foreach ($envLookup as $key => $value) {
+            $normalizedKey = trim((string) $key);
+            if ($normalizedKey === '' || array_key_exists($normalizedKey, $env)) {
+                continue;
+            }
+            $env[$normalizedKey] = (string) $value;
+        }
+
+        // 统一为 cloud-init 模板提供 zeek/sysdig 的开关标记
+        $env['zeek'] = $this->normalizeToggleFlag($envLookup['ZEEK_ENABLED'] ?? null);
+        $env['sysdig'] = $this->normalizeToggleFlag($envLookup['SYSDIG_ENABLED'] ?? null);
+
         return $env;
     }
 
@@ -60,6 +89,128 @@ class CommandLineService
             return $intValue > 0 ? $intValue : null;
         }
 
+        return null;
+    }
+
+    /**
+     * 将布尔/开关型的值标准化为 '1' 或 '0'（默认为 '0'）。
+     */
+    private function normalizeToggleFlag($value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if ($value === null) {
+            return '0';
+        }
+
+        $stringValue = strtolower(trim((string) $value));
+
+        if ($stringValue === '1' || $stringValue === 'true' || $stringValue === 'yes' || $stringValue === 'on') {
+            return '1';
+        }
+
+        return '0';
+    }
+
+    /**
+     * 判断镜像是否为 suricata:v2（忽略 registry/repo 前缀）。
+     */
+    public function isSuricataV2Image(string $image): bool
+    {
+        $normalized = strtolower(trim($image));
+        if ($normalized === '') {
+            return false;
+        }
+        $pos = strrpos($normalized, '/');
+        if ($pos !== false) {
+            $normalized = substr($normalized, $pos + 1);
+        }
+        [$name, $tag] = array_pad(explode(':', $normalized, 2), 2, '');
+        return $name === 'suricata' && $tag === 'v2';
+    }
+
+    /**
+     * 根据交换机与容器名称生成可复现的 OVS 端口名。
+     */
+    public function generateOvsPortName(string $switchName, string $containerName): string
+    {
+        $baseSwitchName = explode('_', $switchName)[0] ?? $switchName;
+        $switchPrefix = substr($baseSwitchName, 0, 2) ?: '';
+        $switchSuffix = substr($baseSwitchName, -2) ?: '';
+        $switchPart = $switchPrefix . $switchSuffix;
+
+        $baseContainerName = explode('_', $containerName)[0] ?? $containerName;
+        $containerPrefix = substr($baseContainerName, 0, 2) ?: '';
+        $containerSuffix = substr($baseContainerName, -2) ?: '';
+        $containerPart = $containerPrefix . $containerSuffix;
+
+        $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
+        $name = $switchPart . $containerPart . $switchHash;
+        // 确保接口名不超过 Linux IFNAMSIZ 限制（15字符）
+        if (strlen($name) > 15) {
+            $name = substr($name, 0, 15);
+        }
+        return $name;
+    }
+
+    /**
+     * 查找某容器在指定 OVS 网桥上的实际 Port 名称。
+     * 优先通过 Interface.external_ids.container_id=containerName 反查；
+     * 若找到的端口不在该 Bridge 上，则继续尝试其他结果。
+     */
+    public function resolveOvsPortNameForContainerOnBridge(string $bridgeName, string $containerName): ?string
+    {
+        // 查找与该容器关联的 Interface 名称（通常等于 Port 名）
+        $findIfCmd = [
+            'sudo', 'ovs-vsctl', '--data=bare', '--no-heading', '--columns=name',
+            'find', 'Interface', 'external_ids:container_id=' . $containerName,
+        ];
+        Log::info('Executing OVS command: ' . implode(' ', $findIfCmd));
+        $proc = new Process($findIfCmd);
+        $proc->run();
+        $candidates = [];
+        if ($proc->isSuccessful()) {
+            $out = trim($proc->getOutput());
+            if ($out !== '') {
+                foreach (preg_split('/\r?\n/', $out) as $line) {
+                    $n = trim($line);
+                    if ($n !== '') {
+                        $candidates[] = $n;
+                    }
+                }
+            }
+        }
+
+        // 逐个候选验证其所属的 Bridge
+        foreach ($candidates as $portName) {
+            $ptbCmd = ['sudo', 'ovs-vsctl', 'port-to-br', $portName];
+            Log::info('Executing OVS command: ' . implode(' ', $ptbCmd));
+            $ptb = new Process($ptbCmd);
+            $ptb->run();
+            if ($ptb->isSuccessful()) {
+                $br = trim($ptb->getOutput());
+                if ($br === $bridgeName) {
+                    return $portName;
+                }
+            }
+        }
+
+        // 兜底：列出该 Bridge 的所有端口，供日志排查
+        $listCmd = ['sudo', 'ovs-vsctl', 'list-ports', $bridgeName];
+        Log::info('Executing OVS command: ' . implode(' ', $listCmd));
+        $list = new Process($listCmd);
+        $list->run();
+        if ($list->isSuccessful()) {
+            $ports = array_filter(array_map('trim', explode("\n", trim($list->getOutput()))));
+            Log::warning('Unable to resolve OVS port for container on bridge; listing ports.', [
+                'bridge' => $bridgeName,
+                'container' => $containerName,
+                'ports' => $ports,
+                'candidates' => $candidates,
+            ]);
+        }
         return null;
     }
 
@@ -97,6 +248,15 @@ class CommandLineService
                 ];
                 Log::info('Executing [iptables]: ' . implode(' ', $command));
                 (new Process($command))->mustRun();
+
+                // 最小改动：为回程添加对应的 MASQUERADE，确保返回流量经本机回到外部
+                $masqCmd = [
+                    'sudo', 'iptables', '-t', 'nat', '-A', 'POSTROUTING',
+                    '-p', 'tcp', '-d', $instanceIp, '--dport', (string)$instancePort,
+                    '-o', 'br0', '-j', 'MASQUERADE'
+                ];
+                Log::info('Executing [iptables]: ' . implode(' ', $masqCmd));
+                (new Process($masqCmd))->mustRun();
             } else {
                 Log::warning('[iptables] Skipping invalid rule', ['rule' => $rule, 'found_ip' => $instanceIp]);
             }
@@ -184,6 +344,121 @@ class CommandLineService
                     'raw' => $item['raw'],
                     'error' => $p->getErrorOutput(),
                 ]);
+            }
+        }
+    }
+
+    /**
+     * 删除在 applyIptablesRules 中为每条转发添加的 POSTROUTING MASQUERADE 规则。
+     * 基于拓扑 connections 反查实例 IP，再用与添加时一致的参数删除。
+     *
+     * @param array $rules       形如 [['hostPort'=>..., 'instanceName'=>..., 'instancePort'=>...], ...]
+     * @param array $connections TopologyParser::parse($topology)['connections']
+     * @param string $outInterface 出口网卡，默认 br0
+     */
+    public function removePostroutingMasqueradeForRules(array $rules, array $connections, string $outInterface = 'br0'): void
+    {
+        // 重建 instanceName => ip 映射
+        $instanceIps = [];
+        foreach ($connections as $conn) {
+            if (!empty($conn['source']['label']) && !empty($conn['source']['ip'])) {
+                $instanceIps[$conn['source']['label']] = explode('/', $conn['source']['ip'])[0];
+            }
+            if (!empty($conn['target']['label']) && !empty($conn['target']['ip'])) {
+                $instanceIps[$conn['target']['label']] = explode('/', $conn['target']['ip'])[0];
+            }
+        }
+
+        foreach ($rules as $rule) {
+            $instanceName = $rule['instanceName'] ?? null;
+            $instancePort = $rule['instancePort'] ?? null;
+            $hostPort = $rule['hostPort'] ?? null;
+            $instanceIp = $instanceName ? ($instanceIps[$instanceName] ?? null) : null;
+
+            // 若无法通过拓扑映射得到 IP，则从当前系统规则中按 hostPort 反查 DNAT 的 --to-destination
+            if ((!$instanceIp || !$instancePort) && $hostPort) {
+                $dump = new Process(['sudo', 'iptables-save', '-t', 'nat']);
+                $dump->run();
+                if ($dump->isSuccessful()) {
+                    $lines = preg_split('/\r?\n/', $dump->getOutput());
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if ($line === '' || !str_starts_with($line, '-A ')) continue;
+                        if (!str_starts_with($line, '-A PREROUTING')) continue;
+                        if (strpos($line, '-j DNAT') === false) continue;
+                        if (!preg_match('/--dport\s+' . preg_quote((string)$hostPort, '/') . '\b/', $line)) continue;
+                        // 提取 --to-destination ip:port
+                        if (preg_match('/--to-destination\s+([^\s]+)/', $line, $m)) {
+                            $to = $m[1] ?? '';
+                            if ($to && str_contains($to, ':')) {
+                                [$ipFound, $portFound] = explode(':', $to, 2);
+                                if (!$instanceIp && !empty($ipFound)) {
+                                    $instanceIp = $ipFound;
+                                }
+                                if (!$instancePort && !empty($portFound)) {
+                                    $instancePort = $portFound;
+                                }
+                            }
+                        }
+                        if ($instanceIp && $instancePort) break;
+                    }
+                }
+            }
+
+            if (!$instanceIp || !$instancePort) {
+                Log::warning('[iptables] Skip MASQUERADE delete: missing instanceIp/instancePort', [
+                    'instanceName' => $instanceName,
+                    'hostPort' => $hostPort,
+                ]);
+                continue;
+            }
+
+            // 与添加时一致的匹配参数，按规格删除一条规则（优先路径）
+            $delCmd = [
+                'sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING',
+                '-p', 'tcp', '-d', (string)$instanceIp, '--dport', (string)$instancePort,
+                '-o', $outInterface, '-j', 'MASQUERADE'
+            ];
+            Log::info('[iptables] Deleting MASQUERADE rule: ' . implode(' ', $delCmd));
+            $p = new Process($delCmd);
+            $p->run();
+            if (!$p->isSuccessful()) {
+                // 回退：解析 iptables-save -t nat，按精确参数删除（考虑内核自动插入的匹配模块）
+                Log::warning('[iptables] MASQUERADE delete by fixed args failed, fallback to exact-args from iptables-save', [
+                    'stderr' => $p->getErrorOutput(),
+                ]);
+
+                $dump = new Process(['sudo', 'iptables-save', '-t', 'nat']);
+                $dump->run();
+                if ($dump->isSuccessful()) {
+                    $lines = preg_split('/\r?\n/', $dump->getOutput());
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if ($line === '' || !str_starts_with($line, '-A ')) continue;
+                        if (!str_starts_with($line, '-A POSTROUTING')) continue;
+                        if (strpos($line, '-j MASQUERADE') === false) continue;
+                        if (strpos($line, '-p tcp') === false) continue;
+                        if (strpos($line, '-d ' . (string)$instanceIp) === false) continue;
+                        if (!preg_match('/--dport\s+' . preg_quote((string)$instancePort, '/') . '\b/', $line)) continue;
+                        // 可选匹配 -o outInterface；若缺失也尝试删除
+                        $parts = preg_split('/\s+/', $line);
+                        $argsExact = array_slice($parts, 2); // 去掉 "-A POSTROUTING"
+                        $cmdExact = array_merge(['sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING'], $argsExact);
+                        Log::info('[iptables] Fallback deleting MASQUERADE via exact args: ' . implode(' ', $cmdExact));
+                        $pex = new Process($cmdExact);
+                        $pex->run();
+                        if (!$pex->isSuccessful()) {
+                            Log::warning('[iptables] Fallback delete failed or rule already gone', [
+                                'stderr' => $pex->getErrorOutput(),
+                                'raw' => $line,
+                            ]);
+                        }
+                    }
+                } else {
+                    Log::warning('[iptables] iptables-save fallback failed', [
+                        'stderr' => $dump->getErrorOutput(),
+                    ]);
+                }
             }
         }
     }
@@ -571,24 +846,7 @@ class CommandLineService
     public function connectContainerToSwitch(string $switchName, string $containerName, ?string $ipAddress = null): void
     {
         // === 生成参数2：新生成的pair名称 ===
-
-        // 1. 处理交换机名称部分
-        $baseSwitchName = explode('_', $switchName)[0];
-        $switchPrefix = substr($baseSwitchName, 0, 2); // 交换机前两个字符
-        $switchSuffix = substr($baseSwitchName, -2);   // 交换机最后一个字符
-        $switchPart = $switchPrefix . $switchSuffix;
-
-        // 2. 处理容器名称部分
-        $baseContainerName = explode('_', $containerName)[0];
-        $containerPrefix = substr($baseContainerName, 0, 2); // 容器前两个字符
-        $containerSuffix = substr($baseContainerName, -2);   // 容器最后一个字符
-        $containerPart = $containerPrefix . $containerSuffix;
-
-        // 3. 交换机唯一哈希部分
-        $switchHash = substr(explode('_', $switchName)[1] ?? '', -4);
-
-        // 4. 拼接成最终的配对名称 (e.g., "SwhCo1da10")
-        $pairName = $switchPart . $containerPart . $switchHash;
+        $pairName = $this->generateOvsPortName($switchName, $containerName);
 
         // === 构建严格的四参数命令 ===
         $command = [
@@ -617,6 +875,80 @@ class CommandLineService
             ]);
             throw new ProcessFailedException($process);
         }
+    }
+
+    /**
+     * 在指定交换机上创建或替换一个镜像规则，将所有端口流量镜像到指定输出端口。
+     *
+     * @param string $switchName  交换机名（OVS Bridge 名称）
+     * @param string $outputPort  输出端口名（镜像流量发往该端口）
+     * @param string $mirrorName  镜像规则名称
+     */
+    public function createOrReplaceMirrorAllToPort(string $switchName, string $outputPort, string $mirrorName): void
+    {
+        // 0) 等待输出端口出现在该 Bridge 上（处理短暂竞态）
+        $this->waitForPortOnBridge($switchName, $outputPort, 40, 250_000); // 最多等 10 秒
+
+        // 1) 查找并移除已存在的同名 Mirror（如果有）
+        $findCmd = ['sudo', 'ovs-vsctl', '--format=csv', '--columns=_uuid', 'find', 'Mirror', 'name=' . $mirrorName];
+        Log::info('Executing OVS command: ' . implode(' ', $findCmd));
+        $findProc = new Process($findCmd);
+        $findProc->run();
+        if ($findProc->isSuccessful()) {
+            $lines = array_values(array_filter(array_map('trim', explode("\n", $findProc->getOutput()))));
+            if (count($lines) > 1) { // 第一行是表头，后面可能是UUID
+                for ($i = 1; $i < count($lines); $i++) {
+                    $uuid = trim($lines[$i], "\" ");
+                    if ($uuid !== '') {
+                        $rmCmd = [
+                            'sudo', 'ovs-vsctl', '--', '--if-exists', 'remove', 'Bridge', $switchName, 'mirrors', $uuid,
+                            '--', '--if-exists', 'destroy', 'Mirror', $uuid,
+                        ];
+                        Log::info('Executing OVS command: ' . implode(' ', $rmCmd));
+                        $rmProc = new Process($rmCmd);
+                        $rmProc->run();
+                    }
+                }
+            }
+        }
+
+        // 2) 原子创建新的 Mirror 并附加到 Bridge，同时以 UUID 方式设置输出端口，避免名字引用不稳定
+        $createCmd = [
+            'sudo', 'ovs-vsctl',
+            '--', '--id=@op', 'get', 'Port', $outputPort, '_uuid',
+            '--', '--id=@m', 'create', 'Mirror', 'name=' . $mirrorName, 'select_all=true', 'output-port=@op',
+            '--', 'add', 'Bridge', $switchName, 'mirrors', '@m',
+        ];
+        Log::info('Executing OVS command: ' . implode(' ', $createCmd));
+        $createProc = new Process($createCmd);
+        $createProc->run();
+        if (!$createProc->isSuccessful()) {
+            throw new ProcessFailedException($createProc);
+        }
+    }
+
+    /**
+     * 等待某个 Port 名称在指定 Bridge 上出现，带重试。
+     */
+    private function waitForPortOnBridge(string $switchName, string $portName, int $retries, int $delayUs): void
+    {
+        $lastPorts = [];
+        for ($i = 0; $i < $retries; $i++) {
+            $listCmd = ['sudo', 'ovs-vsctl', 'list-ports', $switchName];
+            $proc = new Process($listCmd);
+            $proc->run();
+            if ($proc->isSuccessful()) {
+                $ports = array_filter(array_map('trim', explode("\n", trim($proc->getOutput()))));
+                $lastPorts = $ports;
+                if (in_array($portName, $ports, true)) {
+                    return;
+                }
+            }
+            usleep($delayUs);
+        }
+        Log::warning("Port '{$portName}' not found on bridge '{$switchName}' after wait; mirror may fail.", [
+            'seen_ports' => $lastPorts,
+        ]);
     }
 
 
@@ -746,8 +1078,15 @@ XML;
      */
     public function createContainer(array $options): string
     {
+        $imageName = $options['image'] ?? '';
+        $isSuricataV2 = $this->isSuricataV2Image($imageName);
+
         // 1. 构建 docker run 命令数组
         $command = ['sudo', 'docker', 'run', '-itd', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
+        if ($isSuricataV2) {
+            $command[] = '--cap-add=NET_ADMIN';
+            $command[] = '--cap-add=SYS_NICE';
+        }
 
         // a. 添加容器名称
         if (!empty($options['name'])) {
@@ -793,15 +1132,24 @@ XML;
             'px4-image1:latest',
             'px4-image1:v1',
         ];
-        if (!in_array($options['image'], $skipNetworkImages)) {
+        if (!$isSuricataV2 && !in_array($imageName, $skipNetworkImages)) {
             $command[] = '--network=none';
         }
 
         // e. 添加镜像名称（必须是命令的最后一部分）
-        if (empty($options['image'])) {
+        if (empty($imageName)) {
             throw new \Exception('镜像名称不能为空。');
         }
-        $command[] = $options['image'];
+        $command[] = $imageName;
+
+        // 仅 suricata:v2 追加监听接口参数
+        if ($isSuricataV2) {
+            $monitorInterfaces = array_unique(array_filter($options['monitorInterfaces'] ?? []));
+            if (!empty($monitorInterfaces)) {
+                $command[] = '-i';
+                $command[] = implode(',', $monitorInterfaces);
+            }
+        }
 
         Log::info('Executing Docker command: ' . implode(' ', $command));
 
