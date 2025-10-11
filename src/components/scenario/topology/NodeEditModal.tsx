@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -31,6 +31,11 @@ interface ManagedImage {
   version: string;
 }
 
+interface TeamOption {
+  id: string;
+  name: string;
+}
+
 const COMPUTE_RESOURCE_TYPES = ['容器'];
 const BRIDGE_TYPES = ['NAT网桥'];
 
@@ -52,6 +57,9 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
   const [images, setImages] = useState<ManagedImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [legacyTeamLabel, setLegacyTeamLabel] = useState<string>('');
 
   // --- 新增：iptables 规则状态 ---
   const [iptablesRules, setIptablesRules] = useState<IptablesRule[]>([]);
@@ -89,6 +97,10 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       // --- 新增：解析 iptables 规则 (网桥) ---
       setIptablesRules(node.config.iptablesRules || []);
 
+      const { id: extractedTeamId, label: extractedTeamLabel } = extractTeamMeta(node.config);
+      setSelectedTeamId(extractedTeamId);
+      setLegacyTeamLabel(extractedTeamLabel);
+
       // 获取镜像列表 (容器)
       if (COMPUTE_RESOURCE_TYPES.includes(node.config.deviceName)) {
         customFetch('/back/api/images')
@@ -98,6 +110,54 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
       }
     }
   }, [node]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const fetchTeams = async () => {
+      try {
+        const response = await customFetch('/back/api/ad/team?per_page=1000');
+        if (!response.ok) {
+          throw new Error(`获取队伍列表失败，状态码: ${response.status}`);
+        }
+        const data = await response.json();
+        const list = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+        if (!isMounted) return;
+        const mappedTeams: TeamOption[] = list
+          .map((team: any) => {
+            const id = String(team?.c_id ?? team?.id ?? '').trim();
+            if (!id) return null;
+            const rawName = String(team?.c_name ?? team?.name ?? '').trim();
+            return { id, name: rawName || id };
+          })
+          .filter((team): team is TeamOption => Boolean(team));
+        setTeams(mappedTeams);
+      } catch (error) {
+        console.error('获取队伍列表失败:', error);
+      }
+    };
+
+    fetchTeams();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  const teamOptions = useMemo(() => {
+    if (!selectedTeamId) return teams;
+    const exists = teams.some(team => team.id === selectedTeamId);
+    if (exists) return teams;
+    return [
+      ...teams,
+      { id: selectedTeamId, name: legacyTeamLabel || selectedTeamId },
+    ];
+  }, [teams, selectedTeamId, legacyTeamLabel]);
 
   const validate = (): boolean => {
     // 您可以根据需要添加对 iptables 规则的验证
@@ -166,7 +226,13 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
             rule => rule.hostPort && rule.instanceName && rule.instancePort
         );
     }
-    
+    if (selectedTeamId) {
+      newConfig.teamId = selectedTeamId;
+    } else {
+      delete newConfig.teamId;
+    }
+    delete (newConfig as Record<string, unknown>)['teamAssignment'];
+
     onSave(node.id, newConfig, label);
     onClose();
   };
@@ -186,6 +252,24 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField label="节点名称 (标签)" value={label} onChange={(e) => setLabel(e.target.value)} required fullWidth />
             <TextField label="设备类型/名称" value={deviceName} fullWidth disabled />
+            <FormControl fullWidth size="small">
+              <InputLabel>队伍分配</InputLabel>
+              <Select
+                value={selectedTeamId}
+                label="队伍分配"
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <em></em>
+                </MenuItem>
+                {teamOptions.map(team => (
+                  <MenuItem key={team.id} value={team.id}>
+                    {team.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* 容器的高级配置 */}
             {showAdvancedConfig && (
@@ -287,3 +371,37 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
 };
 
 export default NodeEditModal;
+
+function extractTeamMeta(config: NodeConfig): { id: string; label: string } {
+  const directId = config.teamId;
+  if (directId !== undefined && directId !== null && directId !== '') {
+    return { id: String(directId), label: '' };
+  }
+
+  const legacyAssignment = (config as any)?.teamAssignment;
+  if (legacyAssignment && typeof legacyAssignment === 'object') {
+    const legacyId =
+      legacyAssignment.id ??
+      legacyAssignment.teamId ??
+      legacyAssignment.c_id ??
+      '';
+    const legacyName =
+      legacyAssignment.name ??
+      legacyAssignment.c_name ??
+      legacyAssignment.label ??
+      '';
+
+    if (legacyId !== undefined && legacyId !== null && legacyId !== '') {
+      return {
+        id: String(legacyId),
+        label: legacyName ? String(legacyName) : String(legacyId),
+      };
+    }
+  }
+
+  if (typeof legacyAssignment === 'string' && legacyAssignment !== '') {
+    return { id: legacyAssignment, label: legacyAssignment };
+  }
+
+  return { id: '', label: '' };
+}

@@ -269,9 +269,11 @@ Route::prefix('study')->group(function () {
         Route::post('/question_del', [TestController::class, 'question_del']);
         Route::post('/question_list', [TestController::class, 'question_list']);
         Route::post('/question_info', [TestController::class, 'question_info']);
+        Route::get('/getCourses', [TestController::class, 'getCourses']);
         Route::post('/test_add', [TestController::class, 'test_add']);
         Route::post('/test_update', [TestController::class, 'test_update']);
         Route::post('/test_del', [TestController::class, 'test_del']);
+        Route::post('/experiment_del', [TestController::class, 'experiment_del']);
         Route::get('/test_list', [TestController::class, 'test_list']);
         Route::post('/test_info', [TestController::class, 'test_info']);
         Route::get('/getTestUsersByTestId', [TestController::class, 'getTestUsersByTestId']);
@@ -303,12 +305,13 @@ Route::prefix('study')->group(function () {
         Route::get('/get_course_tests_experiments', [TestController::class, 'get_course_tests_experiments']);
         Route::get('get_test_scores', [TestController::class, 'get_test_scores']);
         Route::get('download_test_scores', [TestController::class, 'download_test_scores']);
+        Route::post('get_user_test_score', [TestController::class, 'get_user_test_score']);
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);
        // index 路由需要认证
         Route::get('index', [TestController::class, 'index']);
-          // 根据用户名查找用户的场景实例
-        Route::get('getUserScenarios', [TestController::class, 'getUserScenarios']);
+          // 启动场景
+        Route::post('startDrill/{scenario}', [TestController::class, 'startDrill']);
     });
 });
 

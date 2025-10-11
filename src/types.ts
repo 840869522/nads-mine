@@ -76,6 +76,11 @@ export interface IptablesRule {
 }
 
 //场景node编辑
+export interface TeamAssignment {
+  id: number | string;
+  name: string;
+}
+
 export interface NodeConfig {
   deviceName: string;
   Image?: string;
@@ -87,6 +92,8 @@ export interface NodeConfig {
   memory?: string; // 内存大小 (MB)
   cpu?: string; // CPU核心数
   diskSize?: string; // 磁盘大小 (GB)
+  teamId?: string;
+  teamAssignment?: TeamAssignment;
 }
 export interface TopologyNode {
   id: string;

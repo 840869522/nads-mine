@@ -127,7 +127,47 @@ class IptablesController extends Controller
                     'stdout' => $p->getOutput(),
                 ], 207);
             }
-            return response()->json(['message' => '删除成功']);
+            // 额外处理：如果删除的是 NAT 表 PREROUTING DNAT 规则，则尝试同步删除对应的 POSTROUTING MASQUERADE 回程规则
+            $pairedDeleted = false;
+            if ($table === 'nat' && strtoupper($chain) === 'PREROUTING') {
+                $jumpIdx = array_search('-j', $args, true);
+                $jumpTarget = ($jumpIdx !== false && isset($args[$jumpIdx + 1])) ? strtoupper($args[$jumpIdx + 1]) : null;
+                if ($jumpTarget === 'DNAT') {
+                    // 提取 --to-destination ip:port 与协议/端口，构造匹配的 MASQUERADE 规则
+                    $toIdx = array_search('--to-destination', $args, true);
+                    $toVal = ($toIdx !== false && isset($args[$toIdx + 1])) ? $args[$toIdx + 1] : null;
+                    $protoIdx = array_search('-p', $args, true);
+                    $proto = ($protoIdx !== false && isset($args[$protoIdx + 1])) ? strtolower($args[$protoIdx + 1]) : null;
+                    $dportIdx = array_search('--dport', $args, true);
+                    $dport = ($dportIdx !== false && isset($args[$dportIdx + 1])) ? $args[$dportIdx + 1] : null;
+
+                    if ($toVal && $proto && $dport) {
+                        // 解析 ip:port
+                        $ip = null; $port = null;
+                        if (str_contains($toVal, ':')) {
+                            [$ip, $port] = explode(':', $toVal, 2);
+                        }
+                        if ($ip && $port) {
+                            $delMasq = [
+                                'sudo', 'iptables', '-t', 'nat', '-D', 'POSTROUTING',
+                                '-p', $proto, '-d', $ip, '--dport', $port,
+                                '-o', 'br0', '-j', 'MASQUERADE'
+                            ];
+                            Log::info('[iptables] 同步删除 MASQUERADE 回程规则: ' . implode(' ', $delMasq));
+                            $pm = new Process($delMasq);
+                            $pm->run();
+                            $pairedDeleted = $pm->isSuccessful();
+                            if (!$pairedDeleted) {
+                                Log::warning('[iptables] 未能删除对应的 MASQUERADE 规则（可能已不存在）', [
+                                    'stderr' => $pm->getErrorOutput(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return response()->json(['message' => '删除成功', 'pairedMasqueradeDeleted' => $pairedDeleted]);
         } catch (\Throwable $e) {
             Log::error('[iptables] 删除规则异常: ' . $e->getMessage());
             return response()->json(['message' => '删除规则异常', 'error' => $e->getMessage()], 500);

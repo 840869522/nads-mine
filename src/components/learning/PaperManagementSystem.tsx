@@ -556,11 +556,9 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
               flexWrap: 'wrap',
               gap: 2
             }}>
-              <Typography variant="h5" component="div">
-                试卷规则管理系统 - 测试ID: {testId}
-              </Typography>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%',  padding: '0 16px'  }}>
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
@@ -1026,7 +1024,7 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
             top: 0,
             zIndex: 1
           }}>
-            试卷列表 (测试ID: {testId})
+            试卷列表 
           </DialogTitle>
 
           <DialogContent sx={{ pt: 3 }}>

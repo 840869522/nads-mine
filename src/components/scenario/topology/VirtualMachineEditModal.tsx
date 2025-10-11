@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,6 +30,11 @@ interface VMImage {
   // 根据实际API返回结果调整
 }
 
+interface TeamOption {
+  id: string;
+  name: string;
+}
+
 interface VirtualMachineEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,6 +50,9 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   const [images, setImages] = useState<VMImage[]>([]);
   const [_errors, setErrors] = useState<{ [key: string]: string }>({});
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [legacyTeamLabel, setLegacyTeamLabel] = useState<string>('');
   
   // 资源配置状态
   const [memory, setMemory] = useState('4096');
@@ -64,6 +72,10 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       setMemory(node.config.memory || '4096');
       setCpu(node.config.cpu || '4');
       setDiskSize(node.config.diskSize || '20');
+
+      const { id: extractedTeamId, label: extractedTeamLabel } = extractTeamMeta(node.config);
+      setSelectedTeamId(extractedTeamId);
+      setLegacyTeamLabel(extractedTeamLabel);
 
       const parsedEnvs = node.config.env
         ? node.config.env.split(',').map(e => {
@@ -87,6 +99,54 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
 
     }
   }, [node, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const fetchTeams = async () => {
+      try {
+        const response = await customFetch('/back/api/ad/team?per_page=1000');
+        if (!response.ok) {
+          throw new Error(`获取队伍列表失败，状态码: ${response.status}`);
+        }
+        const data = await response.json();
+        const list = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+        if (!isMounted) return;
+        const mappedTeams: TeamOption[] = list
+          .map((team: any) => {
+            const id = String(team?.c_id ?? team?.id ?? '').trim();
+            if (!id) return null;
+            const rawName = String(team?.c_name ?? team?.name ?? '').trim();
+            return { id, name: rawName || id };
+          })
+          .filter((team): team is TeamOption => Boolean(team));
+        setTeams(mappedTeams);
+      } catch (error) {
+        console.error('获取队伍列表失败:', error);
+      }
+    };
+
+    fetchTeams();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  const teamOptions = useMemo(() => {
+    if (!selectedTeamId) return teams;
+    const exists = teams.some(team => team.id === selectedTeamId);
+    if (exists) return teams;
+    return [
+      ...teams,
+      { id: selectedTeamId, name: legacyTeamLabel || selectedTeamId },
+    ];
+  }, [teams, selectedTeamId, legacyTeamLabel]);
 
   // 表单验证
   const validate = (): boolean => {
@@ -121,6 +181,14 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
       cpu: cpu,
       diskSize: diskSize
     };
+
+    if (selectedTeamId) {
+      newConfig.teamId = selectedTeamId;
+    } else {
+      delete newConfig.teamId;
+    }
+    delete (newConfig as Record<string, unknown>)['teamAssignment'];
+
     onSave(node.id, newConfig, label);
     onClose();
   };
@@ -149,6 +217,24 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               helperText={_errors.label}
             />
             <TextField label="设备类型/名称" value={node.config.deviceName} fullWidth disabled />
+            <FormControl fullWidth size="small">
+              <InputLabel>队伍分配</InputLabel>
+              <Select
+                value={selectedTeamId}
+                label="队伍分配"
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <em></em>
+                </MenuItem>
+                {teamOptions.map(team => (
+                  <MenuItem key={team.id} value={team.id}>
+                    {team.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* 虚拟机镜像选择 */}
             <SearchableSelect
@@ -250,3 +336,37 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
 };
 
 export default VirtualMachineEditModal;
+
+function extractTeamMeta(config: NodeConfig): { id: string; label: string } {
+  const directId = config.teamId;
+  if (directId !== undefined && directId !== null && directId !== '') {
+    return { id: String(directId), label: '' };
+  }
+
+  const legacyAssignment = (config as any)?.teamAssignment;
+  if (legacyAssignment && typeof legacyAssignment === 'object') {
+    const legacyId =
+      legacyAssignment.id ??
+      legacyAssignment.teamId ??
+      legacyAssignment.c_id ??
+      '';
+    const legacyName =
+      legacyAssignment.name ??
+      legacyAssignment.c_name ??
+      legacyAssignment.label ??
+      '';
+
+    if (legacyId !== undefined && legacyId !== null && legacyId !== '') {
+      return {
+        id: String(legacyId),
+        label: legacyName ? String(legacyName) : String(legacyId),
+      };
+    }
+  }
+
+  if (typeof legacyAssignment === 'string' && legacyAssignment !== '') {
+    return { id: legacyAssignment, label: legacyAssignment };
+  }
+
+  return { id: '', label: '' };
+}

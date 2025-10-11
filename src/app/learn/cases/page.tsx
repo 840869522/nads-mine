@@ -34,10 +34,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import Pagination from '@mui/material/Pagination';
 import SecurityIcon from '@mui/icons-material/Security';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
 
-import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat, InstanceStatus } from '@/types';
+import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
 import CategoryFormModal from '@/components/coursecases/CategoryFormModal';
 import ExperimentFormModal from '@/components/coursecases/ExperimentFormModal';
@@ -45,7 +43,6 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import ResourceViewerModal from '@/components/coursecases/ResourceViewerModal';
 import CoursePermissionDialog from '@/components/coursecases/CoursePermissionDialog';
 import { apiClientWithToken } from '@/utils/axios';
-//import { BACK_IP_PORT } from '@/constants';
 import { getCookie } from '@/utils/cookie';
 
 const highlightText = (text: string, keyword: string) => {
@@ -55,12 +52,10 @@ const highlightText = (text: string, keyword: string) => {
 };
 
 const getFileType = (type: string): CourseCaseResourceFormat => {
-  // 如果已经是扩展名，直接返回
   const validExtensions = ['pdf', 'mp4', 'avi', 'pptx', 'docx', 'doc', 'jpg', 'png'];
   if (validExtensions.includes(type.toLowerCase())) {
     return type.toLowerCase() as CourseCaseResourceFormat;
   }
-  // 处理 MIME 类型
   if (type.includes('pdf')) return 'pdf';
   if (type.includes('mp4')) return 'mp4';
   if (type.includes('x-msvideo') || type.includes('avi')) return 'avi';
@@ -69,7 +64,7 @@ const getFileType = (type: string): CourseCaseResourceFormat => {
   if (type.includes('msword')) return 'doc';
   if (type.includes('jpeg')) return 'jpg';
   if (type.includes('png')) return 'png';
-  return 'other'; // 未知类型返回 'other'
+  return 'other';
 };
 
 const CourseCasesPage: React.FC = () => {
@@ -98,7 +93,6 @@ const CourseCasesPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [totalCases, setTotalCases] = useState<number>(0);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [experimentStatuses, setExperimentStatuses] = useState<{ [key: string]: InstanceStatus }>({});
   const [tabValue, setTabValue] = useState(0);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
@@ -111,14 +105,13 @@ const CourseCasesPage: React.FC = () => {
       setErrorMessage('');
       try {
         const token = getCookie('_auth');
-        console.log('JWT Token:', token); // 调试：输出 token
         if (!token) {
           setErrorMessage('未登录，请先登录');
           window.location.href = '/login';
           return;
         }
 
-        // Fetch categories
+        // 获取类别
         const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
           headers: { Authorization: `${token}` },
         });
@@ -132,7 +125,7 @@ const CourseCasesPage: React.FC = () => {
           setErrorMessage(`获取类别失败: ${categoriesData.message || '未知错误'}`);
         }
 
-        // Fetch courses
+        // 获取课程列表
         const params = {
           page: currentPage,
           pageSize: itemsPerPage,
@@ -145,99 +138,21 @@ const CourseCasesPage: React.FC = () => {
         });
         const coursesData = coursesResponse.data;
         if (coursesData.code === 200 || coursesData.code === 900) {
-          const mappedCourses = await Promise.all(
-              (coursesData.data.courses || []).map(async (course: any) => {
-                let resources: CourseCaseResource[] = [];
-                let experiments: Experiment[] = [];
-                try {
-                  const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                    headers: { Authorization: `${token}` },
-                    params: {
-                      page: 1,
-                      pageSize: 10
-                    }
-                  });
-                  const resourcesData = resourcesResponse.data;
-                  if (resourcesData.code === 200) {
-                    resources = (resourcesData.data.resources || []).map((res: any) => ({
-                      c_resource_id: res.c_resource_id,
-                      c_resource_name: res.c_resource_name,
-                      c_type: getFileType(res.c_type),
-                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
-                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                      isExperimentResource: false,
-                    }));
-                  }
-                } catch (error: any) {
-                  console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
-                }
-                try {
-                  const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                    headers: { Authorization: `${token}` },
-                  });
-                  const experimentsData = experimentsResponse.data;
-                  if (experimentsData.code === 200) {
-                    experiments = await Promise.all(
-                        (experimentsData.data.experiments || []).map(async (exp: any) => {
-                          let status: InstanceStatus = 'stopped';
-                          try {
-                            const instanceResponse = await apiClientWithToken.get(`/back/api/instances?scenario_id=${exp.c_config_id}`, {
-                              headers: { Authorization: `${token}` },
-                            });
-                            const instanceData = instanceResponse.data;
-                            status = instanceData.length > 0 ? (instanceData[0].status.toLowerCase() as InstanceStatus) : 'stopped';
-                          } catch (error: any) {
-                            console.warn(`获取实验 ${exp.c_experiment_id} 的场景实例状态失败: ${error.message || '无实例'}`);
-                          }
-                          return {
-                            c_experiment_id: exp.c_experiment_id,
-                            c_experiment_name: exp.c_experiment_name,
-                            c_description: exp.c_description || '',
-                            c_config_id: exp.c_config_id,
-                            c_name: exp.c_name || '',
-                            c_scene_config_id: exp.c_config_id,
-                            resources: (exp.resources || []).map((res: any) => ({
-                              c_resource_id: res.c_resource_id,
-                              c_resource_name: res.c_resource_name,
-                              c_type: getFileType(res.c_type),
-                              c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                              c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                              isExperimentResource: true,
-                            })),
-                            created_at: exp.created_at || new Date().toISOString(),
-                            status,
-                          };
-                        })
-                    );
-                  }
-                } catch (error: any) {
-                  console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
-                }
-                return {
-                  c_course_id: course.c_course_id,
-                  c_course_name: course.c_course_name,
-                  c_description: course.c_description || '',
-                  c_category_id: course.c_category_id,
-                  c_category_name: course.c_category_name,
-                  c_status: course.c_status || 'draft',
-                  resources,
-                  experiments,
-                  created_at: course.created_at || new Date().toISOString(),
-                  highlightedTitle: highlightText(course.c_course_name, searchKeyword),
-                  highlightedDescription: highlightText(course.c_description || '', searchKeyword),
-                };
-              })
-          );
+          const mappedCourses = (coursesData.data.courses || []).map((course: any) => ({
+            c_course_id: course.c_course_id,
+            c_course_name: course.c_course_name,
+            c_description: course.c_description || '',
+            c_category_id: course.c_category_id,
+            c_category_name: course.c_category_name,
+            c_status: course.c_status || 'draft',
+            resources: [], // 初始化为空
+            experiments: [], // 初始化为空
+            created_at: course.created_at || new Date().toISOString(),
+            highlightedTitle: highlightText(course.c_course_name, searchKeyword),
+            highlightedDescription: highlightText(course.c_description || '', searchKeyword),
+          }));
           setCourseCases(mappedCourses);
           setTotalCases(coursesData.data.total || 0);
-          const experimentStatuses = mappedCourses.reduce((acc, course) => ({
-            ...acc,
-            ...course.experiments.reduce((expAcc, exp) => ({
-              ...expAcc,
-              [exp.c_experiment_id]: exp.status || 'stopped',
-            }), {}),
-          }), {} as { [key: string]: InstanceStatus });
-          setExperimentStatuses(experimentStatuses);
         } else {
           setErrorMessage(`获取课程失败: ${coursesData.message || '未知错误'}`);
         }
@@ -262,6 +177,129 @@ const CourseCasesPage: React.FC = () => {
     return () => debouncedFetchData.cancel();
   }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
+  const handleOpenResourcesDialog = async (courseCase: CourseCase, tabIndex: number = 0) => {
+    setIsResourcesDialogOpen(true);
+    setTabValue(tabIndex);
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+
+      // 获取课程资源
+      const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/resources`, {
+        headers: { Authorization: `${token}` },
+        params: { page: 1, pageSize: 10 },
+      });
+      const resourcesData = resourcesResponse.data;
+      let resources: CourseCaseResource[] = [];
+      if (resourcesData.code === 200) {
+        resources = (resourcesData.data.resources || []).map((res: any) => ({
+          c_resource_id: res.c_resource_id,
+          c_resource_name: res.c_resource_name,
+          c_type: getFileType(res.c_type),
+          c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
+          c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+          isExperimentResource: false,
+        }));
+      } else {
+        console.warn(`获取课程资源失败: ${resourcesData.message || '未知错误'}`);
+      }
+
+      // 获取实验资源
+      const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/experiments`, {
+        headers: { Authorization: `${token}` },
+      });
+      const experimentsData = experimentsResponse.data;
+      let experiments: Experiment[] = [];
+      if (experimentsData.code === 200) {
+        experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
+          c_experiment_id: exp.c_experiment_id,
+          c_experiment_name: exp.c_experiment_name,
+          c_description: exp.c_description || '',
+          c_config_id: exp.c_config_id,
+          c_name: exp.c_name || '',
+          resources: (exp.resources || []).map((res: any) => ({
+            c_resource_id: res.c_resource_id,
+            c_resource_name: res.c_resource_name,
+            c_type: getFileType(res.c_type),
+            c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+            c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+            isExperimentResource: true,
+          })),
+          created_at: exp.created_at || new Date().toISOString(),
+        }));
+      } else {
+        console.warn(`获取实验失败: ${experimentsData.message || '未知错误'}`);
+      }
+
+      // 直接更新 selectedCaseForResources
+      setSelectedCaseForResources({
+        ...courseCase,
+        resources,
+        experiments,
+      });
+
+      // 可选：更新 courseCases 以保持状态一致
+      setCourseCases(prev =>
+          prev.map(course =>
+              course.c_course_id === courseCase.c_course_id
+                  ? { ...course, resources, experiments }
+                  : course
+          )
+      );
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '获取资源或实验失败';
+      setErrorMessage(message);
+      console.error('Error fetching resources or experiments:', {
+        message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenCategoryManagement = async () => {
+    setIsCategoryManagementOpen(true);
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const token = getCookie('_auth');
+      if (!token) {
+        throw new Error('未登录，请先登录');
+      }
+
+      // 获取类别
+      const categoriesResponse = await apiClientWithToken.get(`/back/api/study/categories`, {
+        headers: { Authorization: `${token}` },
+      });
+      const categoriesData = categoriesResponse.data;
+      if (categoriesData.code === 200) {
+        setCategories(
+            categoriesData.data.map((cat: { c_category_id: string; c_category_name: string }) => ({
+              c_category_id: cat.c_category_id,
+              c_category_name: cat.c_category_name,
+            })) || []
+        );
+      } else {
+        throw new Error(`获取类别失败: ${categoriesData.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '获取类别失败';
+      setErrorMessage(message);
+      console.error('Error fetching categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleOpenFormModal = (courseCase?: CourseCase) => {
     setEditingCase(courseCase || null);
     setIsFormModalOpen(true);
@@ -271,13 +309,11 @@ const CourseCasesPage: React.FC = () => {
     setEditingCategory(category || null);
     setIsCategoryModalOpen(true);
   };
-  const handleOpenCategoryManagement = () => {
-    setIsCategoryManagementOpen(true);
-  };
 
   const handleCloseCategoryManagement = () => {
     setIsCategoryManagementOpen(false);
   };
+
   const handleOpenExperimentModal = (courseId: string, experiment?: Experiment) => {
     setSelectedCourseId(courseId);
     setEditingExperiment(experiment || null);
@@ -299,6 +335,7 @@ const CourseCasesPage: React.FC = () => {
     setEditingExperiment(null);
     setSelectedCourseId(null);
   };
+
   const handleOpenPermissionDialog = (course: CourseCase) => {
     setSelectedCourse(course);
     setIsPermissionDialogOpen(true);
@@ -308,33 +345,10 @@ const CourseCasesPage: React.FC = () => {
     setIsPermissionDialogOpen(false);
     setSelectedCourse(null);
   };
-  // 添加 handlePermissionSaveSuccess
+
   const handlePermissionSaveSuccess = () => {
     setErrorMessage('权限保存成功');
-    setTimeout(() => setErrorMessage(''), 3000); // 3秒后清除提示
-  };
-
-  const handleStartExperiment = async (experiment: Experiment) => {
-    try {
-      setIsLoading(true);
-      const token = getCookie('_auth');
-      const username = getCookie('username') || 'default_user';
-      const response = await apiClientWithToken.post(`/back/api/scenarios/${experiment.c_scene_config_id}/start`, { username }, {
-        headers: { Authorization: `${token}` },
-      });
-      const responseData = response.data;
-      if (responseData.code === 200) {
-        setExperimentStatuses(prev => ({ ...prev, [experiment.c_experiment_id]: 'running' }));
-        setErrorMessage('');
-        alert('实验启动成功！');
-      } else {
-        setErrorMessage(`实验启动失败: ${responseData.message || '未知错误'}`);
-      }
-    } catch (error: any) {
-      setErrorMessage(error.response?.data?.message || '实验启动失败');
-    } finally {
-      setIsLoading(false);
-    }
+    setTimeout(() => setErrorMessage(''), 3000);
   };
 
   const handleSaveExperiment = async (experiment: Experiment, courseId: string) => {
@@ -346,15 +360,6 @@ const CourseCasesPage: React.FC = () => {
       if (!courseId || courseId === 'new') {
         throw new Error('请先保存课程后再添加实验');
       }
-
-      console.log('Saving experiment:', {
-        courseId,
-        experimentData: {
-          c_experiment_name: experiment.c_experiment_name,
-          c_description: experiment.c_description,
-          c_config_id: experiment.c_config_id,
-        },
-      });
 
       const experimentData = {
         c_experiment_name: experiment.c_experiment_name,
@@ -372,7 +377,7 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`创建实验失败: ${data.message || '未知错误'}`);
         }
         experimentId = data.data.c_experiment_id;
-        setErrorMessage('实验创建成功，用户权限已同步'); // 添加提示
+        setErrorMessage('实验创建成功，用户权限已同步');
         setTimeout(() => setErrorMessage(''), 3000);
       } else {
         const response = await apiClientWithToken.put(`/back/api/study/courses/${courseId}/experiments/${experiment.c_experiment_id}`, experimentData, {
@@ -405,34 +410,8 @@ const CourseCasesPage: React.FC = () => {
         }
       }
 
-      // Refresh experiment list
-      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseId}/experiments`, {
-        headers: { Authorization: `${token}` },
-      });
-      const experimentsData = coursesResponse.data;
-      if (experimentsData.code === 200) {
-        setCourseCases(prev =>
-            prev.map(course => {
-              if (course.c_course_id === courseId) {
-                return {
-                  ...course,
-                  experiments: experimentsData.data.experiments.map((exp: any) => ({
-                    c_experiment_id: exp.c_experiment_id,
-                    c_experiment_name: exp.c_experiment_name,
-                    c_description: exp.c_description,
-                    c_config_id: exp.c_config_id,
-                    c_name: exp.c_name,
-                    resources: exp.resources || [],
-                    created_at: exp.created_at,
-                  })),
-                };
-              }
-              return course;
-            })
-        );
-      } else {
-        throw new Error(`刷新实验列表失败: ${experimentsData.message || '未知错误'}`);
-      }
+      // 刷新实验列表
+      await handleRefreshExperiments(courseId);
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '保存实验失败';
       setErrorMessage(message);
@@ -443,13 +422,13 @@ const CourseCasesPage: React.FC = () => {
 
   const handleSaveCourseCase = async (savedCase: CourseCase) => {
     try {
-      const { c_course_id, c_course_name, c_description, c_category_id,c_status, resources } = savedCase;
+      const { c_course_id, c_course_name, c_description, c_category_id, c_status, resources } = savedCase;
       const courseData = {
         c_course_id,
         c_course_name,
         c_description,
         c_category_id,
-        c_status, // 添加 c_status
+        c_status,
       };
 
       const token = getCookie('_auth');
@@ -466,7 +445,6 @@ const CourseCasesPage: React.FC = () => {
         if (data.code !== 200) {
           throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
         }
-        // 局部更新 courseCases 状态
         setCourseCases(prev =>
             prev.map(course =>
                 course.c_course_id === c_course_id ? { ...course, ...courseData, c_status } : course
@@ -481,7 +459,6 @@ const CourseCasesPage: React.FC = () => {
           throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
         }
         courseId = data.data.c_course_id;
-
       }
 
       if (resources.length > 0) {
@@ -493,7 +470,7 @@ const CourseCasesPage: React.FC = () => {
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
-                'Authorization': `${token}`,
+                Authorization: `${token}`,
               },
             });
             const data = response.data;
@@ -505,83 +482,7 @@ const CourseCasesPage: React.FC = () => {
       }
 
       // 刷新课程列表
-      const coursesResponse = await apiClientWithToken.get(`/back/api/study/courses`, {
-        headers: { Authorization: `${token}` },
-        params: {
-          page: currentPage,
-          pageSize: itemsPerPage, // 使用动态每页条数
-          ...(searchKeyword && { keyword: searchKeyword }),
-          ...(filterCategoryId && { c_category_id: filterCategoryId }),
-        },
-      });
-      const coursesData = coursesResponse.data;
-      if (coursesData.code === 200 || coursesData.code === 900) {
-        const mappedCourses = await Promise.all(
-            (coursesData.data.courses || []).map(async (course: any) => {
-              let resources: CourseCaseResource[] = [];
-              let experiments: Experiment[] = [];
-              try {
-                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: `${token}` },
-                });
-                const resourcesData = resourcesResponse.data;
-                if (resourcesData.code === 200) {
-                  resources = (resourcesData.data.resources || []).map((res: any) => ({
-                    c_resource_id: res.c_resource_id,
-                    c_resource_name: res.c_resource_name,
-                    c_type: getFileType(res.c_type),
-                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
-                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                  }));
-                }
-              } catch (error: any) {
-                console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
-              }
-              try {
-                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                  headers: { Authorization: `${token}` },
-                });
-                const experimentsData = experimentsResponse.data;
-                if (experimentsData.code === 200) {
-                  experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
-                    c_experiment_id: exp.c_experiment_id,
-                    c_experiment_name: exp.c_experiment_name,
-                    c_description: exp.c_description || '',
-                    c_config_id: exp.c_config_id,
-                    c_name: exp.c_name || '',
-                    resources: (exp.resources || []).map((res: any) => ({
-                      c_resource_id: res.c_resource_id,
-                      c_resource_name: res.c_resource_name,
-                      c_type: getFileType(res.c_type),
-                      c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
-                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                    })),
-                    created_at: exp.created_at || new Date().toISOString(),
-                  }));
-                }
-              } catch (error: any) {
-                console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
-              }
-              return {
-                c_course_id: course.c_course_id,
-                c_course_name: course.c_course_name,
-                c_description: course.c_description || '',
-                c_status: course.c_status || 'published',
-                c_category_id: course.c_category_id,
-                c_category_name: course.c_category_name,
-                resources,
-                experiments,
-                created_at: course.created_at || new Date().toISOString(),
-                highlightedTitle: highlightText(course.c_course_name, searchKeyword),
-                highlightedDescription: highlightText(course.c_description || '', searchKeyword),
-              };
-            })
-        );
-        setCourseCases(mappedCourses);
-        setTotalCases(coursesData.data.total || 0);
-      } else {
-        throw new Error(`刷新课程列表失败: ${coursesData.message || '未知错误'}`);
-      }
+      await handleRefreshCourses();
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '保存课程案例失败';
       setErrorMessage(message);
@@ -589,6 +490,7 @@ const CourseCasesPage: React.FC = () => {
     }
     handleCloseFormModal();
   };
+
   const handleRefreshCategories = async () => {
     try {
       setIsLoading(true);
@@ -636,69 +538,19 @@ const CourseCasesPage: React.FC = () => {
       });
       const data = response.data;
       if (data.code === 200 || data.code === 900) {
-        const mappedCourses = await Promise.all(
-            (data.data.courses || []).map(async (course: any) => {
-              let resources: CourseCaseResource[] = [];
-              let experiments: Experiment[] = [];
-              try {
-                const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/resources`, {
-                  headers: { Authorization: `${token}` },
-                  params: { page: 1, pageSize: 10 },
-                });
-                const resourcesData = resourcesResponse.data;
-                if (resourcesData.code === 200) {
-                  resources = (resourcesData.data.resources || []).map((res: any) => ({
-                    c_resource_id: res.c_resource_id,
-                    c_resource_name: res.c_resource_name,
-                    c_type: getFileType(res.c_type),
-                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
-                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                    isExperimentResource: false,
-                  }));
-                }
-              } catch (error: any) {
-                console.warn(`获取课程 ${course.c_course_id} 的资源失败: ${error.message || '无资源'}`);
-              }
-              try {
-                const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${course.c_course_id}/experiments`, {
-                  headers: { Authorization: `${token}` },
-                });
-                const experimentsData = experimentsResponse.data;
-                if (experimentsData.code === 200) {
-                  experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
-                    c_experiment_id: exp.c_experiment_id,
-                    c_experiment_name: exp.c_experiment_name,
-                    c_description: exp.c_description || '',
-                    c_config_id: exp.c_config_id,
-                    c_name: exp.c_name || '',
-                    resources: (exp.resources || []).map((res: any) => ({
-                      c_resource_id: res.c_resource_id,
-                      c_resource_name: res.c_resource_name,
-                      c_type: getFileType(res.c_type),
-                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                      isExperimentResource: true,
-                    })),
-                    created_at: exp.created_at || new Date().toISOString(),
-                  }));
-                }
-              } catch (error: any) {
-                console.warn(`获取课程 ${course.c_course_id} 的实验失败: ${error.message || '无实验'}`);
-              }
-              return {
-                c_course_id: course.c_course_id,
-                c_course_name: course.c_course_name,
-                c_description: course.c_description || '',
-                c_category_id: course.c_category_id,
-                c_category_name: course.c_category_name,
-                resources,
-                experiments,
-                created_at: course.created_at || new Date().toISOString(),
-                highlightedTitle: highlightText(course.c_course_name, searchKeyword),
-                highlightedDescription: highlightText(course.c_description || '', searchKeyword),
-              };
-            })
-        );
+        const mappedCourses = (data.data.courses || []).map((course: any) => ({
+          c_course_id: course.c_course_id,
+          c_course_name: course.c_course_name,
+          c_description: course.c_description || '',
+          c_category_id: course.c_category_id,
+          c_category_name: course.c_category_name,
+          c_status: course.c_status || 'draft',
+          resources: [],
+          experiments: [],
+          created_at: course.created_at || new Date().toISOString(),
+          highlightedTitle: highlightText(course.c_course_name, searchKeyword),
+          highlightedDescription: highlightText(course.c_description || '', searchKeyword),
+        }));
         setCourseCases(mappedCourses);
         setTotalCases(data.data.total || 0);
       } else {
@@ -725,32 +577,34 @@ const CourseCasesPage: React.FC = () => {
       });
       const data = response.data;
       if (data.code === 200) {
+        const experiments = (data.data.experiments || []).map((exp: any) => ({
+          c_experiment_id: exp.c_experiment_id,
+          c_experiment_name: exp.c_experiment_name,
+          c_description: exp.c_description || '',
+          c_config_id: exp.c_config_id,
+          c_name: exp.c_name || '',
+          resources: (exp.resources || []).map((res: any) => ({
+            c_resource_id: res.c_resource_id,
+            c_resource_name: res.c_resource_name,
+            c_type: getFileType(res.c_type),
+            c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
+            c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+            isExperimentResource: true,
+          })),
+          created_at: exp.created_at || new Date().toISOString(),
+        }));
         setCourseCases(prev =>
             prev.map(course => {
               if (course.c_course_id === courseId) {
-                return {
-                  ...course,
-                  experiments: data.data.experiments.map((exp: any) => ({
-                    c_experiment_id: exp.c_experiment_id,
-                    c_experiment_name: exp.c_experiment_name,
-                    c_description: exp.c_description || '',
-                    c_config_id: exp.c_config_id,
-                    c_name: exp.c_name || '',
-                    resources: (exp.resources || []).map((res: any) => ({
-                      c_resource_id: res.c_resource_id,
-                      c_resource_name: res.c_resource_name,
-                      c_type: getFileType(res.c_type),
-                      c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                      c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                      isExperimentResource: true,
-                    })),
-                    created_at: exp.created_at || new Date().toISOString(),
-                  })),
-                };
+                return { ...course, experiments };
               }
               return course;
             })
         );
+        // 更新 selectedCaseForResources
+        if (selectedCaseForResources?.c_course_id === courseId) {
+          setSelectedCaseForResources(prev => (prev ? { ...prev, experiments } : null));
+        }
       } else {
         throw new Error(`刷新实验失败: ${data.message || '未知错误'}`);
       }
@@ -762,6 +616,7 @@ const CourseCasesPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
   const handleSaveCategory = async (category: Category) => {
     try {
       const token = getCookie('_auth');
@@ -807,6 +662,7 @@ const CourseCasesPage: React.FC = () => {
     }
     handleCloseCategoryModal();
   };
+
   const handleDeleteCategory = async () => {
     if (categoryToDelete) {
       try {
@@ -835,6 +691,7 @@ const CourseCasesPage: React.FC = () => {
     setCategoryToDelete(null);
     setIsConfirmDialogOpen(false);
   };
+
   const handleConfirmDelete = () => {
     if (experimentToDelete) {
       handleDeleteExperiment();
@@ -844,6 +701,7 @@ const CourseCasesPage: React.FC = () => {
       handleDeleteCategory();
     }
   };
+
   const handleDeleteCourseCase = async () => {
     if (caseToDelete) {
       try {
@@ -900,6 +758,14 @@ const CourseCasesPage: React.FC = () => {
                 }
                 return course;
               })
+          );
+          setSelectedCaseForResources(prev =>
+              prev
+                  ? {
+                    ...prev,
+                    experiments: prev.experiments?.filter(exp => exp.c_experiment_id !== experimentToDelete.c_experiment_id) || [],
+                  }
+                  : null
           );
         } else {
           throw new Error(`删除实验失败: ${data.message || '未知错误'}`);
@@ -962,6 +828,28 @@ const CourseCasesPage: React.FC = () => {
               return course;
             })
         );
+        setSelectedCaseForResources(prev =>
+            prev
+                ? {
+                  ...prev,
+                  ...(isExperimentResource && experimentId
+                      ? {
+                        experiments: prev.experiments?.map(exp => {
+                          if (exp.c_experiment_id === experimentId) {
+                            return {
+                              ...exp,
+                              resources: exp.resources.filter(r => r.c_resource_id !== resource.c_resource_id),
+                            };
+                          }
+                          return exp;
+                        }) || [],
+                      }
+                      : {
+                        resources: prev.resources.filter(r => r.c_resource_id !== resource.c_resource_id),
+                      }),
+                }
+                : null
+        );
       } else {
         throw new Error(`删除资源失败: ${data.message || '未知错误'}`);
       }
@@ -973,18 +861,14 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handleOpenResourceViewer = (resource: CourseCaseResource) => {
-    const token = getCookie('_auth'); // ✅ 获取 Token
+    const token = getCookie('_auth');
     let updatedResource = resource;
 
-    // 仅在资源路径为 HTTP URL 时附加 Token
     if (resource.c_resource_path && !resource.c_resource_path.startsWith('blob:')) {
-      // 使用 URLSearchParams 避免重复参数
       const url = new URL(resource.c_resource_path, window.location.origin);
       url.searchParams.set('token', token);
       updatedResource = { ...resource, c_resource_path: url.toString() };
-    }
-    // 若为 Blob URL（本地文件），保留原有逻辑
-    else if (!resource.c_resource_path && resource.fileObject) {
+    } else if (!resource.c_resource_path && resource.fileObject) {
       updatedResource = {
         ...resource,
         c_resource_path: URL.createObjectURL(resource.fileObject)
@@ -1014,17 +898,11 @@ const CourseCasesPage: React.FC = () => {
 
   const handleItemsPerPageChange = debounce((event: SelectChangeEvent) => {
     setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1); // 重置到第一页
+    setCurrentPage(1);
   }, 300);
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
     setCurrentPage(page);
-  };
-
-  const handleOpenResourcesDialog = (courseCase: CourseCase, tabIndex: number = 0) => {
-    setSelectedCaseForResources(courseCase);
-    setIsResourcesDialogOpen(true);
-    setTabValue(tabIndex);
   };
 
   const handleCloseResourcesDialog = () => {
@@ -1048,7 +926,7 @@ const CourseCasesPage: React.FC = () => {
   const getPageNumbers = () => {
     const totalPages = Math.ceil(totalCases / itemsPerPage);
     const pageNumbers = [];
-    const maxVisiblePages = 5; // 显示的最大页码数
+    const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -1223,7 +1101,7 @@ const CourseCasesPage: React.FC = () => {
                       <span dangerouslySetInnerHTML={{ __html: course.highlightedDescription || course.c_description || '-' }} />
                     </TableCell>
                     <TableCell>{course.c_category_name}</TableCell>
-                    <TableCell>  {/* 新增 */}
+                    <TableCell>
                       <Chip
                           label={course.c_status === 'published' ? '发布' : '草稿'}
                           color={course.c_status === 'published' ? 'success' : 'default'}
@@ -1267,119 +1145,104 @@ const CourseCasesPage: React.FC = () => {
               color="primary"
           />
         </Box>
-        <Dialog open={isConfirmDialogOpen} onClose={() => setIsConfirmDialogOpen(false)}>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              {experimentToDelete
-                  ? `确定要删除实验 "${experimentToDelete.c_experiment_name}" 吗？此操作不可撤销。`
-                  : caseToDelete
-                      ? `确定要删除课程 "${caseToDelete.c_course_name}" 吗？此操作不可撤销。`
-                      : categoryToDelete
-                          ? `确定要删除类别 "${categoryToDelete.c_category_name}" 吗？此操作将删除该类别下的所有课程，且不可撤销。`
-                          : '确定要删除吗？'}
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setIsConfirmDialogOpen(false)}>取消</Button>
-            <Button onClick={handleConfirmDelete} color="error" variant="contained">
-              删除
-            </Button>
-          </DialogActions>
-        </Dialog>
         <Dialog open={isResourcesDialogOpen} onClose={handleCloseResourcesDialog} maxWidth="md" fullWidth>
           <DialogTitle>
             {selectedCaseForResources?.c_course_name} 的资源
           </DialogTitle>
           <DialogContent>
-            <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
-              <Tab label="课程资源" />
-              <Tab label="实验资源" />
-            </Tabs>
-            {tabValue === 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle1">课程资源</Typography>
-                  {selectedCaseForResources?.resources.length ? (
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>资源名称</TableCell>
-                            <TableCell>类型</TableCell>
-                            <TableCell>大小</TableCell>
-                            <TableCell>操作</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {selectedCaseForResources.resources.map(resource => (
-                              <TableRow key={resource.c_resource_id}>
-                                <TableCell>{resource.c_resource_name}</TableCell>
-                                <TableCell>{resource.c_type}</TableCell>
-                                <TableCell>{resource.c_size}</TableCell>
-                                <TableCell>
-                                  <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                    <VisibilityIcon />
-                                  </IconButton>
-
-                                </TableCell>
-                              </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                  ) : (
-                      <Typography>无课程资源</Typography>
-                  )}
+            {isLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+                  <CircularProgress />
                 </Box>
-            )}
-
-            {tabValue === 1 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle1">实验资源</Typography>
-                  {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) ? (
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>实验名称</TableCell>
-                            <TableCell>资源名称</TableCell>
-                            <TableCell>类型</TableCell>
-                            <TableCell>大小</TableCell>
-                            <TableCell>操作</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(selectedCaseForResources?.experiments || [])
-                              .filter((exp: Experiment) => exp.resources.length > 0)
-                              .flatMap((exp: Experiment) =>
-                                  exp.resources.map((resource: CourseCaseResource) => ({
-                                    experiment: exp,
-                                    resource,
-                                  }))
-                              )
-                              .map(({ experiment, resource }: { experiment: Experiment; resource: CourseCaseResource }, index: number) => (
-                                  <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
-                                    <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
-                                    <TableCell>{resource.c_resource_name}</TableCell>
-                                    <TableCell>{resource.c_type}</TableCell>
-                                    <TableCell>{resource.c_size}</TableCell>
-                                    <TableCell>
-                                      <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                        <VisibilityIcon />
-                                      </IconButton>
-                                      <IconButton
-                                          onClick={() => handleDeleteResource(resource, true, experiment.c_experiment_id)}
-                                          title="删除"
-                                      >
-                                        <DeleteIcon />
-                                      </IconButton>
-                                    </TableCell>
-
-                                  </TableRow>
-                              ))}
-                        </TableBody>
-                      </Table>
-                  ) : (
-                      <Typography>无实验资源</Typography>
+            ) : (
+                <>
+                  <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
+                    <Tab label="课程资源" />
+                    <Tab label="实验资源" />
+                  </Tabs>
+                  {tabValue === 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle1">课程资源</Typography>
+                        {selectedCaseForResources?.resources?.length ? (
+                            <Table>
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>资源名称</TableCell>
+                                  <TableCell>类型</TableCell>
+                                  <TableCell>大小</TableCell>
+                                  <TableCell>操作</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {selectedCaseForResources.resources.map(resource => (
+                                    <TableRow key={resource.c_resource_id}>
+                                      <TableCell>{resource.c_resource_name}</TableCell>
+                                      <TableCell>{resource.c_type}</TableCell>
+                                      <TableCell>{resource.c_size}</TableCell>
+                                      <TableCell>
+                                        <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                          <VisibilityIcon />
+                                        </IconButton>
+                                      </TableCell>
+                                    </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                        ) : (
+                            <Typography>无课程资源</Typography>
+                        )}
+                      </Box>
                   )}
-                </Box>
+                  {tabValue === 1 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle1">实验资源</Typography>
+                        {selectedCaseForResources?.experiments?.some(exp => exp.resources?.length > 0) ? (
+                            <Table>
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>实验名称</TableCell>
+                                  <TableCell>资源名称</TableCell>
+                                  <TableCell>类型</TableCell>
+                                  <TableCell>大小</TableCell>
+                                  <TableCell>操作</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {(selectedCaseForResources?.experiments || [])
+                                    .filter((exp: Experiment) => exp.resources?.length > 0)
+                                    .flatMap((exp: Experiment) =>
+                                        exp.resources.map((resource: CourseCaseResource) => ({
+                                          experiment: exp,
+                                          resource,
+                                        }))
+                                    )
+                                    .map(({ experiment, resource }: { experiment: Experiment; resource: CourseCaseResource }, index: number) => (
+                                        <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
+                                          <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
+                                          <TableCell>{resource.c_resource_name}</TableCell>
+                                          <TableCell>{resource.c_type}</TableCell>
+                                          <TableCell>{resource.c_size}</TableCell>
+                                          <TableCell>
+                                            <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                              <VisibilityIcon />
+                                            </IconButton>
+                                            <IconButton
+                                                onClick={() => handleDeleteResource(resource, true, experiment.c_experiment_id)}
+                                                title="删除"
+                                            >
+                                              <DeleteIcon />
+                                            </IconButton>
+                                          </TableCell>
+                                        </TableRow>
+                                    ))}
+                              </TableBody>
+                            </Table>
+                        ) : (
+                            <Typography>无实验资源</Typography>
+                        )}
+                      </Box>
+                  )}
+                </>
             )}
           </DialogContent>
           <DialogActions>

@@ -9,7 +9,8 @@ import {
     TopologyAction,
     TopologyData,
 } from '../../../types';
-import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES } from '../../../constants';
+import { DEFAULT_NODE_CONFIG, DEFAULT_EDGE_CONFIG, TOPOLOGY_DEVICE_TYPES, TRAFFIC_SIMULATION_IMAGES, TRAFFIC_MIRRORING_IMAGES } from '../../../constants';
+import { canDirectlyLinkNodes, wouldViolateSingleSwitchRule } from './topologyRules';
 import TopologyToolbar from './TopologyToolbar';//包含一个 TopologyToolbar，提供撤销、重做、保存、导入/导出等高级功能。
 import TopologyCanvas from './TopologyCanvas';//可视化画布
 import NodeEditModal from './NodeEditModal';
@@ -36,19 +37,7 @@ interface TopologyState {
     selectedElement: { id: string; type: 'node' | 'edge' } | null;
     linkingState: { startNodeId: string } | null;
 }
-// 辅助：判断两节点是否允许直连（至少一端为交换机）
-const canDirectlyLinkNodes = (a?: TopologyNode, b?: TopologyNode): boolean => {
-    return !!(a && b && (a.type === 'switch' || b.type === 'switch'));
-};
-
-// 新增：限制规则 - 同一个容器或虚拟机只能连接一个交换机（即仅允许一条边）
-const isContainerOrVM = (n?: TopologyNode): boolean => !!n && (n.type === 'container' || n.type === 'virtual_machine');
-const wouldViolateSingleSwitchRule = (a: TopologyNode | undefined, b: TopologyNode | undefined, edges: TopologyEdge[]): boolean => {
-    if (!a || !b) return true;
-    const aHasEdge = isContainerOrVM(a) && edges.some(e => e.source === a.id || e.target === a.id);
-    const bHasEdge = isContainerOrVM(b) && edges.some(e => e.source === b.id || e.target === b.id);
-    return aHasEdge || bHasEdge;
-};
+// 直连与限制规则：改为使用共享规则（topologyRules）
 
 // 函数: 这是一个纯函数，是状态管理的核心。它接收当前的状态 (state)
 // 和一个动作 (action)，然后根据动作的类型（如 'ADD_NODE', 'MOVE_NODE'）
@@ -82,15 +71,13 @@ function topologyReducer(state: TopologyState, action: TopologyAction): Topology
         case 'START_LINKING': return { ...state, linkingState: { startNodeId: action.payload.startNodeId } };
         case 'LOAD_TOPOLOGY': {
             const { nodes: loadedNodes, edges: loadedEdges } = action.payload.topologyData as TopologyData;
-            // 顺序过滤：先满足“至少一端为交换机”，再确保每个容器/虚拟机最多仅保留一条边
+            // 顺序过滤：与运行期规则保持一致
             const filtered: TopologyEdge[] = [];
             for (const e of loadedEdges) {
                 const s = loadedNodes.find(n => n.id === e.source);
                 const t = loadedNodes.find(n => n.id === e.target);
-                if (!canDirectlyLinkNodes(s, t)) continue;
-                const violates = (isContainerOrVM(s) && filtered.some(x => x.source === s!.id || x.target === s!.id))
-                              || (isContainerOrVM(t) && filtered.some(x => x.source === t!.id || x.target === t!.id));
-                if (violates) continue;
+                if (!canDirectlyLinkNodes(s, t)) continue; // 允许：switch 或 特殊镜像容器
+                if (wouldViolateSingleSwitchRule(s, t, filtered)) continue; // 特殊镜像容器不受单边限制
                 filtered.push(e);
             }
             return { ...initialTopologyState, nodes: loadedNodes, edges: filtered };
@@ -251,10 +238,9 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     // --- 修改结束 ---
     const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
     const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [nodeMoveInitialPosition, pushToUndoStack]);
-    const canDirectlyLink = useCallback((a: TopologyNode, b: TopologyNode) => {
-        // 至少一端为交换机即可直连
-        return a.type === 'switch' || b.type === 'switch';
-    }, []);
+    // 使用包含特殊镜像容器规则的直连判定
+    // 允许：至少一端为交换机，或任一端为特殊镜像容器
+    // 统一与 reducer 的 canDirectlyLinkNodes 逻辑保持一致
 
     const handleNodeSelect = useCallback((nodeId: string | null, event?: React.MouseEvent) => {
         event?.stopPropagation();
@@ -270,7 +256,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 const sourceNode = nodes.find(n => n.id === linkingState.startNodeId);
                 const targetNode = nodes.find(n => n.id === nodeId);
                 if (sourceNode && targetNode) {
-                    if (!canDirectlyLink(sourceNode, targetNode)) {
+                    if (!canDirectlyLinkNodes(sourceNode, targetNode)) {
                         return;
                     }
 
@@ -305,7 +291,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: nodeId, type: 'node' } } });
             dispatch({ type: 'START_LINKING', payload: { startNodeId: nodeId } });
         }
-    }, [linkingState, nodes, edges, dispatch, pushToUndoStack, canDirectlyLink]);
+    }, [linkingState, nodes, edges, dispatch, pushToUndoStack]);
     const handleEdgeSelect = useCallback((edgeId: string | null) => { if (edgeId) { dispatch({ type: 'SELECT_ELEMENT', payload: { element: { id: edgeId, type: 'edge' } } }); } else { dispatch({ type: 'CLEAR_SELECTION', payload: null }); } }, [dispatch]);
     const handleCanvasClick = useCallback(() => { dispatch({ type: 'CLEAR_SELECTION', payload: null }); }, [dispatch]);
 
@@ -425,7 +411,6 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         }
 
         // 创建默认的Docker镜像容器
-        const defaultImageName = 'suricata:v1'; // 默认镜像名称
         const containerCount = nodes.filter(n => n.type === 'container').length + 1;
         const containerLabel = `Mirror-${containerCount}`;
         
@@ -438,7 +423,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: TRAFFIC_MIRRORING_IMAGES.SURICATA,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
@@ -482,8 +467,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             return;
         }
 
-        // 创建默认的Docker镜像名称
-        const defaultImageName = 'nicolaka/netshoot:latest';
+        // 创建两个不同的Docker镜像名称
         const containerCount = nodes.filter(n => n.type === 'container').length;
         
         // 创建两个模拟容器
@@ -495,7 +479,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y - 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: TRAFFIC_SIMULATION_IMAGES.SURICATA,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
@@ -508,7 +492,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             y: selectedSwitch.y + 50,
             config: {
                 ...DEFAULT_NODE_CONFIG.container,
-                Image: defaultImageName,
+                Image: TRAFFIC_SIMULATION_IMAGES.IPERF,
                 env: `ELASTICSEARCH_HOST=10.100.88.88,ELASTICSEARCH_PORT=9200,TZ=Asia/Shanghai,ZEEK_ENABLED=1,SYSDIG_ENABLED=1`
             }
         };
