@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import useSWR from 'swr';
 import {
     Box, Typography, CircularProgress, Alert as MuiAlert, Paper, IconButton, Chip, Tooltip,
     TextField, InputAdornment, Switch, FormControlLabel, Menu, MenuItem, Button, useTheme
@@ -29,9 +30,51 @@ interface ContainerInstancesTabProps {
     instanceId: string | null;
 }
 
+interface SupportUserResponse {
+    code: number;
+    message: string;
+    data?: {
+        c_username?: string;
+        role?: string[];
+        [key: string]: unknown;
+    };
+}
+
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const { user } = useAuth();
+    const authUsername = useMemo(
+        () => ((user?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
+        [user]
+    );
+    const { data: supportUserResponse, error: supportUserError } = useSWR<SupportUserResponse>(
+        authUsername ? ['/back/api/support/user/id', authUsername] : null,
+        ([url, id]) =>
+            customFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).then(async (res) => {
+                if (!res.ok) {
+                    const message = res.statusText || '获取用户信息失败';
+                    throw new Error(message);
+                }
+                return res.json();
+            }),
+        {
+            revalidateOnFocus: false,
+        }
+    );
+    useEffect(() => {
+        if (supportUserError) {
+            console.warn('[Container Terminal] 获取用户信息失败:', supportUserError.message);
+        }
+    }, [supportUserError]);
+    const supportUserData = supportUserResponse?.data;
+    const effectiveUsername = useMemo(
+        () => supportUserData?.c_username ?? authUsername,
+        [supportUserData?.c_username, authUsername]
+    );
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +89,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
+    const [permissionAlert, setPermissionAlert] = useState<{ type: 'info' | 'error'; message: string } | null>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
         is_target: true, // Added for the new column
@@ -264,8 +308,62 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         );
     }, [instances, searchTerm]);
 
+    const handleOpenTerminalWithAuthority = useCallback(async (containerId: string) => {
+        try {
+            const payload: Record<string, unknown> = {};
+            if (effectiveUsername) {
+                payload.username = effectiveUsername;
+            }
+            if (supportUserData) {
+                payload.user = supportUserData;
+                if (Array.isArray(supportUserData.role)) {
+                    payload.roles = supportUserData.role;
+                }
+            }
+
+            const hasPayload = Object.keys(payload).length > 0;
+            const response = await customFetch(
+                `${API_BASE}/api/containers/${containerId}/terminal-with-authority`,
+                hasPayload
+                    ? {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                      }
+                    : undefined
+            );
+            let data: any = null;
+            try {
+                data = await response.clone().json();
+            } catch (err) {
+                data = null;
+            }
+
+            if (!response.ok || (data && data.allowed === false)) {
+                const message = data?.message || data?.error || '无权访问该容器终端';
+                setPermissionAlert({ type: 'error', message });
+                return;
+            }
+
+            if (data?.message) {
+                setPermissionAlert({ type: 'info', message: data.message });
+            } else {
+                setPermissionAlert(null);
+            }
+
+            openTerminal(containerId);
+        } catch (error) {
+            setPermissionAlert({ type: 'error', message: '终端权限校验失败，请稍后重试。' });
+        }
+    }, [effectiveUsername, openTerminal, supportUserData]);
+
     return (
         <Box>
+            {permissionAlert && (
+                <MuiAlert severity={permissionAlert.type} sx={{ mb: 2 }}>
+                    {permissionAlert.message}
+                </MuiAlert>
+            )}
              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                   <Typography variant="h6">容器列表</Typography>
                   <TextField
@@ -337,7 +435,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     Bind mounts
                 </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => {
+                    const id = moreMenuAnchor.id;
+                    setMoreMenuAnchor({ anchor: null, id: null });
+                    if (id) {
+                        void handleOpenTerminalWithAuthority(id);
+                    }
+                }}>
                     Terminal
                 </MenuItem>
             </Menu>
