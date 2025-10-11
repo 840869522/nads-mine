@@ -65,6 +65,7 @@ class VmController extends Controller
                     'v.c_scene_instances_id',
                     'v.c_ip',
                     'v.c_flag', // ★★★ 1. 查询 c_flag 字段 ★★★
+                    'v.c_team_id',
                     'sc.c_name as scene_name'
                 )
                 // 核心筛选条件：只选择属于特定场景实例的VM
@@ -90,6 +91,7 @@ class VmController extends Controller
                 $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
                 $vm['scene_name']        = $dbInfo->scene_name;
                 $vm['ip']                = $dbInfo->c_ip;
+                $vm['team'] = $dbInfo->c_team_id;
                 // ★★★ 2. 根据 c_flag 是否为空来设置 is_target ★★★
                 $vm['is_target']         = !empty($dbInfo->c_flag);
 
