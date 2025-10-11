@@ -414,11 +414,11 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         }
       });
 
-      if (answerGroups.length === 0) {
-        showSnackbar('没有提交任何答案，请至少回答一道题目', 'error');
-        setLoading(false);
-        return;
-      }
+      // if (answerGroups.length === 0) {
+      //   showSnackbar('没有提交任何答案，请至少回答一道题目', 'error');
+      //   setLoading(false);
+      //   return;
+      // }
 
       submitParams = {
         test_id: test.test_id,
