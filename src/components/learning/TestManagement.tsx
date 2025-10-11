@@ -1067,9 +1067,11 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
                       <div>开始: {startStr}</div>
                       <div>结束: {endStr}</div>
                     </Box>
-                  </TableCell>
-                   {activeTab === 'theory' && (
-                    <TableCell align="center">{test.c_duration || 0}</TableCell>
+                   </TableCell>
+                  {activeTab === 'theory' && (
+                    <TableCell align="center">
+                      {test.c_type === '练习' ? '不限时' : (test.c_duration || 0) + '分钟'}
+                    </TableCell>
                   )}
                   <TableCell align="center">
                     <Chip
