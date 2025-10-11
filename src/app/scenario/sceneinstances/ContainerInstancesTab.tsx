@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import useSWR from 'swr';
 import {
     Box, Typography, CircularProgress, Alert as MuiAlert, Paper, IconButton, Chip, Tooltip,
     TextField, InputAdornment, Switch, FormControlLabel, Menu, MenuItem, Button, useTheme
@@ -29,9 +30,51 @@ interface ContainerInstancesTabProps {
     instanceId: string | null;
 }
 
+interface SupportUserResponse {
+    code: number;
+    message: string;
+    data?: {
+        c_username?: string;
+        role?: string[];
+        [key: string]: unknown;
+    };
+}
+
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const { user } = useAuth();
+    const authUsername = useMemo(
+        () => ((user?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
+        [user]
+    );
+    const { data: supportUserResponse, error: supportUserError } = useSWR<SupportUserResponse>(
+        authUsername ? ['/back/api/support/user/id', authUsername] : null,
+        ([url, id]) =>
+            customFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).then(async (res) => {
+                if (!res.ok) {
+                    const message = res.statusText || '获取用户信息失败';
+                    throw new Error(message);
+                }
+                return res.json();
+            }),
+        {
+            revalidateOnFocus: false,
+        }
+    );
+    useEffect(() => {
+        if (supportUserError) {
+            console.warn('[Container Terminal] 获取用户信息失败:', supportUserError.message);
+        }
+    }, [supportUserError]);
+    const supportUserData = supportUserResponse?.data;
+    const effectiveUsername = useMemo(
+        () => supportUserData?.c_username ?? authUsername,
+        [supportUserData?.c_username, authUsername]
+    );
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -267,7 +310,28 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
     const handleOpenTerminalWithAuthority = useCallback(async (containerId: string) => {
         try {
-            const response = await customFetch(`${API_BASE}/api/containers/${containerId}/terminal-with-authority`);
+            const payload: Record<string, unknown> = {};
+            if (effectiveUsername) {
+                payload.username = effectiveUsername;
+            }
+            if (supportUserData) {
+                payload.user = supportUserData;
+                if (Array.isArray(supportUserData.role)) {
+                    payload.roles = supportUserData.role;
+                }
+            }
+
+            const hasPayload = Object.keys(payload).length > 0;
+            const response = await customFetch(
+                `${API_BASE}/api/containers/${containerId}/terminal-with-authority`,
+                hasPayload
+                    ? {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                      }
+                    : undefined
+            );
             let data: any = null;
             try {
                 data = await response.clone().json();
@@ -291,7 +355,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         } catch (error) {
             setPermissionAlert({ type: 'error', message: '终端权限校验失败，请稍后重试。' });
         }
-    }, [openTerminal]);
+    }, [effectiveUsername, openTerminal, supportUserData]);
 
     return (
         <Box>

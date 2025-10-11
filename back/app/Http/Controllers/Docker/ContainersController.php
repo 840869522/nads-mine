@@ -177,6 +177,13 @@ class ContainersController extends Controller
             $username = $tokenData['id'];
         } elseif ($request->has('username')) {
             $username = $request->input('username');
+        } else {
+            $userPayload = $request->input('user');
+            if (is_array($userPayload) && isset($userPayload['c_username'])) {
+                $username = $userPayload['c_username'];
+            } elseif (is_object($userPayload) && isset($userPayload->c_username)) {
+                $username = $userPayload->c_username;
+            }
         }
 
         if (!$username) {
