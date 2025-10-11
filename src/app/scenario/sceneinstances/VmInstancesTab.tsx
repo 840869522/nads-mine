@@ -46,6 +46,7 @@ import useSWR, { mutate as globalMutate } from "swr";
 import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
+import { useAuth } from '@/hooks/useAuth';
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -147,8 +148,36 @@ function stateIcon(state: VmInstance["state"]) {
 const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const forceRefreshUntil = React.useRef(0);
+    const { user: authUser } = useAuth();
+    const authUsername = React.useMemo(
+        () => ((authUser?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
+        [authUser]
+    );
+    const { data: currentUser, error: currentUserError } = useSWR<SupportUserResponse>(
+        authUsername ? ['/back/api/support/user/id', authUsername] : null,
+        ([url, id]) =>
+            customFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).then(async (res) => {
+                if (!res.ok) {
+                    const message = res.statusText || '获取用户信息失败';
+                    throw new Error(message);
+                }
+                return res.json();
+            }),
+        {
+            revalidateOnFocus: false,
+        }
+    );
+    const effectiveUsername = currentUser?.data?.c_username ?? authUsername;
+    React.useEffect(() => {
+        if (currentUserError) {
+            console.log(`[Guac Authority] 获取用户信息失败: ${currentUserError.message}`);
+        }
+    }, [currentUserError]);
     const { data, isLoading, isValidating, mutate } = useVmInstances(instanceId, forceRefreshUntil);
-    const { data: currentUser } = useSWR<SupportUserResponse>('/back/api/support/user/id', fetcher);
 
     const [search, setSearch] = React.useState("");
     const [page, setPage] = React.useState(0);
@@ -209,9 +238,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         const params = new URLSearchParams({ method: proto, vm_name: vmName });
-        const username = currentUser?.data?.c_username;
-        if (username) {
-            params.append('username', username);
+        if (effectiveUsername) {
+            params.append('username', effectiveUsername);
+        } else {
+            const reason = currentUserError?.message || '当前用户信息尚未加载';
+            console.log(`[Guac Authority] ${reason}`);
+            alert(reason);
+            setActionAnchor({ anchor: null, id: null });
+            return;
         }
 
         try {
@@ -440,7 +474,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
                 <MenuItem
-                    disabled={!selectedVm || !!blockedVnc[selectedVm.name]}
+                    disabled={!selectedVm || !!blockedVnc[selectedVm.name] || !effectiveUsername}
                     onClick={() => {
                         if (selectedVm) {
                             handleGuac(selectedVm.name, 'vnc');
