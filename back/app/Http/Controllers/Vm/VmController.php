@@ -651,7 +651,7 @@ class VmController extends Controller
             }
 
             try {
-                // 中文注释：查询用户的全部角色，用于判断是否拥有管理员等跨队伍访问权限
+                // 查询用户的全部角色，用于判断是否拥有管理员等跨队伍访问权限
                 $roles = DB::table('c_users_roles')
                     ->where('c_user_id', $username)
                     ->pluck('c_role_id')
@@ -667,7 +667,7 @@ class VmController extends Controller
             $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
             foreach ($roles as $role) {
                 if (in_array($role, $privilegedRoles, true)) {
-                    // 中文注释：记录命中的特权角色，后续跳过队伍校验并向前端返回提示
+                    // 记录命中的特权角色，后续跳过队伍校验并向前端返回提示
                     $privilegedRole = $role;
                     break;
                 }
@@ -732,7 +732,7 @@ class VmController extends Controller
         ];
 
         if ($privilegedRole) {
-            // 中文注释：如果通过特权角色放行，则返回明确的提示信息，便于前端展示
+            // 如果通过特权角色放行，则返回明确的提示信息，便于前端展示
             $response['message'] = sprintf('用户角色 %s 拥有跨队伍访问权限', $privilegedRole);
         }
 
