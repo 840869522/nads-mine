@@ -248,6 +248,7 @@ Route::prefix('vms')->group(function () {
     Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+    Route::get('/{vm_name}/guac-with-authority', [$c, 'getGuacInfoWithAuthority']);
     Route::get('/{vm_id}', [$c, 'getVmInfo']);
     Route::delete('/{vm_id}', [$c, 'deleteVm']);
     Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);

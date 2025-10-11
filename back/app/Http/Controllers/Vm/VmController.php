@@ -605,6 +605,107 @@ class VmController extends Controller
         ], 200);
     }
 
+    // GET /vms/{vm_name}/guac-with-authority
+    public function getGuacInfoWithAuthority($vmName, Request $request)
+    {
+        $method = strtolower($request->query('method', 'ssh'));
+        $vmQueryName = $request->query('vm_name', $vmName);
+
+        $record = null;
+        try {
+            $record = DB::table('c_scene_vm_instances')
+                ->where('c_vm_name', $vmQueryName)
+                ->select('c_ip', 'c_team_id')
+                ->first();
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch VM record for authority check: ' . $e->getMessage());
+            return response()->json([
+                'error' => '数据库查询失败',
+                'message' => '数据库查询失败',
+            ], 500);
+        }
+
+        $teamId = null;
+        $ipFromDb = null;
+        if ($record) {
+            $teamId = $record->c_team_id;
+            $ipFromDb = $record->c_ip;
+        }
+
+        $username = null;
+        $tokenData = $request->input('token_data');
+        if (is_array($tokenData) && isset($tokenData['id'])) {
+            $username = $tokenData['id'];
+        } elseif ($request->has('username')) {
+            $username = $request->input('username');
+        }
+
+        $normalizedTeamId = $teamId !== null ? trim((string)$teamId) : '';
+        if ($normalizedTeamId !== '') {
+            if (!$username) {
+                return response()->json([
+                    'error' => '无法识别当前用户',
+                    'message' => '用户信息缺失',
+                ], 401);
+            }
+
+            try {
+                $isMember = DB::table('c_teams_users')
+                    ->where('team_id', $normalizedTeamId)
+                    ->where('user_id', $username)
+                    ->exists();
+            } catch (\Throwable $e) {
+                Log::error('Failed to verify team membership: ' . $e->getMessage());
+                return response()->json([
+                    'error' => '数据库查询失败',
+                    'message' => '数据库查询失败',
+                ], 500);
+            }
+
+            if (!$isMember) {
+                Log::warning('User lacks permission to access VM via Guac.', [
+                    'vm_name' => $vmName,
+                    'team_id' => $normalizedTeamId,
+                    'username' => $username,
+                ]);
+                return response()->json([
+                    'error' => '无权限访问该虚拟机',
+                    'message' => '用户不在该虚拟机所属队伍中',
+                ], 403);
+            }
+        }
+
+        try {
+            $xml = $this->runVirsh('dumpxml', $vmName);
+            $vncPort = $this->parseVncPort($xml) ?? 5900;
+        } catch (\Throwable $e) {
+            $vncPort = 5900;
+        }
+
+        $ip = null;
+        if ($method === 'vnc') {
+            $ip = '127.0.0.1';
+            try {
+                $disp = trim($this->runVirsh('vncdisplay', $vmName));
+                if (preg_match('/:([0-9]+)$/', $disp, $m)) {
+                    $vncPort = 5900 + (int)$m[1];
+                }
+            } catch (\Throwable $e) {
+            }
+        } else {
+            if ($ipFromDb) {
+                $ip = explode('/', $ipFromDb)[0];
+            }
+        }
+
+        return response()->json([
+            'host' => $ip ?? '无效',
+            'ssh_port' => 22,
+            'rdp_port' => 3389,
+            'vnc_port' => $vncPort,
+        ], 200);
+    }
+
     // GET /vms/{vm_id}
     public function getVmInfo($vmId)
     {

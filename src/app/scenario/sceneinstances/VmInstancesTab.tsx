@@ -80,6 +80,15 @@ interface VmInstancesTabProps {
     instanceId: string | null;
 }
 
+interface SupportUserResponse {
+    code: number;
+    message: string;
+    data?: {
+        c_username?: string;
+        [key: string]: unknown;
+    };
+}
+
 /* ---------- SWR Hooks ---------- */
 const fetcher = (url: string) => customFetch(url).then((r) => r.json());
 
@@ -139,6 +148,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const forceRefreshUntil = React.useRef(0);
     const { data, isLoading, isValidating, mutate } = useVmInstances(instanceId, forceRefreshUntil);
+    const { data: currentUser } = useSWR<SupportUserResponse>('/back/api/support/user/id', fetcher);
 
     const [search, setSearch] = React.useState("");
     const [page, setPage] = React.useState(0);
@@ -155,6 +165,12 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         ip: true,
         is_target: true, // Added for the new column
     });
+    const [blockedVnc, setBlockedVnc] = React.useState<Record<string, boolean>>({});
+
+    const selectedVm = React.useMemo(
+        () => data?.find((vm) => vm.id === actionAnchor.id) ?? null,
+        [data, actionAnchor.id]
+    );
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
@@ -192,16 +208,54 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     };
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
+        const params = new URLSearchParams({ method: proto, vm_name: vmName });
+        const username = currentUser?.data?.c_username;
+        if (username) {
+            params.append('username', username);
+        }
+
         try {
-            const res = await customFetch(`/back/api/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
-            if (!res.ok) throw new Error('Guacamole info request failed');
-            const info = await res.json();
+            const res = await customFetch(`/back/api/vms/${vmName}/guac-with-authority?${params.toString()}`);
+            let payload: any = null;
+            try {
+                payload = await res.json();
+            } catch (err) {
+                payload = null;
+            }
+
+            if (!res.ok) {
+                const message = payload?.error ?? payload?.message ?? 'Guacamole info request failed';
+                if (proto === 'vnc') {
+                    setBlockedVnc((prev) => ({ ...prev, [vmName]: true }));
+                }
+                console.log(`[Guac Authority] ${message}`);
+                const error = new Error(message);
+                (error as any).__alreadyLogged = true;
+                throw error;
+            }
+
+            if (!payload) {
+                throw new Error('Guacamole info response is invalid');
+            }
+
+            const info = payload;
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
             openGuacWindow({ type: proto, hostname: info.host, port: String(port) });
+            if (proto === 'vnc') {
+                setBlockedVnc((prev) => {
+                    if (!prev[vmName]) return prev;
+                    const { [vmName]: _removed, ...rest } = prev;
+                    return rest;
+                });
+            }
         } catch (e: any) {
-            alert(e.message || 'Failed to open connection');
+            if (!e?.__alreadyLogged) {
+                console.log('打开连接失败：', e?.message ?? e);
+            }
+            alert(e?.message || 'Failed to open connection');
+        } finally {
+            setActionAnchor({ anchor: null, id: null });
         }
-        setActionAnchor({ anchor: null, id: null });
     };
 
     const handleDelete = async (vm: VmInstance) => {
@@ -385,15 +439,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Box>
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
-                {/*<MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
-                    <SshIcon fontSize="small" sx={{ mr: 1 }} />
-                    SSH
-                </MenuItem>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'rdp'); setActionAnchor({ anchor: null, id: null }); }}>
-                    <RdpIcon fontSize="small" sx={{ mr: 1 }} />
-                    RDP
-                </MenuItem>*/}
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}>
+                <MenuItem
+                    disabled={!selectedVm || !!blockedVnc[selectedVm.name]}
+                    onClick={() => {
+                        if (selectedVm) {
+                            handleGuac(selectedVm.name, 'vnc');
+                        }
+                    }}
+                >
                     <VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台
                 </MenuItem>
             </Menu>
