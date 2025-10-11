@@ -640,6 +640,7 @@ class VmController extends Controller
             $username = $request->input('username');
         }
 
+        $privilegedRole = null;
         $normalizedTeamId = $teamId !== null ? trim((string)$teamId) : '';
         if ($normalizedTeamId !== '') {
             if (!$username) {
@@ -650,28 +651,53 @@ class VmController extends Controller
             }
 
             try {
-                $isMember = DB::table('c_teams_users')
-                    ->where('team_id', $normalizedTeamId)
-                    ->where('user_id', $username)
-                    ->exists();
+                // 中文注释：查询用户的全部角色，用于判断是否拥有管理员等跨队伍访问权限
+                $roles = DB::table('c_users_roles')
+                    ->where('c_user_id', $username)
+                    ->pluck('c_role_id')
+                    ->map(fn ($role) => strtolower((string)$role));
             } catch (\Throwable $e) {
-                Log::error('Failed to verify team membership: ' . $e->getMessage());
+                Log::error('Failed to fetch user roles for Guac authority check: ' . $e->getMessage());
                 return response()->json([
                     'error' => '数据库查询失败',
                     'message' => '数据库查询失败',
                 ], 500);
             }
 
-            if (!$isMember) {
-                Log::warning('User lacks permission to access VM via Guac.', [
-                    'vm_name' => $vmName,
-                    'team_id' => $normalizedTeamId,
-                    'username' => $username,
-                ]);
-                return response()->json([
-                    'error' => '无权限访问该虚拟机',
-                    'message' => '用户不在该虚拟机所属队伍中',
-                ], 403);
+            $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+            foreach ($roles as $role) {
+                if (in_array($role, $privilegedRoles, true)) {
+                    // 中文注释：记录命中的特权角色，后续跳过队伍校验并向前端返回提示
+                    $privilegedRole = $role;
+                    break;
+                }
+            }
+
+            if (!$privilegedRole) {
+                try {
+                    $isMember = DB::table('c_teams_users')
+                        ->where('team_id', $normalizedTeamId)
+                        ->where('user_id', $username)
+                        ->exists();
+                } catch (\Throwable $e) {
+                    Log::error('Failed to verify team membership: ' . $e->getMessage());
+                    return response()->json([
+                        'error' => '数据库查询失败',
+                        'message' => '数据库查询失败',
+                    ], 500);
+                }
+
+                if (!$isMember) {
+                    Log::warning('User lacks permission to access VM via Guac.', [
+                        'vm_name' => $vmName,
+                        'team_id' => $normalizedTeamId,
+                        'username' => $username,
+                    ]);
+                    return response()->json([
+                        'error' => '无权限访问该虚拟机',
+                        'message' => '用户不在该虚拟机所属队伍中',
+                    ], 403);
+                }
             }
         }
 
@@ -698,12 +724,19 @@ class VmController extends Controller
             }
         }
 
-        return response()->json([
+        $response = [
             'host' => $ip ?? '无效',
             'ssh_port' => 22,
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,
-        ], 200);
+        ];
+
+        if ($privilegedRole) {
+            // 中文注释：如果通过特权角色放行，则返回明确的提示信息，便于前端展示
+            $response['message'] = sprintf('用户角色 %s 拥有跨队伍访问权限', $privilegedRole);
+        }
+
+        return response()->json($response, 200);
     }
 
     // GET /vms/{vm_id}
