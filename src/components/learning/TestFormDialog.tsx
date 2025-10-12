@@ -292,18 +292,10 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       }
     }
 
-    // 实验类型验证场景配置和时长
+    // 实验类型验证场景配置
     if (formData.c_test_type === '实验') {
       if (!formData.c_scene_config_id || formData.c_scene_config_id <= 0) {
         setError('请选择场景配置');
-        return false;
-      }
-      if (formData.c_duration === undefined || formData.c_duration <= 0) {
-        setError('请输入有效的测试时长（大于0的整数）');
-        return false;
-      }
-      if (formData.c_duration > 300) {
-        setError('测试时长不能超过300分钟');
         return false;
       }
     }
@@ -387,7 +379,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
         c_end: test.c_end || null,
         c_test_type: test.c_test_type || '理论测试',
         c_type: test.c_test_type === '实验' ? '' : (test.c_type || '考试'),
-        c_duration: test.c_duration || 60,
+        c_duration: test.c_test_type === '实验' ? undefined : (test.c_duration || 60),
         c_scene_config_id: test.c_scene_config_id
       };
       
@@ -413,7 +405,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
         c_end: null,
         c_test_type: '理论测试',
         c_type: '考试',
-        c_duration: 60,
+        c_duration: undefined,
         c_scene_config_id: undefined
       });
     }
@@ -667,47 +659,47 @@ const handleEndDateChange = (date: moment.Moment | null) => {
             </Box>
           )}
 
-          {/* 测试时长 - 在考试模式或实验类型下显示 */}
-          {(formData.c_type === '考试' || formData.c_test_type === '实验') && (
-            <Box sx={{ width: '100%' }}>
-              <InputLabel sx={{ 
-                color: theme.palette.text.secondary,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                mb: 1,
-                pl: 1
-              }}>
-                测试时长（分钟） *
-                <span style={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>
-                  （1-300之间的整数）
-                </span>
-              </InputLabel>
-              <TextField
-                fullWidth
-                variant="outlined"
-                name="c_duration"
-                type="text"
-                value={formData.c_duration || ''}
-                onChange={handleDurationChange}
-                disabled={submitting}
-                inputProps={{ 
-                  style: { 
+          {/* 测试时长 - 只在考试模式的理论测试下显示，实验类型不显示 */}
+              {formData.c_test_type === '理论测试' && formData.c_type === '考试' && (
+                <Box sx={{ width: '100%' }}>
+                  <InputLabel sx={{ 
+                    color: theme.palette.text.secondary,
                     fontSize: '1.1rem',
-                    padding: '16px 20px',
-                    height: '20px'
-                  },
-                  inputMode: 'numeric'
-                }}
-                sx={{ 
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                    border: `2px solid ${theme.palette.divider}`,
-                  }
-                }}
-                placeholder="请输入测试时长（分钟）"
-              />
-            </Box>
-          )}
+                    fontWeight: 500,
+                    mb: 1,
+                    pl: 1
+                  }}>
+                    测试时长（分钟） *
+                    <span style={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>
+                      （1-300之间的整数）
+                    </span>
+                  </InputLabel>
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    name="c_duration"
+                    type="text"
+                    value={formData.c_duration || ''}
+                    onChange={handleDurationChange}
+                    disabled={submitting}
+                    inputProps={{ 
+                      style: { 
+                        fontSize: '1.1rem',
+                        padding: '16px 20px',
+                        height: '20px'
+                      },
+                      inputMode: 'numeric'
+                    }}
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        border: `2px solid ${theme.palette.divider}`,
+                      }
+                    }}
+                    placeholder="请输入测试时长（分钟）"
+                  />
+                </Box>
+              )}
 
           {/* 测试描述 */}
           <Box sx={{ width: '100%' }}>

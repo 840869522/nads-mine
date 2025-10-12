@@ -49,14 +49,14 @@ interface User {
     c_name?: string;
 }
 
+// MODIFIED: 更新 AdConfig 类型定义
 interface AdConfig {
     c_id: string;
     c_drill_name: string;
     c_scene_config_id: number | null;
     c_scene_instance_id: string | null;
     c_status: 'pending' | 'running' | 'finished' | 'archived';
-    redTeam?: { c_name: string };
-    blueTeam?: { c_name: string };
+    teams: { c_id: number; c_name: string }[]; // 替换 redTeam 和 blueTeam
     sceneConfig?: { c_name: string };
 }
 
@@ -251,17 +251,29 @@ const RefereeOverviewPage: React.FC = () => {
                 <TablePagination component="div" count={totalEntries} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} onRowsPerPageChange={handleChangeRowsPerPage} rowsPerPageOptions={[5, 10, 25, 50]} labelRowsPerPage="每页行数:" labelDisplayedRows={({ from, to, count }) => `第 ${from} 到 ${to} 条，共 ${count} 条`} />
             </Paper>
 
+            {/* MODIFIED: 演练详情弹窗内容更新 */}
             <Dialog open={isInfoDialogOpen} onClose={handleCloseInfoDialog} fullWidth maxWidth="xs">
                 <DialogTitle>演练详情: {selectedAdConfig?.c_drill_name}</DialogTitle>
                 <DialogContent dividers>
                     {selectedAdConfig ? (
                         <List dense>
-                            <ListItem><ListItemText primary="红队" secondary={selectedAdConfig.redTeam?.c_name || '未指定'} /></ListItem>
+                            <ListItem>
+                                <ListItemText
+                                    primary="参赛队伍"
+                                    secondary={
+                                        selectedAdConfig.teams && selectedAdConfig.teams.length > 0
+                                            ? selectedAdConfig.teams.map(t => t.c_name).join('、')
+                                            : '未指定'
+                                    }
+                                />
+                            </ListItem>
                             <Divider component="li" />
-                            <ListItem><ListItemText primary="蓝队" secondary={selectedAdConfig.blueTeam?.c_name || '未指定'} /></ListItem>
-                            <Divider component="li" />
-                            {/* ★★★ 核心修复点 ★★★ */}
-                            <ListItem><ListItemText primary="场景模板" secondary={selectedAdConfig.sceneConfig?.c_name || '未关联'} /></ListItem>
+                            <ListItem>
+                                <ListItemText
+                                    primary="场景模板"
+                                    secondary={selectedAdConfig.sceneConfig?.c_name || '未关联'}
+                                />
+                            </ListItem>
                         </List>
                     ) : (
                         <Typography color="text.secondary">无法加载演练信息。</Typography>

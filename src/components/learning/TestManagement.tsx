@@ -1028,7 +1028,9 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
                 <TableCell align="center" sx={{ fontWeight: 600 }}>场景配置</TableCell>
               )}
               <TableCell sx={{ fontWeight: 600 }}>时间范围</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600 }}>时长(分钟)</TableCell>
+              {activeTab === 'theory' && (
+                <TableCell align="center" sx={{ fontWeight: 600 }}>时长(分钟)</TableCell>
+              )}
               <TableCell align="center" sx={{ fontWeight: 600 }}>状态</TableCell>
               <TableCell align="center" sx={{ fontWeight: 600, width: 250 }}>操作</TableCell>
             </TableRow>
@@ -1065,8 +1067,12 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
                       <div>开始: {startStr}</div>
                       <div>结束: {endStr}</div>
                     </Box>
-                  </TableCell>
-                  <TableCell align="center">{test.c_duration || 0}</TableCell>
+                   </TableCell>
+                  {activeTab === 'theory' && (
+                    <TableCell align="center">
+                      {test.c_type === '练习' ? '不限时' : (test.c_duration || 0) + '分钟'}
+                    </TableCell>
+                  )}
                   <TableCell align="center">
                     <Chip
                       label={status.label}

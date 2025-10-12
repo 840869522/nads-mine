@@ -1,11 +1,8 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import Header from "@/app/visualization/header";
-// import Battlefield from "./battlefield";
-
 import dynamic from 'next/dynamic';
 import ThreeDimensional from "./threeDimensional";
-import { websocketClient } from "@/utils/websocket";
 
 const Battlefield = dynamic(() => import('./battlefield'), { ssr: false });
 

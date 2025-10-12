@@ -16,7 +16,7 @@ export type LogInfo ={
 
 export type BattlefieldInfo = {
     type: number;
-    teamId: number;
+    sceneId: string;
     logInfo: LogInfo[];
 };
 
@@ -26,11 +26,23 @@ function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
     const end = Math.floor(max / 5)
 
     const rand = Math.floor(Math.random() * (end - start + 1)) + start
-    return rand * 5
+    return rand * 5 
 }
 
-async function fetchTeamMembers(teamId: number) {
-    const res = await fetch(`/back/api/visualization/users/${teamId}`);
+async function fetchTeamMembers(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/users/${sceneId}`);
+    const result = await res.json();
+
+    if (result.code !== 200) {
+        console.error(result.message);
+        return [];
+    }
+
+    return result.data; // 这里是对象数组 [{ userId, username }, ...]
+}
+
+async function fetchTeams(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/teams/${sceneId}`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -118,24 +130,62 @@ export default function Team(team:BattlefieldInfo) {
     const [logList, setLogList] = useState<LogInfo[]>(team.logInfo)
 
     // 同步父组件更新
-    // 同步父组件更新
+    // useEffect(() => {
+    //     let teams: TeamInfo[] = [];
+    //     fetchTeamMembers(team.sceneId).then(users => {
+    //         for(let i = 0; i < users.length; ++i){
+    //             let item: TeamInfo = {
+    //                 teamId: users[i].userId,
+    //                 teamName: team.type === 0 ? `蓝方席位${i+1}`: `红方席位${i+1}` ,
+    //                 teamScore: getRandomDivisibleBy5()
+    //             }
+    //             teams.push(item);
+    //         }  
+    //         teams.sort((a, b) => b.teamScore - a.teamScore);
+    //         setTeamList(teams);
+    //     });
+        
+        
+    // }, [team.sceneId])
+
     useEffect(() => {
         let teams: TeamInfo[] = [];
-        fetchTeamMembers(team.teamId).then(users => {
-            for(let i = 0; i < users.length; ++i){
-                let item: TeamInfo = {
-                    teamId: users[i].userId,
-                    teamName: team.type === 0 ? `蓝方席位${i+1}`: `红方席位${i+1}` ,
-                    teamScore: getRandomDivisibleBy5()
-                }
-                teams.push(item);
-            }  
-            teams.sort((a, b) => b.teamScore - a.teamScore);
-            setTeamList(teams);
-        });
-        
-        
-    }, [team.teamId])
+        if(team.type === 1){
+            setTeamList(redTeamInfos);
+            // fetchTeamMembers(team.sceneId).then(users => {
+            //     for(let i = 0; i < users.length; ++i){
+            //         let item: TeamInfo = {
+            //             teamId: users[i].userId,
+            //             teamName: users[i].userId,
+            //             teamScore: getRandomDivisibleBy5()
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
+            //     if(teams.length === 0)
+            //         setTeamList(redTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
+        }else{
+            setTeamList(blueTeamInfos);
+            // fetchTeams(team.sceneId).then(teams => {
+            //     for(let j = 0; j < teams.length; ++j){
+            //         let item: TeamInfo = {
+            //             teamId: teams[j].teamId.toString(),
+            //             teamName: teams[j].teamName,
+            //             teamScore: getRandomDivisibleBy5() / 5
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((c: TeamInfo, d: TeamInfo) => c.teamScore - d.teamScore);
+            //     if(teams.length === 0)
+            //         setTeamList(blueTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
+        }
+    }, [team.sceneId])
 
     useEffect(()=>{
         setLogList(team.logInfo);
@@ -149,7 +199,7 @@ export default function Team(team:BattlefieldInfo) {
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
                         <FontAwesomeIcon icon={faShieldAlt}/>
                     </div>
-                    <h2 className="text-[1.3rem] font-bold uppercase text-white">蓝方队伍</h2>
+                    <h2 className="text-[1.3rem] font-bold uppercase text-white">队伍排名</h2>
                 </div>
 
                 <TeamInfo teamList={teamList} />
@@ -165,12 +215,68 @@ export default function Team(team:BattlefieldInfo) {
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
                         <FontAwesomeIcon icon={faCrosshairs}/>
                     </div>
-                    <h2 className="text-[1.3rem] font-bold uppercase text-white">红方队伍</h2>
+                    <h2 className="text-[1.3rem] font-bold uppercase text-white">成员排名</h2>
                 </div>
 
                 <TeamInfo teamList={teamList} />
-                <LogInfo logList={logList} />
+                {/* <LogInfo logList={logList} /> */}
             </div>
         );
     }
 }
+
+const blueTeamInfos: TeamInfo[] = [
+    {
+        teamId: '1',
+        teamName: '队伍1',
+        teamScore: 295
+    },
+    {
+        teamId: '2',
+        teamName: '队伍2',
+        teamScore: 285
+    },
+    {
+        teamId: '3',
+        teamName: '队伍3',
+        teamScore: 270
+    },
+]
+
+const redTeamInfos: TeamInfo[] = [
+    {
+        teamId: '1',
+        teamName: 'student1',
+        teamScore: 50
+    },
+    {
+        teamId: '2',
+        teamName: 'student2',
+        teamScore: 45
+    },
+    {
+        teamId: '3',
+        teamName: 'student3',
+        teamScore: 45
+    },
+    {
+        teamId: '4',
+        teamName: 'student4',
+        teamScore: 30
+    },
+    {
+        teamId: '5',
+        teamName: 'student5',
+        teamScore: 10
+    },
+    {
+        teamId: '6',
+        teamName: 'student6',
+        teamScore: 10
+    },
+    {
+        teamId: '7',
+        teamName: 'student7',
+        teamScore: 0
+    },
+]

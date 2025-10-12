@@ -145,6 +145,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     useEffect(() => {
         // 从 initialData 中提取拓扑信息
         const topology = initialData?.topology_json;
+
         if (topology && (topology.nodes?.length > 0 || topology.edges?.length > 0)) {
             dispatch({ type: 'LOAD_TOPOLOGY', payload: { topologyData: topology } });
 

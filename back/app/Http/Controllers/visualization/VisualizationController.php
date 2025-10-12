@@ -71,29 +71,53 @@ class VisualizationController extends Controller{
         }
     }
 
-    public function getTeamUsers(int $teamId){
-        try{
-            $users = DB::table('c_teams_users as tu')
-                ->join('c_users as u', 'tu.user_id', '=', 'u.c_username') // 关联唯一标识
-                ->where('tu.team_id', $teamId)
-                ->select('u.c_username as userId', 'u.c_name as username')   // 返回对象数组
-                ->get()
-                ->all();
+    // public function getTeamUsers(string $instance_id){
+    //     try{
+    //         $users = DB::table('c_ad_node_assignments as ana')
+    //             ->join('c_users as u', 'ana.c_username', '=', 'u.c_username') // 关联唯一标识
+    //             ->where('ana.c_scene_config_id', $instance_id)
+    //             ->select('u.c_username as userId', 'u.c_name as username')   // 返回对象数组
+    //             ->get()
+    //             ->all();
             
-            return response()->json([
-                'code'    => 200,
-                'message' => '成功',
-                'data'    => $users
-            ]);
-        } catch (\Throwable $e){
-            Log::error("Failed to obtain {$teamId} team members: {$e->getMessage()}");
-            return response()->json([
-                'code'    => 500,
-                'message' => '数据库查询失败: ' . $e->getMessage(),
-                'data'    => null,
-            ], 500);
-        }
-    }
+    //         return response()->json([
+    //             'code'    => 200,
+    //             'message' => '成功',
+    //             'data'    => $users
+    //         ]);
+    //     } catch (\Throwable $e){
+    //         Log::error("Failed to obtain {$instance_id} team members: {$e->getMessage()}");
+    //         return response()->json([
+    //             'code'    => 500,
+    //             'message' => '数据库查询失败: ' . $e->getMessage(),
+    //             'data'    => null,
+    //         ], 500);
+    //     }
+    // }
+
+    // public function getTeams(string $instance_id){
+    //     try{
+    //         $teams = DB::table('c_ad_node_assignments as ana')
+    //             ->join('c_teams as t', 'ana.c_team_id', '=', 't.c_id') // 关联唯一标识
+    //             ->where('ana.c_scene_config_id', $instance_id)
+    //             ->select('t.c_id as teamId', 't.c_name as teamName')   // 返回对象数组
+    //             ->get()
+    //             ->all();
+            
+    //         return response()->json([
+    //             'code'    => 200,
+    //             'message' => '成功',
+    //             'data'    => $teams
+    //         ]);
+    //     } catch (\Throwable $e){
+    //         Log::error("Failed to obtain {$instance_id} team members: {$e->getMessage()}");
+    //         return response()->json([
+    //             'code'    => 500,
+    //             'message' => '数据库查询失败: ' . $e->getMessage(),
+    //             'data'    => null,
+    //         ], 500);
+    //     }
+    // }
 
     public function getFlagLogs(string $instance_id){
         $flags = FlagSubmissionModel::with(['containerInstance', 'vmInstance'])
@@ -123,10 +147,10 @@ class VisualizationController extends Controller{
                 'logTime' => $f->c_submitted_at,
                 'logContent' => $logMessage,
             ];
-            if($f->c_is_correct == 1)
-                $redLog[] = $item;
-            else
-                $blueLog[] = $item;
+            // if($f->c_is_correct == 1)
+            //     $redLog[] = $item;
+            // else
+            $blueLog[] = $item;
         }
 
         return response()->json([
