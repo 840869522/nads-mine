@@ -2726,16 +2726,13 @@ public function submit_papers(Request $request)
         Log::debug('请求头', ['headers' => $request->headers->all()]);
         Log::debug('原始输入', ['content' => $request->getContent()]);
 
-        // 验证输入参数
+        //  修改验证规则 - 完全移除内部验证 
         $validator = Validator::make($request->all(), [
             'test_id' => 'required|string',
             'username' => 'required|string|exists:c_users,c_username',
             'paper_id' => 'required|string|exists:c_papers,c_id',
-            'answers' => 'required|array',
-            'answers.*.type' => 'required|integer|in:1,2,3,4',
-            'answers.*.data' => 'required|array',
-            'answers.*.data.*.question_id' => 'required|string',
-            'answers.*.data.*.answer' => 'required|string',
+            'answers' => 'present|array',
+            // 移除所有内部验证规则
         ]);
 
         if ($validator->fails()) {
@@ -2756,6 +2753,45 @@ public function submit_papers(Request $request)
         $paper_id = $validatedData['paper_id'];
         $answers = $validatedData['answers'];
         $test_type = $validatedData['test_type'] ?? '考试';
+
+        //  手动验证 answers 数据结构（只有当 answers 不为空时）
+        if (!empty($answers)) {
+            foreach ($answers as $index => $answer_group) {
+                if (!isset($answer_group['type']) || !in_array($answer_group['type'], [1, 2, 3, 4])) {
+                    return response()->json([
+                        'code' => 400,
+                        'message' => "答案组 {$index} 的 type 字段无效",
+                        'input' => $request->all()
+                    ], 400);
+                }
+                
+                if (!isset($answer_group['data']) || !is_array($answer_group['data'])) {
+                    return response()->json([
+                        'code' => 400,
+                        'message' => "答案组 {$index} 的 data 字段无效",
+                        'input' => $request->all()
+                    ], 400);
+                }
+                
+                foreach ($answer_group['data'] as $data_index => $answer_item) {
+                    if (!isset($answer_item['question_id']) || !is_string($answer_item['question_id'])) {
+                        return response()->json([
+                            'code' => 400,
+                            'message' => "答案组 {$index} 的数据项 {$data_index} 的 question_id 字段无效",
+                            'input' => $request->all()
+                        ], 400);
+                    }
+                    
+                    if (!isset($answer_item['answer']) || !is_string($answer_item['answer'])) {
+                        return response()->json([
+                            'code' => 400,
+                            'message' => "答案组 {$index} 的数据项 {$data_index} 的 answer 字段无效",
+                            'input' => $request->all()
+                        ], 400);
+                    }
+                }
+            }
+        }
 
         // 获取测试类型
         $testInfo = DB::table('c_tests')->where('c_id', $test_id)->first();
@@ -2845,65 +2881,67 @@ public function submit_papers(Request $request)
         $objective_score = 0;
         $correct_count = 0;
 
-        // 处理答案
-        foreach ($answers as $answer_group) {
-            $type = $answer_group['type'];
-            $data = $answer_group['data'];
+        //  只有当 answers 不为空时才处理答案 
+        if (!empty($answers)) {
+            foreach ($answers as $answer_group) {
+                $type = $answer_group['type'];
+                $data = $answer_group['data'];
 
-            foreach ($data as $answer_item) {
-                $question_id = $answer_item['question_id'];
-                $user_answer = $answer_item['answer'];
+                foreach ($data as $answer_item) {
+                    $question_id = $answer_item['question_id'];
+                    $user_answer = $answer_item['answer'];
 
-                // 查找正确答案
-                if (!isset($correctAnswerMap[$question_id])) {
-                    Log::warning('正确答案不存在', ['question_id' => $question_id]);
-                    continue;
-                }
-
-                $correct_answer = $correctAnswerMap[$question_id];
-
-                // 比较答案
-                Log::debug('比较答案', [
-                    'question_id' => $question_id,
-                    'user_answer' => $user_answer,
-                    'correct_answer' => $correct_answer,
-                    'type' => $type
-                ]);
-
-                if ($type == 1 || $type == 3) {
-                    // 单选或判断题
-                    if ($user_answer === $correct_answer) {
-                        // 查找题目分数
-                        $score = 0;
-                        foreach ($questions as $q) {
-                            if (isset($q['id']) && $q['id'] == $question_id) {
-                                $score = $q['score'] ?? 0;
-                                break;
-                            }
-                        }
-                        $objective_score += $score;
-                        $correct_count++;
+                    // 查找正确答案
+                    if (!isset($correctAnswerMap[$question_id])) {
+                        Log::warning('正确答案不存在', ['question_id' => $question_id]);
+                        continue;
                     }
-                } elseif ($type == 2) {
-                    // 多选题
-                    $user_answers = explode(';', $user_answer);
-                    $correct_answers_arr = explode(';', $correct_answer);
-                    sort($user_answers);
-                    sort($correct_answers_arr);
-                    if ($user_answers === $correct_answers_arr) {
-                        // 查找题目分数
-                        $score = 0;
-                        foreach ($questions as $q) {
-                            if (isset($q['id']) && $q['id'] == $question_id) {
-                                $score = $q['score'] ?? 0;
-                                break;
+
+                    $correct_answer = $correctAnswerMap[$question_id];
+
+                    // 比较答案
+                    Log::debug('比较答案', [
+                        'question_id' => $question_id,
+                        'user_answer' => $user_answer,
+                        'correct_answer' => $correct_answer,
+                        'type' => $type
+                    ]);
+
+                    if ($type == 1 || $type == 3) {
+                        // 单选或判断题
+                        if ($user_answer === $correct_answer) {
+                            // 查找题目分数
+                            $score = 0;
+                            foreach ($questions as $q) {
+                                if (isset($q['id']) && $q['id'] == $question_id) {
+                                    $score = $q['score'] ?? 0;
+                                    break;
+                                }
                             }
+                            $objective_score += $score;
+                            $correct_count++;
                         }
-                        $objective_score += $score;
-                        $correct_count++;
+                    } elseif ($type == 2) {
+                        // 多选题
+                        $user_answers = explode(';', $user_answer);
+                        $correct_answers_arr = explode(';', $correct_answer);
+                        sort($user_answers);
+                        sort($correct_answers_arr);
+                        if ($user_answers === $correct_answers_arr) {
+                            // 查找题目分数
+                            $score = 0;
+                            foreach ($questions as $q) {
+                                if (isset($q['id']) && $q['id'] == $question_id) {
+                                    $score = $q['score'] ?? 0;
+                                    break;
+                                }
+                            }
+                            $objective_score += $score;
+                            $correct_count++;
+                        }
                     }
+                    // 主观题 (type=4) 由人工批改
                 }
-                // 主观题 (type=4) 由人工批改
             }
         }
 
@@ -2972,17 +3010,17 @@ public function submit_papers(Request $request)
         ]);
 
         return $this->_response(
-    GlobalResponse::$HTTP_STATUS_OK_CODE,
-    '交卷成功',
-    [
-        'objective_score' => $objective_score,
-        'total_score' => $total_score,
-        'correct_count' => $correct_count,
-        'has_subjective_questions' => $hasSubjectiveQuestions,
-        'correct_status' => $correct_status,
-        'test_type' => $testType
-    ]
-);
+            GlobalResponse::$HTTP_STATUS_OK_CODE,
+            '交卷成功',
+            [
+                'objective_score' => $objective_score,
+                'total_score' => $total_score,
+                'correct_count' => $correct_count,
+                'has_subjective_questions' => $hasSubjectiveQuestions,
+                'correct_status' => $correct_status,
+                'test_type' => $testType
+            ]
+        );
     } catch (ValidationException $e) {
         Log::error('验证异常', ['errors' => $e->errors(), 'input' => $request->all()]);
         return response()->json([

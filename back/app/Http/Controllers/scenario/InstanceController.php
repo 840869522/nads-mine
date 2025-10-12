@@ -122,6 +122,7 @@ class InstanceController extends Controller
                         'name' => ltrim($details->getName() ?? '', '/'),
                         'type' => 'container',
                         'ipAddress' => $containerInstance->c_ip,
+                        'team' => $containerInstance->c_team_id,
                         'scene_instance_id' => $containerInstance->c_scene_instances_id,
                         'scene_name' => $instance->sceneConfig->c_name ?? null,
                         'status' => $this->mapStatus($details->getState()->getStatus()),

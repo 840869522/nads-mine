@@ -65,6 +65,7 @@ class VmController extends Controller
                     'v.c_scene_instances_id',
                     'v.c_ip',
                     'v.c_flag', // ★★★ 1. 查询 c_flag 字段 ★★★
+                    'v.c_team_id',
                     'sc.c_name as scene_name'
                 )
                 // 核心筛选条件：只选择属于特定场景实例的VM
@@ -90,6 +91,7 @@ class VmController extends Controller
                 $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
                 $vm['scene_name']        = $dbInfo->scene_name;
                 $vm['ip']                = $dbInfo->c_ip;
+                $vm['team'] = $dbInfo->c_team_id;
                 // ★★★ 2. 根据 c_flag 是否为空来设置 is_target ★★★
                 $vm['is_target']         = !empty($dbInfo->c_flag);
 
@@ -601,6 +603,140 @@ class VmController extends Controller
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,
         ], 200);
+    }
+
+    // GET /vms/{vm_name}/guac-with-authority
+    public function getGuacInfoWithAuthority($vmName, Request $request)
+    {
+        $method = strtolower($request->query('method', 'ssh'));
+        $vmQueryName = $request->query('vm_name', $vmName);
+
+        $record = null;
+        try {
+            $record = DB::table('c_scene_vm_instances')
+                ->where('c_vm_name', $vmQueryName)
+                ->select('c_ip', 'c_team_id')
+                ->first();
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch VM record for authority check: ' . $e->getMessage());
+            return response()->json([
+                'error' => '数据库查询失败',
+                'message' => '数据库查询失败',
+            ], 500);
+        }
+
+        $teamId = null;
+        $ipFromDb = null;
+        if ($record) {
+            $teamId = $record->c_team_id;
+            $ipFromDb = $record->c_ip;
+        }
+
+        $username = null;
+        $tokenData = $request->input('token_data');
+        if (is_array($tokenData) && isset($tokenData['id'])) {
+            $username = $tokenData['id'];
+        } elseif ($request->has('username')) {
+            $username = $request->input('username');
+        }
+
+        $privilegedRole = null;
+        $normalizedTeamId = $teamId !== null ? trim((string)$teamId) : '';
+        if ($normalizedTeamId !== '') {
+            if (!$username) {
+                return response()->json([
+                    'error' => '无法识别当前用户',
+                    'message' => '用户信息缺失',
+                ], 401);
+            }
+
+            try {
+                // 查询用户的全部角色，用于判断是否拥有管理员等跨队伍访问权限
+                $roles = DB::table('c_users_roles')
+                    ->where('c_user_id', $username)
+                    ->pluck('c_role_id')
+                    ->map(fn ($role) => strtolower((string)$role));
+            } catch (\Throwable $e) {
+                Log::error('Failed to fetch user roles for Guac authority check: ' . $e->getMessage());
+                return response()->json([
+                    'error' => '数据库查询失败',
+                    'message' => '数据库查询失败',
+                ], 500);
+            }
+
+            $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+            foreach ($roles as $role) {
+                if (in_array($role, $privilegedRoles, true)) {
+                    // 记录命中的特权角色，后续跳过队伍校验并向前端返回提示
+                    $privilegedRole = $role;
+                    break;
+                }
+            }
+
+            if (!$privilegedRole) {
+                try {
+                    $isMember = DB::table('c_teams_users')
+                        ->where('team_id', $normalizedTeamId)
+                        ->where('user_id', $username)
+                        ->exists();
+                } catch (\Throwable $e) {
+                    Log::error('Failed to verify team membership: ' . $e->getMessage());
+                    return response()->json([
+                        'error' => '数据库查询失败',
+                        'message' => '数据库查询失败',
+                    ], 500);
+                }
+
+                if (!$isMember) {
+                    Log::warning('User lacks permission to access VM via Guac.', [
+                        'vm_name' => $vmName,
+                        'team_id' => $normalizedTeamId,
+                        'username' => $username,
+                    ]);
+                    return response()->json([
+                        'error' => '无权限访问该虚拟机',
+                        'message' => '用户不在该虚拟机所属队伍中',
+                    ], 403);
+                }
+            }
+        }
+
+        try {
+            $xml = $this->runVirsh('dumpxml', $vmName);
+            $vncPort = $this->parseVncPort($xml) ?? 5900;
+        } catch (\Throwable $e) {
+            $vncPort = 5900;
+        }
+
+        $ip = null;
+        if ($method === 'vnc') {
+            $ip = '127.0.0.1';
+            try {
+                $disp = trim($this->runVirsh('vncdisplay', $vmName));
+                if (preg_match('/:([0-9]+)$/', $disp, $m)) {
+                    $vncPort = 5900 + (int)$m[1];
+                }
+            } catch (\Throwable $e) {
+            }
+        } else {
+            if ($ipFromDb) {
+                $ip = explode('/', $ipFromDb)[0];
+            }
+        }
+
+        $response = [
+            'host' => $ip ?? '无效',
+            'ssh_port' => 22,
+            'rdp_port' => 3389,
+            'vnc_port' => $vncPort,
+        ];
+
+        if ($privilegedRole) {
+            // 如果通过特权角色放行，则返回明确的提示信息，便于前端展示
+            $response['message'] = sprintf('用户角色 %s 拥有跨队伍访问权限', $privilegedRole);
+        }
+
+        return response()->json($response, 200);
     }
 
     // GET /vms/{vm_id}

@@ -189,13 +189,13 @@ export default function Battlefield (adData: AdData) {
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
-        teamId: adData ? adData.blueTeamId : 0,
+        sceneId: adData ? adData.id : "",
         logInfo: blueLogInfos
     }
 
     const redTeam: BattlefieldInfo = {
         type: 1,
-        teamId: adData ? adData.redTeamId : 0,
+        sceneId: adData ? adData.id : "",
         logInfo: redLogInfos
     }
 

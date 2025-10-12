@@ -233,6 +233,11 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
     if (!paperData || view !== 'intro' || submitted) return;
 
     console.log('paperData 已加载，进行时间检查:', { paperId: paperData.paperId });
+     // 练习模式不进行时间检查
+    if (test.c_type === '练习') {
+      console.log('练习模式，跳过时间限制');
+      return;
+    }
 
     const savedStartTime = localStorage.getItem(`test_start_time_${test.test_id}`);
     const totalDuration = paperData.duration * 60;
@@ -266,25 +271,27 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   }, [view, test.test_id, timeLeft, startTime, submitted]);
 
   useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0 || submitted || !startTime) return;
-    
-    const totalDuration = paperData ? paperData.duration * 60 : test.duration * 60;
-    const updateTimeLeft = () => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const remaining = totalDuration - elapsed;
-      if (remaining <= 0) {
-        setTimeLeft(0);
-        handleSubmit();
-        showSnackbar('考试时间已到，已自动提交试卷', 'info');
-      } else {
-        setTimeLeft(remaining);
-      }
-    };
+    if (test.c_type === '练习') return;
+  
+  if (timeLeft === null || timeLeft <= 0 || submitted || !startTime) return;
+  
+  const totalDuration = paperData ? paperData.duration * 60 : test.duration * 60;
+  const updateTimeLeft = () => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remaining = totalDuration - elapsed;
+    if (remaining <= 0) {
+      setTimeLeft(0);
+      handleSubmit();
+      showSnackbar('考试时间已到，已自动提交试卷', 'info');
+    } else {
+      setTimeLeft(remaining);
+    }
+  };
 
-    const timer = setInterval(updateTimeLeft, 1000);
+  const timer = setInterval(updateTimeLeft, 1000);
 
-    return () => clearInterval(timer);
-  }, [startTime, submitted, view, paperData, test.duration]);
+  return () => clearInterval(timer);
+}, [startTime, submitted, view, paperData, test.duration, test.c_type]);
 
   useEffect(() => {
     const savedAnswers = localStorage.getItem(`test_answers_${test.test_id}`);
@@ -414,11 +421,11 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         }
       });
 
-      if (answerGroups.length === 0) {
-        showSnackbar('没有提交任何答案，请至少回答一道题目', 'error');
-        setLoading(false);
-        return;
-      }
+      // if (answerGroups.length === 0) {
+      //   showSnackbar('没有提交任何答案，请至少回答一道题目', 'error');
+      //   setLoading(false);
+      //   return;
+      // }
 
       submitParams = {
         test_id: test.test_id,
@@ -505,12 +512,14 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   };
 
   const handleBackClick = () => {
-    if (view === 'test' && !submitted) {
+    if (view === 'test' && !submitted && test.c_type === '考试') {
+      // 只在考试模式下显示确认提示
       if (window.confirm('确定要退出吗？考试倒计时不会暂停')) {
         onBack();
       }
       return;
     }
+    // 练习模式直接返回，不显示确认提示
     onBack();
   };
 
@@ -637,25 +646,25 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   return (
     <Box sx={fullscreenContainerStyle}>
       {view === 'intro' && paperData && (
-        <Box 
-          sx={{ 
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '100vh',
-            p: 2
-          }}
-        >
-          <Paper sx={{ 
-            p: 4, 
-            borderRadius: 2,
-            backgroundColor: getQuestionBgColor(),
-            color: getTextColor(),
-            boxShadow: isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.1)',
-            maxWidth: 700,
-            width: '100%',
-            textAlign: 'center'
-          }}>
+          <Box 
+            sx={{ 
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              minHeight: '100vh',
+              p: 2
+            }}
+          >
+            <Paper sx={{ 
+              p: 4, 
+              borderRadius: 2,
+              backgroundColor: getQuestionBgColor(),
+              color: getTextColor(),
+              boxShadow: isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.1)',
+              maxWidth: 700,
+              width: '100%',
+              textAlign: 'center'
+            }}>
             <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 3, color: getAccentColor() }}>
               {test.c_name}
             </Typography>
@@ -694,11 +703,11 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                     </Box>
                   </Typography>
                 </Grid>
-                <Grid item xs={12}>
+                 <Grid item xs={12}>
                   <Typography variant="body1" sx={{ mb: 1.5 }}>
                     <Box component="span" sx={{ fontWeight: 600 }}>考试时长:</Box> 
                     <Box component="span" sx={{ color: getSecondaryTextColor() }}>
-                      {paperData.duration} 分钟
+                      {test.c_type === '练习' ? '不限时' : `${paperData.duration} 分钟`}
                     </Box>
                   </Typography>
                 </Grid>
@@ -939,7 +948,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
               />
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              {timeLeft !== null && (
+               {test.c_type === '考试' && timeLeft !== null && (
                 <Box sx={{ 
                   display: 'flex', 
                   alignItems: 'center',

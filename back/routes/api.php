@@ -237,6 +237,7 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/info', [ContainersController::class, 'info']);
     // 新增路由：检查容器操作权限
     Route::get('/{containerId}/can-operate', [ContainersController::class, 'checkPermission']);
+    Route::match(['GET', 'POST'], '/{id}/terminal-with-authority', [ContainersController::class, 'terminalWithAuthority']);
 });
 
 
@@ -248,6 +249,7 @@ Route::prefix('vms')->group(function () {
     Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+    Route::get('/{vm_name}/guac-with-authority', [$c, 'getGuacInfoWithAuthority']);
     Route::get('/{vm_id}', [$c, 'getVmInfo']);
     Route::delete('/{vm_id}', [$c, 'deleteVm']);
     Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
@@ -412,6 +414,6 @@ Route::prefix('flag')->group(function () {
 
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
-    Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
+    // Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
     Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
 });

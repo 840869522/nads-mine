@@ -41,7 +41,6 @@ public function index(Request $request)
                 'c_course_experiments.c_config_id',
                 'c_course_experiments.c_start',
                 'c_course_experiments.c_end',
-                'c_course_experiments.c_duration',
                 'c_scene_configs.c_name',
                 'c_courses.c_course_name',
                 'c_course_experiments.created_at'
@@ -100,7 +99,6 @@ public function index(Request $request)
                     'c_config_id' => $exp->c_config_id,
                     'c_start' => $exp->c_start,
                     'c_end' => $exp->c_end,
-                    'c_duration' => $exp->c_duration,
                     'c_name' => $exp->c_name,
                     'c_course_name' => $exp->c_course_name ?? '未知课程',
                     'created_at' => $exp->created_at,
@@ -134,7 +132,7 @@ public function index(Request $request)
     public function store(Request $request)
     {
         Log::info('Experiment store request:', $request->json()->all());
-        // 2. 补充 c_start、c_end、c_duration 的验证规则
+        // 2. 补充 c_start、c_end的验证规则
         $validator = Validator::make($request->json()->all(), [
             'c_course_id' => 'required|string|exists:c_courses,c_course_id|max:5', // 匹配表字段 varchar(5)
             'c_experiment_name' => 'required|string|max:100',
@@ -143,14 +141,12 @@ public function index(Request $request)
             // 新增：时间字段验证（格式+逻辑约束）
             'c_start' => 'required|date_format:Y-m-d H:i:s|after:now', // 开始时间需晚于当前
             'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start', // 结束时间需晚于开始时间
-            'c_duration' => 'required|integer|min:1' // 时长需为正整数（单位：分钟）
         ], [
             // 自定义错误提示（可选，增强可读性）
             'c_course_id.max' => '课程ID长度不能超过5个字符',
             'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
             'c_start.after' => '开始时间必须晚于当前时间',
-            'c_end.after' => '结束时间必须晚于开始时间',
-            'c_duration.min' => '实验时长至少为1分钟'
+            'c_end.after' => '结束时间必须晚于开始时间'       
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -163,16 +159,6 @@ public function index(Request $request)
         $data = $request->json()->all();
         $courseId = $data['c_course_id'];
 
-        // 补充：验证时长 ≤ 起止时间差值（核心业务约束）
-        $startTime = strtotime($data['c_start']);
-        $endTime = strtotime($data['c_end']);
-        $maxAllowedDuration = round(($endTime - $startTime) / 60); // 计算最大允许时长（分钟）
-        if ($data['c_duration'] > $maxAllowedDuration) {
-            return response()->json([
-                'code' => 422,
-                'message' => "实验时长不能超过起止时间差值（最大允许{$maxAllowedDuration}分钟）",
-            ], 422);
-        }
 
         // 实验名称唯一性验证（同课程下不重复）
         $nameValidator = Validator::make(['c_experiment_name' => $data['c_experiment_name']], [
@@ -240,7 +226,7 @@ public function index(Request $request)
     public function update(Request $request, $experimentId)
     {
         Log::info('Experiment update request:', ['experimentId' => $experimentId, 'data' => $request->json()->all()]);
-        // 4. 补充更新接口的 c_start、c_end、c_duration 验证
+        // 4. 补充更新接口的 c_start、c_end 验证
         $validator = Validator::make($request->json()->all(), [
             'c_experiment_name' => 'required|string|max:100',
             'c_description' => 'nullable|string',
@@ -248,13 +234,11 @@ public function index(Request $request)
             // 新增：同store的时间字段验证
             'c_start' => 'required|date_format:Y-m-d H:i:s|after:now',
             'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start',
-            'c_duration' => 'required|integer|min:1'
         ], [
             // 自定义错误提示
             'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
             'c_start.after' => '开始时间必须晚于当前时间',
             'c_end.after' => '结束时间必须晚于开始时间',
-            'c_duration.min' => '实验时长至少为1分钟'
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -286,16 +270,7 @@ public function index(Request $request)
         }
 
         $data = $request->json()->all();
-        // 补充：更新时同样验证时长 ≤ 起止时间差值
-        $startTime = strtotime($data['c_start']);
-        $endTime = strtotime($data['c_end']);
-        $maxAllowedDuration = round(($endTime - $startTime) / 60);
-        if ($data['c_duration'] > $maxAllowedDuration) {
-            return response()->json([
-                'code' => 422,
-                'message' => "实验时长不能超过起止时间差值（最大允许{$maxAllowedDuration}分钟）",
-            ], 422);
-        }
+    
 
         // 5. 数据传入模型（包含新增的3个字段）
         $modelRes = ExperimentModel::updateExperiment($courseId, $experimentId, $data);
@@ -316,7 +291,6 @@ public function index(Request $request)
                     'c_course_experiments.c_config_id',
                     'c_course_experiments.c_start',
                     'c_course_experiments.c_end',
-                    'c_course_experiments.c_duration',
                     'c_scene_configs.c_name as c_scene_name'
                 )
                 ->where('c_course_experiments.c_experiment_id', $experimentId)
@@ -353,7 +327,6 @@ public function index(Request $request)
                     'c_config_id' => $experiment->c_config_id,
                     'c_start' => $experiment->c_start,
                     'c_end' => $experiment->c_end,
-                    'c_duration' => $experiment->c_duration,
                     'c_scene_name' => $experiment->c_scene_name,
                     'resources' => $resources,
                 ],
