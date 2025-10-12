@@ -257,17 +257,20 @@ app.prepare().then(() => {
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer(async (req, res) => {
         const url = req.url || '';
+        // Use URL to correctly separate pathname from query string for matching
+        const parsedUrl = new URL(url, `http://${req.headers.host}`);
+        const pathname = parsedUrl.pathname;
 
         // --- CLUSTER ROUTING LOGIC (Aggregation) ---
-        const backUrl = url.startsWith('/back') ? url.substring(5) : '';
+        const backPathname = pathname.startsWith('/back') ? pathname.substring(5) : pathname;
 
-        if (req.method === 'GET' && backUrl) {
-            const simpleMatch = aggregationPaths.find(p => backUrl === p.path);
+        if (req.method === 'GET' && backPathname) {
+            const simpleMatch = aggregationPaths.find(p => backPathname === p.path);
             if (simpleMatch) {
                 console.log(`[CLUSTER] Aggregating list for: ${url}`);
                 return aggregateFromHosts(req, res, simpleMatch.idKey);
             }
-            const regexMatch = aggregationRegexPaths.find(p => p.regex.test(backUrl));
+            const regexMatch = aggregationRegexPaths.find(p => p.regex.test(backPathname));
             if (regexMatch) {
                 console.log(`[CLUSTER] Aggregating list for regex path: ${url}`);
                 return aggregateFromHosts(req, res, regexMatch.idKey);
