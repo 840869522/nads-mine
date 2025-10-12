@@ -195,7 +195,7 @@ app.prepare().then(() => {
         console.log(`> ➡️  PHP proxied from /back/`);
         console.log(`> ➡️  AI proxied from /chat/`);
         console.log(`> ➡️  Guacamole proxied from /connect-guac`);
-        console.log(`> ➡️  Terminal WebSocket direct at /api/terminal`);
+        console.log(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
     });
 
     guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
