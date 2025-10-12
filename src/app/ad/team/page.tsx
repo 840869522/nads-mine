@@ -53,16 +53,19 @@ interface Team {
     members?: User[];
 }
 
+// MODIFIED: 更新 TeamDrill 类型定义
 interface TeamDrill {
     c_id: string;
     c_drill_name: string;
     c_status: 'pending' | 'running' | 'finished' | 'archived';
-    c_red_team_id: number;
-    c_blue_team_id: number;
     c_scene_instance_id: string | null;
     scene_config: {
         c_name: string;
     } | null;
+    // (可选但推荐) 后端可以返回队伍在此演练中的角色
+    pivot?: {
+        c_role: string;
+    }
 }
 
 interface InstanceDetails {
@@ -160,22 +163,14 @@ const Page: React.FC = () => {
             }
             const result = await response.json();
 
-            // 新的、更具兼容性的检查逻辑
-            // 检查 result.data 是否存在，并且 result.data.data 是否是一个数组
             if (result && result.data && Array.isArray(result.data.data)) {
-                // 从更深的层级取出真正的用户数组
                 const rawUsers = result.data.data;
-
-                // 确保字段名与前端 interface 匹配
-                // 后端返回的是 c_username 和 c_name，我们需要转换成 u_id 和 u_name
                 const formattedUsers: User[] = rawUsers.map((user: any) => ({
                     u_id: user.c_username,
                     u_name: user.c_name
                 }));
-
                 setAllUsers(formattedUsers);
             } else {
-                // 如果格式不正确，抛出错误
                 throw new Error('返回的用户数据格式不正确');
             }
         } catch (err) {
@@ -453,10 +448,11 @@ const Page: React.FC = () => {
                                                 size="small"
                                             />
                                         </TableCell>
+                                        {/* MODIFIED: 角色显示逻辑更新 */}
                                         <TableCell>
                                             <Chip
-                                                label={drill.c_red_team_id === selectedTeamForDrills?.c_id ? '红队' : '蓝队'}
-                                                color={drill.c_red_team_id === selectedTeamForDrills?.c_id ? 'error' : 'info'}
+                                                label={drill.pivot?.c_role || '参赛方'}
+                                                color="primary"
                                                 variant="outlined"
                                                 size="small"
                                             />
@@ -474,7 +470,6 @@ const Page: React.FC = () => {
                                                     <IconButton
                                                         color="secondary"
                                                         onClick={() => handleOpenInstanceDetailsDialog(drill.c_scene_instance_id!)}
-                                                        // ★ 增加对演练状态的检查 ★
                                                         disabled={!drill.c_scene_instance_id || drill.c_status !== 'running'}
                                                     >
                                                         <VisibilityIcon />
