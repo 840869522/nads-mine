@@ -466,10 +466,12 @@ function initializeGuacamoleClient(token, protocol, params) {
     }
 
     try {
-        // Create WebSocket tunnel
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const host = window.location.host; // includes port
-        const tunnel = new Guacamole.WebSocketTunnel(`${protocol}://${host}/connect-guac`);
+        // Create WebSocket tunnel using the URL provided by our injected config
+        if (!window.GUAC_CONFIG || !window.GUAC_CONFIG.websocketUrl) {
+            alert("Configuration Error: Guacamole WebSocket URL is not defined.");
+            return;
+        }
+        const tunnel = new Guacamole.WebSocketTunnel(window.GUAC_CONFIG.websocketUrl);
 
         // Set up onuuid event handler to log connection ID
         tunnel.onuuid = function (uuid) {

@@ -229,18 +229,29 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     };
 
     const handleOpenLogs = React.useCallback((vm: VmInstance) => {
-        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
-        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
-        const id = uuidv4();
-        const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
-        const params = encodeURIComponent(JSON.stringify({
-            dataViewSpec: { id, title, allowNoIndex: true },
-            columns: ["_source"],
-            query: { language: "kuery", query: "" },
-            filters: []
-        }));
-        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
-        window.open(url, '_blank');
+        // The original Kibana path, e.g., /app/discover
+        const kibanaPath = '/app/discover';
+
+        // Construct the query parameters for Kibana's internal use
+        const kibanaParams = new URLSearchParams({
+            _g: JSON.stringify({
+                time: { from: 'now-15m', to: 'now' },
+            }),
+            _a: JSON.stringify({
+                columns: ['_source'],
+                query: {
+                    query: `libvirt.domain.name: "${vm.name}"`, // Search by VM name
+                    language: 'kuery'
+                },
+                index: 'logs-*',
+            }),
+        });
+
+        // Construct the final URL pointing to our Next.js proxy
+        // It includes the resource ID (VM ID) for our gateway to perform routing
+        const finalUrl = `/api/kibana-proxy${kibanaPath}?id=${encodeURIComponent(vm.id)}&${kibanaParams.toString()}`;
+
+        window.open(finalUrl, '_blank');
     }, []);
 
     const columns = React.useMemo<GridColDef<VmInstance>[]>(

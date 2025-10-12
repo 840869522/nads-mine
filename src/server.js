@@ -15,8 +15,13 @@ const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
 // =================================================================
 // CLUSTER CONFIGURATION
 // =================================================================
-const backendHosts = (process.env.BACKEND_HOSTS || 'http://127.0.0.1:8000').split(',').map(h => h.trim());
-const localHost = backendHosts.find(h => h.includes('127.0.0.1') || h.includes('localhost'));
+const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
+const backendHostNames = (process.env.BACKEND_HOSTS || '127.0.0.1').split(',').map(h => h.trim());
+
+// The host identified as 'local' (running this gateway process)
+const localHostName = backendHostNames.find(h => h.includes('127.0.0.1') || h.includes('localhost'));
+// The full URL for the local backend service. This is used to distinguish local vs remote actions.
+const localHost = localHostName ? `http://${localHostName}:${PHP_API_PORT}` : undefined;
 
 // Global cache for resource locations: { resourceId: hostUrl }
 const resourceHostMap = new Map();
@@ -31,8 +36,8 @@ const handle = app.getRequestHandler();
 // --- Port Definitions ---
 const MAIN_PORT = parseInt(process.env.PORT || '3000', 10);
 const GUAC_INTERNAL_PORT = parseInt(process.env.GUAC_PORT || '3001', 10); // Guac 服务的内部端口
-const PHP_API_PORT = process.env.PHP_API_PORT || 8000;
 const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 9000;
+const KIBANA_PORT = process.env.KIBANA_PORT || 5601;
 
 // --- Target URLs for Proxies ---
 const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
@@ -67,8 +72,9 @@ app.prepare().then(() => {
 
     const aggregateFromHosts = async (req, res, idKey = 'id') => {
         try {
-            const requests = backendHosts.map(host => {
-                const targetUrl = `${host}${req.url.replace('/back', '')}`;
+            const requests = backendHostNames.map(hostName => {
+                const hostUrl = `http://${hostName}:${PHP_API_PORT}`;
+                const targetUrl = `${hostUrl}${req.url.replace('/back', '')}`;
                 console.log(`[AGGREGATE] Forwarding to ${targetUrl}`);
                 return axios.get(targetUrl, { headers: { 'X-Forwarded-For': req.socket.remoteAddress } });
             });
@@ -77,17 +83,18 @@ app.prepare().then(() => {
 
             let combinedData = [];
             results.forEach((result, index) => {
-                const host = backendHosts[index];
+                const hostName = backendHostNames[index];
+                const hostUrl = `http://${hostName}:${PHP_API_PORT}`;
                 if (result.status === 'fulfilled' && result.value.data) {
                     const data = result.value.data;
-                    updateResourceMap(data, host, idKey);
+                    updateResourceMap(data, hostUrl, idKey);
                     if (Array.isArray(data)) {
                         combinedData = combinedData.concat(data);
                     } else {
-                        console.warn(`[AGGREGATE] Response from ${host} for ${req.url} is not an array:`, data);
+                        console.warn(`[AGGREGATE] Response from ${hostUrl} for ${req.url} is not an array:`, data);
                     }
                 } else {
-                    console.error(`[AGGREGATE] Failed to fetch from ${host} for url ${req.url}:`, result.reason?.code);
+                    console.error(`[AGGREGATE] Failed to fetch from ${hostUrl} for url ${req.url}:`, result.reason?.code);
                 }
             });
 
@@ -149,8 +156,9 @@ app.prepare().then(() => {
 
             // Creation APIs (Round Robin)
             if (method === 'POST' && creationApiPatterns.some(p => url.startsWith(p))) {
-                const target = backendHosts[creationHostIndex];
-                creationHostIndex = (creationHostIndex + 1) % backendHosts.length;
+                const hostName = backendHostNames[creationHostIndex];
+                creationHostIndex = (creationHostIndex + 1) % backendHostNames.length;
+                const target = `http://${hostName}:${PHP_API_PORT}`;
                 console.log(`[SMART PROXY] Routing creation API ${url} to ${target}`);
                 return target;
             }
@@ -173,7 +181,11 @@ app.prepare().then(() => {
             }
 
             // Fallback for any /back/ request that wasn't routed
-            if(url.startsWith('/back/')) return backendHosts[0];
+            if(url.startsWith('/back/')) {
+                const fallbackHost = `http://${backendHostNames[0]}:${PHP_API_PORT}`;
+                console.log(`[SMART PROXY] Fallback routing for ${url} to ${fallbackHost}`);
+                return fallbackHost;
+            }
 
             // Default: do not proxy
             return undefined;
@@ -316,6 +328,36 @@ app.prepare().then(() => {
 
         if (url.startsWith('/chat/')) {
             return aiChatProxy(req,res);
+        }
+
+        if (url.startsWith('/api/kibana-proxy')) {
+            const kibanaProxy = createProxyMiddleware({
+                changeOrigin: true,
+                logLevel: dev ? 'debug' : 'info',
+                router: (req) => {
+                    const resourceId = new URL(req.url, `http://${req.headers.host}`).searchParams.get('id');
+                    if (resourceId) {
+                        const hostUrl = resourceHostMap.get(resourceId);
+                        if (hostUrl) {
+                             // Extract hostname from the full hostUrl (e.g., http://192.168.1.10:8000 -> 192.168.1.10)
+                            const hostName = new URL(hostUrl).hostname;
+                            const target = `http://${hostName}:${KIBANA_PORT}`;
+                            console.log(`[KIBANA PROXY] Routing request for resource ${resourceId} to ${target}`);
+                            return target;
+                        }
+                    }
+                    console.warn(`[KIBANA PROXY] Could not find host for resource ${resourceId}. Cannot route.`);
+                    return undefined; // Or a fallback Kibana instance
+                },
+                pathRewrite: (path, req) => {
+                    // We need to strip our custom API path and the ID query param
+                    // Example: /api/kibana-proxy/app/kibana?id=... -> /app/kibana
+                    const originalUrl = new URL(path, `http://${req.headers.host}`);
+                    originalUrl.searchParams.delete('id'); // Remove our tracking param
+                    return path.replace('/api/kibana-proxy', '') + originalUrl.search;
+                },
+            });
+            return kibanaProxy(req, res);
         }
 
         // 其他所有请求都由 Next.js 处理

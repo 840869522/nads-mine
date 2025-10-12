@@ -154,18 +154,30 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails, user]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
-        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
-        const id = uuidv4();
-        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
-        const params = encodeURIComponent(JSON.stringify({
-            dataViewSpec: { id, title, allowNoIndex: true },
-            columns: ["_source"],
-            query: { language: "kuery", query: "" },
-            filters: []
-        }));
-        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
-        window.open(url, '_blank');
+        // The original Kibana path, e.g., /app/discover
+        const kibanaPath = '/app/discover';
+
+        // Construct the query parameters for Kibana's internal use
+        const kibanaParams = new URLSearchParams({
+            _g: JSON.stringify({
+                time: { from: 'now-15m', to: 'now' },
+            }),
+            _a: JSON.stringify({
+                columns: ['_source'],
+                query: {
+                    query: `container.id: "${instance.id.substring(0, 12)}*"`, // Search by container ID prefix
+                    language: 'kuery'
+                },
+                // Using a predefined data view is more robust
+                index: 'logs-*',
+            }),
+        });
+
+        // Construct the final URL pointing to our Next.js proxy
+        // It includes the resource ID for our gateway to perform routing
+        const finalUrl = `/api/kibana-proxy${kibanaPath}?id=${encodeURIComponent(instance.id)}&${kibanaParams.toString()}`;
+
+        window.open(finalUrl, '_blank');
     }, []);
 
     const columns: GridColDef[] = React.useMemo(() => [
