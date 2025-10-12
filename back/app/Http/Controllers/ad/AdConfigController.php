@@ -67,10 +67,8 @@ class AdConfigController extends Controller
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
             'c_end_time'        => 'nullable|date|after_or_equal:c_start_time',
-            // ★★★ START: 添加新字段的验证规则 ★★★
             'c_type'            => 'nullable|integer|in:1,2', // 1=无人机, 2=科幻
             'c_show_attack'     => 'nullable|integer|in:0,1', // 0=不显示, 1=显示
-            // ★★★ END: 添加新字段的验证规则 ★★★
             'referees'          => ['required', 'array', 'min:1', new NotInTeams((int)$request->input('c_red_team_id', 0), (int)$request->input('c_blue_team_id', 0))],
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],

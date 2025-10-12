@@ -45,12 +45,12 @@ chat_memory = ConversationBufferMemory(
     chat_memory=FileChatMessageHistory(file_path="./history.txt"),
     memory_key="history",
     return_messages=True,
-    max_message = 10
+    max_message = 5
 )
 
 retriever = vector_store.as_retriever(
     search_type="similarity",
-    search_kwargs={'k': 6}
+    search_kwargs={'k': 6, 'score_threshold': 0.5}
 )
 
 memory_store = {}
