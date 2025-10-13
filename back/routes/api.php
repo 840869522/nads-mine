@@ -181,7 +181,7 @@ Route::prefix('scenarios')->group(function () {
     //GET 获取场景
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
-    
+
 });
 
 Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
@@ -386,20 +386,19 @@ Route::prefix('ad')->group(function () {
         // --- 辅助路由 ---
         Route::get('/users', [UserController::class, 'getAllUser']);
 
-        Route::prefix('vms')->group(function () {
-            $c = AdVmController::class; // 使用我们刚才定义的别名
+         Route::prefix('vms')->group(function () {
+                $c = AdVmController::class;
+                // 获取演练场景下的虚拟机列表
+                // 最终 URL: GET /api/ad/vms/scene/{instance_id}
+                Route::get('/scene/{instance_id}', [$c, 'listVmsBySceneInstance']);
 
-            // 示例：获取演练场景下的虚拟机列表（新逻辑）
-            // 最终 URL: GET /api/ad/vms/scene/{instance_id}
-            Route::get('/scene/{instance_id}', [$c, 'listVmsBySceneInstance']);
+                // 对演练中的虚拟机执行操作
+                // 最终 URL: POST /api/ad/vms/{vm_name}/actions/{action}
+                Route::post('/{vm_name}/actions/{action}', [$c, 'manageVmLifecycle']);
 
-            // 示例：对演练中的虚拟机执行操作（新逻辑）
-            // 最终 URL: POST /api/ad/vms/{vm_name}/actions/{action}
-            Route::post('/{vm_name}/actions/{action}', [$c, 'manageVmLifecycle']);
-
-            // 示例：获取演练中虚拟机的 Guacamole 连接信息（新逻辑）
-            // 最终 URL: GET /api/ad/vms/{vm_name}/guac
-            Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+                // 获取演练中虚拟机的 Guacamole 连接信息
+                // 最终 URL: GET /api/ad/vms/{vm_name}/guac
+                Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
 
         });
     });

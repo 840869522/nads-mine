@@ -48,6 +48,7 @@ import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
+import { useAuth } from "@/hooks/useAuth";
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -63,8 +64,8 @@ interface VmInstance {
     scene_name?: string;
     uptime?: string;
     is_target: boolean;
-    // ★ 新增：添加 can_operate 字段以接收后端的权限标志
-    can_operate: boolean;
+    can_operate: boolean | string; // 允许 can_operate 是布尔值或字符串
+    team_id: string | null;
 }
 
 interface OverviewData {
@@ -160,6 +161,8 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         ip: true,
         is_target: true,
     });
+
+    const { user } = useAuth();
 
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
@@ -262,7 +265,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 field: 'actions',
                 headerName: '操作',
                 sortable: false,
-                width: 280, // ★ 稍微增加宽度以容纳新按钮
+                width: 280,
                 renderCell: (params) => {
                     const vm = params.row;
                     const { data: info } = useVmInfo(vm.id);
@@ -271,22 +274,60 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     const isPaused = state === 'paused';
                     const isTarget = vm.is_target;
 
-                    // ★ 核心修改：从后端数据中获取操作权限
-                    const canOperate = JSON.parse(atob(vm.can_operate));
+                    // ★★★ START: 最终修复版 - 引入安全的 Base64 解码 ★★★
+
+                    const safeJsonParse = (b64: string | boolean): any => {
+                        if (typeof b64 !== 'string' || b64 === '') {
+                            return { can_operate: !!b64, vm_stop: false, vm_restart: false, vm_shutdown: false, vm_delete: false };
+                        }
+                        try {
+                            const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+                            const jsonString = atob(paddedB64);
+                            return JSON.parse(jsonString);
+                        } catch (e) {
+                            console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
+                            return { can_operate: false, vm_stop: false, vm_restart: false, vm_shutdown: false, vm_delete: false };
+                        }
+                    };
+
+                    const isPrivilegedUser = (currentUser: any): boolean => {
+                        if (!currentUser) return false;
+                        const privilegedRoleStrings = ['admin', 'referee', 'administrator'];
+                        const roles = currentUser.role || currentUser.user?.roles;
+                        if (Array.isArray(roles)) {
+                            return roles.some(role => privilegedRoleStrings.includes(role));
+                        }
+                        return false;
+                    };
+
+                    const getUserTeamId = (currentUser: any): string | null => {
+                        if (!currentUser) return null;
+                        return currentUser.team_id || currentUser.user?.team_id || null;
+                    };
+
+                    const isAdminOrReferee = isPrivilegedUser(user);
+                    const userTeamId = getUserTeamId(user);
+
+                    const isTeamMember = !!(userTeamId && vm.team_id && String(userTeamId) === String(vm.team_id));
+
+                    const hasVncPermission = isAdminOrReferee || isTeamMember;
+
+                    const canOperateGeneral = safeJsonParse(vm.can_operate);
+
+                    // ★★★ END: 最终修复版 ★★★
 
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             {isRunning ? (
                                 <>
-                                    {/* ★ 修改：在 disabled 条件中加入 !canOperate，并用 <span> 或 <Box> 包裹 Tooltip */}
-                                    <Tooltip title={canOperate?.vm_stop ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperate?.vm_stop}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
-                                    <Tooltip title={canOperate?.vm_shutdown ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperate?.vm_shutdown}><StopIcon fontSize="small" color={canOperate?.vm_shutdown ? "error" : "disabled"} /></IconButton></Box></Tooltip>
-                                    <Tooltip title={canOperate?.vm_restart ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperate?.vm_restart}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperateGeneral?.vm_stop ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperateGeneral?.vm_stop}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperateGeneral?.vm_shutdown ? "关机" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'shutdown')} disabled={actionLoading || !canOperateGeneral?.vm_shutdown}><StopIcon fontSize="small" color={canOperateGeneral?.vm_shutdown ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+                                    <Tooltip title={canOperateGeneral?.vm_restart ? "重启" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'reboot')} disabled={actionLoading || !canOperateGeneral?.vm_restart}><ResetIcon fontSize="small" /></IconButton></Box></Tooltip>
                                 </>
                             ) : (
-                                <Tooltip title={canOperate?.can_operate ? (isPaused ? "恢复" : "启动") : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading || !canOperate?.can_operate}><StartIcon fontSize="small" color={canOperate?.can_operate ? "success" : "disabled"} /></IconButton></Box></Tooltip>
+                                <Tooltip title={canOperateGeneral?.can_operate ? (isPaused ? "恢复" : "启动") : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, isPaused ? 'resume' : 'start')} disabled={actionLoading || !canOperateGeneral?.can_operate}><StartIcon fontSize="small" color={canOperateGeneral?.can_operate ? "success" : "disabled"} /></IconButton></Box></Tooltip>
                             )}
-                            <Tooltip title={canOperate?.vm_delete ? "删除" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading || !canOperate?.vm_delete}><DeleteIcon fontSize="small" color={canOperate?.vm_delete ? "error" : "disabled"} /></IconButton></Box></Tooltip>
+                            <Tooltip title={canOperateGeneral?.vm_delete ? "删除" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleDelete(vm)} disabled={actionLoading || !canOperateGeneral?.vm_delete}><DeleteIcon fontSize="small" color={canOperateGeneral?.vm_delete ? "error" : "disabled"} /></IconButton></Box></Tooltip>
 
                             {isTarget && (
                                 <>
@@ -295,19 +336,29 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                                 </>
                             )}
 
-                            <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(vm)} disabled={canOperate?.can_operate} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
+                            <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(vm)} disabled={!canOperateGeneral?.can_operate} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
 
-                            <Tooltip title={canOperate?.can_operate ? "更多操作" : "无权限"}><Box component="span">
-                                <IconButton size="small" onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })} disabled={!isRunning || !canOperate?.can_operate}>
-                                    <ArrowDownIcon fontSize="small" />
-                                </IconButton>
-                            </Box></Tooltip>
+                            <Tooltip title={
+                                !isRunning ? "虚拟机未运行" :
+                                    !canOperateGeneral?.can_operate ? "您无权进行此操作" :
+                                        !hasVncPermission ? "您不属于此虚拟机分配的队伍" : "更多操作"
+                            }>
+                                <Box component="span">
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => setActionAnchor({ anchor: e.currentTarget, id: vm.id })}
+                                        disabled={!isRunning || !canOperateGeneral?.can_operate || !hasVncPermission}
+                                    >
+                                        <ArrowDownIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                            </Tooltip>
                         </Box>
                     );
                 },
             },
         ],
-        [actionLoading, showColumns, handleOpenLogs]
+        [actionLoading, showColumns, handleOpenLogs, user]
     );
 
     const filteredRows = React.useMemo(() => {
@@ -344,15 +395,9 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Box>
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
-                {/*<MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'ssh'); setActionAnchor({ anchor: null, id: null }); }}>
-                    <SshIcon fontSize="small" sx={{ mr: 1 }} />
-                    SSH
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}>
+                    <VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台
                 </MenuItem>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm,'rdp'); setActionAnchor({ anchor: null, id: null }); }}>
-                    <RdpIcon fontSize="small" sx={{ mr: 1 }} />
-                    RDP
-                </MenuItem>*/}
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}><VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台</MenuItem>
             </Menu>
 
             <Backdrop open={actionLoading} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
