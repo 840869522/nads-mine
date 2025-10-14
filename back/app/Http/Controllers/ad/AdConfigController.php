@@ -210,6 +210,8 @@ class AdConfigController extends Controller
             $startDrillRequest = new Request([
                 'username' => $username,
                 'ad_config_id' => $adConfig->c_id,
+                // 将从 $scenario 对象中获取的拓扑 JSON 添加到请求中
+                        'topology' => $scenario->c_scene,
             ]);
             // 确保 AdController::startDrill 返回的是一个 JsonResponse
             return $adController->startDrill($startDrillRequest, $scenario);
