@@ -17,7 +17,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-// ★★★ MODIFICATION 1: Import the InstanceController ★★★
 use App\Http\Controllers\scenario\InstanceController;
 
 class AdController extends Controller
@@ -43,39 +42,36 @@ class AdController extends Controller
         // --- 验证输入 ---
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:50',
-            'ad_config_id' => 'required|string|exists:c_ad_configs,c_id'
+            'ad_config_id' => 'required|string|exists:c_ad_configs,c_id',
+            'topology' => 'required|array', // ★★★ 修复点 1: 验证 topology 字段 ★★★
         ]);
         if ($validator->fails()) {
-            return response()->json(['message' => '请求格式不正确，必须包含有效的用户名和演练配置ID', 'errors' => $validator->errors()], 422);
+            return response()->json(['message' => '请求格式不正确，必须包含有效的用户名、演练配置ID和拓扑数据', 'errors' => $validator->errors()], 422);
         }
         $userName = $request->input('username');
         $adConfigId = $request->input('ad_config_id');
+        // ★★★ 修复点 2: 从请求中获取 topology ★★★
+        $topologyJson = $request->input('topology');
 
-        // ★★★ START: MODIFICATION 2: Add pre-cleanup logic ★★★
-        // 在创建任何新资源之前，先尝试清理与此演练关联的任何旧的、残留的场景实例
+        // --- 预清理逻辑 ---
         $adConfig = AdConfig::find($adConfigId);
         if ($adConfig && $adConfig->c_scene_instance_id) {
             Log::info("演练 '{$adConfig->c_drill_name}' 存在旧的场景实例ID [{$adConfig->c_scene_instance_id}]，开始执行预清理...");
             try {
                 $instanceToDelete = SceneInstance::find($adConfig->c_scene_instance_id);
                 if ($instanceToDelete) {
-                    // 复用 InstanceController 中的 destroy 方法，它可以彻底清理所有资源
                     $instanceController = app(InstanceController::class);
                     $instanceController->destroy($instanceToDelete);
                     Log::info("成功预清理旧的场景实例: " . $adConfig->c_scene_instance_id);
                 }
             } catch (\Exception $e) {
-                // 如果预清理失败，只记录一个警告，然后继续尝试启动。
-                // 因为有些失败（比如记录存在但物理资源已删）是可接受的。
                 Log::warning("预清理旧场景实例时发生错误 (将继续尝试启动): " . $e->getMessage());
             }
-            // 清理后，重置 adConfig 中的 instance_id 和状态
             $adConfig->update(['c_scene_instance_id' => null, 'c_status' => 'pending']);
         }
-        // ★★★ END: MODIFICATION 2 ★★★
 
         // --- 解析拓扑 ---
-        $topologyJson = is_string($scenario->c_scene) ? json_decode($scenario->c_scene, true) : $scenario->c_scene;
+        // $topologyJson 已经从请求中获取，不再需要从 $scenario 获取
         $parsedTopology = TopologyParser::parse($topologyJson);
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
         $connections = &$parsedTopology['connections'];
@@ -97,13 +93,14 @@ class AdController extends Controller
         // =========================================================
         DB::beginTransaction();
         try {
+            // ★★★ 修复点 3: 将正确的 topologyJson 存入数据库 ★★★
             $sceneInstance = SceneInstance::create([
                 'c_config_id' => $scenario->c_config_id,
                 'c_username' => $userName,
                 'c_status' => 'CREATING',
+                'c_scene_config' => $topologyJson, // 使用从请求中传递过来的拓扑数据
             ]);
 
-            // 重新查找 AdConfig 以确保状态最新
             $adConfig = AdConfig::find($adConfigId);
             if ($adConfig) {
                 $adConfig->update([
@@ -124,7 +121,7 @@ class AdController extends Controller
         }
 
         // =========================================================
-        // 阶段二：创建物理资源
+        // 阶段二：创建物理资源 (这部分代码无需修改)
         // =========================================================
         try {
             $createdSwitchesInfo = [];

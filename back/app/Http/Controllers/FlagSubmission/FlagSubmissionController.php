@@ -129,6 +129,40 @@ class FlagSubmissionController extends BaseController
             );
         }
 
+        // 获取用户所属队伍
+        $userTeamId = null;
+        try {
+            $teamRes = \App\Models\Users\UserModel::getUserTeamId($username);
+            if ($teamRes['code'] !== \App\Utils\GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                Log::error("Flag提交失败：查询用户队伍信息出错", [
+                    'username' => $username,
+                    'team_res' => $teamRes
+                ]);
+                return $this->_response(
+                    GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    '无法获取用户队伍信息，请稍后重试。'
+                );
+            }
+
+            $userTeamId = $teamRes['data'];
+            if (empty($userTeamId)) {
+                Log::warning("Flag提交失败：用户未分配队伍", ['username' => $username]);
+                return $this->_response(
+                    GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                    '当前账号未被分配到任何队伍，无法提交 Flag。'
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error("Flag提交失败：获取用户队伍信息异常", [
+                'username' => $username,
+                'error' => $e->getMessage()
+            ]);
+            return $this->_response(
+                GlobalResponse::$HTTP_SERVER_ERROR_CODE,
+                '获取队伍信息失败，请稍后重试。'
+            );
+        }
+
         // 2. 参数校验 - 简化正则表达式验证防止语法错误
         $validator = Validator::make($request->all(), [
             'c_scene_instances_id' => 'required|string|exists:c_scene_instances,c_scene_instances_id',
@@ -158,6 +192,7 @@ class FlagSubmissionController extends BaseController
         $correctFlag = null;
         $instance = null; // 确保实例变量在任何情况下都已定义
         $actualDbId = null; // 存储实际的数据库ID
+        $instanceTeamId = null;
 
         // 添加详细的参数调试信息
         Log::info("Flag提交请求参数详情", [
@@ -188,9 +223,11 @@ class FlagSubmissionController extends BaseController
             if ($instance) {
                 $correctFlag = $instance->c_flag;
                 $actualDbId = $instance->c_container_id; // 容器ID就是数据库ID
+                $instanceTeamId = $instance->c_team_id ?? null;
                 Log::info("找到容器实例", [
                     'container_name' => $instance->c_container_name,
-                    'has_flag' => !empty($correctFlag)
+                    'has_flag' => !empty($correctFlag),
+                    'container_team_id' => $instanceTeamId
                 ]);
             } else {
                 // 调试信息：查找是否存在该容器但场景不匹配
@@ -218,16 +255,18 @@ class FlagSubmissionController extends BaseController
                 $vmId = (int)$instance_id;
                 Log::info("尝试按数字ID查找", ['vm_id' => $vmId]);
 
-                $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
+                    $instance = SceneVmInstanceModel::where('c_vm_id', $vmId)
                                                 ->where('c_scene_instances_id', $c_scene_instances_id)
                                                 ->first();
                 if ($instance) {
                     $correctFlag = $instance->c_flag;
                     $actualDbId = $instance->c_vm_id;
+                    $instanceTeamId = $instance->c_team_id ?? null;
                     Log::info("按数字ID找到VM实例", [
                         'vm_id' => $instance->c_vm_id,
                         'vm_name' => $instance->c_vm_name,
-                        'has_flag' => !empty($correctFlag)
+                        'has_flag' => !empty($correctFlag),
+                        'vm_team_id' => $instanceTeamId
                     ]);
                 }
             }
@@ -251,11 +290,13 @@ class FlagSubmissionController extends BaseController
                         if ($instance) {
                             $correctFlag = $instance->c_flag;
                             $actualDbId = $instance->c_vm_id;
+                            $instanceTeamId = $instance->c_team_id ?? null;
                             Log::info("通过UUID找到VM实例", [
                                 'vm_id' => $instance->c_vm_id,
                                 'vm_name' => $instance->c_vm_name,
                                 'uuid' => $instance_id,
-                                'has_flag' => !empty($correctFlag)
+                                'has_flag' => !empty($correctFlag),
+                                'vm_team_id' => $instanceTeamId
                             ]);
                         } else {
                             Log::warning("通过VM名称没找到数据库记录", [
@@ -300,6 +341,33 @@ class FlagSubmissionController extends BaseController
                 'scene_status' => $sceneInstance->c_status ?? 'unknown'
             ]);
             return $this->_response(GlobalResponse::$HTTP_STATUS_NOTFOUND_CODE, '提交的靶机实例与场景不匹配或不存在');
+        }
+
+        // 确认靶机队伍信息并进行权限校验
+        if (empty($instanceTeamId)) {
+            Log::warning("靶机实例缺少队伍信息，禁止提交", [
+                'instance_type' => $instance_type,
+                'instance_id' => $instance_id,
+                'scene_id' => $c_scene_instances_id
+            ]);
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '靶机未配置所属队伍信息，暂无法提交 Flag。'
+            );
+        }
+
+        if ((string)$instanceTeamId === (string)$userTeamId) {
+            Log::info("拦截提交本队靶机 Flag 的请求", [
+                'username' => $username,
+                'user_team_id' => $userTeamId,
+                'instance_team_id' => $instanceTeamId,
+                'instance_type' => $instance_type,
+                'instance_id' => $instance_id
+            ]);
+            return $this->_response(
+                GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                '不能提交本队靶机的 Flag。'
+            );
         }
 
         // 检查靶机是否为目标靶机（有flag）
