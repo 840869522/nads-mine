@@ -24,6 +24,7 @@ use App\Http\Controllers\Course\CategoryController;
 use App\Http\Controllers\Course\ResourceController;
 use App\Http\Controllers\Vm\VmController;
 use App\Http\Controllers\Course\TestController;
+use App\Http\Controllers\Course\FlagSubmissioneController;
 use App\Http\Controllers\Experiment\ExperimentController;
 use App\Http\Controllers\Experiment\ExperimentResourceController;
 use App\Http\Controllers\Course\CoursePermissionController;
