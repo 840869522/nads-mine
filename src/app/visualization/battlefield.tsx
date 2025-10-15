@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
 import {useLayoutEffect, useRef, useState} from "react";
-import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, Quaternion, CallbackProperty, ScreenSpaceEventHandler, Cartographic, ScreenSpaceEventType } from "cesium";
+import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, CallbackProperty } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
 
@@ -168,18 +168,18 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
     }
 }
 
-async function fetchLogs(instanceId: string): Promise<FlagLog> {
+async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
         const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
        
-        return json.data as FlagLog;
+        return json.data as LogInfo[];
     } catch (err) {
         console.error("请求接口出错:", err);
         // 异常时返回空列表，保证类型安全
-        return { redLogList: [], blueLogList: [] };
+        return [];
     }
 }
 
@@ -237,7 +237,6 @@ export default function Battlefield (adData: AdData) {
 
         // viewer.resolutionScale = window.devicePixelRatio;
         // viewer.scene.globe.maximumScreenSpaceError = 1;
-
 
         // 调用加载地形函数
         addWorldTerrainAsync(viewer);
@@ -313,20 +312,12 @@ export default function Battlefield (adData: AdData) {
             try {
                 const logs = await fetchLogs(adData.id);
 
-                if (logs.redLogList.length !== 0 && logs.redLogList.length !== lastRedLogLength) {
-                    setRedTeamState(prev => ({
-                        ...prev,
-                        logInfo: logs.redLogList
-                    }));
-                    lastRedLogLength = logs.redLogList.length;
-                }
-
-                if (logs.blueLogList.length !== 0 && logs.blueLogList.length !== lastBlueLogLength) {
+                if (logs.length !== 0 && logs.length !== lastBlueLogLength) {
                     setBlueTeamState(prev => ({
                         ...prev,
-                        logInfo: logs.blueLogList
+                        logInfo: logs
                     }));
-                    lastBlueLogLength = logs.blueLogList.length;
+                    lastBlueLogLength = logs.length;
                 }
 
             } catch (err) {

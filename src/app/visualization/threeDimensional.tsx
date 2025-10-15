@@ -313,18 +313,18 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
     }
 }
 
-async function fetchLogs(instanceId: string): Promise<FlagLog> {
+async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
         const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
         // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
-        return json.data as FlagLog;
+        return json.data as LogInfo[];
     } catch (err) {
         console.error("请求接口出错:", err);
         // 异常时返回空列表，保证类型安全
-        return { redLogList: [], blueLogList: [] };
+        return [];
     }
 }
 
@@ -333,8 +333,6 @@ export default function ThreeDimensional(adData: AdData){
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
-
-    // const adData = data !== "" ? JSON.parse(data) : null;
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
@@ -350,9 +348,6 @@ export default function ThreeDimensional(adData: AdData){
 
     const [redTeamState, setRedTeamState] = useState<BattlefieldInfo>(redTeam);
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
-
-    const scene = new THREE.Scene();
-    const rings = new THREE.Group();  // 用于保存所有圆环线
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -396,9 +391,6 @@ export default function ThreeDimensional(adData: AdData){
             rings.push(ring);
             scene.add(ring);
         });
-        // ... (你的代码片段，直到 scene.add(ring); 之后) ...
-
-        // --- 最终修正：七个更亮、不透明的彩色梯形结构 ---
 
         // 1. 获取第一个圆环的半径
         const firstRingRadius = ringRadii[0];
@@ -968,20 +960,12 @@ export default function ThreeDimensional(adData: AdData){
             try {
                 const logs = await fetchLogs(adData.id);
 
-                if (logs.redLogList.length !== 0 && logs.redLogList.length !== lastRedLogLength) {
-                    setRedTeamState(prev => ({
-                        ...prev,
-                        logInfo: logs.redLogList
-                    }));
-                    lastRedLogLength = logs.redLogList.length; 
-                }
-
-                if (logs.blueLogList.length !== 0 && logs.blueLogList.length !== lastBlueLogLength) {
+                if (logs.length !== 0 && logs.length !== lastBlueLogLength) {
                     setBlueTeamState(prev => ({
                         ...prev,
-                        logInfo: logs.blueLogList
+                        logInfo: logs
                     }));
-                    lastBlueLogLength = logs.blueLogList.length;
+                    lastBlueLogLength = logs.length;
                 }
 
             } catch (err) {
@@ -996,7 +980,6 @@ export default function ThreeDimensional(adData: AdData){
         setInterval(fetchAndUpdateLogs, 5000);
         if(adData && adData.id !== ""){
             fetchData();
-            // websocketClient.onMessage(handleMessage);
         }
 
         let shootingPaused = false;

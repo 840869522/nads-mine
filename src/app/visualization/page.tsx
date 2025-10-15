@@ -58,8 +58,6 @@ function Fps() {
 
 export interface AdData{
 	id: string;
-	blueTeamId: number;
-	redTeamId: number;
 	type: number,
     showAttack: number
 }
@@ -79,10 +77,9 @@ const ADPage: React.FC = () => {
 			if(sessionData)
 				sessionObj = JSON.parse(sessionData) as AdData;
             setAdData(sessionObj);
-		
-            // websocketClient.connect();
         }
     },[]);
+	
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'black' }}>
             <Header />
