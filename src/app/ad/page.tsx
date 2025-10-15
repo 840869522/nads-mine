@@ -108,6 +108,8 @@ const AdManagementPage: React.FC = () => {
 
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedAdConfigForTopology, setSelectedAdConfigForTopology] = useState<AdConfig | null>(null);
+    // ★ 1. 新增 State，用于存放从实例接口获取的拓扑数据
+    const [currentInstanceTopology, setCurrentInstanceTopology] = useState<any>(null);
     const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
 
 
@@ -136,19 +138,17 @@ const AdManagementPage: React.FC = () => {
             setAdConfigs(adConfigsData.data || []);
             setTotalAdConfigs(adConfigsData.meta?.total || 0);
 
-            // ★★★ START: 核心修复 - 健壮地解析用户和场景数据 ★★★
-            // 修复1: 假设 usersUrl 返回 { data: { data: [...] } }
             const rawUsers = usersData?.data?.data && Array.isArray(usersData.data.data) ? usersData.data.data : [];
             setUsers(rawUsers);
 
-            // 修复2: 健壮地处理 scenesUrl 的返回
             const rawScenes = scenesData.data && Array.isArray(scenesData.data) ? scenesData.data : (Array.isArray(scenesData) ? scenesData : []);
             const formattedScenes = rawScenes.map((scene: any) => ({
                 c_config_id: scene.id,
                 c_name: scene.name,
+                // ★ 2. (可选优化) 传递 topology_json 以改进初始按钮的 disabled 状态
+                topology_json: scene.topology_json
             }));
             setSceneConfigs(formattedScenes);
-            // ★★★ END: 核心修复 ★★★
 
         } catch (err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
@@ -205,13 +205,37 @@ const AdManagementPage: React.FC = () => {
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
-    const handleViewTopology = (adConfig: AdConfig) => {
-        if (!adConfig.sceneConfig || !adConfig.sceneConfig.topology_json) {
-            setStatusMessage({ type: 'warning', message: '此演练未关联有效的场景拓扑。' });
+    // ★ 3. 重写 handleViewTopology 函数
+    const handleViewTopology = async (adConfig: AdConfig) => {
+        if (!adConfig.c_scene_instance_id) {
+            setStatusMessage({ type: 'warning', message: '此演练尚未启动或没有关联的场景实例，无法查看拓扑。' });
             return;
         }
-        setSelectedAdConfigForTopology(adConfig);
-        setIsTopologyOpen(true);
+
+        setIsSubmitting(true);
+        setStatusMessage(null);
+
+        try {
+            const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${adConfig.c_scene_instance_id}/config`);
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || '获取实例拓扑数据失败');
+            }
+
+            if (result && result.c_scene_config) {
+                setCurrentInstanceTopology(result.c_scene_config);
+                setSelectedAdConfigForTopology(adConfig);
+                setIsTopologyOpen(true);
+            } else {
+                throw new Error('从实例数据中未找到有效的拓扑信息 (c_scene_config)。');
+            }
+
+        } catch (err: any) {
+            setStatusMessage({ type: 'error', message: err.message });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -365,9 +389,12 @@ const AdManagementPage: React.FC = () => {
                                                             </Tooltip>
                                                         </>
                                                     )}
-                                                    <Tooltip title="查看/编辑拓扑及队伍分配">
+                                                    <Tooltip title="查看拓扑">
                                                         <span>
-                                                            <IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.sceneConfig}><AccountTreeIcon /></IconButton>
+                                                            {/* ★ 4. 修改 disabled 逻辑 */}
+                                                            <IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.c_scene_instance_id || isSubmitting}>
+                                                                <AccountTreeIcon />
+                                                            </IconButton>
                                                         </span>
                                                     </Tooltip>
                                                     <Tooltip title="查看实例详情">
@@ -477,17 +504,27 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
+            {/* ★ 5. 更新 InstanceTopologyDialog 的 props */}
             {isTopologyOpen && selectedAdConfigForTopology && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
-                    onClose={() => { setIsTopologyOpen(false); setSelectedAdConfigForTopology(null); }}
-                    adConfig={selectedAdConfigForTopology}
-                    sceneInstanceId={selectedAdConfigForTopology.c_scene_instance_id}
-                    onSaveSuccess={() => {
+                    onClose={() => {
                         setIsTopologyOpen(false);
                         setSelectedAdConfigForTopology(null);
-                        fetchData();
+                        setCurrentInstanceTopology(null); // 清空临时数据
                     }}
+                    title={`实例拓扑：${selectedAdConfigForTopology.c_drill_name}`}
+                    // 使用我们从 state 获取的拓扑数据
+                    topology={currentInstanceTopology}
+                    // 传递实例ID
+                    instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
+                    // 保留你可能需要的其他props
+                    // adConfig={selectedAdConfigForTopology}
+                    // onSaveSuccess={() => {
+                    //     setIsTopologyOpen(false);
+                    //     setSelectedAdConfigForTopology(null);
+                    //     fetchData();
+                    // }}
                 />
             )}
         </Box>

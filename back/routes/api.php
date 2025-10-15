@@ -196,6 +196,7 @@ Route::prefix('scenariosinstances')->group(function () {
     // iptables 管理（必须放在通用路由之前）
     Route::get('/iptables', [IptablesController::class, 'index']);
     Route::delete('/iptables', [IptablesController::class, 'destroy']);
+    Route::get('/{instanceId}/config', [InstanceController::class, 'getConfig']);
 
     Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
     Route::get('/switches', [SwitchController::class, 'index']);

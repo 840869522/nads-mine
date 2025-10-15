@@ -20,6 +20,7 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Utils\JWTControll;      // ★ 1. 确保导入 JWTControll
 use Illuminate\Support\Facades\Cache;  // ★ 1. 确保导入 Cache
+use Illuminate\Http\JsonResponse;
 
 
 class InstanceController extends Controller
@@ -146,6 +147,29 @@ class InstanceController extends Controller
             } catch (\Exception $e) {
                 Log::error("获取实例详情时发生错误 for instance {$instance->c_scene_instances_id}: " . $e->getMessage());
                 return response()->json(['message' => '获取实例详情失败。'], 500);
+            }
+        }
+    /**
+     * 获取指定场景实例的配置信息，特别是 c_scene_config 拓扑JSON。
+     *
+     * @param  string $instanceId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getConfig($instanceId): JsonResponse
+        {
+            try {
+                $instance = SceneInstance::findOrFail($instanceId);
+
+                return response()->json([
+                    'c_scene_instances_id' => $instance->c_scene_instances_id,
+                    'c_scene_config' => $instance->c_scene_config,
+                ]);
+
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                return response()->json(['message' => '场景实例配置未找到。'], 404);
+            } catch (\Exception $e) {
+                Log::error("获取场景实例配置时发生错误 (ID: {$instanceId}): " . $e->getMessage());
+                return response()->json(['message' => '服务器内部错误'], 500);
             }
         }
 
