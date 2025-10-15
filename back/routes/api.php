@@ -181,7 +181,7 @@ Route::prefix('scenarios')->group(function () {
     //GET 获取场景
     Route::get('/{scenario}', [ScenarioController::class, 'update']);
     // 启动场景
-    
+
 });
 
 Route::get('/permissions/users', [ScenarioPermissionController::class, 'getAllUsers'])
@@ -196,6 +196,7 @@ Route::prefix('scenariosinstances')->group(function () {
     // iptables 管理（必须放在通用路由之前）
     Route::get('/iptables', [IptablesController::class, 'index']);
     Route::delete('/iptables', [IptablesController::class, 'destroy']);
+    Route::get('/{instanceId}/config', [InstanceController::class, 'getConfig']);
 
     Route::delete('/switches/{switchName}', [SwitchController::class, 'destroy']);
     Route::get('/switches', [SwitchController::class, 'index']);
@@ -237,6 +238,7 @@ Route::prefix('containers')->group(function () {
     Route::get('/{id}/info', [ContainersController::class, 'info']);
     // 新增路由：检查容器操作权限
     Route::get('/{containerId}/can-operate', [ContainersController::class, 'checkPermission']);
+    Route::match(['GET', 'POST'], '/{id}/terminal-with-authority', [ContainersController::class, 'terminalWithAuthority']);
 });
 
 
@@ -248,6 +250,7 @@ Route::prefix('vms')->group(function () {
     Route::get('/image-options', [$c, 'listVmImageOptions']);
     Route::post('/create', [$c, 'createVm']);
     Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+    Route::get('/{vm_name}/guac-with-authority', [$c, 'getGuacInfoWithAuthority']);
     Route::get('/{vm_id}', [$c, 'getVmInfo']);
     Route::delete('/{vm_id}', [$c, 'deleteVm']);
     Route::post('/{vm_id}/actions/{action}', [$c, 'manageVmLifecycle']);
@@ -312,6 +315,7 @@ Route::prefix('study')->group(function () {
         Route::get('index', [TestController::class, 'index']);
           // 启动场景
         Route::post('startDrill/{scenario}', [TestController::class, 'startDrill']);
+        Route::post('submitFlag', [FlagSubmissioneController::class, 'submitFlag'])->middleware('throttle:60,1');
     });
 });
 
@@ -384,20 +388,19 @@ Route::prefix('ad')->group(function () {
         // --- 辅助路由 ---
         Route::get('/users', [UserController::class, 'getAllUser']);
 
-        Route::prefix('vms')->group(function () {
-            $c = AdVmController::class; // 使用我们刚才定义的别名
+         Route::prefix('vms')->group(function () {
+                $c = AdVmController::class;
+                // 获取演练场景下的虚拟机列表
+                // 最终 URL: GET /api/ad/vms/scene/{instance_id}
+                Route::get('/scene/{instance_id}', [$c, 'listVmsBySceneInstance']);
 
-            // 示例：获取演练场景下的虚拟机列表（新逻辑）
-            // 最终 URL: GET /api/ad/vms/scene/{instance_id}
-            Route::get('/scene/{instance_id}', [$c, 'listVmsBySceneInstance']);
+                // 对演练中的虚拟机执行操作
+                // 最终 URL: POST /api/ad/vms/{vm_name}/actions/{action}
+                Route::post('/{vm_name}/actions/{action}', [$c, 'manageVmLifecycle']);
 
-            // 示例：对演练中的虚拟机执行操作（新逻辑）
-            // 最终 URL: POST /api/ad/vms/{vm_name}/actions/{action}
-            Route::post('/{vm_name}/actions/{action}', [$c, 'manageVmLifecycle']);
-
-            // 示例：获取演练中虚拟机的 Guacamole 连接信息（新逻辑）
-            // 最终 URL: GET /api/ad/vms/{vm_name}/guac
-            Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
+                // 获取演练中虚拟机的 Guacamole 连接信息
+                // 最终 URL: GET /api/ad/vms/{vm_name}/guac
+                Route::get('/{vm_name}/guac', [$c, 'getGuacInfo']);
 
         });
     });
@@ -412,6 +415,7 @@ Route::prefix('flag')->group(function () {
 
 Route::prefix('visualization')->group(function() {
     Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
-    Route::get('users/{teamId}', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('users/{instance_id}', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('teams/{instance_id}', [VisualizationController::class, 'getTeams']);
     Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
 });
