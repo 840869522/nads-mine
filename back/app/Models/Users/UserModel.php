@@ -80,6 +80,39 @@
             }
         }
 
+     // ★★★ START: 新增方法 ★★★
+        /**
+         * 根据用户ID查询其所属的第一个队伍ID。
+         *
+         * @param string $userId 用户的唯一标识 (c_username)
+         * @return array 包含队伍ID或错误的数组
+         */
+        public static function getUserTeamId(string $userId): array
+        {
+            // SQL 查询语句，从 c_teams_users 表中查找记录
+            $sql = "SELECT team_id FROM `c_teams_users` WHERE user_id = ? LIMIT 1";
+
+            try {
+                // 执行查询，使用 selectOne 获取单个记录
+                $result = db::selectOne($sql, [$userId]);
+
+                // 如果找到了记录，返回队伍ID；如果没找到，$result会是null，则返回null
+                $teamId = $result ? $result->team_id : null;
+
+                return [
+                    "code" => GlobalResponse::$DATABASE_SUCCESS_CODE,
+                    "data" => $teamId,
+                ];
+
+            } catch (QueryException $e) {
+                Log::info('[DATABASE]: FAILED TO GET USER TEAM ID : ' . $e->getMessage());
+                return [
+                    "code" => GlobalResponse::$DATABASE_ERROR_CODE,
+                    "data" => null, // 出错时也返回 null
+                ];
+            }
+        }
+
         public static function getUserPrimissions(string $id): array{
             try {
                 db::beginTransaction();
@@ -182,36 +215,36 @@
             try {
                 $successCount = 0;
                 $errorCount = 0;
-                
+
                 foreach ($users as $index => $user) {
                     try {
                         DB::beginTransaction();
-                        
+
                         $sql = "INSERT INTO `c_users`(
-                            c_username, 
-                            c_password, 
-                            c_name, 
-                            c_email, 
-                            c_is_login, 
-                            c_create_at, 
+                            c_username,
+                            c_password,
+                            c_name,
+                            c_email,
+                            c_is_login,
+                            c_create_at,
                             c_update_at,
                             c_last_login
                         ) VALUES(?,?,?,?,?,?,?,?)";
                         $insertResult = DB::insert($sql, [
-                            $user['username'], 
-                            $user['password'], 
+                            $user['username'],
+                            $user['password'],
                             $user['name'],
-                            $user['email'], 
+                            $user['email'],
                             $user['is_login'] ?? 1,
                             $user['crate_at'],
                             $user["update_at"],
                             $user['last_login']
                         ]);
-                        
+
                         if (!$insertResult) {
                             throw new \Exception("用户插入失败");
                         }
-                        
+
                         // 2. 处理用户角色分配
                         if (isset($user['role']) && is_array($user['role'])) {
                             $roles = array_map(function ($role_id) use ($user) {
@@ -220,7 +253,7 @@
                                     'c_role_id' => $role_id
                                 ];
                             }, $user['role']);
-                            
+
                             $roleResult = RoleModel::grantRole2User($user['username'], $roles);
                             if ($roleResult["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
                                 DB::rollBack();
@@ -230,13 +263,13 @@
                         }
                         DB::commit();
                         $successCount++;
-                        
+
                     } catch (\Exception $e) {
                         DB::rollBack();
                         $errorCount++;
                     }
                 }
-        
+
                 return [
                     'code' => GlobalResponse::$DATABASE_SUCCESS_CODE,
                     'data' => [
@@ -249,7 +282,7 @@
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                 ];
-            } 
+            }
         }
 
 

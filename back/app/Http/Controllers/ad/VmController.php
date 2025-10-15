@@ -122,10 +122,15 @@ class VmController extends Controller
                 $vm['ip'] = $dbInfo->c_ip;
                 $vm['is_target'] = !empty($dbInfo->c_flag);
 
+                // ★★★ 新增代码 ★★★
+                // 将数据库中的 c_team_id 添加到 API 响应中
+                // 我们使用 team_id 作为 JSON 键名，保持简洁
+                $vm['team_id'] = $dbInfo->c_team_id;
+
                 // ★ 关键：调用权限检查函数来动态生成 can_operate 字段 ★
                 // 这个函数内部会自己从 Request 中获取用户信息，所以我们不需要传递参数。
                 // 它的返回值 (true/false) 将决定前端按钮是否可操作。
-		$can_operate = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
+		        $can_operate = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
                 $permissions = [
                     "vm_stop"     => $vm_stop && $can_operate,
                     "vm_restart"  => $vm_restart && $can_operate,
@@ -136,15 +141,16 @@ class VmController extends Controller
                 $permissionsJson = json_encode($permissions);
                 $encodedPermissions = base64_encode($permissionsJson);
                 $vm["can_operate"] =$encodedPermissions;
+                Log::info($vm);
                 // 将处理完毕的虚拟机信息添加到最终结果中
                 $resultVms[] = $vm;
             }
-            Log::info($resultVms);
         }
 
         // --- 步骤 4: 将最终结果以 JSON 格式返回给前端 ---
         return response()->json($resultVms);
     }
+
     /**
      * Execute a system command and return trimmed output.
      */
@@ -608,58 +614,20 @@ class VmController extends Controller
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
     {
-    Log::info($request);
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
         $auth = $request->header("Authorization",null);
         $jwtRes =  JWTControll::decodeJWT($auth);
-        $tokenData = $jwtRes["data"];
 
-        // ★ 添加权限检查：验证用户是否有权访问此VM的VNC控制台
-        try {
-            $vmInstance = SceneVmInstance::where('c_vm_name', $vmQueryName)->first();
-            if (!$vmInstance) {
-                Log::warning('VM not found in database', ['vm_name' => $vmQueryName]);
-                return response()->json(['error' => '虚拟机不存在'], 404);
-            }
-
-            // 获取对应的演练配置
-            $adConfig = DB::table('c_scene_instances as si')
-                ->join('c_ad_configs as ac', 'si.c_scene_instances_id', '=', 'ac.c_scene_instance_id')
-                ->where('si.c_scene_instances_id', $vmInstance->c_scene_instances_id)
-                ->first();
-
-            $adConfigObj = null;
-
-            if ($adConfig) {
-                // 转换为对象以便传递给canBeOperatedByUser方法
-                $adConfigObj = (object)[
-                    'c_red_team_id' => $adConfig->c_red_team_id,
-                    'c_blue_team_id' => $adConfig->c_blue_team_id,
-                    "token_data"=> $tokenData
-                ];
-            }
-            // 使用现有的canBeOperatedByUser方法检查权限
-            if (!$vmInstance->canBeOperatedByUser($adConfigObj)) {
-                Log::warning('User not authorized to access VM', [
-                    'vm_name' => $vmQueryName,
-                    'user' => $tokenData['id'] ?? 'unknown',
-                    'is_target' => !empty($vmInstance->c_flag)
-                ]);
-                return response()->json(['error' => '无权访问此虚拟机的控制台'], 403);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Permission check failed for VM access', [
-                'vm_name' => $vmQueryName,
-                'error' => $e->getMessage()
-            ]);
-            return response()->json(['error' => '权限检查失败'], 500);
+        if ($jwtRes["err"] != null) {
+            return response()->json(['error' => '无效的令牌'], 401);
         }
 
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
             $vncPort = $this->parseVncPort($xml) ?? 5900;
         } catch (\Throwable $e) {
+            Log::error("Failed to parse VNC port from virsh for VM: {$vmName}", ['error' => $e->getMessage()]);
             $vncPort = 5900;
         }
 
@@ -672,6 +640,7 @@ class VmController extends Controller
                     $vncPort = 5900 + (int)$m[1];
                 }
             } catch (\Throwable $e) {
+                Log::warning("Could not get VNC display for VM: {$vmName}", ['error' => $e->getMessage()]);
             }
         } else {
             try {
@@ -685,7 +654,7 @@ class VmController extends Controller
                 Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
             }
         }
-    Log::info(['L'=>$ip]);
+
         return response()->json([
             'host' => $ip ?? '无效',
             'ssh_port' => 22,
@@ -772,15 +741,6 @@ class VmController extends Controller
         } catch (\Throwable $e) {
         }
 
-        // $flag = null;
-        // try {
-        //     $flag = DB::table('c_scene_vm_instances')
-        //         ->where('c_vm_name', $vmId)
-        //         ->value('c_flag');
-        // } catch (\Throwable $e) {
-        //     $flag = null;
-        // }
-
         return response()->json([
             'status' => $state,
             'hostNode' => $host,
@@ -793,7 +753,6 @@ class VmController extends Controller
             'autostart' => $autostart,
             'uuid' => $vmId,
             'ipAddress' => $ip,
-            // 'is_target' => !empty($flag),
         ], 200);
     }
 

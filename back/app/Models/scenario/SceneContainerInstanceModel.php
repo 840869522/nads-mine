@@ -51,7 +51,8 @@ class SceneContainerInstanceModel extends Model
         'c_scene_instances_id',
         'c_container_name',
         'c_ip',
-        'c_flag'
+        'c_flag',
+        'c_team_id'
     ];
 
     /**

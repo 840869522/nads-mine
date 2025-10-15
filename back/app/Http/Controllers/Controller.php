@@ -23,11 +23,11 @@ class Controller extends BaseController
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
-        Log::info($controllerName);
+        // Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 
-        Log::info($res);
+        // Log::info($res);
         if ($res['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE) {
             if ($res['data']['found']){
                 $auth = $request->header("Authorization",null);
@@ -67,7 +67,7 @@ class Controller extends BaseController
                     }
                 }
             }else {
-                Log::info(in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission']));
+                // Log::info(in_array($controllerName, ["UserController.login", "PermissionController.getSystemAllMenu", 'PermissionController.getSystemAllPermission']));
             }
         }else{
             $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,GlobalResponse::$DATABASE_ERROR_MES)->send();

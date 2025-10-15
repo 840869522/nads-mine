@@ -15,8 +15,8 @@ use Exception;
 class RefereeController extends Controller
 {
     /**
-     * 获取裁判总览列表 (已支持搜索、分页和丰富的关联数据)
-     * [防御性编程版]: 手动构建响应数据结构以确保正确性。
+     * 获取裁判总览列表。
+     * 队伍相关的逻辑已被彻底移除。
      */
     public function index(Request $request): JsonResponse
     {
@@ -24,42 +24,36 @@ class RefereeController extends Controller
             $perPage = $request->query('per_page', 10);
             $searchQuery = $request->query('search');
 
+            // MODIFIED: Removed 'adConfig.teams' from eager loading.
             $query = Referee::query()
                 ->with([
                     'user:c_username,c_name',
                     'adConfig',
-                    'adConfig.redTeam:c_id,c_name',
-                    'adConfig.blueTeam:c_id,c_name',
                     'adConfig.sceneConfig:c_config_id,c_name'
                 ])
                 ->latest('c_create_at');
 
-            // --- 搜索逻辑 ---
+            // --- 搜索逻辑 (保持不变) ---
             if ($searchQuery) {
                 $query->where(function ($q) use ($searchQuery) {
-                    // 搜索关联的用户名
                     $q->whereHas('user', function ($userQuery) use ($searchQuery) {
                         $userQuery->where('c_username', 'LIKE', '%' . $searchQuery . '%')
                             ->orWhere('c_name', 'LIKE', '%' . $searchQuery . '%');
                     })
-                        // 或者搜索关联的演练名称
                         ->orWhereHas('adConfig', function ($adConfigQuery) use ($searchQuery) {
                             $adConfigQuery->where('c_drill_name', 'LIKE', '%' . $searchQuery . '%');
                         });
                 });
             }
-            // --- 搜索逻辑结束 ---
 
             $referees = $query->paginate($perPage);
 
-            // ★★★ 核心修改点 ★★★
-            // 手动转换分页数据，确保数据结构绝对正确
             $referees->getCollection()->transform(function($referee) {
 
                 $adConfigData = null;
                 if ($referee->adConfig) {
 
-                    // 动态注入实例ID
+                    // 动态注入实例ID的逻辑保持不变
                     if (empty($referee->adConfig->c_scene_instance_id) && $referee->adConfig->c_scene_config_id) {
                         $instance = SceneInstance::where('c_config_id', $referee->adConfig->c_scene_config_id)
                             ->where('c_status', 'RUNNING')
@@ -71,26 +65,22 @@ class RefereeController extends Controller
                         }
                     }
 
-                    // 手动构建 ad_config 的数据结构
+                    // MODIFIED: Removed 'teams' key from the manually built data structure.
                     $adConfigData = [
                         'c_id' => $referee->adConfig->c_id,
                         'c_drill_name' => $referee->adConfig->c_drill_name,
                         'c_status' => $referee->adConfig->c_status,
                         'c_scene_config_id' => $referee->adConfig->c_scene_config_id,
                         'c_scene_instance_id' => $referee->adConfig->c_scene_instance_id,
-                        // 显式地从加载的关系中获取数据
-                        'redTeam' => $referee->adConfig->redTeam ? ['c_name' => $referee->adConfig->redTeam->c_name] : null,
-                        'blueTeam' => $referee->adConfig->blueTeam ? ['c_name' => $referee->adConfig->blueTeam->c_name] : null,
                         'sceneConfig' => $referee->adConfig->sceneConfig ? ['c_name' => $referee->adConfig->sceneConfig->c_name] : null,
                     ];
                 }
 
-                // 返回一个全新的、干净的对象结构
                 return [
                     'c_user_id' => $referee->c_user_id,
                     'c_ad_config_id' => $referee->c_ad_config_id,
                     'c_level' => $referee->c_level,
-                    'c_create_at' => $referee->c_create_at->toDateTimeString(), // 转换为标准字符串格式
+                    'c_create_at' => $referee->c_create_at->toDateTimeString(),
                     'user' => $referee->user,
                     'ad_config' => $adConfigData,
                 ];
@@ -109,6 +99,7 @@ class RefereeController extends Controller
 
     /**
      * 获取可用的用户列表作为裁判候选人。
+     * (此方法无需修改)
      */
     public function availableUsers(Request $request): JsonResponse
     {

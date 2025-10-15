@@ -6,62 +6,71 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Flag\FlagSubmissionModel;
+use App\Models\scenario\SceneContainerInstanceModel;
+use App\Models\scenario\SceneVmInstanceModel;
 
 class VisualizationController extends Controller{
+    private $vms;
+    private $containers;
+    private $trueTargetList;
+    private $falseTargetList;
+
+    private function getInstances(string $instance_id){
+        $this->vms = SceneVmInstanceModel::where('c_scene_instances_id', $instance_id)
+            ->select('c_vm_name as name', 'c_ip as ip', 'c_flag', 'c_team_id')
+            ->get();
+        $this->containers = SceneContainerInstanceModel::where('c_scene_instances_id', $instance_id)
+            ->select('c_container_name as name', 'c_ip as ip', 'c_flag', 'c_team_id')
+            ->get();
+
+        $this->trueTargetList = collect();
+        $this->falseTargetList = collect();
+
+        foreach ($this->vms as $vm) {
+            $ip = explode('/', $vm->ip)[0];
+            $item = [
+                'name' => $vm->name,
+                'ip'   => $ip,
+            ];
+
+            if (!empty($vm->c_flag)) {
+                $this->trueTargetList->push($item);
+            } else {
+                $this->falseTargetList->push($item);
+            }
+        }
+
+        foreach ($this->containers as $container) {
+            $ip = explode('/', $container->ip)[0];
+            $item = [
+                'name' => $container->name,
+                'ip'   => $ip,
+            ];
+
+            if (!empty($container->c_flag)) {
+                $this->trueTargetList->push($item);
+            } else {
+                $this->falseTargetList->push($item);
+            }
+        }
+    }
+
     public function getListVms(string $instance_id)
     {
         try {
-            $vms = DB::table('c_scene_vm_instances')
-                ->select('c_vm_name as name', 'c_ip as ip', 'c_flag')
-                ->where('c_scene_instances_id', $instance_id)
-                ->get();
-            $containers = DB::table('c_scene_container_instances')
-                ->select('c_container_name as name', 'c_ip as ip', 'c_flag')
-                ->where('c_scene_instances_id', $instance_id)
-                ->get();
-
-            $trueTargetList = [];
-            $falseTargetList = [];
-
-            foreach ($vms as $vm) {
-                $ip = explode('/', $vm->ip)[0];
-                $item = [
-                    'name' => $vm->name,
-                    'ip'   => $ip,
-                ];
-
-                if (!empty($vm->c_flag)) {
-                    $trueTargetList[] = $item;
-                } else {
-                    $falseTargetList[] = $item;
-                }
-            }
-
-            foreach ($containers as $container) {
-                $ip = explode('/', $container->ip)[0];
-                $item = [
-                    'name' => $container->name,
-                    'ip'   => $ip,
-                ];
-
-                if (!empty($container->c_flag)) {
-                    $trueTargetList[] = $item;
-                } else {
-                    $falseTargetList[] = $item;
-                }
-            }
+            $this->getInstances($instance_id);
 
             return response()->json([
                 'code'    => 200,
                 'message' => '成功',
                 'data'    => [
-                    'trueTargetList'  => $trueTargetList,
-                    'falseTargetList' => $falseTargetList,
+                    'trueTargetList'  => $this->trueTargetList->toArray(),
+                    'falseTargetList' => $this->falseTargetList->toArray(),
                 ],
             ]);
 
         } catch (\Throwable $e) {
-            Log::error("Database query for scene VMs failed for instance {$instance_id}: {$e->getMessage()}");
+            Log::error("Database query for scene instances failed for instance {$instance_id}: {$e->getMessage()}");
 
             return response()->json([
                 'code'    => 500,
@@ -71,22 +80,70 @@ class VisualizationController extends Controller{
         }
     }
 
-    public function getTeamUsers(int $teamId){
+    public function getTeamUsers(string $instance_id){
         try{
-            $users = DB::table('c_teams_users as tu')
-                ->join('c_users as u', 'tu.user_id', '=', 'u.c_username') // 关联唯一标识
-                ->where('tu.team_id', $teamId)
-                ->select('u.c_username as userId', 'u.c_name as username')   // 返回对象数组
-                ->get()
-                ->all();
+            $containerUsers = DB::table('c_scene_container_instances as sci')
+                ->leftJoin('c_teams_users as tu', 'sci.c_team_id', '=', 'tu.team_id') // 关联唯一标识
+                ->leftJoin('c_users as u', 'tu.user_id', '=', 'u.c_username')
+                ->where('sci.c_scene_instances_id', $instance_id)
+                ->select('u.c_username as userId', 'u.c_name as userName')   // 返回对象数组
+                ->get();
             
+            $vmUsers = DB::table('c_scene_vm_instances as svi')
+                ->leftJoin('c_teams_users as tu', 'svi.c_team_id', '=', 'tu.team_id') // 关联唯一标识
+                ->leftJoin('c_users as u', 'tu.user_id', '=', 'u.c_username')
+                ->where('svi.c_scene_instances_id', $instance_id)
+                ->select('u.c_username as userId', 'u.c_name as userName')   // 返回对象数组
+                ->get();
+            
+            $users = $containerUsers
+                ->merge($vmUsers)
+                ->unique('userId')
+                ->values()
+                ->toArray();
+
             return response()->json([
                 'code'    => 200,
                 'message' => '成功',
                 'data'    => $users
             ]);
         } catch (\Throwable $e){
-            Log::error("Failed to obtain {$teamId} team members: {$e->getMessage()}");
+            Log::error("Failed to obtain {$instance_id} team members: {$e->getMessage()}");
+            return response()->json([
+                'code'    => 500,
+                'message' => '数据库查询失败: ' . $e->getMessage(),
+                'data'    => null,
+            ], 500);
+        }
+    }
+
+    public function getTeams(string $instance_id){
+        try{
+            $containerTeams = DB::table('c_scene_container_instances as sci')
+                ->leftJoin('c_teams as t', 'sci.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->where('sci.c_scene_instances_id', $instance_id)
+                ->select('t.c_id as teamId', 't.c_name as teamName')   // 返回对象数组
+                ->get();
+            
+            $vmTeams = DB::table('c_scene_vm_instances as svi')
+                ->leftJoin('c_teams as t', 'svi.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->where('svi.c_scene_instances_id', $instance_id)
+                ->select('t.c_id as teamId', 't.c_name as teamName')   // 返回对象数组
+                ->get();
+            
+            $teams = $containerTeams
+                ->merge($vmTeams)
+                ->unique('teamId')
+                ->values()
+                ->toArray();
+            
+            return response()->json([
+                'code'    => 200,
+                'message' => '成功',
+                'data'    => $teams
+            ]);
+        } catch (\Throwable $e){
+            Log::error("Failed to obtain {$instance_id} teams: {$e->getMessage()}");
             return response()->json([
                 'code'    => 500,
                 'message' => '数据库查询失败: ' . $e->getMessage(),
@@ -113,8 +170,8 @@ class VisualizationController extends Controller{
             })
             ->sortBy('c_submitted_at') // 按提交时间倒序
             ->values();                    // 重新索引
-        $redLog = [];
-        $blueLog = [];
+
+        $logList = [];
         foreach($flags as $f){
             $logMessage = $f->c_is_correct == 1 ? "{$f->c_username}提交{$f->name}的flag正确"
                 :"{$f->c_username}提交{$f->name}的flag错误";
@@ -123,19 +180,14 @@ class VisualizationController extends Controller{
                 'logTime' => $f->c_submitted_at,
                 'logContent' => $logMessage,
             ];
-            if($f->c_is_correct == 1)
-                $redLog[] = $item;
-            else
-                $blueLog[] = $item;
+            $logList[] = $item;
         }
 
         return response()->json([
             'code'    => 200,
             'message' => '成功',
-            'data'    => [
-                'redLogList'  => $redLog,
-                'blueLogList' => $blueLog,
-            ],
+            'data'    => $logList
         ]);
     }
+
 }

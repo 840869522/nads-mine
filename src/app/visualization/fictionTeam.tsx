@@ -40,8 +40,20 @@ function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
     return rand * 5
 }
 
-async function fetchTeamMembers(teamId: number) {
-    const res = await fetch(`/back/api/visualization/users/${teamId}`);
+async function fetchTeamMembers(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/users/${sceneId}`);
+    const result = await res.json();
+
+    if (result.code !== 200) {
+        console.error(result.message);
+        return [];
+    }
+
+    return result.data; // 这里是对象数组 [{ userId, username }, ...]
+}
+
+async function fetchTeams(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/teams/${sceneId}`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -54,12 +66,16 @@ async function fetchTeamMembers(teamId: number) {
 
 function TeamInfoItem(props: { info: TeamInfo; index: number }) {
     return (
-        <div className="flex items-center justify-between py-1 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors">
-            <div className="flex items-center space-x-2">
+        <div className="flex items-center py-1 px-4 rounded-lg w-full">
+            <div className="w-[16.666667%] flex justify-center items-center">
                 <CrownIcon rank={props.index} />
-                <span className="font-medium text-sm text-white">{props.info.teamName}</span>
             </div>
-            <span className="text-base font-bold text-yellow-300">{props.info.teamScore}</span>
+            <div className="w-[66.666667%] flex justify-center items-center font-medium text-sm text-white text-center">
+                {props.info.teamName}
+            </div>
+            <div className="w-[16.666667%] flex justify-center items-center text-base font-bold text-yellow-500 text-center">
+                {props.info.teamScore}
+            </div>
         </div>
     )
 }
@@ -99,16 +115,42 @@ function LogItem(props: LogInfo){
     );
 }
 
-function TeamList(props: {teamList: TeamInfo[]}){
-    return(
-        <div className="mb-3">
-            <div className="flex flex-col gap-2 pt-2">
-                {props.teamList.map((teamInfo, index) => (
-                    <TeamInfoItem key={teamInfo.teamId} info={teamInfo} index={index} />
-                ))}
+function TeamList(props: {type:number; teamList: TeamInfo[]}){
+     const teamInfoStyle1 = "bg-[linear-gradient(to_right,rgba(135,206,250,0),rgba(135,206,250,0.3))] border border-blue-400/30 rounded-md p-3 mb-3";
+    const teamInfoStyle2 = "bg-[linear-gradient(to_left,rgba(135,206,250,0),rgba(135,206,250,0.3))] border border-blue-400/30 rounded-md p-3 mb-3";
+
+    if(props.type === 0){
+        return (
+            <div className={teamInfoStyle1}>
+                {/*<div className={styles.infoHeader}>*/}
+                {/*    <div className={styles.infoHeaderItem}>排名</div>*/}
+                {/*    <div className={styles.infoHeaderItem}>席位名称</div>*/}
+                {/*    <div className={styles.infoHeaderItem}>总分</div>*/}
+                {/*</div>*/}
+                <ul className="flex flex-col gap-2 pt-2">
+                    {props.teamList.map((teamInfo, index) => (
+                        <TeamInfoItem key={teamInfo.teamId} info={teamInfo} index={index} />
+                    ))}
+                </ul>
             </div>
-        </div>
-    );
+        )
+    }
+    else{
+        return (
+            <div className={teamInfoStyle2}>
+                {/*<div className={styles.infoHeader}>*/}
+                {/*    <div className={styles.infoHeaderItem}>排名</div>*/}
+                {/*    <div className={styles.infoHeaderItem}>席位名称</div>*/}
+                {/*    <div className={styles.infoHeaderItem}>总分</div>*/}
+                {/*</div>*/}
+                <ul className="flex flex-col gap-2 pt-2">
+                    {props.teamList.map((teamInfo, index) => (
+                        <TeamInfoItem key={teamInfo.teamId} info={teamInfo} index={index} />
+                    ))}
+                </ul>
+            </div>
+        )
+    }
 }
 
 function LogList(props: {logList: LogInfo[]}){
@@ -144,25 +186,47 @@ export default function FictionTeam(team:BattlefieldInfo) {
     // 同步父组件更新
     useEffect(() => {
         let teams: TeamInfo[] = [];
-        fetchTeamMembers(team.teamId).then(users => {
-            for(let i = 0; i < users.length; ++i){
-                let item: TeamInfo = {
-                    teamId: users[i].userId,
-                    teamName: team.type === 0 ? `蓝方席位${i+1}`: `红方席位${i+1}` ,
-                    teamScore: getRandomDivisibleBy5()
+        if(team.type === 1){
+            // setTeamList(redTeamInfos);
+            fetchTeamMembers(team.sceneId).then(users => {
+                for(let i = 0; i < users.length; ++i){
+                    let item: TeamInfo = {
+                        teamId: users[i].userId,
+                        teamName: users[i].userId,
+                        teamScore: getRandomDivisibleBy5() / 5
+                    }
+                    teams.push(item);
                 }
-                teams.push(item);
-            }  
-            teams.sort((a, b) => b.teamScore - a.teamScore);
-            setTeamList(teams);
-        });
-        
-        
-    }, [team.teamId])
+                teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
+                if(teams.length === 0)
+                    setTeamList(redTeamInfos);
+                else
+                    setTeamList(teams);
+            });
+        }else{
+            // setTeamList(blueTeamInfos);
+            fetchTeams(team.sceneId).then(teamList => {
+                for(let j = 0; j < teamList.length; ++j){
+                    let item: TeamInfo = {
+                        teamId: teamList[j].teamId.toString(),
+                        teamName: teamList[j].teamName,
+                        teamScore: getRandomDivisibleBy5()
+                    }
+                    teams.push(item);
+                }
+                teams.sort((c: TeamInfo, d: TeamInfo) => c.teamScore - d.teamScore);
+                if(teams.length === 0)
+                    setTeamList(blueTeamInfos);
+                else
+                    setTeamList(teams);
+            });
+        }
+    }, [team.sceneId])
 
     useEffect(()=>{
         setLogList(team.logInfo);
     }, [team.logInfo])
+    
     if(team.type === 0){
         return (
             <div className="absolute min-w-[300px] grid grid-rows-[auto_auto_1fr]
@@ -171,10 +235,10 @@ export default function FictionTeam(team:BattlefieldInfo) {
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
                         <FontAwesomeIcon icon={faShieldAlt}/>
                     </div>
-                    <h2 className="text-[1.3rem] font-bold uppercase text-white">蓝方队伍</h2>
+                    <h2 className="text-[1.3rem] font-bold uppercase text-white">队伍排名</h2>
                 </div>
 
-                <TeamList teamList={teamList} />
+                <TeamList type={team.type} teamList={teamList} />
 
                 <LogList logList={logList} />
             </div>
@@ -187,12 +251,68 @@ export default function FictionTeam(team:BattlefieldInfo) {
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(51,102,255,0.8)] text-[#aaccff] text-[1.3rem]">
                         <FontAwesomeIcon icon={faCrosshairs}/>
                     </div>
-                    <h2 className="text-[1.3rem] font-bold uppercase text-white">红方队伍</h2>
+                    <h2 className="text-[1.3rem] font-bold uppercase text-white">成员排名</h2>
                 </div>
 
-                <TeamList teamList={teamList} />
-                <LogList logList={logList} />
+                <TeamList type={team.type} teamList={teamList} />
+                {/* <LogList logList={logList} /> */}
             </div>
         );
     }
 }
+
+const blueTeamInfos: TeamInfo[] = [
+    {
+        teamId: '1',
+        teamName: '队伍1',
+        teamScore: 295
+    },
+    {
+        teamId: '2',
+        teamName: '队伍2',
+        teamScore: 285
+    },
+    {
+        teamId: '3',
+        teamName: '队伍3',
+        teamScore: 270
+    },
+]
+
+const redTeamInfos: TeamInfo[] = [
+    {
+        teamId: '1',
+        teamName: 'student1',
+        teamScore: 50
+    },
+    {
+        teamId: '2',
+        teamName: 'student2',
+        teamScore: 45
+    },
+    {
+        teamId: '3',
+        teamName: 'student3',
+        teamScore: 45
+    },
+    {
+        teamId: '4',
+        teamName: 'student4',
+        teamScore: 30
+    },
+    {
+        teamId: '5',
+        teamName: 'student5',
+        teamScore: 10
+    },
+    {
+        teamId: '6',
+        teamName: 'student6',
+        teamScore: 10
+    },
+    {
+        teamId: '7',
+        teamName: 'student7',
+        teamScore: 0
+    },
+]

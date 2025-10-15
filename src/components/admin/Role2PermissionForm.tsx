@@ -67,7 +67,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                         // if (idx > -1) {
                         //     newSelected.splice(idx, 1);
                         // }
-                        newSelected = newSelected.filter(k=> k!== parentKey);
+                        newSelected = newSelected.filter(k => k !== parentKey);
                     }
                     // 继续向上查找父级
                     const parentResult = findPermissionByKey(appAllPermission, currentParent.key);
@@ -83,7 +83,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
             const updated = isChecked
                 ? [...newSelected, permissionKey]
                 : newSelected.filter(k => k !== permissionKey);
-                console.log(updated)
+            console.log(updated)
             newSelected.length = 0;
             newSelected.push(...updated);
             // 3. 向上更新所有父级权限的选中状态
@@ -105,7 +105,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
                         newSelected.push(parentKey);
                     }
                 } else {
-                    newSelected = newSelected.filter(k=> k!== parentKey);
+                    newSelected = newSelected.filter(k => k !== parentKey);
                 }
                 // 继续向上查找父级
                 const parentResult = findPermissionByKey(appAllPermission, currentParent.key);
@@ -149,7 +149,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
         if (perms.length === 0)
             return null;
         return perms.map((perm) => {
-            const isParent = !!perm.children || perm.key === "databoard_view" ;
+            const isParent = !!perm.children && perm.children.length > 0;
             const allDescendants = getAllDescendantKeys(perm);
 
             // 检查所有后代是否都被选中
@@ -167,56 +167,32 @@ const PermissionForm: React.FC<PermissionFormProps> = ({
 
             return (
                 <React.Fragment key={perm.key}>
-                    {isParent ? (
-                        // 父级权限：直接渲染标题 + 子项，不使用 Accordion
-                        <React.Fragment>
-                            <ListItem sx={{ p: 0 }}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            checked={selected.includes(perm.key) || allChildrenSelected}
-                                            indeterminate={indeterminate}
-                                            onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
-                                            size="small"
-                                        />
-                                    }
-                                    label={
-                                        <Typography variant="body2">
-                                            {perm.label}
-                                        </Typography>
-                                    }
-                                    sx={{
-                                        pl: level,
-                                    }}
+                    <ListItem sx={{ p: 0 }}>
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={selected.includes(perm.key) || allChildrenSelected}
+                                    indeterminate={indeterminate}
+                                    onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
+                                    size="small"
                                 />
-                            </ListItem>
-                            {renderPermissions(perm?.children! || [], level + 2)}
-                        </React.Fragment>
-                    ) : (
-                        <ListItem sx={{ p: 0 }}>
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={selected.includes(perm.key)}
-                                        onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
-                                        size="small"
-                                    />
-                                }
-                                label={
-                                    <Typography variant="body2">
-                                        {perm.label}
-                                    </Typography>
-                                }
-                                sx={{
-                                    pl: level + 2,
-                                }}
-                            />
-                        </ListItem>
-                    )}
+                            }
+                            label={
+                                <Typography variant="body2">
+                                    {perm.label}
+                                </Typography>
+                            }
+                            sx={{
+                                pl: level,
+                            }}
+                        />
+                    </ListItem>
+                    {isParent && renderPermissions(perm.children!, level + 3)}
                 </React.Fragment>
             );
         });
     };
+
     return (
         <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>

@@ -1,20 +1,21 @@
 <?php
-// file: app/Http/Controllers/ad/TeamController.php
 
 namespace App\Http\Controllers\ad;
 
 use App\Http\Controllers\Controller;
 use App\Models\ad\AdConfig;
 use App\Models\ad\Team;
-use App\Models\scenario\SceneInstance; // <-- 修复点 (1/3): 使用正确的单数类名
+use App\Models\ad\TeamUsers; // ★ 1. 导入 TeamUsers 服务类
+use App\Models\scenario\SceneInstance;
 use App\Models\Users\UserModel;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
 {
-    // ... (index, store, show, update, destroy 方法保持不变，这里省略以保持简洁)
+    // index, store, show, update, destroy 方法与演练结构解耦，无需修改
     public function index(Request $request)
     {
         $searchQuery = $request->query('search');
@@ -29,6 +30,7 @@ class TeamController extends Controller
         $teams = $query->latest('c_id')->paginate($perPage);
         return response()->json($teams);
     }
+
     public function store(Request $request)
     {
         $validatedData = $request->validate([
@@ -54,11 +56,13 @@ class TeamController extends Controller
             return response()->json(['status'  => 'error','message' => '创建失败: ' . $e->getMessage(),], 500);
         }
     }
+
     public function show(Team $team)
     {
         $team->load('users');
         return response()->json(['status' => 'success', 'data' => $team]);
     }
+
     public function update(Request $request, Team $team)
     {
         $validatedData = $request->validate([
@@ -79,16 +83,15 @@ class TeamController extends Controller
             return response()->json(['status'  => 'error','message' => '更新失败: ' . $e->getMessage(),], 500);
         }
     }
+
     public function destroy(Team $team)
     {
         $teamName = $team->c_name;
         $team->delete();
         return response()->json(['status' => 'success', 'message' => '队伍 "' . $teamName . '" 已成功删除。']);
     }
-    /**
-     * ★★★ 新增方法 ★★★
-     * 切换指定队伍中用户的禁用状态。
-     */
+
+    // toggleUserBanStatus 方法与演练结构解耦，无需修改
     public function toggleUserBanStatus(Team $team, UserModel $user)
     {
         $pivot = DB::table('c_teams_users')
@@ -122,30 +125,22 @@ class TeamController extends Controller
     /**
      * 获取指定队伍参与的所有演练。
      *
-     * @param  \App\Models\ad\Team  $team
-     * @return \Illuminate\Http\JsonResponse
+     * @param  Team  $team
+     * @return JsonResponse
      */
-    public function getDrills(Team $team)
+    public function getDrills(Team $team): JsonResponse
     {
-        // 查询演练配置
-        $drills = AdConfig::query()
-            ->with(['sceneConfig:c_config_id,c_name'])
-            ->where(function ($query) use ($team) {
-                $query->where('c_red_team_id', $team->c_id)
-                    ->orWhere('c_blue_team_id', $team->c_id);
-            })
-            ->select('c_id', 'c_drill_name', 'c_status', 'c_red_team_id', 'c_blue_team_id', 'c_scene_config_id', 'c_scene_instance_id')
+        // MODIFIED: 查询逻辑被简化为直接使用模型中定义好的 'drills' 多对多关系
+        $drills = $team->drills()
+            ->with(['sceneConfig:c_config_id,c_name']) // 继续预加载场景信息
             ->latest('c_create_at')
             ->get();
 
-        // 动态注入实时实例状态
-        $sceneInstanceModel = new SceneInstance(); // <-- 修复点 (2/3): 使用正确的单数类名实例化
-        $drills->transform(function($drill) use ($sceneInstanceModel) {
+        // 动态注入实时实例状态的逻辑保持不变，因为它很有用
+        $drills->transform(function($drill) {
             if (empty($drill->c_scene_instance_id) && $drill->c_scene_config_id) {
-                // ★★★ 修复点 (3/3): 调用模型的一个不存在的方法 get_c_scene_instances_id
-                // 我们应该直接查询模型。这里我们创建一个更健壮的查询。
                 $instance = SceneInstance::where('c_config_id', $drill->c_scene_config_id)
-                    ->where('c_status', 'RUNNING') // 只查找正在运行的实例
+                    ->where('c_status', 'RUNNING')
                     ->select('c_scene_instances_id')
                     ->first();
 
@@ -162,5 +157,24 @@ class TeamController extends Controller
             'status' => 'success',
             'data' => $drills,
         ]);
+    }
+
+    /**
+     * ★★★ 新增：获取多个队伍的所有成员ID ★★★
+     * 这个方法用于支持前端在指派裁判时进行角色冲突检查。
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getMembersByTeamIds(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'team_ids'   => 'required|array',
+            'team_ids.*' => 'integer|exists:c_teams,c_id',
+        ]);
+
+        $memberIds = TeamUsers::get_teams_users($validated['team_ids']);
+
+        return response()->json(['data' => $memberIds]);
     }
 }

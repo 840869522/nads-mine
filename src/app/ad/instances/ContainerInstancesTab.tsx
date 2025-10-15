@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box, Typography, CircularProgress, Alert as MuiAlert, Paper, IconButton, Chip, Tooltip,
@@ -10,13 +11,15 @@ import {
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
     History as HistoryIcon,
-    Article as ArticleIcon // ★ 确保 ArticleIcon 已导入
+    Article as ArticleIcon,
+    RestartAlt as RestartIcon
 } from '@mui/icons-material';
 
-// ★ 修改：在 RunningInstance 类型中增加 can_operate 字段
 import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
+// ★ 1. 修改类型定义
 interface RunningInstance extends OriginalRunningInstance {
-    can_operate: boolean;
+    team_id: string | null;
+    can_operate: string; // can_operate 现在是一个 Base64 字符串
 }
 
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
@@ -57,14 +60,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [showColumns, setShowColumns] = useState({
         id: false,
         is_target: true,
+        team_id: true,
         imageName: true,
         ports: true,
-        cpuUsage: true,
-        memoryUsage: true,
-        uptime: true,
+        cpuUsage: false,
+        memoryUsage: false,
+        uptime: false,
         ipAddress: true,
-        scene_instance_id: true,
-        scene_name: true,
+        scene_instance_id: false,
+        scene_name: false,
     });
 
     const getStatusChipColor = (status: InstanceStatus): "success" | "warning" | "error" | "info" | "default" => {
@@ -126,7 +130,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `停止实例: ${instance.name}`,
             message: `您确定要停止实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                await fetch(`${API_BASE}/api/containers/${instance.id}?action=stop`, { method: 'POST' });
+                await customFetch(`${API_BASE}/api/containers/${instance.id}?action=stop`, { method: 'POST' });
                 fetchInstanceDetails();
             },
         });
@@ -151,10 +155,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             message: `您确定要永久删除实例 "${instance.name}" 吗？此操作无法撤销。`,
             onConfirm: async () => {
                 await customFetch(`${API_BASE}/api/containers/${instance.id}?action=delete`, { method: 'POST' });
-                if (user) {
-                    const q = `?userId=${user.id}&role=${user.role}&id=${instance.id}`;
-                    await customFetch(`${API_BASE}/api/instances${q}`, { method: 'DELETE' });
-                }
                 fetchInstanceDetails();
             },
         });
@@ -162,8 +162,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails, user]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        // This function seems specific to Kibana and might be better named, but keeping as is.
-        // For containers, a direct logs modal is usually preferred.
         setLogsModalId(instance.id);
     }, []);
 
@@ -173,78 +171,111 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         {
             field: 'is_target',
             headerName: '是否为靶机',
-            width: 120,
+            width: 100,
             hide: !showColumns.is_target,
             renderCell: (params) => ( <Chip label={params.value ? '是' : '否'} color={params.value ? 'primary' : 'default'} size="small" variant="outlined" /> )
         },
+        { field: 'team_id', headerName: '所属队伍ID', width: 120, hide: !showColumns.team_id },
         { field: 'imageName', headerName: '镜像', flex: 2, hide: !showColumns.imageName },
-        { field: 'ports', headerName: '端口', flex: 2, hide: !showColumns.ports },
-        { field: 'cpuUsage', headerName: 'CPU', width: 100, hide: !showColumns.cpuUsage },
-        { field: 'memoryUsage', headerName: '内存', flex: 1, hide: !showColumns.memoryUsage },
-        { field: 'uptime', headerName: '运行时间', flex: 1, hide: !showColumns.uptime },
+        { field: 'ports', headerName: '端口', flex: 1.5, hide: !showColumns.ports },
         { field: 'ipAddress', headerName: 'IP', width: 160, hide: !showColumns.ipAddress },
-        { field: 'scene_instance_id', headerName: '场景实例ID', width: 160, hide: !showColumns.scene_instance_id },
-        { field: 'scene_name', headerName: '场景名称', width: 160, hide: !showColumns.scene_name },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 280, // ★ 稍微增加宽度
+            field: 'actions', headerName: '操作', sortable: false, width: 320,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
-                const isActionable = !['starting', 'stopping', 'deleting'].includes(instance.status);
+                const isActionable = !['starting', 'stopping', 'deleting', 'restarting'].includes(instance.status);
                 const isStopped = instance.status === 'exited' || instance.status === 'stopped';
                 const isRunning = instance.status === 'running';
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                // ★ 核心修改：从后端数据中获取操作权限
-                const canOperate = instance.can_operate;
+                // ★★★ START: 移植并应用完整的权限逻辑 ★★★
+
+                const safeJsonParse = (b64: string | boolean): any => {
+                    if (typeof b64 !== 'string' || b64 === '') {
+                        return { can_operate: !!b64 };
+                    }
+                    try {
+                        const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+                        return JSON.parse(atob(paddedB64));
+                    } catch (e) {
+                        console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
+                        return { can_operate: false };
+                    }
+                };
+
+                const isPrivilegedUser = (currentUser: any): boolean => {
+                    if (!currentUser) return false;
+                    const privilegedRoles = ['admin', 'referee', 'administrator'];
+                    const roles = currentUser.role || currentUser.user?.roles;
+                    if (Array.isArray(roles)) {
+                        return roles.some(role => privilegedRoles.includes(role));
+                    }
+                    return false;
+                };
+
+                const getUserTeamId = (currentUser: any): string | null => {
+                    if (!currentUser) return null;
+                    return currentUser.team_id || currentUser.user?.team_id || null;
+                };
+
+                const isAdminOrReferee = isPrivilegedUser(user);
+                const userTeamId = getUserTeamId(user);
+
+                const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
+
+                const hasTerminalPermission = isAdminOrReferee || isTeamMember;
+
+                const canOperateGeneral = safeJsonParse(instance.can_operate);
+
+                // ★★★ END: 移植并应用完整的权限逻辑 ★★★
 
                 return (
                     <Box>
-                        {/* ★ 修改：在所有操作按钮的 disabled 条件中加入 !canOperate */}
-                        <Tooltip title={canOperate ? (isRunning ? '暂停' : '启动') : "无权限"}><Box component="span">
-                            <IconButton onClick={() => isRunning ? handlePauseInstance(instance) : handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperate}>
-                                {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={canOperate ? "success" : "disabled"} />}
-                            </IconButton>
-                        </Box></Tooltip>
-                        <Tooltip title={canOperate ? "停止" : "无权限"}><Box component="span">
-                            <IconButton onClick={() => handleStopInstance(instance)} size="small" disabled={!isActionable || isStopped || !canOperate}>
-                                <StopIcon fontSize="small" color={!isStopped && canOperate ? 'error' : 'disabled'} />
-                            </IconButton>
-                        </Box></Tooltip>
-                        <Tooltip title={canOperate ? "删除" : "无权限"}><Box component="span">
-                            <IconButton onClick={() => handleDeleteInstance(instance)} size="small" disabled={!isActionable || (!isStopped && instance.status !== 'error') || !canOperate}>
-                                <DeleteIcon fontSize="small" color={(isStopped || instance.status === 'error') && canOperate ? 'error' : 'disabled'} />
-                            </IconButton>
-                        </Box></Tooltip>
+                        <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
+                            <Box component="span">
+                                <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.can_operate}>
+                                    {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={canOperateGeneral?.can_operate ? "success" : "disabled"} />}
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
+                        <Tooltip title={canOperateGeneral?.container_stop ? "停止" : "无权限"}>
+                            <Box component="span">
+                                <IconButton onClick={() => handleStopInstance(instance)} size="small" disabled={!isActionable || isStopped || !canOperateGeneral?.container_stop}>
+                                    <StopIcon fontSize="small" color={!isStopped && canOperateGeneral?.container_stop ? 'error' : 'disabled'} />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
+                        <Tooltip title={canOperateGeneral?.container_delete ? "删除" : "无权限"}>
+                            <Box component="span">
+                                <IconButton onClick={() => handleDeleteInstance(instance)} size="small" disabled={!isActionable || !isStopped || !canOperateGeneral?.container_delete}>
+                                    <DeleteIcon fontSize="small" color={isStopped && canOperateGeneral?.container_delete ? 'error' : 'disabled'} />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
 
                         {isTarget && (
                             <>
-                                <Tooltip title="提交Flag"><Box component="span">
-                                    <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                        <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                    </IconButton>
-                                </Box></Tooltip>
-                                <Tooltip title="Flag历史记录"><Box component="span">
-                                    <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
-                                        <HistoryIcon fontSize="small" color="info" />
-                                    </IconButton>
-                                </Box></Tooltip>
+                                <Tooltip title="提交Flag"><Box component="span"><IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}><FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} /></IconButton></Box></Tooltip>
+                                <Tooltip title="Flag历史记录"><Box component="span"><IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small"><HistoryIcon fontSize="small" color="info" /></IconButton></Box></Tooltip>
                             </>
                         )}
 
                         <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(instance)} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
 
-                        <Tooltip title={canOperate ? "更多操作" : "无权限"}><Box component="span">
-                            <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small" disabled={!canOperate}>
-                                <MoreVertIcon fontSize="small" />
-                            </IconButton>
-                        </Box></Tooltip>
+                        <Tooltip title={hasTerminalPermission ? "更多操作" : "您不属于此容器分配的队伍"}>
+                            <Box component="span">
+                                <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small" disabled={!hasTerminalPermission}>
+                                    <MoreVertIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
                     </Box>
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, user]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -283,7 +314,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 {Object.entries(showColumns).map(([key,val])=> (
                     <MenuItem key={key}>
                         <FormControlLabel control={<Switch checked={val} onChange={(e)=>setShowColumns(prev=>({...prev,[key]:e.target.checked}))} color="primary"/>}
-                                          label={ key === 'id' ? '容器 ID' : key === 'imageName' ? '镜像名' : key === 'ports' ? '端口' : key === 'cpuUsage' ? 'CPU' : key === 'memoryUsage' ? '内存' : key === 'ipAddress' ? 'IP' : key === 'scene_instance_id' ? '场景实例ID' : key === 'scene_name' ? '场景名称' : key === 'is_target' ? '是否为靶机' : '运行时间' } />
+                                          label={ key === 'id' ? '容器 ID' : key === 'imageName' ? '镜像名' : key === 'ports' ? '端口' : key === 'cpuUsage' ? 'CPU' : key === 'memoryUsage' ? '内存' : key === 'ipAddress' ? 'IP' : key === 'scene_instance_id' ? '场景实例ID' : key === 'scene_name' ? '场景名称' : key === 'is_target' ? '是否为靶机' : key === 'team_id' ? '队伍ID' : '运行时间' } />
                     </MenuItem>
                 ))}
             </Menu>
@@ -294,14 +325,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Bind mounts </MenuItem>
                 <MenuItem onClick={() => {
                     const instance = instances.find(inst => inst.id === moreMenuAnchor.id);
-                    if (instance?.can_operate && moreMenuAnchor.id) {
-                        openTerminal(moreMenuAnchor.id);
+                    if (instance && moreMenuAnchor.id) {
+                        const isAdmin = isPrivilegedUser(user);
+                        const isMember = !!(getUserTeamId(user) && instance.team_id && String(getUserTeamId(user)) === String(instance.team_id));
+                        if(isAdmin || isMember) {
+                            openTerminal(moreMenuAnchor.id);
+                        }
                     }
                     setMoreMenuAnchor({ anchor: null, id: null });
-                }}
-                    // ★ 修改：禁用终端菜单项
-                          disabled={!instances.find(inst => inst.id === moreMenuAnchor.id)?.can_operate}
-                >
+                }}>
                     Terminal
                 </MenuItem>
             </Menu>

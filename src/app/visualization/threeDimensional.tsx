@@ -57,17 +57,22 @@ function createSpaceship(
 }
 
 function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Object3D) {
-    const start = startNode.position.clone();
-    const end = endNode.position.clone();
+    const start = new THREE.Vector3();
+    const end = new THREE.Vector3();
 
-    const steps = 100; // 分段数
-    const height = 80 + Math.random() * 50; // 抛物线顶点高度
+    // 1. 获取旋转后的世界坐标
+    startNode.getWorldPosition(start);
+    endNode.getWorldPosition(end);
 
-    // 二次贝塞尔控制点
+    const steps = 100;
+
+    const arcHeight = 5;
+
     const mid = start.clone().add(end).multiplyScalar(0.5);
-    mid.y += height;
 
-    // 生成完整轨迹数组
+    mid.y += arcHeight;
+
+    // 生成完整轨迹数组 (使用二次贝塞尔曲线公式)
     const trajectory: THREE.Vector3[] = [];
     for (let i = 0; i <= steps; i++) {
         const t = i / steps;
@@ -77,12 +82,12 @@ function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.
         trajectory.push(point);
     }
 
-    // 初始化 geometry，把所有点放进去
+    // ... (剩余的 Line、Material、Animation 逻辑保持不变) ...
     const geometry = new THREE.BufferGeometry().setFromPoints(trajectory);
     geometry.setDrawRange(0, 2);
 
     const material = new THREE.LineBasicMaterial({
-        color: 0x00ffff,
+        color: 0xff0000,
         transparent: true,
         opacity: 1,
     });
@@ -91,7 +96,7 @@ function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.
     scene.add(line);
 
     const startTime = performance.now();
-    const duration = 1000; // 2s 发射完成
+    const duration = 1000; // 1s 发射完成
 
     function animate() {
         const elapsed = performance.now() - startTime;
@@ -113,6 +118,167 @@ function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.
 
     animate();
 }
+
+function shootBalls(scene: THREE.Scene, startNode: THREE.Object3D, firstRingRadius: number) {
+
+    const ballBaseRadius = 0.01;
+    const ballMaxSize = 0.08;
+    const singleBallLifespan = 4000;  // 单个小球的生命周期 (4秒)
+    const emissionInterval = 150;     // 小球之间的发射间隔 (150ms)
+    const arcHeight = 1;
+    const ballColor = 0xADD8E6;
+    const ringYPosition = 0;
+
+    const streamDuration = singleBallLifespan;
+
+    const pauseDuration = 2000;
+
+    const totalBallsInStream = Math.floor(streamDuration / emissionInterval) + 1;
+
+    const material = new THREE.MeshBasicMaterial({ color: ballColor });
+    let isShooting = true;
+
+    function emitSingleBall() {
+
+        const start = new THREE.Vector3();
+        startNode.getWorldPosition(start);
+
+        const fixedTargetRadius = firstRingRadius * 0.75;
+        const radialDirection = start.clone().setY(0).normalize();
+        const end = radialDirection.multiplyScalar(fixedTargetRadius);
+        end.y = ringYPosition;
+
+        const mid = start.clone().add(end).multiplyScalar(0.5);
+        const baseHeight = Math.max(start.y, end.y);
+        mid.y = baseHeight + arcHeight;
+
+        const geometry = new THREE.SphereGeometry(ballBaseRadius, 8, 8);
+        const ballMesh = new THREE.Mesh(geometry, material);
+        ballMesh.position.copy(start);
+        scene.add(ballMesh);
+
+        const ballStartTime = performance.now();
+
+        function animateBall() {
+            const elapsed = performance.now() - ballStartTime;
+            const t = elapsed / singleBallLifespan;
+
+            if (t < 1) {
+                // 抛物线运动
+                const position = start.clone().multiplyScalar((1 - t) ** 2)
+                    .add(mid.clone().multiplyScalar(2 * (1 - t) * t))
+                    .add(end.clone().multiplyScalar(t ** 2));
+                ballMesh.position.copy(position);
+
+                const scaleFactor = ballBaseRadius + (ballMaxSize - ballBaseRadius) * t;
+                ballMesh.scale.set(scaleFactor / ballBaseRadius, scaleFactor / ballBaseRadius, scaleFactor / ballBaseRadius);
+
+                requestAnimationFrame(animateBall);
+            } else {
+                scene.remove(ballMesh);
+                geometry.dispose();
+            }
+        }
+
+        animateBall();
+    }
+
+    function shootStream() {
+        if (!isShooting) return;
+
+        let ballCount = 0;
+
+        function streamLoop() {
+            if (!isShooting || ballCount >= totalBallsInStream) {
+
+                const totalDelay = streamDuration + pauseDuration;
+                setTimeout(shootStream, totalDelay);
+                return;
+            }
+
+            emitSingleBall();
+            ballCount++;
+
+            setTimeout(streamLoop, emissionInterval);
+        }
+
+        streamLoop();
+    }
+
+    shootStream();
+
+    return {
+        stop: () => { isShooting = false; }
+    };
+}
+
+// --- 节点几何体常量 ---
+const GEOM_STAND_SIZE: number = 0.5;
+const GEOM_STAND_HEIGHT: number = 0.025;
+const GEOM_BASE_HEIGHT: number = 0.4;
+const GEOM_BASE_BOTTOM_RADIUS: number = 0.15;
+const GEOM_BASE_TOP_RADIUS: number = 0.05;
+const GEOM_TOP_RADIUS: number = GEOM_BASE_BOTTOM_RADIUS;
+
+// --- 通用节点创建函数 ---
+function createNodeMesh(nodeMaterial: THREE.Material): { nodeGroup: THREE.Group, topMesh: THREE.Mesh } {
+    const nodeGroup = new THREE.Group();
+
+    // 1. 底部正方形台子
+    const standGeometry = new THREE.BoxGeometry(GEOM_STAND_SIZE, GEOM_STAND_HEIGHT, GEOM_STAND_SIZE);
+    const standMesh = new THREE.Mesh(standGeometry, nodeMaterial);
+    standMesh.position.y = GEOM_STAND_HEIGHT / 2;
+    nodeGroup.add(standMesh);
+
+    // 2. 棋子底座（圆台）
+    const basePoints: THREE.Vector2[] = [];
+    for (let j = 0; j <= 20; j++) {
+        const y = (j / 20) * GEOM_BASE_HEIGHT;
+        const progress = j / 20;
+        const radius = GEOM_BASE_BOTTOM_RADIUS + (GEOM_BASE_TOP_RADIUS - GEOM_BASE_BOTTOM_RADIUS) * Math.sin(progress * Math.PI / 2);
+        basePoints.push(new THREE.Vector2(radius, y));
+    }
+    const baseGeometry = new THREE.LatheGeometry(basePoints, 32);
+    const baseMesh = new THREE.Mesh(baseGeometry, nodeMaterial);
+    baseMesh.position.y = GEOM_STAND_HEIGHT;
+    nodeGroup.add(baseMesh);
+
+    // 3. 棋子顶部（球体）
+    const topGeometry = new THREE.SphereGeometry(GEOM_TOP_RADIUS, 32, 32);
+    const topMesh = new THREE.Mesh(topGeometry, nodeMaterial);
+    topMesh.position.y = GEOM_STAND_HEIGHT + GEOM_BASE_HEIGHT + GEOM_TOP_RADIUS;
+    nodeGroup.add(topMesh);
+
+    // 4. 底部一圈小球
+    const blueBallMaterial = new THREE.MeshBasicMaterial({ color: 0xADD8E6 });
+    const blackBallMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const ballRadius: number = 0.03;
+    const standBallCount: number = 24;
+    const ballCircleRadius: number = GEOM_STAND_SIZE / 2 - ballRadius;
+
+    for (let j = 0; j < standBallCount; j++) {
+        const ballAngle: number = (j / standBallCount) * Math.PI * 2;
+        const ballGeometry = new THREE.SphereGeometry(ballRadius, 16, 16);
+        const ballMesh: THREE.Mesh = new THREE.Mesh(
+            ballGeometry,
+            j % 2 === 0 ? blueBallMaterial : blackBallMaterial
+        );
+
+        ballMesh.position.set(
+            Math.cos(ballAngle) * ballCircleRadius,
+            GEOM_STAND_HEIGHT + ballRadius,
+            Math.sin(ballAngle) * ballCircleRadius
+        );
+        nodeGroup.add(ballMesh);
+    }
+
+    return { nodeGroup, topMesh };
+}
+
+// --- 节点信息收集 Map ---
+// 存储 { position: THREE.Vector3, isOccupied: boolean, ip: string (optional) }
+const allNodePositions: Map<number, { position: THREE.Vector3, isOccupied: boolean, ip: string | null }> = new Map();
+
 
 interface VMItem {
     name: string;
@@ -147,18 +313,18 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
     }
 }
 
-async function fetchLogs(instanceId: string): Promise<FlagLog> {
+async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
         const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
         // 直接返回 data 部分，前端拿到就是 { trueTargetList, falseTargetList }
-        return json.data as FlagLog;
+        return json.data as LogInfo[];
     } catch (err) {
         console.error("请求接口出错:", err);
         // 异常时返回空列表，保证类型安全
-        return { redLogList: [], blueLogList: [] };
+        return [];
     }
 }
 
@@ -168,209 +334,623 @@ export default function ThreeDimensional(adData: AdData){
     const battlefieldRef = useRef<HTMLDivElement>(null);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
 
-    // const adData = data !== "" ? JSON.parse(data) : null;
-
     const blueTeam: BattlefieldInfo = {
         type: 0,
-        teamId: adData ? adData.blueTeamId : 0,
+        sceneId: adData ? adData.id : "",
         logInfo: blueLogInfos
     }
 
     const redTeam: BattlefieldInfo = {
         type: 1,
-        teamId: adData ? adData.redTeamId : 0,
+        sceneId: adData ? adData.id : "",
         logInfo: redLogInfos
     }
 
     const [redTeamState, setRedTeamState] = useState<BattlefieldInfo>(redTeam);
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
 
-    const scene = new THREE.Scene();
-    const rings = new THREE.Group();  // 用于保存所有圆环线
-
     useEffect(() => {
         if (!containerRef.current) return;
         if (initialized.current) return; // 已经加载过了，直接退出
         initialized.current = true;      // 第一次加载时设置为 true
+        const container = containerRef.current;
         
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
+        // 获取containerRef的当前宽高
+        const width = container.clientWidth;
+        const height = container.clientHeight;
 
-        scene.background = new THREE.Color(0x000000);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 
-        const camera = new THREE.PerspectiveCamera(60, width / height, 1, 5000);
-        camera.position.set(0, 150, 400);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(width, height);
-        containerRef.current.appendChild(renderer.domElement);
+        container.appendChild(renderer.domElement);
+        container.style.backgroundColor = 'rgba(0, 50, 150, 0.6)';
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
+        // --- 创建四个圆环 ---
+        const rings: THREE.Mesh[] = [];
+        const baseRadius = 5;
+        const relativeRingRadii = [1, 2, 3, 4];
+        const ringRadii = relativeRingRadii.map(r => r + baseRadius);
 
-        // 添加一个环境光，让场景有一个基础亮度，避免模型全黑
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // 颜色, 强度
-        scene.add(ambientLight);
+        const tubeRadius = 0.01;
+        const radialSegments = 64;
+        const tubularSegments = 64;
+        const ringColor = new THREE.Color(0x87cefa);
 
-        // 添加一个平行光（像太阳光），可以产生阴影和高光
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 10, 7.5); // 从斜上方照射
-        scene.add(directionalLight);
-
-        // ---------- 太阳核心 ----------
-        const sunRadius = 20; // 太阳核心半径
-        const sunGeometry = new THREE.SphereGeometry(sunRadius, 64, 64);
-        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffdd55 });
-        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-        scene.add(sun);
-
-        // ---------- 火焰球面 ----------
-        const flameGeometry = new THREE.SphereGeometry(sunRadius * 1.2, 128, 128);
-        const flameMaterial = new THREE.ShaderMaterial({
-            vertexShader: `
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-            void main() {
-                vNormal = normal;
-                vPosition = position;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
-            }`,
-            fragmentShader: `
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-            uniform float time;
-            void main() {
-                float intensity = length(vNormal.xy) + sin(time + length(vPosition)) * 0.5;
-                intensity = clamp(intensity, 0.0, 1.0);
-                vec3 color = mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.0, 0.0), intensity);
-                gl_FragColor = vec4(color, 1.0);
-            }`,
-            uniforms: {
-                time: { value: 0 }
-            },
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-        });
-        const flames = new THREE.Mesh(flameGeometry, flameMaterial);
-        scene.add(flames);
-
-        // ---------- 星空背景 ----------
-        const starCount = 1000;
-        const starGeometry = new THREE.BufferGeometry();
-        const starPositions = new Float32Array(starCount * 3);
-        for (let i = 0; i < starCount; i++) {
-            starPositions[i * 3] = (Math.random() - 0.5) * 2000; // 随机星星位置
-            starPositions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
-            starPositions[i * 3 + 2] = (Math.random() - 0.5) * 2000;
-        }
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
-        const stars = new THREE.Points(starGeometry, starMaterial);
-        scene.add(stars);
-
-        // ---------- 云层贴图 ----------
-        const cloudTextureUrl = "/mapdata/img/cloud.jpg"; // 替换为你的云层图URL
-        const cloudTexture = new THREE.TextureLoader().load(cloudTextureUrl);
-
-        // 创建云层几何体，包裹整个场景
-        const cloudGeometry = new THREE.SphereGeometry(3000, 64, 64); // 云层球体，半径为 4000
-        const cloudMaterial = new THREE.MeshBasicMaterial({
-            map: cloudTexture,
-            transparent: true,
-            opacity: 0.35, // 透明度设置得很低，模拟远距离的云层
-            side: THREE.DoubleSide,
-            depthWrite: false, // 不写深度，避免遮挡
-            blending: THREE.AdditiveBlending, // 混合模式
+        ringRadii.forEach((radius) => {
+            const geometry = new THREE.TorusGeometry(
+                radius,
+                tubeRadius,
+                radialSegments,
+                tubularSegments
+            );
+            const material = new THREE.MeshBasicMaterial({ color: ringColor });
+            const ring = new THREE.Mesh(geometry, material);
+            ring.rotation.x = Math.PI / 2;
+            rings.push(ring);
+            scene.add(ring);
         });
 
-        // 创建云层对象
-        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
-        scene.add(cloud);
+        // 1. 获取第一个圆环的半径
+        const firstRingRadius = ringRadii[0];
 
-        // 创建轨道
-        const ringCount = 6;  // 设置6个圆环
-        
+        // 定义梯形的半径：
+        const trapOuterRadius = firstRingRadius * 0.90;
+        const trapInnerRadius = firstRingRadius * 0.45;
 
-        // 生成圆环线并添加到场景中
-        for (let i = 0; i < ringCount; i++) {
-            // 每个圆环的半径：逐渐增大，确保不靠太近
-            const radius = sunRadius * (3 + i * 3);  // 增大每个圆环的半径，确保它们之间有间距
+        const trapezoidCount = 7;
+        const trapezoidHeight = 0.005;
 
-            const segments = 64; // 圆环的分段数
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(segments * 3);  // 每个点(x, y, z)
-            const uv = new Float32Array(segments * 2);  // 每个顶点的UV坐标，用于渐变颜色
+        // 关键修改：使用更亮、更鲜艳的颜色数组
+        const trapezoidColors = [
+            0xFF4500, // 亮橙色 (OrangeRed)
+            0x32CD32, // 亮绿色 (LimeGreen)
+            0x1E90FF, // 亮蓝色 (DodgerBlue)
+            0xFFD700, // 金色 (Gold)
+            0xBA55D3, // 中兰花紫 (MediumOrchid)
+            0x00CED1, // 深绿松石 (DarkTurquoise)
+            0xFA8072  // 鲑鱼色 (Salmon)
+        ];
 
-            // 生成圆环的顶点和UV坐标
-            for (let j = 0; j < segments; j++) {
-                const angle = (j / segments) * Math.PI * 2;  // 计算每个顶点的角度
-                positions[j * 3] = radius * Math.cos(angle);  // x 坐标
-                positions[j * 3 + 1] = radius * Math.sin(angle);  // y 坐标
-                positions[j * 3 + 2] = 0;  // z 坐标（平面上的圆环）
+        // 间隙控制参数 (更窄的梯形)
+        const gapFactor = 0.3;
+        const fullAngleStep = Math.PI * 2 / trapezoidCount;
 
-                // 给每个顶点设置UV坐标，0到1，用于后续渐变颜色
-                uv[j * 2] = j / segments;  // UV的x坐标（用于渐变）
-                uv[j * 2 + 1] = 0;  // 固定UV的y坐标
-            }
+        for (let k = 0; k < trapezoidCount; k++) {
+            const startAngle = (k / trapezoidCount) * Math.PI * 2;
 
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));  // 设置UV坐标
+            // 计算梯形实际开始和结束的角度
+            const gapAngle = fullAngleStep * (1 - gapFactor) / 2;
 
-            // 创建自定义材质：通过着色器进行颜色渐变
-            const material = new THREE.ShaderMaterial({
-                vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;  // 传递UV坐标
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }`,
-                fragmentShader: `
-                varying vec2 vUv;
-                void main() {
-                    // 渐变效果：沿着圆环从浅蓝色到深蓝色
-                    vec3 startColor = vec3(0.678, 0.847, 1.0);  // 浅蓝色
-                    vec3 endColor = vec3(0.0, 0.0, 0.545);    // 深蓝色
-                    vec3 color = mix(startColor, endColor, vUv.x);  // 根据UV坐标进行渐变
+            const currentAngle = startAngle + gapAngle;
+            const nextAngle = startAngle + fullAngleStep - gapAngle;
 
-                    gl_FragColor = vec4(color, 1.0);  // 设定最终颜色
-                }`,
-                transparent: true,
-                side: THREE.DoubleSide,  // 两面可见
+            // 2. 定义梯形的四个顶点 (扇形计算)
+            const points = [
+                // 内侧短边
+                new THREE.Vector2(Math.cos(currentAngle) * trapInnerRadius, Math.sin(currentAngle) * trapInnerRadius),
+                new THREE.Vector2(Math.cos(nextAngle) * trapInnerRadius, Math.sin(nextAngle) * trapInnerRadius),
+
+                // 外侧长边
+                new THREE.Vector2(Math.cos(nextAngle) * trapOuterRadius, Math.sin(nextAngle) * trapOuterRadius),
+                new THREE.Vector2(Math.cos(currentAngle) * trapOuterRadius, Math.sin(currentAngle) * trapOuterRadius),
+            ];
+
+            // 3. 创建 Shape 并挤压成几何体
+            const trapezoidShape = new THREE.Shape(points);
+
+            const extrudeSettings = {
+                steps: 1,
+                depth: trapezoidHeight,
+                bevelEnabled: false
+            };
+            const trapezoidGeometry = new THREE.ExtrudeGeometry(trapezoidShape, extrudeSettings);
+
+            // 关键修改：为每个梯形创建带有不同颜色且不透明的新材质
+            const trapezoidMaterial = new THREE.MeshBasicMaterial({
+                color: trapezoidColors[k % trapezoidColors.length] // 从颜色数组中获取更亮的颜色
+                // transparent 和 opacity 属性已移除
             });
 
-            // 创建圆环并应用自定义材质
-            const ring = new THREE.LineLoop(geometry, material);  // 创建圆环线条
-            ring.rotation.x = Math.PI / 2;  // 确保圆环是水平放置的
-            ring.position.set(0, 0, 0);  // 设置圆环位置
+            const trapezoidMesh = new THREE.Mesh(trapezoidGeometry, trapezoidMaterial);
 
-            rings.add(ring);  // 将圆环添加到组中
+            // 4. 旋转和定位：平躺在 XZ 平面上
+            trapezoidMesh.rotation.x = Math.PI / 2;
+            trapezoidMesh.position.set(0, -trapezoidHeight / 2, 0);
+
+            scene.add(trapezoidMesh);
         }
 
-        scene.add(rings);  // 将所有圆环添加到场景中
+        // --- 添加第一个和第二个圆环之间的连接线 (扁平，有间距) ---
+        const connectionPadding = 0.15;
+        const firstRingOuterRadiusWithPadding = (ringRadii[0] + tubeRadius) + connectionPadding;
+        const secondRingInnerRadiusWithPadding = (ringRadii[1] - tubeRadius) - connectionPadding;
 
-        const redSpaceships: { ip: string; object: THREE.Object3D }[] = [];
-        const blueSpaceships: { ip: string; object: THREE.Object3D }[] = [];
+        const connectingLineWidth = 0.1;
+        const originalConnectingLineColor = new THREE.Color(0x87cefa);
+        const whiteConnectingLineColor = new THREE.Color(0xffffff);
+
+        const lineLength = secondRingInnerRadiusWithPadding - firstRingOuterRadiusWithPadding;
+
+        if (lineLength <= 0) {
+            console.warn("无法创建连接线：第一个圆环外边缘已超过第二个圆环内边缘，请检查半径和padding设置。");
+            return;
+        }
+
+        const radialCenter = (firstRingOuterRadiusWithPadding + secondRingInnerRadiusWithPadding) / 2;
+        const circumference = 2 * Math.PI * radialCenter;
+        const segmentPlusGapWidth = connectingLineWidth * 2;
+        const numberOfConnectingLines = Math.floor(circumference / segmentPlusGapWidth);
+
+        const originalLineMaterial = new THREE.MeshBasicMaterial({
+            color: originalConnectingLineColor,
+            transparent: true,
+            opacity: 0.3,
+        });
+
+        const whiteLineMaterial = new THREE.MeshBasicMaterial({
+            color: whiteConnectingLineColor,
+            transparent: true,
+            opacity: 0.5,
+        });
+
+        for (let i = 0; i < numberOfConnectingLines; i++) {
+            const angle = (i / numberOfConnectingLines) * Math.PI * 2;
+
+            const startPoint = new THREE.Vector3(
+                Math.cos(angle) * firstRingOuterRadiusWithPadding,
+                0,
+                Math.sin(angle) * firstRingOuterRadiusWithPadding
+            );
+
+            const endPoint = new THREE.Vector3(
+                Math.cos(angle) * secondRingInnerRadiusWithPadding,
+                0,
+                Math.sin(angle) * secondRingInnerRadiusWithPadding
+            );
+
+            const segmentCenter = new THREE.Vector3().copy(startPoint).add(endPoint).divideScalar(2);
+            const segmentDirection = new THREE.Vector3().copy(endPoint).sub(startPoint).normalize();
+
+            if (i % 3 === 0) {
+                const whiteSegmentLength = lineLength / 3;
+                const whiteSegmentGeometry = new THREE.BoxGeometry(
+                    connectingLineWidth,
+                    whiteSegmentLength,
+                    0.005
+                );
+                const whiteSegmentMesh = new THREE.Mesh(whiteSegmentGeometry, whiteLineMaterial);
+
+                const whiteSegmentCenter = new THREE.Vector3()
+                    .copy(startPoint)
+                    .add(segmentDirection.clone().multiplyScalar(whiteSegmentLength / 2));
+
+                whiteSegmentMesh.position.copy(whiteSegmentCenter);
+                whiteSegmentMesh.lookAt(endPoint); 
+                whiteSegmentMesh.rotateX(Math.PI / 2);
+
+                scene.add(whiteSegmentMesh);
+
+                const blueSegmentLength = lineLength * 2 / 3;
+                const blueSegmentGeometry = new THREE.BoxGeometry(
+                    connectingLineWidth,
+                    blueSegmentLength,
+                    0.005
+                );
+                const blueSegmentMesh = new THREE.Mesh(blueSegmentGeometry, originalLineMaterial);
+
+                const blueSegmentCenter = new THREE.Vector3()
+                    .copy(startPoint)
+                    .add(segmentDirection.clone().multiplyScalar(whiteSegmentLength + blueSegmentLength / 2));
+
+                blueSegmentMesh.position.copy(blueSegmentCenter);
+                blueSegmentMesh.lookAt(endPoint);
+                blueSegmentMesh.rotateX(Math.PI / 2);
+
+                scene.add(blueSegmentMesh);
+            } else {
+                const lineGeometry = new THREE.BoxGeometry(
+                    connectingLineWidth,
+                    lineLength,
+                    0.005
+                );
+                const lineMesh = new THREE.Mesh(lineGeometry, originalLineMaterial);
+
+                lineMesh.position.copy(segmentCenter);
+                lineMesh.lookAt(endPoint);
+                lineMesh.rotateX(Math.PI / 2);
+
+                scene.add(lineMesh);
+            }
+        }
+
+        // --- 新增: 在第二个和第三个圆环之间创建3组独立的线段 ---
+        const newDashedRings: THREE.Group[] = [];
+        const secondRingRadius = ringRadii[1];
+        const thirdRingRadius = ringRadii[2];
+
+        // 新“圆环”的半径
+        const newDashedRingRadii = [
+            secondRingRadius + (thirdRingRadius - secondRingRadius) * 0.1,
+            secondRingRadius + (thirdRingRadius - secondRingRadius) * 0.5,
+            secondRingRadius + (thirdRingRadius - secondRingRadius) * 0.9,
+        ];
+
+        // 每一组线段的宽度
+        const newSegmentWidths = [0.1, 0.5, 0.02];
+
+        // 虚线参数：线段和间隙的长度
+        const segmentLength = 0.2;
+        const gapLength = 0.1;
+
+        // 新增：为第一个线段创建更低的透明度材质
+        const solidLineMaterial = new THREE.MeshBasicMaterial({
+            color: originalLineMaterial.color,
+            transparent: true,
+            opacity: 0.9, // 透明度更高，看起来更实心
+        });
+
+
+        newDashedRingRadii.forEach((ringRadius, index) => {
+            // 宽度：直接从数组中获取已修改的值
+            const currentSegmentWidth = newSegmentWidths[index];
+
+            let currentSegmentLength = segmentLength;
+
+            // 长度：只将第一个和第二个圆环的长度增加5倍和8倍
+            if (index === 0) {
+                currentSegmentLength *= 8;
+            } else if (index === 1) {
+                currentSegmentLength *= 10;
+            }
+
+            const segmentTotalLength = currentSegmentLength + gapLength;
+
+            // 修正：根据索引选择材质
+            let material;
+            if (index === 0) {
+                material = solidLineMaterial; // 第一个线段使用更低的透明度
+            } else {
+                material = originalLineMaterial; // 其他线段使用原始材质
+            }
+
+            const group = new THREE.Group();
+
+            const circumferenceAtRadius = 2 * Math.PI * ringRadius;
+            const numberOfSegments = Math.floor(circumferenceAtRadius / segmentTotalLength);
+
+            for (let i = 0; i < numberOfSegments; i++) {
+                const angle = (i / numberOfSegments) * Math.PI * 2;
+
+                const segmentGeometry = new THREE.BoxGeometry(
+                    currentSegmentWidth,
+                    0.005,
+                    currentSegmentLength
+                );
+                const segmentMesh = new THREE.Mesh(segmentGeometry, material);
+
+                segmentMesh.position.set(
+                    Math.cos(angle) * ringRadius,
+                    0,
+                    Math.sin(angle) * ringRadius
+                );
+
+                segmentMesh.rotation.y = -angle;
+
+                group.add(segmentMesh);
+            }
+
+            newDashedRings.push(group);
+            scene.add(group);
+        });
+
+        const dotRadius = 0.05; // 实心圆的半径
+        const dotSpacing = dotRadius * 5; // 实心圆的间距，设置为半径的2倍
+
+        // 将圆点放在第二个和第三个圆环的正中间
+        const dotRingRadius = secondRingRadius + (thirdRingRadius - secondRingRadius) / 2;
+
+        const dotMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.8,
+        });
+
+        const dotGroup = new THREE.Group();
+
+        // 根据圆环周长和间距计算圆点的数量
+        const circumference1 = 2 * Math.PI * dotRingRadius;
+        const dotCount = Math.floor(circumference1 / dotSpacing);
+
+        for (let i = 0; i < dotCount; i++) {
+            const angle = (i / dotCount) * Math.PI * 2;
+
+            // 修正：使用球体几何体，使其在任何角度都可见
+            const dotGeometry = new THREE.SphereGeometry(dotRadius, 32, 32);
+            const dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
+
+            dotMesh.position.set(
+                Math.cos(angle) * dotRingRadius,
+                0,
+                Math.sin(angle) * dotRingRadius
+            );
+
+            dotGroup.add(dotMesh);
+        }
+
+        scene.add(dotGroup);
+
+        // --- 新增：在第四个圆环外面创建2组独立的线段 ---
+        const fourthRingRadius = ringRadii[3];
+
+        // 第三个样式的线段（短而细）
+        const thirdStyleRadius = fourthRingRadius + 0.1; // 靠近第四个圆环
+        const thirdStyleWidth = 0.005; // 保持原始的细度
+        const thirdStyleLength = 0.2; // 保持原始的长度
+        const thirdStyleGap = 0.1;
+        const thirdStyleTotalLength = thirdStyleLength + thirdStyleGap;
+
+        const thirdStyleMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        const thirdStyleGroup = new THREE.Group();
+        const thirdStyleCircumference = 2 * Math.PI * thirdStyleRadius;
+        const thirdStyleSegments = Math.floor(thirdStyleCircumference / thirdStyleTotalLength);
+
+        for (let i = 0; i < thirdStyleSegments; i++) {
+            const angle = (i / thirdStyleSegments) * Math.PI * 2;
+            const geometry = new THREE.BoxGeometry(
+                thirdStyleWidth,
+                0.005, 
+                thirdStyleLength
+            );
+            const mesh = new THREE.Mesh(geometry, thirdStyleMaterial);
+
+            mesh.position.set(
+                Math.cos(angle) * thirdStyleRadius,
+                0,
+                Math.sin(angle) * thirdStyleRadius
+            );
+            
+            mesh.rotation.y = -angle;
+            thirdStyleGroup.add(mesh);
+        }
+        scene.add(thirdStyleGroup);
+
+        // 第一个样式的线段（长而实心）
+        const firstStyleRadius = fourthRingRadius + 0.3; // 放在最外面
+        const firstStyleWidth = 0.2; // 保持第一个样式相同的宽度
+        const firstStyleLength = 1.5; // 保持第一个样式相同的长度
+        const firstStyleGap = 0.1;
+        const firstStyleTotalLength = firstStyleLength + firstStyleGap;
+
+        const firstStyleMaterial = new THREE.MeshBasicMaterial({
+            color: 0x87cefa,
+            transparent: true,
+            opacity: 0.1 // 更实心
+        });
+
+        const firstStyleGroup = new THREE.Group();
+        const firstStyleCircumference = 2 * Math.PI * firstStyleRadius;
+        const firstStyleSegments = Math.floor(firstStyleCircumference / firstStyleTotalLength);
+
+        for (let i = 0; i < firstStyleSegments; i++) {
+            const angle = (i / firstStyleSegments) * Math.PI * 2;
+            const geometry = new THREE.BoxGeometry(
+                firstStyleWidth,
+                0.005,
+                firstStyleLength
+            ); 
+            const mesh = new THREE.Mesh(geometry, firstStyleMaterial);
+
+            mesh.position.set(
+                Math.cos(angle) * firstStyleRadius,
+                0,
+                Math.sin(angle) * firstStyleRadius
+            );
+            mesh.rotation.y = -angle;
+            firstStyleGroup.add(mesh);
+        }
+        scene.add(firstStyleGroup);
+
+
+        // 存储蓝色节点最上方的球体 (使用你要求的 'ip' 字段)
+        const blueNodes: { object: THREE.Mesh; ip: string }[] = [];
+        // 存储红色节点最上方的球体 (使用你要求的 'ip' 字段)
+        const redNodes: { object: THREE.Mesh; ip: string }[] = [];
+
 
         async function fetchData() {
             const result = await fetchVMs(adData.id);
             setVms(result);
-            if(redSpaceships.length === 0 && blueSpaceships.length === 0){
-                for (let i = 0; i < result.falseTargetList.length; i++) {
-                    createSpaceship(scene, rings, "/mapdata/model/redSpaceship.glb", 2, 1).then((spaceship) => {
-                        redSpaceships.push({ip:result.falseTargetList[i].ip, object:spaceship});
-                    });
-                }
+            const totalSelectedNodes = result.falseTargetList.length + result.trueTargetList.length; // 总是 4
+
+            const selectedIndices: Set<number> = new Set();
+            while (selectedIndices.size < totalSelectedNodes) {
+                selectedIndices.add(Math.floor(Math.random() * firstStyleSegments));
+            }
+            // 将Set转换为数组，方便按索引分配颜色
+            const indicesArray = Array.from(selectedIndices);
+
+            // 定义白色材质
+            const whiteNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+
+            for (let i = 0; i < firstStyleSegments; i++) {
+                const angle: number = (i / firstStyleSegments) * Math.PI * 2;
+                const geometry = new THREE.BoxGeometry(firstStyleWidth, 0.005, firstStyleLength);
+                const mesh = new THREE.Mesh(geometry, firstStyleMaterial);
+
+                mesh.position.set(
+                    Math.cos(angle) * firstStyleRadius,
+                    0,
+                    Math.sin(angle) * firstStyleRadius
+                );
+                mesh.rotation.y = -angle;
+                firstStyleGroup.add(mesh);
+
+                // 仅收集位置信息
+                allNodePositions.set(i, {
+                    position: mesh.position.clone(),
+                    isOccupied: false,
+                    ip: null
+                });
+            }
+            if(blueNodes.length === 0 && redNodes.length === 0){
+                const firstR: number = ringRadii[0]; // 假设 ringRadii[0] 存在
+
+                // --- B1. 蓝色节点创建和保存 ---
+                const blueColor: number = 0x0000FF;
+                const blueNodeMaterial = new THREE.MeshBasicMaterial({ color: blueColor });
 
                 for (let i = 0; i < result.trueTargetList.length; i++) {
-                    createSpaceship(scene, rings, "/mapdata/model/blueSpaceship.glb", 18).then((spaceship) => {
-                        blueSpaceships.push({ip:result.trueTargetList[i].ip, object:spaceship});
+                    const ip: string = result.trueTargetList[i].ip;
+                    const segmentIndex: number = indicesArray[i]; // 对应 indicesArray 中前 i 个索引
+    
+                    const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
+
+                    // 创建节点
+                    const { nodeGroup, topMesh } = createNodeMesh(blueNodeMaterial);
+
+                    blueNodes.push({
+                        object: topMesh,
+                        ip: ip 
                     });
+
+                    // 放置节点并标记已占据
+                    nodeGroup.position.copy(info.position);
+                    firstStyleGroup.add(nodeGroup);
+                    
+                    info.isOccupied = true;
+                    info.ip = ip;
+                }
+
+
+                // --- B2. 红色节点创建和保存 ---
+                const redColor: number = 0xFF0000;
+                const redNodeMaterial = new THREE.MeshBasicMaterial({ color: redColor });
+                const redStartOffset: number = result.trueTargetList.length; // 红色节点在 indicesArray 中的起始偏移量
+
+                for (let i = 0; i < result.falseTargetList.length; i++) {
+                    const ip: string = result.falseTargetList[i].ip;
+                    const segmentIndex: number = indicesArray[i + redStartOffset]; // 使用偏移后的索引
+                    
+                    const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
+
+                    // 创建节点
+                    const { nodeGroup, topMesh } = createNodeMesh(redNodeMaterial);
+
+                    redNodes.push({
+                        object: topMesh,
+                        ip: ip 
+                    });
+
+                    // 放置节点并标记已占据
+                    nodeGroup.position.copy(info.position);
+                    firstStyleGroup.add(nodeGroup);
+                    
+                    info.isOccupied = true;
+                    info.ip = ip;
+                }
+
+                // --- C. 独立循环：创建白色节点并启动发射逻辑 ---
+                for (const [, info] of allNodePositions.entries()) {
+                    // 检查该位置是否已经被红/蓝节点占据
+                    if (!info.isOccupied) { 
+                        
+                        const { nodeGroup, topMesh } = createNodeMesh(whiteNodeMaterial); 
+
+                        nodeGroup.position.copy(info.position);
+                        firstStyleGroup.add(nodeGroup);
+                        
+                        // **关键步骤 1：初始化 userData**
+                        topMesh.userData.hasEmitter = false; // 默认未发射
+                        
+                        const randomTargetRadius: number = firstR * (0.5 + Math.random() * 0.4); 
+                        const randomDelay: number = Math.random() * 5000;
+
+                        setTimeout(() => {
+                            
+                            // **关键步骤 2：在发射前检查标志位**
+                            if (topMesh.userData.hasEmitter) {
+                                // 如果已经被标记为已发射，则退出，不再重复启动
+                                return;
+                            }
+                            
+                            // 启动发射器
+                            const emitter = shootBalls(scene, topMesh, randomTargetRadius);
+                            
+                            // **关键步骤 3：标记为已发射**
+                            topMesh.userData.hasEmitter = true;
+                            
+                            // 如果你需要后续清理，可以将 emitter 存储在 topMesh.userData 中，而不是全局数组中
+                            topMesh.userData.emitter = emitter; 
+
+                        }, randomDelay);
+                    }
                 }
             }
-
         }
+
+        if(adData && adData.id !== ""){
+            fetchData();
+            // websocketClient.onMessage(handleMessage);
+        }
+
+        setTimeout(function shootLoop() {
+            if(redNodes.length > 0 && blueNodes.length > 0){
+                const red = redNodes[Math.floor(Math.random() * redNodes.length)];
+                const blue = blueNodes[Math.floor(Math.random() * blueNodes.length)];
+
+                if (red && blue) {
+                    shootRay(scene, red.object, blue.object);
+                }
+
+                // 下次间隔：5~10 秒
+                const nextDelay = (5 + Math.random() * 5) * 1000;
+                setTimeout(shootLoop, nextDelay);
+            }
+        }, (5 + Math.random() * 1) * 1000);
+
+         camera.position.set(0.26, 5, 10.23);
+        //camera.lookAt(0.01, -0.75, -0.66);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 将 lookAt 的目标点设置为 OrbitControls 的目标点
+        controls.target.set(0, -0.5, 5);
+
+        // 关键步骤：通知 OrbitControls 和相机立即更新
+        controls.update();
+
+        let hasBeenDragged = false; // 标志位：是否被拖动过
+
+        controls.addEventListener('change', () => {
+            // 只有在第一次拖动时才执行
+            if (!hasBeenDragged) {
+
+                // 1. 设置新的目标点：(0, 0, 0)
+                controls.target.set(0, 0, 0);
+
+                // 2. 设置标志位，确保以后拖动不会再进入这个逻辑
+                hasBeenDragged = true;
+
+                // 可选：输出提示信息，确认切换成功
+                console.log("用户已开始操作，OrbitControls 目标点已切换到 (0, 0, 0)。");
+            }
+
+            // 注意：这里不需要再调用 controls.update()，
+            // 因为 change 事件本身就是在 update() 内部触发的。
+        });
+
+        const redSpaceships: { ip: string; object: THREE.Object3D }[] = [];
+        const blueSpaceships: { ip: string; object: THREE.Object3D }[] = [];
+
 
         // 每 5 秒执行一次 fetchLogs
         let lastRedLogLength = 0;
@@ -380,20 +960,12 @@ export default function ThreeDimensional(adData: AdData){
             try {
                 const logs = await fetchLogs(adData.id);
 
-                if (logs.redLogList.length !== 0 && logs.redLogList.length !== lastRedLogLength) {
-                    setRedTeamState(prev => ({
-                        ...prev,
-                        logInfo: logs.redLogList
-                    }));
-                    lastRedLogLength = logs.redLogList.length;
-                }
-
-                if (logs.blueLogList.length !== 0 && logs.blueLogList.length !== lastBlueLogLength) {
+                if (logs.length !== 0 && logs.length !== lastBlueLogLength) {
                     setBlueTeamState(prev => ({
                         ...prev,
-                        logInfo: logs.blueLogList
+                        logInfo: logs
                     }));
-                    lastBlueLogLength = logs.blueLogList.length;
+                    lastBlueLogLength = logs.length;
                 }
 
             } catch (err) {
@@ -406,49 +978,8 @@ export default function ThreeDimensional(adData: AdData){
 
         // 然后每隔 5 秒轮询
         setInterval(fetchAndUpdateLogs, 5000);
-
-        // let timer = "";
-
-        // const handleMessage = (data: any) => {
-        //     try {
-        //         const msg = typeof data === "string" ? JSON.parse(data) : data;
-        //         if (msg.type === "flag-log" && msg.timer !== timer && msg.data.scene_instance_id === adData.id) {
-        //             timer = msg.timer;
-        //             const now = new Date();
-        //             const hours = now.getHours().toString().padStart(2, '0');
-        //             const minutes = now.getMinutes().toString().padStart(2, '0');
-        //             const seconds = now.getSeconds().toString().padStart(2, '0');
-
-                    
-        //             let logMessage = msg.data.success? `${msg.data.username}提交${msg.data.instance_name}的flag正确`
-        //                 : `${msg.data.username}提交${msg.data.instance_name}的flag错误`
-
-        //             let newLog: LogInfo = {
-        //                 logId: Date.now(),
-        //                 logTime: `${hours}:${minutes}:${seconds}`,
-        //                 logContent: logMessage
-        //             };
-
-        //             if(msg.data.success){
-        //                 setRedTeamState(prev => ({
-        //                     ...prev,
-        //                     logInfo: [...prev.logInfo, newLog]
-        //                 }));
-        //             }else{
-        //                 setBlueTeamState(prev => ({
-        //                     ...prev,
-        //                     logInfo: [...prev.logInfo, newLog]
-        //                 }));
-        //             }
-        //         }
-        //     } catch (e) {
-        //     console.error("解析 WebSocket 数据失败:", e, data);
-        //     }
-        // };
-
         if(adData && adData.id !== ""){
             fetchData();
-            // websocketClient.onMessage(handleMessage);
         }
 
         let shootingPaused = false;
@@ -478,35 +1009,16 @@ export default function ThreeDimensional(adData: AdData){
         const clock = new THREE.Clock();
         const animate = () => {
             requestAnimationFrame(animate);
-            const time = clock.getElapsedTime();
-            (flameMaterial.uniforms['time']).value = time;
-
-            // 火焰球面微小变形
-            const pos = flameGeometry.attributes.position as THREE.BufferAttribute;
-            for (let i = 0; i < pos.count; i++) {
-                const x = pos.getX(i);
-                const y = pos.getY(i);
-                const z = pos.getZ(i);
-                const len = Math.sqrt(x * x + y * y + z * z);
-                const nx = x / len;
-                const ny = y / len;
-                const nz = z / len;
-                const offset = Math.sin(time * 3 + i * 0.1) * 2.0;
-                pos.setXYZ(i, nx * (sunRadius * 1.2 + offset), ny * (sunRadius * 1.2 + offset), nz * (sunRadius * 1.2 + offset));
-            }
-            pos.needsUpdate = true;
-
-            // 动态云层效果：微小的漂浮，模拟自然运动
-            cloud.rotation.y += 0.001;
-
-            rings.rotation.y += 0.01;  // 让所有圆环沿y轴旋转
-
             controls.update();
+
+            // scene.rotation.y += 0.002;
             renderer.render(scene, camera);
+            
         };
         animate();
        
         return () => {
+            //controls.dispose();
             renderer.dispose();
             if (containerRef.current?.contains(renderer.domElement)) {
                 containerRef.current.removeChild(renderer.domElement);

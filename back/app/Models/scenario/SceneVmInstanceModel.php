@@ -51,7 +51,8 @@ class SceneVmInstanceModel extends Model
         'c_scene_instances_id',
         'c_vm_name',
         'c_ip',
-        'c_flag'
+        'c_flag',
+        'c_team_id'
     ];
 
     /**
