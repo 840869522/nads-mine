@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\FlagSubmission;
+namespace App\Http\Controllers\Course;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
@@ -15,7 +15,7 @@ use App\Models\scenario\SceneVmInstanceModel;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Redis; // 添加 Cache facade 用于 Redis
 
-class FlagSubmissionController extends BaseController
+class FlagSubmissioneController extends BaseController
 {
 
     /**
