@@ -13,6 +13,8 @@ from operator import itemgetter
 from . import qdrant
 from . import vector_store
 from app import config
+from .StreamOutputHandler import StreamOutputHandler
+import base64
 
 
 
@@ -93,8 +95,12 @@ rag_chain_memory = RunnableWithMessageHistory(
 
 
 async def agenerate_response(message: str):
+    handler = StreamOutputHandler(chunk_threshold=3)
     async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
-        yield f"data: {chunk}\n\n"
+        clear_chunk = chunk.strip()
+        if clear_chunk:
+            processed_chunk = base64.b64encode(processed_chunk.encode("utf-8")).decode('utf-8')
+            yield f"data: {processed_chunk}\n\n"
 
 async def generate_response(message: str):
     try:

@@ -112,44 +112,44 @@ const ChatDialog = () => {
     const handleSend = () => {
         if (!inputValue.trim()) return;
 
-        const newMessage: Message = {
+        // 添加用户消息
+        const userMessage: Message = {
             id: Date.now().toString(),
             text: inputValue,
             role: 'user',
         };
-
-        setMessages((prev) => [...prev, newMessage]);
+        setMessages(prev => [...prev, userMessage]);
         setInputValue('');
         setIsLoading(true);
 
-        const currentMessage = { current: '' };
-        setPendingStream('');
-        if (streamUpdateTimeout.current) {
-            clearTimeout(streamUpdateTimeout.current);
-        }
-        apiClientWithToken.post("/chat/chat", JSON.stringify({ "message": newMessage.text })).then(res => {
-            setMessages((prev) => {
-                const newMessages = [...prev];
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage?.role === 'assistant') {
-                    lastMessage.text = res.data.data;
-                } else {
-                    newMessages.push({
-                        id: (Date.now() + 1).toString(),
-                        role: 'assistant',
-                        text: res.data.data,
-                    });
-                }
-                return newMessages;
-            });
+        const assistantMessageId = (Date.now() + 1).toString();
+        setMessages(prev => [...prev, {
+            id: assistantMessageId,
+            text: '',
+            role: 'assistant',
+        }]);
+        streamPostRequest(
+            "/chat/achat",
+            { "message": userMessage.text },
+            (chunk: string) => {
+                // 更新助手消息内容
+                setMessages(prev => prev.map(msg => 
+                    msg.id === assistantMessageId 
+                        ? { ...msg, text: msg.text + chunk } 
+                        : msg
+                ));
+            },
+            (error: Error) => {
+                setMessages(prev => prev.map(msg => 
+                    msg.id === assistantMessageId 
+                        ? { ...msg, text: `错误：${error.message}` } 
+                        : msg
+                ));
+                console.error("流式请求错误:", error);
+            }
+        ).finally(() => {
             setIsLoading(false);
-        }).catch((error) => {
-            setMessages((prev) => [
-                ...prev,
-                { id: (Date.now() + 1).toString(), role: 'assistant', text: `错误：${error.message}` },
-            ]);
-            setIsLoading(false);
-        }).finally(() => setIsLoading(false));
+        });
     };
 
     useEffect(() => {

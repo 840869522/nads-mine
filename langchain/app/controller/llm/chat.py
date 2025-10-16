@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse, JSONResponse
-from app.llm.LLMChain import generate_response
+from app.llm.LLMChain import generate_response, agenerate_response
 from app.schema.ChatMessage import ChatMessage
 from app.schema.ParseFile import FileParseMessage
 
