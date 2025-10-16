@@ -269,6 +269,7 @@ Route::prefix('vms')->group(function () {
 Route::prefix('study')->group(function () {
     Route::prefix('test')->group(function(){
         Route::post('/question_add', [TestController::class, 'question_add']);
+        Route::post('/question_search', [TestController::class, 'question_search']);
         Route::post('/question_up', [TestController::class, 'question_up']);
         Route::post('/question_del', [TestController::class, 'question_del']);
         Route::post('/question_list', [TestController::class, 'question_list']);
