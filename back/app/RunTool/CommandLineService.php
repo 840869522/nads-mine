@@ -117,8 +117,12 @@ class CommandLineService
     /**
      * 判断镜像是否为 suricata:v2（忽略 registry/repo 前缀）。
      */
-    public function isSuricataV2Image(string $image): bool
+    public function isSuricataV2Image(?string $image): bool
     {
+        if ($image === null) {
+            return false;
+        }
+
         $normalized = strtolower(trim($image));
         if ($normalized === '') {
             return false;
