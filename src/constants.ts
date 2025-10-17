@@ -327,6 +327,8 @@ export const TRAFFIC_MIRRORING_IMAGES = {
 export const SPECIAL_IMAGES = [
   'routertar2:v1',
   'router:v1.1',
+  'frr-ubuntu20:latest',
+
 
   // 可以在这里添加更多特殊镜像
 ] as const;
