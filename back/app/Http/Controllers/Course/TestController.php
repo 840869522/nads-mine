@@ -156,6 +156,105 @@ class TestController extends Controller
     }
 
 
+/**
+ * Notes: 搜索题目接口
+ * User: zhangnan
+ * DateTime: 2025/7/10 16:20
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function question_search(Request $request)
+{
+    try {
+        $page = $request->input('page', 1);
+        $pageSize = $request->input('pagesize', 10);
+        $searchName = trim($request->input('name', ''));
+        
+        // 验证参数
+        $validated_data = [
+            'page' => 'integer|min:1',
+            'pagesize' => 'integer|min:1|max:100',
+            'name' => 'string|max:255'
+        ];
+        
+        $validated_msg = [
+            'page.integer' => "page字段类型错误",
+            'page.min' => "page字段最小值为1",
+            'pagesize.integer' => "pagesize字段类型错误",
+            'pagesize.min' => "pagesize字段最小值为1",
+            'pagesize.max' => "pagesize字段最大值为100",
+            'name.string' => "搜索关键词类型错误",
+            'name.max' => "搜索关键词超限"
+        ];
+        
+        $validatedData = $request->validate($validated_data, $validated_msg);
+        
+        // 构建基础查询
+        $query = "SELECT * FROM c_questions WHERE 1=1";
+        $countQuery = "SELECT COUNT(*) as total FROM c_questions WHERE 1=1";
+        $searchParams = [];
+        $countParams = [];
+        
+        // 添加搜索条件
+        if (!empty($searchName)) {
+            $query .= " AND (c_id LIKE ? OR c_question LIKE ? OR c_course_id LIKE ? OR c_tag LIKE ?)";
+            $countQuery .= " AND (c_id LIKE ? OR c_question LIKE ? OR c_course_id LIKE ? OR c_tag LIKE ?)";
+            $searchParam = "%" . $searchName . "%";
+            $searchParams = [$searchParam, $searchParam, $searchParam, $searchParam];
+            $countParams = [$searchParam, $searchParam, $searchParam, $searchParam];
+        }
+        
+        // 计算分页
+        $offset = ($page - 1) * $pageSize;
+        $query .= " ORDER BY c_create_at DESC LIMIT ? OFFSET ?";
+        
+        // 为数据查询添加分页参数
+        $dataParams = array_merge($searchParams, [$pageSize, $offset]);
+        
+        // 执行查询
+        $questions = DB::select($query, $dataParams);
+        $totalResult = DB::select($countQuery, $countParams);
+        $total = $totalResult[0]->total;
+        
+        // 格式化返回数据
+        $formattedQuestions = [];
+        foreach ($questions as $question) {
+            // 获取选项数据（如果是选择题）
+            $options = [];
+            if (in_array($question->c_type, [1, 2])) {
+                $optionQuery = "SELECT * FROM c_question_options WHERE c_question_id = ?";
+                $options = DB::select($optionQuery, [$question->c_id]);
+            }
+            
+            $formattedQuestions[] = [
+                'c_id' => $question->c_id,
+                'c_course_id' => $question->c_course_id,
+                'c_question' => $question->c_question,
+                'c_answer' => $question->c_answer,
+                'c_tag' => $question->c_tag,
+                'c_type' => $question->c_type,
+                'c_create_at' => $question->c_create_at,
+                'connect' => $options
+            ];
+        }
+        
+        $responseData = [
+            'data' => $formattedQuestions,
+            'count' => $total,
+            'current_page' => $page,
+            'page_size' => $pageSize,
+            'total_pages' => ceil($total / $pageSize)
+        ];
+        
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $responseData);
+        
+    } catch (ValidationException $e) {
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        Log::error('搜索题目失败: ' . $e->getMessage());
+        return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, "服务器内部错误");
+    }
+}
 
     /**
      * 修改题目

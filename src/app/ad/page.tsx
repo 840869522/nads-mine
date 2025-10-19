@@ -80,6 +80,14 @@ interface AdConfig {
     nodeAssignments?: any[];
 }
 
+// ★ 1. 为拓扑节点定义一个基本类型，以便在函数签名中使用
+interface TopologyNode {
+    id: string;
+    label: string;
+    type: 'container' | 'virtual_machine' | 'switch' | 'nat_bridge';
+    // ... 可能还有其他属性
+}
+
 const AdManagementPage: React.FC = () => {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
@@ -108,7 +116,6 @@ const AdManagementPage: React.FC = () => {
 
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedAdConfigForTopology, setSelectedAdConfigForTopology] = useState<AdConfig | null>(null);
-    // ★ 1. 新增 State，用于存放从实例接口获取的拓扑数据
     const [currentInstanceTopology, setCurrentInstanceTopology] = useState<any>(null);
     const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
 
@@ -145,7 +152,6 @@ const AdManagementPage: React.FC = () => {
             const formattedScenes = rawScenes.map((scene: any) => ({
                 c_config_id: scene.id,
                 c_name: scene.name,
-                // ★ 2. (可选优化) 传递 topology_json 以改进初始按钮的 disabled 状态
                 topology_json: scene.topology_json
             }));
             setSceneConfigs(formattedScenes);
@@ -205,7 +211,6 @@ const AdManagementPage: React.FC = () => {
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
-    // ★ 3. 重写 handleViewTopology 函数
     const handleViewTopology = async (adConfig: AdConfig) => {
         if (!adConfig.c_scene_instance_id) {
             setStatusMessage({ type: 'warning', message: '此演练尚未启动或没有关联的场景实例，无法查看拓扑。' });
@@ -236,6 +241,53 @@ const AdManagementPage: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    /**
+     * ★ 2. 新增：定义打开终端的业务逻辑函数 ★
+     * 这个函数将作为 prop 传递给 InstanceTopologyDialog。
+     */
+    const handleTopologyTerminalClick = async (node: TopologyNode, instanceId: string): Promise<void> => {
+        if (!instanceId || !node || !node.label || !node.type) {
+            throw new Error("打开终端所需信息不完整。");
+        }
+
+        const params = new URLSearchParams({ name: node.label, type: node.type });
+        const url = `${API_BASE_URL}/scenariosinstances/${instanceId}/find-resource?${params.toString()}`;
+
+        const response = await customFetch(url);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || '获取资源信息失败');
+        }
+
+        const permissions = JSON.parse(atob(data.can_operate));
+        if (!permissions.can_operate) {
+            throw new Error('您没有权限访问此终端。');
+        }
+
+        const realId = data.real_id;
+        if (!realId) {
+            throw new Error('未能获取到资源的有效ID。');
+        }
+
+        console.log(`向 /back/api/containers/${realId}/terminal-with-authority 发起POST请求`);
+        const terminalResponse = await customFetch(`${API_BASE_URL}/containers/${realId}/terminal-with-authority`, {
+            method: 'POST',
+        });
+
+        if (!terminalResponse.ok) {
+            const termErrorData = await terminalResponse.json().catch(() => ({}));
+            throw new Error(termErrorData.message || '启动终端会话失败');
+        }
+
+        const terminalData = await terminalResponse.json();
+
+        console.log("成功获取终端会话信息，请在这里实现弹窗:", terminalData);
+        alert(`成功！准备为容器 ${realId} 打开终端。\n请在控制台查看会话信息，并在此处替换为真正的弹窗逻辑。`);
+        // 在这里实现你打开Web Terminal的客户端逻辑
+        // 示例： openXtermJsModal(terminalData);
     };
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -391,7 +443,6 @@ const AdManagementPage: React.FC = () => {
                                                     )}
                                                     <Tooltip title="查看拓扑">
                                                         <span>
-                                                            {/* ★ 4. 修改 disabled 逻辑 */}
                                                             <IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.c_scene_instance_id || isSubmitting}>
                                                                 <AccountTreeIcon />
                                                             </IconButton>
@@ -504,27 +555,19 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
-            {/* ★ 5. 更新 InstanceTopologyDialog 的 props */}
+            {/* ★ 3. 更新 InstanceTopologyDialog 的 props，传入 onTerminalClick ★ */}
             {isTopologyOpen && selectedAdConfigForTopology && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
                     onClose={() => {
                         setIsTopologyOpen(false);
                         setSelectedAdConfigForTopology(null);
-                        setCurrentInstanceTopology(null); // 清空临时数据
+                        setCurrentInstanceTopology(null);
                     }}
                     title={`实例拓扑：${selectedAdConfigForTopology.c_drill_name}`}
-                    // 使用我们从 state 获取的拓扑数据
                     topology={currentInstanceTopology}
-                    // 传递实例ID
                     instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
-                    // 保留你可能需要的其他props
-                    // adConfig={selectedAdConfigForTopology}
-                    // onSaveSuccess={() => {
-                    //     setIsTopologyOpen(false);
-                    //     setSelectedAdConfigForTopology(null);
-                    //     fetchData();
-                    // }}
+                    onTerminalClick={handleTopologyTerminalClick}
                 />
             )}
         </Box>

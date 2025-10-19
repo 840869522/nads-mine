@@ -117,8 +117,12 @@ class CommandLineService
     /**
      * 判断镜像是否为 suricata:v2（忽略 registry/repo 前缀）。
      */
-    public function isSuricataV2Image(string $image): bool
+    public function isSuricataV2Image(?string $image): bool
     {
+        if ($image === null) {
+            return false;
+        }
+
         $normalized = strtolower(trim($image));
         if ($normalized === '') {
             return false;
@@ -505,7 +509,7 @@ class CommandLineService
         foreach ($containers as $container) {
             $containerName = $container['name'];
             // 使用 ip route replace，若不存在则新增，存在则覆盖，避免重复添加报错
-            $commandReplaceRoute = ['sudo', 'docker', 'exec', $containerName, 'ip', 'route', 'replace', 'default', 'via', $gatewayIpOnly];
+            $commandReplaceRoute = ['sudo', 'docker', 'exec', '--user', 'root', $containerName, 'ip', 'route', 'replace', 'default', 'via', $gatewayIpOnly];
             Log::info("Executing [IP-Config]: Replacing default route for container {$containerName} via {$gatewayIpOnly}");
             (new Process($commandReplaceRoute))->mustRun();
         }
