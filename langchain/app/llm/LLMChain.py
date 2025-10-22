@@ -41,6 +41,7 @@ chat_llm = ChatOpenAI(
     model=config['chatModel']['model'],
     base_url=config['chatModel']['base_url'],
     api_key=config['chatModel']['api_key'],
+    steaming=True
 )
 
 chat_memory = ConversationBufferMemory(
@@ -52,7 +53,11 @@ chat_memory = ConversationBufferMemory(
 
 retriever = vector_store.as_retriever(
     search_type="similarity",
-    search_kwargs={'k': 6, 'score_threshold': 0.5}
+    search_kwargs={
+        'k': 6
+        'score_threshold': 0.7,
+        'ef': 50
+    }
 )
 
 memory_store = {}
@@ -99,7 +104,7 @@ async def agenerate_response(message: str):
     async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
         clear_chunk = chunk.strip()
         if clear_chunk:
-            processed_chunk = base64.b64encode(processed_chunk.encode("utf-8")).decode('utf-8')
+            processed_chunk = base64.b64encode(chunk.encode("utf-8")).decode('utf-8')
             yield f"data: {processed_chunk}\n\n"
 
 async def generate_response(message: str):
