@@ -44,6 +44,7 @@ import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import FlagIcon from '@mui/icons-material/Flag';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import GroupWorkIcon from '@mui/icons-material/GroupWork'; // ★ 1. 导入新图标
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -52,6 +53,7 @@ import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog';
+import NodeTeamAssignmentDialog from './NodeTeamAssignmentDialog'; // ★ 2. 导入新创建的弹窗组件
 
 
 // --- 类型定义 ---
@@ -80,12 +82,10 @@ interface AdConfig {
     nodeAssignments?: any[];
 }
 
-// ★ 1. 为拓扑节点定义一个基本类型，以便在函数签名中使用
 interface TopologyNode {
     id: string;
     label: string;
     type: 'container' | 'virtual_machine' | 'switch' | 'nat_bridge';
-    // ... 可能还有其他属性
 }
 
 const AdManagementPage: React.FC = () => {
@@ -118,6 +118,10 @@ const AdManagementPage: React.FC = () => {
     const [selectedAdConfigForTopology, setSelectedAdConfigForTopology] = useState<AdConfig | null>(null);
     const [currentInstanceTopology, setCurrentInstanceTopology] = useState<any>(null);
     const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
+
+    // ★ 3. 添加新状态来控制“节点队伍分配”弹窗
+    const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false);
+    const [selectedAdForAssignment, setSelectedAdForAssignment] = useState<AdConfig | null>(null);
 
 
     const fetchData = useCallback(async () => {
@@ -211,6 +215,17 @@ const AdManagementPage: React.FC = () => {
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
+    // ★ 4. 添加打开“节点队伍分配”弹窗的处理函数
+    const handleOpenAssignmentDialog = (adConfig: AdConfig) => {
+        if (adConfig.c_status === 'running' && adConfig.c_scene_instance_id) {
+            setSelectedAdForAssignment(adConfig);
+            setIsAssignmentDialogOpen(true);
+        } else {
+            setStatusMessage({ type: 'warning', message: '只有进行中的演练才能分配节点队伍。' });
+        }
+    };
+
+
     const handleViewTopology = async (adConfig: AdConfig) => {
         if (!adConfig.c_scene_instance_id) {
             setStatusMessage({ type: 'warning', message: '此演练尚未启动或没有关联的场景实例，无法查看拓扑。' });
@@ -243,10 +258,6 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
-    /**
-     * ★ 2. 新增：定义打开终端的业务逻辑函数 ★
-     * 这个函数将作为 prop 传递给 InstanceTopologyDialog。
-     */
     const handleTopologyTerminalClick = async (node: TopologyNode, instanceId: string): Promise<void> => {
         if (!instanceId || !node || !node.label || !node.type) {
             throw new Error("打开终端所需信息不完整。");
@@ -286,8 +297,6 @@ const AdManagementPage: React.FC = () => {
 
         console.log("成功获取终端会话信息，请在这里实现弹窗:", terminalData);
         alert(`成功！准备为容器 ${realId} 打开终端。\n请在控制台查看会话信息，并在此处替换为真正的弹窗逻辑。`);
-        // 在这里实现你打开Web Terminal的客户端逻辑
-        // 示例： openXtermJsModal(terminalData);
     };
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -433,6 +442,18 @@ const AdManagementPage: React.FC = () => {
                                                     )}
                                                     {adConfig.c_status === 'running' && (
                                                         <>
+                                                            {/* ★ 5. 在此区域添加新按钮 */}
+                                                            <Tooltip title="节点队伍分配">
+                                                                <span>
+                                                                    <IconButton
+                                                                        color="secondary"
+                                                                        onClick={() => handleOpenAssignmentDialog(adConfig)}
+                                                                        disabled={!adConfig.c_scene_instance_id}
+                                                                    >
+                                                                        <GroupWorkIcon />
+                                                                    </IconButton>
+                                                                </span>
+                                                            </Tooltip>
                                                             <Tooltip title="Flag历史">
                                                                 <IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}><FlagIcon /></IconButton>
                                                             </Tooltip>
@@ -555,7 +576,6 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
-            {/* ★ 3. 更新 InstanceTopologyDialog 的 props，传入 onTerminalClick ★ */}
             {isTopologyOpen && selectedAdConfigForTopology && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
@@ -568,6 +588,16 @@ const AdManagementPage: React.FC = () => {
                     topology={currentInstanceTopology}
                     instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
                     onTerminalClick={handleTopologyTerminalClick}
+                />
+            )}
+
+            {/* ★ 6. 在 JSX 末尾渲染新弹窗 */}
+            {isAssignmentDialogOpen && selectedAdForAssignment && (
+                <NodeTeamAssignmentDialog
+                    open={isAssignmentDialogOpen}
+                    onClose={() => setIsAssignmentDialogOpen(false)}
+                    instanceId={selectedAdForAssignment.c_scene_instance_id!}
+                    drillName={selectedAdForAssignment.c_drill_name}
                 />
             )}
         </Box>

@@ -211,6 +211,8 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
     // 新增：更新场景实例的 c_scene_config JSON
     Route::put('/{instance:c_scene_instances_id}/scene-config', [InstanceController::class, 'updateSceneConfig']);
+    Route::get('/{instance}/nodes', [InstanceController::class, 'getNodesForAssignment']);
+    Route::put('/{instance}/node-assignments', [InstanceController::class, 'updateNodeAssignments']);
 });
 
 Route::prefix('images')->group(function () {
