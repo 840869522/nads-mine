@@ -26,13 +26,11 @@ function App() {
     // 验证消息来源（生产环境应替换为实际父平台域名）
     const trustedOrigins = ['http://localhost:3000', 'http://localhost:8000'];
     if (!trustedOrigins.includes(event.origin)) {
-      console.log('忽略非信任来源的消息:', event.origin);
       return;
     }
 
     // 处理主题消息
     if (event.data?.type === 'theme' && ['light', 'dark'].includes(event.data.mode)) {
-      console.log('收到平台主题:', event.data.mode);
       setThemeMode(event.data.mode as ThemeMode);
       setHasReceivedPlatformTheme(true);
       setIsLoading(false);
@@ -49,7 +47,6 @@ function App() {
     // 超时处理
     const timeoutId = setTimeout(() => {
       if (!hasReceivedPlatformTheme) {
-        console.log('未收到平台主题，使用默认设置');
         setIsLoading(false);
       }
     }, 100);

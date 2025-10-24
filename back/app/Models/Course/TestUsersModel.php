@@ -219,18 +219,10 @@ class TestUsersModel extends Model{
             ->where($this->table . '.c_paper_id', '=', 'experiment_default')
             ->where($this->table . '.c_username', $username)
             ->select(
-                $this->table . '.c_paper_id',
-                $this->table . '.c_answers',
-                $this->table . '.c_submit',
-                $this->table . '.c_score',
-                $this->table . '.c_objective_score',
-                $this->table . '.c_test_id as test_id',
                 'c_course_experiments.c_experiment_name as c_name',
                 'c_course_experiments.c_experiment_id as c_id',
                 // 移除不存在的c_type字段引用
                 // 为保持数据结构一致，设置默认值
-                db::raw("'练习' as c_type"),
-                db::raw("'实验' as c_test_type"),
                 'c_course_experiments.c_start as test_start',
                 'c_course_experiments.c_end as test_end',
                 'c_course_experiments.c_description as c_description',
