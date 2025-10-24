@@ -44,6 +44,7 @@ import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import FlagIcon from '@mui/icons-material/Flag';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import GroupWorkIcon from '@mui/icons-material/GroupWork'; // ★ 1. 导入新图标
 
 // 自定义钩子和组件
 import { useDebounce } from '@/app/hooks/useDebounce';
@@ -52,6 +53,7 @@ import { customFetch } from "@/utils/fetch";
 import InstanceDetailsDialog from '../ad/instances/InstanceDetailsDialog';
 import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog';
+import NodeTeamAssignmentDialog from './NodeTeamAssignmentDialog'; // ★ 2. 导入新创建的弹窗组件
 
 
 // --- 类型定义 ---
@@ -78,6 +80,12 @@ interface AdConfig {
     referees: AdReferee[];
     sceneConfig?: SceneConfigForAd | null;
     nodeAssignments?: any[];
+}
+
+interface TopologyNode {
+    id: string;
+    label: string;
+    type: 'container' | 'virtual_machine' | 'switch' | 'nat_bridge';
 }
 
 const AdManagementPage: React.FC = () => {
@@ -108,9 +116,12 @@ const AdManagementPage: React.FC = () => {
 
     const [isTopologyOpen, setIsTopologyOpen] = useState(false);
     const [selectedAdConfigForTopology, setSelectedAdConfigForTopology] = useState<AdConfig | null>(null);
-    // ★ 1. 新增 State，用于存放从实例接口获取的拓扑数据
     const [currentInstanceTopology, setCurrentInstanceTopology] = useState<any>(null);
     const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
+
+    // ★ 3. 添加新状态来控制“节点队伍分配”弹窗
+    const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false);
+    const [selectedAdForAssignment, setSelectedAdForAssignment] = useState<AdConfig | null>(null);
 
 
     const fetchData = useCallback(async () => {
@@ -145,7 +156,6 @@ const AdManagementPage: React.FC = () => {
             const formattedScenes = rawScenes.map((scene: any) => ({
                 c_config_id: scene.id,
                 c_name: scene.name,
-                // ★ 2. (可选优化) 传递 topology_json 以改进初始按钮的 disabled 状态
                 topology_json: scene.topology_json
             }));
             setSceneConfigs(formattedScenes);
@@ -205,7 +215,17 @@ const AdManagementPage: React.FC = () => {
     };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
 
-    // ★ 3. 重写 handleViewTopology 函数
+    // ★ 4. 添加打开“节点队伍分配”弹窗的处理函数
+    const handleOpenAssignmentDialog = (adConfig: AdConfig) => {
+        if (adConfig.c_status === 'running' && adConfig.c_scene_instance_id) {
+            setSelectedAdForAssignment(adConfig);
+            setIsAssignmentDialogOpen(true);
+        } else {
+            setStatusMessage({ type: 'warning', message: '只有进行中的演练才能分配节点队伍。' });
+        }
+    };
+
+
     const handleViewTopology = async (adConfig: AdConfig) => {
         if (!adConfig.c_scene_instance_id) {
             setStatusMessage({ type: 'warning', message: '此演练尚未启动或没有关联的场景实例，无法查看拓扑。' });
@@ -236,6 +256,47 @@ const AdManagementPage: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleTopologyTerminalClick = async (node: TopologyNode, instanceId: string): Promise<void> => {
+        if (!instanceId || !node || !node.label || !node.type) {
+            throw new Error("打开终端所需信息不完整。");
+        }
+
+        const params = new URLSearchParams({ name: node.label, type: node.type });
+        const url = `${API_BASE_URL}/scenariosinstances/${instanceId}/find-resource?${params.toString()}`;
+
+        const response = await customFetch(url);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || '获取资源信息失败');
+        }
+
+        const permissions = JSON.parse(atob(data.can_operate));
+        if (!permissions.can_operate) {
+            throw new Error('您没有权限访问此终端。');
+        }
+
+        const realId = data.real_id;
+        if (!realId) {
+            throw new Error('未能获取到资源的有效ID。');
+        }
+
+        console.log(`向 /back/api/containers/${realId}/terminal-with-authority 发起POST请求`);
+        const terminalResponse = await customFetch(`${API_BASE_URL}/containers/${realId}/terminal-with-authority`, {
+            method: 'POST',
+        });
+
+        if (!terminalResponse.ok) {
+            const termErrorData = await terminalResponse.json().catch(() => ({}));
+            throw new Error(termErrorData.message || '启动终端会话失败');
+        }
+
+        const terminalData = await terminalResponse.json();
+
+        console.log("成功获取终端会话信息，请在这里实现弹窗:", terminalData);
+        alert(`成功！准备为容器 ${realId} 打开终端。\n请在控制台查看会话信息，并在此处替换为真正的弹窗逻辑。`);
     };
 
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -381,6 +442,18 @@ const AdManagementPage: React.FC = () => {
                                                     )}
                                                     {adConfig.c_status === 'running' && (
                                                         <>
+                                                            {/* ★ 5. 在此区域添加新按钮 */}
+                                                            <Tooltip title="节点队伍分配">
+                                                                <span>
+                                                                    <IconButton
+                                                                        color="secondary"
+                                                                        onClick={() => handleOpenAssignmentDialog(adConfig)}
+                                                                        disabled={!adConfig.c_scene_instance_id}
+                                                                    >
+                                                                        <GroupWorkIcon />
+                                                                    </IconButton>
+                                                                </span>
+                                                            </Tooltip>
                                                             <Tooltip title="Flag历史">
                                                                 <IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}><FlagIcon /></IconButton>
                                                             </Tooltip>
@@ -391,7 +464,6 @@ const AdManagementPage: React.FC = () => {
                                                     )}
                                                     <Tooltip title="查看拓扑">
                                                         <span>
-                                                            {/* ★ 4. 修改 disabled 逻辑 */}
                                                             <IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.c_scene_instance_id || isSubmitting}>
                                                                 <AccountTreeIcon />
                                                             </IconButton>
@@ -504,27 +576,28 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
-            {/* ★ 5. 更新 InstanceTopologyDialog 的 props */}
             {isTopologyOpen && selectedAdConfigForTopology && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
                     onClose={() => {
                         setIsTopologyOpen(false);
                         setSelectedAdConfigForTopology(null);
-                        setCurrentInstanceTopology(null); // 清空临时数据
+                        setCurrentInstanceTopology(null);
                     }}
                     title={`实例拓扑：${selectedAdConfigForTopology.c_drill_name}`}
-                    // 使用我们从 state 获取的拓扑数据
                     topology={currentInstanceTopology}
-                    // 传递实例ID
                     instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
-                    // 保留你可能需要的其他props
-                    // adConfig={selectedAdConfigForTopology}
-                    // onSaveSuccess={() => {
-                    //     setIsTopologyOpen(false);
-                    //     setSelectedAdConfigForTopology(null);
-                    //     fetchData();
-                    // }}
+                    onTerminalClick={handleTopologyTerminalClick}
+                />
+            )}
+
+            {/* ★ 6. 在 JSX 末尾渲染新弹窗 */}
+            {isAssignmentDialogOpen && selectedAdForAssignment && (
+                <NodeTeamAssignmentDialog
+                    open={isAssignmentDialogOpen}
+                    onClose={() => setIsAssignmentDialogOpen(false)}
+                    instanceId={selectedAdForAssignment.c_scene_instance_id!}
+                    drillName={selectedAdForAssignment.c_drill_name}
                 />
             )}
         </Box>

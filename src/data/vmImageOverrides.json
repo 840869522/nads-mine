@@ -365,5 +365,11 @@
   },
   "defend5.qcow2": {
     "osType": "Linux"
+  },
+  "v_att_IPCimplant.qcow2": {
+    "osType": "win7_1"
+  },
+  "v_tar_IPCimplant.qcow2": {
+    "osType": "win7_1"
   }
 }

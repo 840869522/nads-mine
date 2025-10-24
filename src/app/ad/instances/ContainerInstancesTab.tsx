@@ -11,15 +11,14 @@ import {
     Stop as StopIcon, Delete as DeleteIcon, Pause as PauseIcon,
     ViewColumn as ViewColumnIcon, MoreVert as MoreVertIcon, Flag as FlagIcon,
     History as HistoryIcon,
-    Article as ArticleIcon,
-    RestartAlt as RestartIcon
+    Article as ArticleIcon
 } from '@mui/icons-material';
 
 import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
-// ★ 1. 修改类型定义
+
 interface RunningInstance extends OriginalRunningInstance {
     team_id: string | null;
-    can_operate: string; // can_operate 现在是一个 Base64 字符串
+    can_operate: string | boolean;
 }
 
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
@@ -31,7 +30,6 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
-import { v4 as uuidv4 } from 'uuid';
 
 const API_BASE = "/back";
 
@@ -41,7 +39,8 @@ interface ContainerInstancesTabProps {
 
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
-    const { user } = useAuth();
+    // ★ 1. 从 useAuth hook 中获取 user 和 userTeamId ★
+    const { user, userTeamId } = useAuth();
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +93,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             const res = await customFetch(url);
             if (!res.ok) throw new Error(`获取容器列表失败，状态码: ${res.status}`);
             const data = await res.json();
-            setInstances(data);
+            setInstances(Array.isArray(data) ? data : []);
         } catch (err: any) {
             setInstances([]);
             setFetchError(err.message || '无法连接到后端服务。');
@@ -112,6 +111,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         }
     }, [instanceId, fetchInstanceDetails]);
 
+    // 原始版本中的操作函数，保持不变
     const handleStartInstance = useCallback((instance: RunningInstance) => {
         setConfirmActionProps({
             title: `启动实例: ${instance.name}`,
@@ -165,7 +165,24 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setLogsModalId(instance.id);
     }, []);
 
-    const columns: GridColDef[] = React.useMemo(() => [
+    // 原始版本中需要的权限辅助函数，保持不变
+    const isPrivilegedUser = useCallback((currentUser: any): boolean => {
+        if (!currentUser) return false;
+        const privilegedRoles = ['admin', 'referee', 'administrator'];
+        const roles = currentUser.role || currentUser.user?.roles;
+        if (Array.isArray(roles)) {
+            return roles.some(role => privilegedRoles.includes(role.c_name || role));
+        }
+        return false;
+    }, []);
+
+    const getUserTeamId = useCallback((currentUser: any): string | null => {
+        if (!currentUser) return null;
+        return currentUser.team_id || currentUser.user?.team_id || null;
+    }, []);
+
+
+    const columns: GridColDef[] = useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
         { field: 'status', headerName: '状态', width: 120, renderCell: (params) => (<Chip label={params.row.status} color={getStatusChipColor(params.row.status as InstanceStatus)} size="small" />)},
         {
@@ -190,8 +207,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                // ★★★ START: 移植并应用完整的权限逻辑 ★★★
-
                 const safeJsonParse = (b64: string | boolean): any => {
                     if (typeof b64 !== 'string' || b64 === '') {
                         return { can_operate: !!b64 };
@@ -205,34 +220,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     }
                 };
 
-                const isPrivilegedUser = (currentUser: any): boolean => {
-                    if (!currentUser) return false;
-                    const privilegedRoles = ['admin', 'referee', 'administrator'];
-                    const roles = currentUser.role || currentUser.user?.roles;
-                    if (Array.isArray(roles)) {
-                        return roles.some(role => privilegedRoles.includes(role));
-                    }
-                    return false;
-                };
-
-                const getUserTeamId = (currentUser: any): string | null => {
-                    if (!currentUser) return null;
-                    return currentUser.team_id || currentUser.user?.team_id || null;
-                };
-
-                const isAdminOrReferee = isPrivilegedUser(user);
-                const userTeamId = getUserTeamId(user);
-
-                const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
-
-                const hasTerminalPermission = isAdminOrReferee || isTeamMember;
-
                 const canOperateGeneral = safeJsonParse(instance.can_operate);
+                const isAdminOrReferee = isPrivilegedUser(user);
 
-                // ★★★ END: 移植并应用完整的权限逻辑 ★★★
+                // ★ 2. 在这里添加Flag提交的权限判断逻辑 ★
+                const isOwnTeamTarget = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
+                const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
+
+                // 终端权限逻辑保持不变
+                const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
+                const hasTerminalPermission = isAdminOrReferee || isTeamMember;
 
                 return (
                     <Box>
+                        {/* 原始版本的启动/暂停、停止、删除按钮逻辑，保持不变 */}
                         <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
                                 <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.can_operate}>
@@ -257,8 +258,25 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
                         {isTarget && (
                             <>
-                                <Tooltip title="提交Flag"><Box component="span"><IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}><FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} /></IconButton></Box></Tooltip>
-                                <Tooltip title="Flag历史记录"><Box component="span"><IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small"><HistoryIcon fontSize="small" color="info" /></IconButton></Box></Tooltip>
+                                {/* ★ 3. 修改 Flag 按钮的 disabled 逻辑和 Tooltip 提示 ★ */}
+                                <Tooltip title={canSubmitFlag ? "提交Flag" : "不能对本队靶机提交Flag"}>
+                                    <Box component="span">
+                                        <IconButton
+                                            onClick={() => setFlagSubmissionModalId(instance.id)}
+                                            size="small"
+                                            disabled={!isRunning || !canSubmitFlag}
+                                        >
+                                            <FlagIcon fontSize="small" color={isRunning && canSubmitFlag ? 'primary' : 'disabled'} />
+                                        </IconButton>
+                                    </Box>
+                                </Tooltip>
+                                <Tooltip title="Flag历史记录">
+                                    <Box component="span">
+                                        <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
+                                            <HistoryIcon fontSize="small" color="info" />
+                                        </IconButton>
+                                    </Box>
+                                </Tooltip>
                             </>
                         )}
 
@@ -275,7 +293,8 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, user]);
+        // ★ 4. 将 userTeamId 添加到依赖数组中 ★
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, user, userTeamId, isPrivilegedUser, getUserTeamId]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -288,6 +307,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
     return (
         <Box>
+            {/* ... JSX 保持不变 ... */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                 <Typography variant="h6">容器列表</Typography>
                 <TextField variant="outlined" placeholder="搜索容器名称或镜像..." onChange={(e) => setSearchTerm(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} />
@@ -325,11 +345,11 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Bind mounts </MenuItem>
                 <MenuItem onClick={() => {
                     const instance = instances.find(inst => inst.id === moreMenuAnchor.id);
-                    if (instance && moreMenuAnchor.id) {
+                    if (instance) {
                         const isAdmin = isPrivilegedUser(user);
                         const isMember = !!(getUserTeamId(user) && instance.team_id && String(getUserTeamId(user)) === String(instance.team_id));
                         if(isAdmin || isMember) {
-                            openTerminal(moreMenuAnchor.id);
+                            openTerminal(moreMenuAnchor.id!); // Non-null assertion is safe here
                         }
                     }
                     setMoreMenuAnchor({ anchor: null, id: null });

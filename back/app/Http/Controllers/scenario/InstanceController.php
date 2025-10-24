@@ -21,6 +21,8 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Utils\JWTControll;      // ★ 1. 确保导入 JWTControll
 use Illuminate\Support\Facades\Cache;  // ★ 1. 确保导入 Cache
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use App\Models\ad\Team;
 
 
 class InstanceController extends Controller
@@ -948,6 +950,101 @@ class InstanceController extends Controller
             }
         }
         unset($connection);
+    }
+
+/**
+     * 获取指定场景实例下的所有可分配节点（容器和虚拟机）。
+     *
+     * @param  \App\Models\scenario\SceneInstance  $instance
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getNodesForAssignment(SceneInstance $instance): JsonResponse
+    {
+        try {
+            // 查询关联的容器
+            $containers = $instance->containers()->get(['c_container_id', 'c_container_name', 'c_team_id'])->map(function ($container) {
+                return [
+                    'id'      => $container->c_container_id,
+                    'name'    => $container->c_container_name,
+                    'type'    => 'container',
+                    'team_id' => $container->c_team_id ? (int)$container->c_team_id : null, // 确保 team_id 是整数或 null
+                ];
+            });
+
+            // 查询关联的虚拟机
+            $vms = $instance->vms()->get(['c_vm_id', 'c_vm_name', 'c_team_id'])->map(function ($vm) {
+                return [
+                    'id'      => $vm->c_vm_id,
+                    'name'    => $vm->c_vm_name,
+                    'type'    => 'vm',
+                    'team_id' => $vm->c_team_id ? (int)$vm->c_team_id : null,
+                ];
+            });
+
+            // 合并结果并返回
+            $nodes = $containers->merge($vms)->sortBy('name')->values();
+
+            return response()->json(['status' => 'success', 'data' => $nodes]);
+
+        } catch (\Exception $e) {
+            Log::error("获取实例节点列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage());
+            return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
+        }
+    }
+
+    /**
+     * 批量更新指定场景实例下节点的队伍归属。
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\scenario\SceneInstance  $instance
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateNodeAssignments(Request $request, SceneInstance $instance): JsonResponse
+    {
+        // 1. 验证输入数据
+        $validator = Validator::make($request->all(), [
+            'assignments'          => 'required|array',
+            'assignments.*.type'   => 'required|string|in:container,vm',
+            'assignments.*.id'     => 'required', // ID 可以是字符串或整数
+            'assignments.*.team_id'=> ['nullable', 'integer', 'exists:' . (new Team)->getTable() . ',c_id'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => '数据验证失败', 'errors' => $validator->errors()], 422);
+        }
+
+        $assignments = $request->input('assignments');
+
+        // 2. 使用数据库事务执行更新
+        DB::beginTransaction();
+        try {
+            foreach ($assignments as $assignment) {
+                $type   = $assignment['type'];
+                $id     = $assignment['id'];
+                $teamId = $assignment['team_id']; // 可以是 null
+
+                if ($type === 'container') {
+                    // 更新容器表，并确保该容器属于当前实例
+                    SceneContainerInstance::where('c_container_id', $id)
+                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                        ->update(['c_team_id' => $teamId]);
+                } elseif ($type === 'vm') {
+                    // 更新虚拟机表，并确保该虚拟机属于当前实例
+                    SceneVmInstance::where('c_vm_id', $id)
+                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                        ->update(['c_team_id' => $teamId]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json(['status' => 'success', 'message' => '节点队伍分配已成功更新。']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("更新节点队伍分配失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage());
+            return response()->json(['message' => '更新分配时发生服务器错误。'], 500);
+        }
     }
 
     /**
