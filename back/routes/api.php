@@ -352,7 +352,7 @@ Route::put('/ad-configs/{adConfig}', [AdConfigController::class, 'update']);
 // 删除一个演练配置 (将 {adconfig} -> {adConfig})
 Route::delete('/ad-configs/{adConfig}', [AdConfigController::class, 'destroy']);
 
-
+Route::get('/ad-configs/{adConfig}/teams-with-members', [AdConfigController::class, 'getTeamsWithMembers']);
 /**
  * 演练配置的自定义操作
  */

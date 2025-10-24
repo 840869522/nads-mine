@@ -16,6 +16,9 @@ use Illuminate\Validation\Rule;
 use App\Http\Controllers\ad\AdController;
 use App\Models\scenario\SceneConfig;
 use Illuminate\Support\Facades\Log;
+use App\Models\scenario\SceneContainerInstance;
+use App\Models\scenario\SceneVmInstance;
+use App\Models\ad\Team;
 
 class AdConfigController extends Controller
 {
@@ -185,7 +188,16 @@ class AdConfigController extends Controller
             return;
         }
         // 实际的资源清理逻辑...
-        $instance->delete();
+        // 这里应该调用 InstanceController@destroy 来保证完整的资源清理
+        try {
+             $instanceController = app(InstanceController::class);
+             $instanceController->destroy($instance);
+        } catch(Exception $e) {
+             // 记录清理失败的日志，但不中断主流程
+             Log::error("在 tearDownInstanceResources 中调用 InstanceController@destroy 失败: " . $e->getMessage());
+             // 即使物理资源清理失败，数据库记录仍然会被删除
+             $instance->delete();
+        }
     }
 
     public function start(Request $request, AdConfig $adConfig): JsonResponse
@@ -220,4 +232,54 @@ class AdConfigController extends Controller
             return response()->json(['message' => '启动演练时发生内部错误。'], 500);
         }
     }
-}
+
+    /**
+     * ★★★ 新增方法 ★★★
+     * 获取指定演练下的所有队伍及其成员列表（包括禁赛状态）。
+     *
+     * @param AdConfig $adConfig
+     * @return JsonResponse
+     */
+    public function getTeamsWithMembers(AdConfig $adConfig): JsonResponse
+        {
+            try {
+                // 步骤 1: 检查演练是否已启动并有关联的场景实例
+                if (!$adConfig->c_scene_instance_id) {
+                    return response()->json(['data' => []]);
+                }
+
+                // 步骤 2: 从节点实例表中直接获取所有唯一的 team_id
+                // 这是最可靠的数据源
+                $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                    ->distinct()
+                    ->pluck('c_team_id');
+
+                $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                    ->distinct()
+                    ->pluck('c_team_id');
+
+                // 合并并去重所有找到的 team_id
+                $allTeamIds = $containerTeamIds
+                                ->merge($vmTeamIds)
+                                ->unique()
+                                ->filter() // 过滤掉 null 或空值
+                                ->values()
+                                ->all();
+
+                if (empty($allTeamIds)) {
+                    return response()->json(['data' => []]);
+                }
+
+                // 步骤 3: 根据提取出的 team_id 列表，查询队伍及其成员信息
+                $teams = Team::whereIn('c_id', $allTeamIds)
+                            ->with(['users:c_username,c_name']) // 预加载成员信息
+                            ->get();
+
+                return response()->json(['data' => $teams]);
+
+            } catch (\Exception $e) {
+                Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
+            }
+        }
+    }

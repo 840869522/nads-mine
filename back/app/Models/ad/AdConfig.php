@@ -37,11 +37,21 @@ class AdConfig extends Model
         'c_start_time', 'c_end_time', 'c_create_at', 'c_update_at',
     ];
 
+    /**
+     * 定义与场景配置模板 (SceneConfig) 的 "属于" (belongsTo) 关系。
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
     public function sceneConfig()
     {
         return $this->belongsTo(SceneConfig::class, 'c_scene_config_id', 'c_config_id');
     }
 
+    /**
+     * 定义与裁判 (Referee) 的 "一对多" (hasMany) 关系。
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
     public function referees(): HasMany
     {
         return $this->hasMany(Referee::class, 'c_ad_config_id', 'c_id');

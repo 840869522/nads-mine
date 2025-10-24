@@ -1,21 +1,39 @@
 // NodeTeamAssignmentDialog.tsx
+"use client";
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     CircularProgress, Alert, Table, TableBody, TableCell, TableHead,
-    TableRow, MenuItem, Select, Typography, Box
+    TableRow, MenuItem, Select, Typography, Box, Paper, IconButton, Tooltip, Chip
 } from '@mui/material';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { customFetch } from '@/utils/fetch';
 
-// 定义数据类型
-interface Node {
-    id: string; // 容器ID或虚拟机ID
-    name: string;
-    type: 'container' | 'vm';
-    team_id: number | null; // 使用 number 因为 c_teams.c_id 是 int
+// ★ 1. 更新类型定义
+interface Member {
+    c_username: string;
+    c_name: string | null;
+    is_banned: boolean;
 }
 
-interface Team {
+interface TeamWithMembers {
+    c_id: number;
+    c_name: string;
+    users: Member[];
+}
+
+interface Node {
+    id: string;
+    name: string;
+    type: 'container' | 'vm';
+    team_id: number | null;
+    team: TeamWithMembers | null;
+}
+
+// 新增：基础队伍类型，用于下拉菜单
+interface BasicTeam {
     c_id: number;
     c_name: string;
 }
@@ -34,37 +52,34 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
                                                                                drillName
                                                                            }) => {
     const [nodes, setNodes] = useState<Node[]>([]);
-    const [teams, setTeams] = useState<Team[]>([]);
+    const [allTeams, setAllTeams] = useState<BasicTeam[]>([]); // ★ 新 state, 用于下拉菜单
+    const [availableTeams, setAvailableTeams] = useState<TeamWithMembers[]>([]); // ★ 保持这个 state，用于成员展示
     const [assignments, setAssignments] = useState<Record<string, number | null>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const API_BASE_URL = '/back/api';
 
-    // 获取节点和队伍列表的函数
+    // ★ 2. 更新 fetchData 函数
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            // 并行获取节点列表和所有队伍列表
-            const [nodesRes, teamsRes] = await Promise.all([
-                customFetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/nodes`),
-                customFetch(`${API_BASE_URL}/ad/team?all=true`) // 假设有这样一个API获取所有队伍
-            ]);
-
-            if (!nodesRes.ok || !teamsRes.ok) {
-                throw new Error('获取基础数据失败');
+            const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/nodes`);
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || '获取数据失败');
             }
 
-            const nodesData = await nodesRes.json();
-            const teamsData = await teamsRes.json();
+            const apiData = await response.json();
+            const data = apiData.data;
 
-            setNodes(nodesData.data || []);
-            setTeams(teamsData.data || []);
+            setNodes(data.nodes || []);
+            setAllTeams(data.all_teams || []); // 使用 all_teams 填充下拉菜单的数据源
+            setAvailableTeams(data.current_teams || []); // 使用 current_teams (或类似字段) 填充成员信息的数据源
 
-            // 初始化 assignments 状态
             const initialAssignments: Record<string, number | null> = {};
-            (nodesData.data || []).forEach((node: Node) => {
+            (data.nodes || []).forEach((node: Node) => {
                 initialAssignments[`${node.type}-${node.id}`] = node.team_id;
             });
             setAssignments(initialAssignments);
@@ -82,35 +97,49 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
         }
     }, [open, fetchData]);
 
-    // 处理下拉菜单变更
+    // 处理下拉菜单变更 (逻辑不变)
     const handleAssignmentChange = (nodeKey: string, newTeamId: string | number) => {
         const teamId = newTeamId === 'none' ? null : Number(newTeamId);
         setAssignments(prev => ({ ...prev, [nodeKey]: teamId }));
     };
 
-    // 提交变更
+    // 禁赛处理函数 (逻辑不变)
+    const handleToggleBan = async (teamId: number, username: string) => {
+        try {
+            setError(null);
+            const response = await customFetch(`${API_BASE_URL}/ad/team/${teamId}/users/${username}/toggle-ban`, {
+                method: 'POST'
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || '操作失败');
+            }
+            await fetchData();
+        } catch (err) {
+            setError((err as Error).message);
+        }
+    };
+
+    // 提交变更 (逻辑不变)
     const handleSubmit = async () => {
         setIsSubmitting(true);
         setError(null);
-
         const payload = Object.entries(assignments).map(([key, team_id]) => {
-            const [type, id] = key.split('-');
+            const [type, ...idParts] = key.split('-');
+            const id = idParts.join('-');
             return { type, id, team_id };
         });
-
         try {
             const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${instanceId}/node-assignments`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ assignments: payload })
             });
-
             if (!response.ok) {
                 const result = await response.json();
                 throw new Error(result.message || '更新失败');
             }
-
-            onClose(); // 成功后关闭弹窗
+            onClose();
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -119,45 +148,77 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle>为演练 "{drillName}" 分配节点队伍</DialogTitle>
+        // ★ 3. 更新 JSX 渲染逻辑
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+            <DialogTitle>管理演练 "{drillName}" 节点与成员</DialogTitle>
             <DialogContent dividers>
                 {isLoading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
                 ) : error ? (
-                    <Alert severity="error">{error}</Alert>
+                    <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>
                 ) : (
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell>节点名称</TableCell>
-                                <TableCell>节点类型</TableCell>
-                                <TableCell>所属队伍</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>节点信息</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>所属队伍与成员管理</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {nodes.map(node => {
                                 const nodeKey = `${node.type}-${node.id}`;
+                                const assignedTeamId = assignments[nodeKey];
+                                // ★ 关键修改: 成员列表数据源现在是 availableTeams, 它包含了完整的成员信息
+                                const currentTeamData = assignedTeamId ? availableTeams.find(t => t.c_id === assignedTeamId) : null;
+
                                 return (
                                     <TableRow key={nodeKey}>
-                                        <TableCell>{node.name}</TableCell>
-                                        <TableCell>
+                                        <TableCell sx={{ verticalAlign: 'top', width: '35%' }}>
+                                            <Typography fontWeight="bold">{node.name}</Typography>
                                             <Typography variant="body2" color="text.secondary">
                                                 {node.type === 'container' ? '容器' : '虚拟机'}
                                             </Typography>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell sx={{ verticalAlign: 'top', width: '65%' }}>
                                             <Select
-                                                value={assignments[nodeKey] ?? 'none'}
+                                                value={assignedTeamId ?? 'none'}
                                                 onChange={(e) => handleAssignmentChange(nodeKey, e.target.value)}
                                                 size="small"
                                                 fullWidth
                                             >
                                                 <MenuItem value="none"><em>不分配</em></MenuItem>
-                                                {teams.map(team => (
+                                                {/* ★ 关键修改: 使用 allTeams 来渲染下拉选项 */}
+                                                {allTeams.map(team => (
                                                     <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>
                                                 ))}
                                             </Select>
+
+                                            {/* 成员列表显示逻辑 */}
+                                            {currentTeamData && currentTeamData.users && currentTeamData.users.length > 0 && (
+                                                <Box mt={2} pl={1}>
+                                                    <Typography variant="subtitle2" gutterBottom>队伍成员:</Typography>
+                                                    {currentTeamData.users.map(user => (
+                                                        <Paper key={user.c_username} variant="outlined" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, mb: 1 }}>
+                                                            <Typography variant="body2">
+                                                                {user.c_name ? `${user.c_name} (${user.c_username})` : user.c_username}
+                                                            </Typography>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                <Chip
+                                                                    label={user.is_banned ? '已禁赛' : '正常'}
+                                                                    color={user.is_banned ? 'error' : 'success'}
+                                                                    size="small"
+                                                                    sx={{ mr: 1 }}
+                                                                />
+                                                                <Tooltip title={user.is_banned ? '解除禁赛' : '标记作弊并禁赛'}>
+                                                                    <IconButton size="small" onClick={() => handleToggleBan(currentTeamData.c_id, user.c_username)}>
+                                                                        {user.is_banned ? <CheckCircleOutlineIcon fontSize="small" color="success" /> : <BlockIcon fontSize="small" color="error" />}
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            </Box>
+                                                        </Paper>
+                                                    ))}
+                                                </Box>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 );
