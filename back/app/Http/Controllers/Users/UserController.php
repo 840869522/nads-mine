@@ -140,10 +140,16 @@
         }
 
         public function logout(Request $req){
-            $token_data  = $req->input("token_data");
-            $key = $token_data["redis_id"];
+            $auth = $req->header("Authorization",null);
+            $jwtRes =  JWTControll::decodeJWT($auth);
+            if ($jwtRes["err"] != null) {
+                return response()->json([
+                    "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                ])->send();
+            }
             try {
-                Cache::delete($key);
+                Cache::delete($jwtRes['data']['permission']);
             }catch (Exception $e) {
                 Log::info("[Error] [UserController:logout]:: ".$e);
             }
