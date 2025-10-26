@@ -80,6 +80,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update_common", [UserController::class, "updateCommonUser"]);
         Route::post("/2excel", [UserController::class, "convert2Excel"]);
         Route::post("batch_add", [UserController::class , "batchImportUsers"]);
+        Route::post("/logout", [UserController::class, "logout"]);
     });
 
     Route::prefix("role")->group(function () {

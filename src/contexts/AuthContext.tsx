@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     const logout = async () => {
-        const res = await apiClientWithToken.post("/logout")
+        const res = await apiClientWithToken.post("/back/api/support/user/logout")
         deleteCookie("_auth");
         setUser(null);
         localStorage.removeItem('droneSimUser');
