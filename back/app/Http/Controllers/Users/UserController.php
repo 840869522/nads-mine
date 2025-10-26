@@ -141,7 +141,7 @@
 
         public function logout(Request $req){
             $token_data  = $req->input("token_data");
-            $key = $token_data["permission"];
+            $key = $token_data["redis_id"];
             try {
                 Cache::delete($key);
             }catch (Exception $e) {
