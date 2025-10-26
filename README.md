@@ -32,7 +32,7 @@ sudo apt install php8.3 php8.3-mysql php8.3-xml php8.3-fpm php8.3-common php8.3-
 wget http://https://getcomposer.org/download/2.8.11/composer.phar
 ```
 
-### 1.2 Node 和Npm安装
+### 1.2 Node 和Npm安装（两种安装任选其一）
 
 #### 1.2.1 apt 安装
 
@@ -57,7 +57,7 @@ npm -v
 #输出 X.x.x
 ```
 
-#### 1.2.2 二进制安装（可选）
+#### 1.2.2 二进制安装
 
 访问[node官网](https://nodejs.org/zh-cn/download)，下载对应的版本，如： Linux x64复制下载连接，例如：https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
 
@@ -217,12 +217,11 @@ sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 
 ```.env
 DB_CONNECTION=mysql
-#DB_HOST=127.0.0.1
-DB_HOST=10.12.0.101
-DB_PORT=3306
-DB_DATABASE=nads
-DB_USERNAME=nads
-DB_PASSWORD=GQip8WD02X
+DB_HOST=10.12.0.101 # 数据库地址
+DB_PORT=3306 # 数据库端口
+DB_DATABASE=nads # 数据库名
+DB_USERNAME=nads # 数据库用户名
+DB_PASSWORD=GQip***02X # 数据库用户密码
 DB_CHARSET=UTF8
 ```
 
@@ -231,8 +230,7 @@ DB_CHARSET=UTF8
 需要修改下面的文件
 
 ```sehll
-<project_dir>/langchian/config.yaml
-# 修改 chatModel 和 embeddingModel 以及qdrant 的内容
+# 修改 <project_dir>/langchian/config.yaml中的chatModel 和 embeddingModel 以及qdrant 的内容
 chatModel:
   model: "gpt-oss"
   base_url: "http://43.143.151.41:3000/v1"
@@ -260,7 +258,7 @@ docker run --name guacd \
   --network host \
   -d --restart unless-stopped \
   guacamole/guacd:1.6.0
-``` 
+```
 
 ### 1.8 启动
 
@@ -274,7 +272,7 @@ docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage --name qdrant_datab
 
 #### 1.8.2 构建向量数据库
 
-需要用到llm_parse代码，在执行之前需要激活虚拟环境并修改如下内容。修改之后，执行llm_parse的main.py。
+需要用到llm_parse代码，在执行之前需要激活虚拟环境并修改如下内容。修改之后，使用 python main.py 执行llm_parse的main.py。
 
 ```python
 # 激活虚拟环境
@@ -481,4 +479,4 @@ git apply /path/to/fix_login.patch #
 在启动中出现问题，请见 [2 维护](README.md#2-维护)
 
 ### 3.3 其他问题
-拷贝日志文件，位置为 src/front.log 和 back/back.log ，查看并与开发人员联系
+拷贝日志文件，位置为 src/front.log 、 back/back.log以及back/storage/logs/laravel.log ，查看并与开发人员联系

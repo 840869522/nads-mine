@@ -20,7 +20,7 @@ import base64
 
 system_template = """
     你是一个非常有用的问答助手，根据下面给出的知识和以往的对话，
-    回答给出的问题,当你知道问题的答案时，准确的回答问题，不要是用表格尽量简短；如果你不知道答案，那么直接回答“我不知道”。
+    回答给出的问题，在使用markdown格式时要符合格式规范。当你知道问题的答案时，准确的回答问题，尽量不要使用表格尽量简短；如果你不知道答案，那么直接回答“我不知道”。
     知识：{knowledge}
     重要：在你的回答中不要包含<think>标签或任何类似的内部思考标记。
 """
@@ -54,7 +54,7 @@ retriever = vector_store.as_retriever(
     search_type="similarity",
     search_kwargs={
         'k': 6,
-        'score_threshold': 0.7,
+        'score_threshold': 0.7
     }
 )
 
