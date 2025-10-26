@@ -128,7 +128,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
         }]);
       }
     } catch (error: any) {
-      console.error('获取规则失败:', error);
       setRules([{
         testId: testId,
         testName: '获取失败',
@@ -181,7 +180,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
       });
       setIsModalOpen(true);
     } catch (error) {
-      console.error('加载规则失败:', error);
       alert(`加载规则失败: ${(error as any)?.response?.data?.message || (error as Error).message}`);
     } finally {
       setEditLoading(false);
@@ -251,7 +249,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
         alert(`删除失败: ${response.data?.message || '服务器未知错误'}`);
       }
     } catch (error: any) {
-      console.error('删除规则失败:', error);
       const errorMsg = error.response?.data?.message || error.message || '网络错误';
       alert(`删除失败: ${errorMsg}`);
     } finally {
@@ -457,7 +454,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
       setFetchedPapers(papers);
       setIsPaperListModalOpen(true);
     } catch (error) {
-      console.error('获取试卷失败:', error);
       setFetchedPapers([]);
       alert('获取试卷失败，请检查测试ID是否正确');
     } finally {
@@ -491,7 +487,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
         questionCount: questions.length
       };
     } catch (error) {
-      console.error('获取试卷详情失败:', error);
       return null;
     } finally {
       setLoadingPaperDetails(false);
@@ -529,7 +524,6 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('导出试卷失败:', error);
       alert('导出试卷失败，请稍后再试: ' + (error as any)?.response?.data?.message || (error as Error).message);
     }
   };

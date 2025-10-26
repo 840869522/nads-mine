@@ -71,12 +71,9 @@ const apiClient = apiClientWithToken;
 // 请求拦截器 - 添加详细日志
 apiClient.interceptors.request.use(
   (config) => {
-    console.log(`[API请求] ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('[请求参数]', config.params || config.data);
     return config;
   },
   (error) => {
-    console.error('[请求错误]', error);
     return Promise.reject(error);
   }
 );
@@ -84,17 +81,9 @@ apiClient.interceptors.request.use(
 // 响应拦截器 - 添加详细日志
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`[API响应] ${response.config.url}`);
-    console.log('[响应数据]', response.data);
     return response;
   },
   (error) => {
-    console.error('[响应错误]', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message
-    });
     return Promise.reject(error);
   }
 );
@@ -244,10 +233,8 @@ const TestManagement_user = () => {
   const getAuthState = (): { isAuthenticated: boolean; username: string } => {
     try {
       const droneSimUserStr = localStorage.getItem('droneSimUser');
-      console.log('读取droneSimUser:', droneSimUserStr);
 
       if (!droneSimUserStr) {
-        console.log('认证失败：未找到droneSimUser');
         return { isAuthenticated: false, username: '' };
       }
 
@@ -256,17 +243,14 @@ const TestManagement_user = () => {
       const userUsername = userInfo?.c_username || '';
 
       if (userInfo && userUsername.trim()) {
-        console.log('认证成功：用户名=', userUsername.trim());
         return {
           isAuthenticated: true,
           username: userUsername.trim()
         };
       }
 
-      console.log('认证失败：droneSimUser结构异常或无c_username');
       return { isAuthenticated: false, username: '' };
     } catch (err) {
-      console.error('解析droneSimUser失败:', err);
       return { isAuthenticated: false, username: '' };
     }
   };
@@ -310,36 +294,20 @@ const TestManagement_user = () => {
 
     try {
       setLoading(true);
-      console.log('=== 开始获取测试列表 ===');
-      console.log('当前用户名:', username);
-      console.log('理论测试API地址:', '/back/api/study/test/getUserRelatedTests');
-      console.log('实验测试API地址:', '/back/api/study/test/getUserRelatedExperiments');
 
       const [theoreticalTestsData, practicalTestsData] = await Promise.all([
         theoryTestApi.getUserTheoryTests(username),
         theoryTestApi.getUserExperimentTests(username)
       ]);
 
-      console.log('=== 后端API响应结果 ===');
-      console.log('理论测试API状态码:', theoreticalTestsData?.code);
-      console.log('理论测试API消息:', theoreticalTestsData?.message);
-      console.log('理论测试数据数量:', theoreticalTestsData?.data ? theoreticalTestsData.data.length : 0);
-      console.log('实验测试API状态码:', practicalTestsData?.code);
-      console.log('实验测试API消息:', practicalTestsData?.message);
-      console.log('实验测试数据数量:', practicalTestsData?.data ? practicalTestsData.data.length : 0);
-      console.log('理论测试原始数据:', theoreticalTestsData?.data);
-      console.log('实验测试原始数据:', practicalTestsData?.data);
-
       let formattedTheoreticalTests: Test[] = [];
       if (theoreticalTestsData?.code === 200) {
         formattedTheoreticalTests = (theoreticalTestsData.data || []).reduce((acc: Test[], test: any) => {
           if (!test.c_id || !test.c_id.trim()) {
-            console.error('过滤无效理论测试数据（缺少c_id）:', test);
             return acc;
           }
 
           const userPaperId = test.c_paper_id || test.paper_id || '';
-          console.log('理论测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
             test_id: test.c_id.trim().replace(/[{}]/g, ''),
@@ -364,12 +332,10 @@ const TestManagement_user = () => {
       if (practicalTestsData?.code === 200) {
         formattedPracticalTests = (practicalTestsData.data || []).reduce((acc: Test[], test: any) => {
           if (!test.c_id || !test.c_id.trim()) {
-            console.error('过滤无效实验测试数据（缺少c_id）:', test);
             return acc;
           }
 
           const userPaperId = test.c_paper_id || test.paper_id || '';
-          console.log('实验测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
             test_id: test.c_id.trim().replace(/[{}]/g, ''),
@@ -397,7 +363,6 @@ const TestManagement_user = () => {
     // 不再调用 checkSubmissionStatus 接口
     
   } catch (err: any) {
-    console.error('加载测试列表失败:', err);
     setError(err.message || '加载测试列表失败');
   } finally {
     setLoading(false);
@@ -450,7 +415,6 @@ const TestManagement_user = () => {
     }
 
   } catch (err: any) {
-    console.error('进入测试失败:', err);
     setErrorDialog({
       open: true,
       title: '进入测试失败',
@@ -496,7 +460,6 @@ const handleCancelEnterTest = () => {
         testName: test.test_name
       });
     } catch (err: any) {
-      console.error('获取成绩失败:', err);
       setErrorDialog({
         open: true,
         title: '获取成绩失败',

@@ -93,7 +93,6 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
         showSnackbar('获取资源列表失败: ' + response.data.message, 'error');
       }
     } catch (error) {
-      console.error('获取资源列表失败:', error);
       showSnackbar('获取资源列表失败', 'error');
     } finally {
       setLoading(false);
@@ -115,7 +114,6 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
         showSnackbar('删除资源失败: ' + response.data.message, 'error');
       }
     } catch (error) {
-      console.error('删除资源失败:', error);
       showSnackbar('删除资源失败', 'error');
     } finally {
       setLoadingDelete(null);
@@ -331,7 +329,6 @@ const ExperimentResourceDialog: React.FC<ExperimentResourceDialogProps> = ({
                     iframe.style.opacity = '1';
                   }}
                   onError={(e) => {
-                    console.error('Office预览加载失败:', e);
                   }}
                 />
               ) : previewResource.c_type.toLowerCase() === 'txt' ? (

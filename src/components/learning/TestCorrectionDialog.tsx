@@ -105,7 +105,6 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
         setCurrentUsername(username);
       }
     } catch (err) {
-      console.error('解析用户信息失败:', err);
     }
   }, []);
 
@@ -158,7 +157,6 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
         setError(response.data.message || '获取考生名单失败');
       }
     } catch (error: any) {
-      console.error('获取所有考生名单失败:', error);
       setError(error.response?.data?.message || '网络请求失败');
     } finally {
       setLoading(false);
@@ -187,7 +185,6 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
         setError(response.data.message || '获取考生作答失败');
       }
     } catch (error: any) {
-      console.error('获取考生作答失败:', error);
       setError(error.response?.data?.message || '网络请求失败');
     } finally {
       setLoading(false);
@@ -270,7 +267,6 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
         setError(response.data.message || '批改提交失败');
       }
     } catch (error: any) {
-      console.error('批改提交失败:', error);
       setError(error.response?.data?.message || '网络请求失败');
     } finally {
       setSubmitting(false);

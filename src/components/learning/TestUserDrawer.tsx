@@ -230,11 +230,9 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
           setScoreData(response.data.data);
         } else {
           setScoreData(null);
-          console.error('获取成绩失败:', response.data.message);
         }
       } catch (error: any) {
         setScoreData(null);
-        console.error('获取成绩失败:', error);
       } finally {
         setLoadingScores(false);
       }

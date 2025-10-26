@@ -83,7 +83,6 @@ const ScoreManagement: React.FC = () => {
       const rawData = response.data?.data || [];
       setCourses(rawData);
     } catch (error) {
-      console.error('获取课程及测试实验失败:', error);
       setCourses([]);
     } finally {
       setLoading(false);
@@ -104,7 +103,6 @@ const ScoreManagement: React.FC = () => {
         alert(response.data?.message || '获取成绩失败');
       }
     } catch (error) {
-      console.error('获取成绩失败:', error);
       alert('获取成绩失败');
     } finally {
       setLoadingScores((prev) => ({ ...prev, [courseId]: false })); // 恢复当前课程的加载状态
