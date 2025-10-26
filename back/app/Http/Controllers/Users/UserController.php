@@ -139,6 +139,19 @@
             }
         }
 
+        public function logout(Request $req){
+            $token_data  = $req->input("token_data");
+            $key = $token_data["permission"];
+            try {
+                Cache::delete($key);
+            }catch (Exception $e) {
+                Log::info("[Error] [UserController:logout]:: ".$e);
+            }
+            return response()->json([
+                "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+            ]);
+        }
 
         public function login(Request $req){
                     $reqData = $req->json()->all();
@@ -206,7 +219,6 @@
 
                     $userTeamId = $teamRes['data'];
 
-                    // ★★★ 3. 构建包含 role 和 team_id 的 JWT 负载 ★★★
                     $jwtPayload = [
                         "id" => $user->c_username,
                         "permission" => $user_login_key,
@@ -229,8 +241,6 @@
                         "c_username"=>$user->c_username,
                         "c_email"=>$user->c_email
                     ];
-
-                    // ★★★ 4. 在返回给前端的数据中也加入 team_id ★★★
                     return response()->json([
                         "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
                         "message" => GlobalResponse::$USER_LOGIN_SUCCESS_MES,

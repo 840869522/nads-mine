@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/ui/Card';
@@ -17,40 +17,41 @@ import { deleteCookie, getCookie, setCookie } from '@/utils/cookie';
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const [isCheckAuth, setIsAuthCheck] = useState<boolean>(true);
 
   const features = [
-      {
-          name: '基础支撑分系统',
-          description: '管理用户角色、权限分配、系统级镜像和全局配置。',
-          // 修正: 指向该分系统的主要入口页面，通常是用户管理
-          path: '/admin/users',
-          icon: ServerStackIcon,
-          color: 'text-yellow-500',
-      },
-      {
-          name: '环境构建分系统',
-          description: '配置网络拓扑，管理无人机节点和虚拟容器等基础设施。',
-          // 修正: 修复了拼写错误 "envirments" -> "environments"
-          path: '/scenario/manage',
-          icon: AdjustmentsHorizontalIcon,
-          color: 'text-green-500',
-      },
-      {
-          name: '安全实验分系统',
-          description: '模拟网络攻防场景，进行红蓝对抗演练，检验安全防护能力。',
-          // 修正: 指向安全实验的配置或列表页面，/drill/configs 是一个常见的模式
-          path: '/ad',
-          icon: ShieldCheckIcon,
-          color: 'text-red-500',
-      },
-      {
-          name: '人员测试分系统',
-          description: '进行互动测验，获取AI反馈，并管理相关题库。',
-          // 修正: 指向该分系统的主入口，通常是课程列表，而不是直接进入测验
-          path: '/learn/cases',
-          icon: AcademicCapIcon,
-          color: 'text-blue-500',
-      },
+    {
+      name: '基础支撑分系统',
+      description: '管理用户角色、权限分配、系统级镜像和全局配置。',
+      // 修正: 指向该分系统的主要入口页面，通常是用户管理
+      path: '/admin/users',
+      icon: ServerStackIcon,
+      color: 'text-yellow-500',
+    },
+    {
+      name: '环境构建分系统',
+      description: '配置网络拓扑，管理无人机节点和虚拟容器等基础设施。',
+      // 修正: 修复了拼写错误 "envirments" -> "environments"
+      path: '/scenario/manage',
+      icon: AdjustmentsHorizontalIcon,
+      color: 'text-green-500',
+    },
+    {
+      name: '安全实验分系统',
+      description: '模拟网络攻防场景，进行红蓝对抗演练，检验安全防护能力。',
+      // 修正: 指向安全实验的配置或列表页面，/drill/configs 是一个常见的模式
+      path: '/ad',
+      icon: ShieldCheckIcon,
+      color: 'text-red-500',
+    },
+    {
+      name: '人员测试分系统',
+      description: '进行互动测验，获取AI反馈，并管理相关题库。',
+      // 修正: 指向该分系统的主入口，通常是课程列表，而不是直接进入测验
+      path: '/learn/cases',
+      icon: AcademicCapIcon,
+      color: 'text-blue-500',
+    },
   ];
 
   const router = useRouter();
@@ -58,12 +59,40 @@ const DashboardPage: React.FC = () => {
     const token = getCookie("_auth");
     if (!token) {
       router.replace('/login');
+    } else {
+      setIsAuthCheck(false);
     }
-  }, [ router]);
+  }, [router]);
 
   useEffect(() => {
     features.forEach((f) => router.prefetch(f.path));
   }, [router]);
+
+  if (isCheckAuth) {
+    return (
+      <Box className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 p-4">
+        <div className="text-center">
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full border-2 border-primary-200 dark:border-primary-800"></div>
+            </div>
+            <div className="h-12 w-12 rounded-full border-4 border-primary-500 dark:border-primary-400 border-t-transparent animate-spin-slow"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-6 w-6 rounded-full bg-primary-500 dark:bg-primary-400 animate-pulse"></div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Typography variant="body1" className="font-medium text-neutral-700 dark:text-neutral-200">
+              系统加载中...
+            </Typography>
+          </div>
+          <div className="mt-8 w-24 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-primary-500 to-blue-500 animate-progress-bar"></div>
+          </div>
+        </div>
+      </Box>
+    )
+  }
 
   return (
     <Box>

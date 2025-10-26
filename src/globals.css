@@ -8,7 +8,7 @@
     width: 100%;
     margin: 1rem 0;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     font-size: 0.95rem;
 }
 
@@ -35,7 +35,6 @@
     background-color: #f0f7ff;
 }
 
-/* 响应式表格 - 确保在小屏幕上可滚动 */
 @media (max-width: 768px) {
     .markdown-content .custom-markdown-table {
         display: block;
@@ -43,22 +42,73 @@
         -webkit-overflow-scrolling: touch;
         margin: 1rem 0;
     }
-    
+
     .markdown-content .custom-markdown-table::-webkit-scrollbar {
         height: 6px;
     }
-    
+
     .markdown-content .custom-markdown-table::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 3px;
     }
-    
+
     .markdown-content .custom-markdown-table::-webkit-scrollbar-thumb {
         background: #888;
         border-radius: 3px;
     }
-    
+
     .markdown-content .custom-markdown-table::-webkit-scrollbar-thumb:hover {
         background: #555;
     }
+}
+
+@keyframes spin-slow {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin-slow {
+    animation: spin-slow 1.5s linear infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+
+@keyframes progress-bar {
+    0% {
+        width: 0%;
+    }
+
+    50% {
+        width: 70%;
+    }
+
+    100% {
+        width: 100%;
+    }
+}
+
+.animate-progress-bar {
+    animation: progress-bar 2s ease-in-out infinite;
 }
