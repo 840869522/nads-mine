@@ -41,7 +41,6 @@ chat_llm = ChatOpenAI(
     model=config['chatModel']['model'],
     base_url=config['chatModel']['base_url'],
     api_key=config['chatModel']['api_key'],
-    steaming=True
 )
 
 chat_memory = ConversationBufferMemory(
@@ -54,9 +53,8 @@ chat_memory = ConversationBufferMemory(
 retriever = vector_store.as_retriever(
     search_type="similarity",
     search_kwargs={
-        'k': 6
+        'k': 6,
         'score_threshold': 0.7,
-        'ef': 50
     }
 )
 
