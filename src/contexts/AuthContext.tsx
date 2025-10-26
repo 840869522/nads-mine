@@ -1,6 +1,6 @@
 "use client";
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { apiClient } from '@/utils/axios';
+import { apiClient, apiClientWithToken } from '@/utils/axios';
 import { deleteCookie, setCookie } from '@/utils/cookie';
 
 // ★ 1. 更新类型定义：为 user 对象添加 team_id 属性
@@ -59,7 +59,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
+        const res = await apiClientWithToken.post("/logout")
         deleteCookie("_auth");
         setUser(null);
         localStorage.removeItem('droneSimUser');
