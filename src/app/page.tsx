@@ -57,15 +57,15 @@ const DashboardPage: React.FC = () => {
 
   const router = useRouter();
   useEffect(() => {
-    const token = getCookie("_auth");
     const timer = setTimeout(() => {
+      const token = getCookie("_auth");
       if (!token) {
         router.replace('/login');
       } else {
         setIsAuthCheck(false);
       }
-    }, 3000);
-    return ()=>{
+    }, 2000);
+    return () => {
       clearTimeout(timer);
     }
   }, [router]);
