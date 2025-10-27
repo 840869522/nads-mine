@@ -13,7 +13,7 @@ import {
 import MuiLink from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import { deleteCookie, getCookie, setCookie } from '@/utils/cookie';
+import { getCookie } from '@/utils/cookie';
 import LoadingPage from '@/components/layout/LoadingPage';
 
 const DashboardPage: React.FC = () => {
@@ -58,10 +58,15 @@ const DashboardPage: React.FC = () => {
   const router = useRouter();
   useEffect(() => {
     const token = getCookie("_auth");
-    if (!token) {
-      router.replace('/login');
-    } else {
-      setIsAuthCheck(false);
+    const timer = setTimeout(() => {
+      if (!token) {
+        router.replace('/login');
+      } else {
+        setIsAuthCheck(false);
+      }
+    }, 3000);
+    return ()=>{
+      clearTimeout(timer);
     }
   }, [router]);
 
