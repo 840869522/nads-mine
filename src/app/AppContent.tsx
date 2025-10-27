@@ -37,6 +37,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
         }, 1500)
       }
     } else {
+      setIsAuthCheck(false);
       const match = routeAndPermission.find(r => pathname === r.prefix);
       if (match) {
         if (!roleData.includes(UserRole.ADMIN))
