@@ -14,7 +14,6 @@ import MuiLink from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import { getCookie } from '@/utils/cookie';
-import LoadingPage from '@/components/layout/LoadingPage';
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -57,16 +56,9 @@ const DashboardPage: React.FC = () => {
 
   const router = useRouter();
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const token = getCookie("_auth");
-      if (!token) {
-        router.replace('/login');
-      } else {
-        setIsAuthCheck(false);
-      }
-    }, 2000);
-    return () => {
-      clearTimeout(timer);
+    const token = getCookie("_auth");
+    if (!token) {
+      router.replace('/login');
     }
   }, [router]);
 
@@ -74,9 +66,6 @@ const DashboardPage: React.FC = () => {
     features.forEach((f) => router.prefetch(f.path));
   }, [router]);
 
-  if (isCheckAuth) {
-    return <LoadingPage />
-  }
 
   return (
     <Box>
