@@ -589,11 +589,6 @@ const PermissionManagementPage: React.FC = () => {
           onConfirm={confirmDeletePermission}
         />
       )}
-
-      {/* <MuiAlert severity="info" sx={{ mt: 4 }}>
-        <Typography variant="subtitle2" gutterBottom>系统安全提示</Typography>
-        权限的密码将通过安全的哈希算法进行加密存储。所有权限操作均会记录审计日志，确保系统安全可追溯。请定期审查权限权限，遵循最小权限原则。
-      </MuiAlert> */}
     </Paper>
   );
 };
