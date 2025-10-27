@@ -56,7 +56,6 @@ const DashboardPage: React.FC = () => {
 
   const router = useRouter();
   useEffect(() => {
-    console.log("page");
     const token = getCookie("_auth");
     if (!token) {
       router.replace('/login');

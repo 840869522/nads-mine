@@ -25,17 +25,16 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const [isCheckAuth , setIsAuthCheck] = useState<boolean>(true);
 
   useEffect(() => {
-    console.log("app_context");
     const permissionsData = user?.permission || [];
     const roleData = user?.role || [];
     const token = getCookie("_auth");
     const isGuac = pathname.startsWith('/guac');
     if (!token) {
       if (pathname !== '/login' && !isGuac) {
+        router.replace('/login');
         setTimeout(() => {
           setIsAuthCheck(false);
-          router.replace('/login');
-        }, 2000)
+        }, 1500)
       }
     } else {
       const match = routeAndPermission.find(r => pathname === r.prefix);
@@ -48,10 +47,6 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       }
     }
   }, [user, pathname, router]);
-
-  if (isCheckAuth) {
-    return <LoadingPage />
-  }
 
   const aiChat = useMemo(() => {
     if (user)
@@ -71,6 +66,9 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac') && !pathname.startsWith('/visualization');
 
+  if (isCheckAuth) {
+    return <LoadingPage />
+  }
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {showSidebar && <Sidebar drawerWidth={DRAWER_WIDTH} />}
