@@ -32,12 +32,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     if (!token) {
       if (pathname !== '/login' && !isGuac) {
         router.replace('/login');
-        setTimeout(() => {
-          setIsAuthCheck(false);
-        }, 1500)
       }
     } else {
-      setIsAuthCheck(false);
       const match = routeAndPermission.find(r => pathname === r.prefix);
       if (match) {
         if (!roleData.includes(UserRole.ADMIN))
@@ -47,6 +43,9 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           }
       }
     }
+    setTimeout(() => {
+      setIsAuthCheck(false);
+    }, 1500)
   }, [user, pathname, router]);
 
   const aiChat = useMemo(() => {
