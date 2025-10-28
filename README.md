@@ -110,7 +110,7 @@ redis-cli ping
 ```shell
 # 拉取 Redis 官方镜像
 docker pull redis:latest
-# 如果不能拉去请使用国内镜像源， 如
+# 如果不能拉取请使用国内镜像源， 如
 # docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/opstree/redis:v7.0.5
 # docker tag swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/opstree/redis:v7.0.5  redis:latest
 
