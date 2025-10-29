@@ -5,7 +5,7 @@ namespace App\Http\Controllers\ad;
 use App\Http\Controllers\Controller;
 use App\Models\ad\AdConfig;
 use App\Models\ad\Team;
-use App\Models\ad\TeamUsers; // ★ 1. 导入 TeamUsers 服务类
+use App\Models\ad\TeamUsers;
 use App\Models\scenario\SceneInstance;
 use App\Models\Users\UserModel;
 use Illuminate\Http\JsonResponse;
@@ -130,14 +130,47 @@ class TeamController extends Controller
      */
     public function getDrills(Team $team): JsonResponse
     {
-        // MODIFIED: 查询逻辑被简化为直接使用模型中定义好的 'drills' 多对多关系
-        $drills = $team->drills()
+        // === MODIFIED START: 重写演练查询逻辑 ===
+
+        // 步骤 1 & 2: 查找队伍关联的所有场景实例ID
+        // 从虚拟机实例表中查找
+        $instanceIdsFromVms = DB::table('c_scene_vm_instances')
+            ->where('c_team_id', $team->c_id)
+            ->whereNotNull('c_scene_instances_id') // 确保 c_scene_instances_id 不为 null
+            ->pluck('c_scene_instances_id');
+
+        // 从容器实例表中查找
+        $instanceIdsFromContainers = DB::table('c_scene_container_instances')
+            ->where('c_team_id', $team->c_id)
+            ->whereNotNull('c_scene_instances_id') // 确保 c_scene_instances_id 不为 null
+            ->pluck('c_scene_instances_id');
+
+        // 合并并去重所有场景实例ID
+        $allInstanceIds = $instanceIdsFromVms
+            ->merge($instanceIdsFromContainers)
+            ->unique()
+            ->values();
+
+        // 如果队伍没有关联任何实例，则直接返回空数组
+        if ($allInstanceIds->isEmpty()) {
+            return response()->json([
+                'status' => 'success',
+                'data' => [],
+            ]);
+        }
+
+        // 步骤 3: 使用场景实例ID查找对应的演练配置 (c_ad_configs)
+        $drills = AdConfig::whereIn('c_scene_instance_id', $allInstanceIds)
             ->with(['sceneConfig:c_config_id,c_name']) // 继续预加载场景信息
             ->latest('c_create_at')
             ->get();
 
-        // 动态注入实时实例状态的逻辑保持不变，因为它很有用
-        $drills->transform(function($drill) {
+        // 步骤 4: 模拟 pivot 数据以满足前端期望的数据结构
+        $drills->transform(function ($drill) {
+            // 因为资源直接分配给队伍，所以角色默认为 "参赛方"
+            $drill->pivot = (object)['c_role' => '参赛方'];
+
+            // 保持原有逻辑：如果实例ID为空但有关联模板，尝试查找正在运行的实例
             if (empty($drill->c_scene_instance_id) && $drill->c_scene_config_id) {
                 $instance = SceneInstance::where('c_config_id', $drill->c_scene_config_id)
                     ->where('c_status', 'RUNNING')
@@ -157,6 +190,7 @@ class TeamController extends Controller
             'status' => 'success',
             'data' => $drills,
         ]);
+        // === MODIFIED END ===
     }
 
     /**

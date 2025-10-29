@@ -41,4 +41,10 @@ class Team extends Model
             // 也要从中间表 c_teams_users 中获取 is_banned 和 role 这两个额外字段。
             ->withPivot('is_banned', 'role');
     }
+
+    /*
+     * 如果之前尝试添加过错误的 drills() 方法，请确保它已被删除或注释掉。
+     * 例如：
+     * public function drills() { ... } // <--- 删除此方法
+     */
 }

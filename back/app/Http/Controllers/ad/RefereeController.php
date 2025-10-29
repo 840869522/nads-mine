@@ -16,7 +16,6 @@ class RefereeController extends Controller
 {
     /**
      * 获取裁判总览列表。
-     * 队伍相关的逻辑已被彻底移除。
      */
     public function index(Request $request): JsonResponse
     {
@@ -24,7 +23,7 @@ class RefereeController extends Controller
             $perPage = $request->query('per_page', 10);
             $searchQuery = $request->query('search');
 
-            // MODIFIED: Removed 'adConfig.teams' from eager loading.
+            // 预加载逻辑保持不变，访问器不能通过 with() 预加载
             $query = Referee::query()
                 ->with([
                     'user:c_username,c_name',
@@ -48,6 +47,7 @@ class RefereeController extends Controller
 
             $referees = $query->paginate($perPage);
 
+            // 使用 transform 方法重塑返回给前端的数据结构
             $referees->getCollection()->transform(function($referee) {
 
                 $adConfigData = null;
@@ -65,7 +65,7 @@ class RefereeController extends Controller
                         }
                     }
 
-                    // MODIFIED: Removed 'teams' key from the manually built data structure.
+                    // ★ 核心修改：构建 adConfig 数据时，通过访问器获取并添加 teams 数据 ★
                     $adConfigData = [
                         'c_id' => $referee->adConfig->c_id,
                         'c_drill_name' => $referee->adConfig->c_drill_name,
@@ -73,9 +73,11 @@ class RefereeController extends Controller
                         'c_scene_config_id' => $referee->adConfig->c_scene_config_id,
                         'c_scene_instance_id' => $referee->adConfig->c_scene_instance_id,
                         'sceneConfig' => $referee->adConfig->sceneConfig ? ['c_name' => $referee->adConfig->sceneConfig->c_name] : null,
+                        'teams' => $referee->adConfig->teams, // <-- 这里会触发 AdConfig 模型中 getTeamsAttribute 方法
                     ];
                 }
 
+                // 确保返回的结构与前端期望的 RefereeEntry 类型一致
                 return [
                     'c_user_id' => $referee->c_user_id,
                     'c_ad_config_id' => $referee->c_ad_config_id,
