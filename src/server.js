@@ -143,7 +143,7 @@ app.prepare().then(() => {
             console.log('[Terminal] No container ID provided. Disconnecting.');
             return;
         }
-        const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/sh'], {
+        const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/bash'], {
             name: 'xterm-color', cols: 80, rows: 24, cwd: process.env.HOME, env: process.env,
         });
         shell.onData((d) => socket.emit('output', d));
