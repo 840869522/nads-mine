@@ -583,8 +583,8 @@ class TestController extends Controller
                 'type' => 'required|max:50',
                 'description' => 'required',
                 'paper_count' => 'required|integer|max:11',
-                'start' => 'required|date|after:now|before:end',
-                'end' => 'required|date|after:now',
+                'start' => 'required|date|before:end',
+                'end' => 'required|date',
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 // 仅考试类型需要验证时长
                 'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
@@ -599,7 +599,6 @@ class TestController extends Controller
                 'paper_count.max' => "试卷数超限",
                 'start.required' => "测试开始时间不能为空",
                 'start.date_format' => "测试开始时间不格式不正确",
-                'start.after' => "测试开始时间不能小于当前日期",
                 'start.before' => "测试结束时间不能小于测试开始时间",
                 'end.required' => "测试结束时间不能为空",
                 'end.date_format' => "测试结束时间不格式不正确",
@@ -671,8 +670,8 @@ class TestController extends Controller
                 'type' => 'required|max:50',
                 'description' => 'required',
                 'paper_count' => 'required|integer|max:11',
-                'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
-                'end' => 'required|date_format:Y-m-d H:i:s|after:now',
+                'start' => 'required|date_format:Y-m-d H:i:s|before:end',
+                'end' => 'required|date_format:Y-m-d H:i:s',
                 'course_id' => 'required|exists:c_courses,c_course_id',
                 // 仅考试类型需要验证时长
                 'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
@@ -690,7 +689,6 @@ class TestController extends Controller
                 'paper_count.max' => "试卷数超限",
                 'start.required' => "测试开始时间不能为空",
                 'start.date_format' => "测试开始时间不格式不正确",
-                'start.after' => "测试开始时间不能小于当前日期",
                 'start.before' => "测试结束时间不能小于测试开始时间",
                 'end.required' => "测试结束时间不能为空",
                 'end.date_format' => "测试结束时间不格式不正确",

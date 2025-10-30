@@ -266,13 +266,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       return false;
     }
 
-          // 时间逻辑验证
-      const now = moment();
-      if (startDate.isBefore(now, 'minute')) {
-        setError('开始时间不能早于当前时间');
-        return false;
-      }
-
+    // 时间逻辑验证 - 只保留结束时间不能早于开始时间的检查
       if (endDate.isBefore(startDate, 'minute')) {
         setError('结束时间不能早于开始时间');
         return false;
@@ -849,7 +843,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
                         />
                       )}
                       inputFormat="YYYY/MM/DD HH:mm"
-                      minDate={moment().add(1, 'minute')}
                     />
                   </Box>
                   

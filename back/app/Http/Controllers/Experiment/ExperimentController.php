@@ -28,6 +28,7 @@ public function index(Request $request)
         $endDate = $request->get('endDate', '');
         $sort = $request->get('sort', 'created_at');
         $order = $request->get('order', 'desc');
+        $noPagination = $request->get('noPagination', false); // 新增：不分页参数
 
         // 构建查询
         $query = DB::table('c_course_experiments')
@@ -73,7 +74,48 @@ public function index(Request $request)
         // 获取总数
         $total = $query->count();
 
-        // 分页
+        // 如果不分页，返回所有数据
+        if ($noPagination) {
+            $experiments = $query->get()
+                ->map(function ($exp) {
+                    $resources = DB::table('c_experiment_resources')
+                        ->where('c_experiment_id', $exp->c_experiment_id)
+                        ->select(
+                            'c_resource_id',
+                            'c_resource_name',
+                            'c_resource_path',
+                            'c_type',
+                            'c_size'
+                        )
+                        ->get()
+                        ->toArray();
+                    
+                    return [
+                        'c_experiment_id' => $exp->c_experiment_id,
+                        'c_course_id' => $exp->c_course_id,
+                        'c_experiment_name' => $exp->c_experiment_name,
+                        'c_description' => $exp->c_description,
+                        'c_config_id' => $exp->c_config_id,
+                        'c_start' => $exp->c_start,
+                        'c_end' => $exp->c_end,
+                        'c_name' => $exp->c_name,
+                        'c_course_name' => $exp->c_course_name ?? '未知课程',
+                        'created_at' => $exp->created_at,
+                        'resources' => $resources,
+                    ];
+                });
+
+            return response()->json([
+                'code' => 200,
+                'message' => 'Experiments retrieved successfully.',
+                'data' => [
+                    'experiments' => $experiments,
+                    'total' => $total
+                ],
+            ], 200);
+        }
+
+        // 分页逻辑（原有逻辑保持不变）
         $offset = ($page - 1) * $pageSize;
         $experiments = $query->offset($offset)
             ->limit($pageSize)
@@ -139,13 +181,12 @@ public function index(Request $request)
             'c_description' => 'nullable|string',
             'c_config_id' => 'required|integer|exists:c_scene_configs,c_config_id',
             // 新增：时间字段验证（格式+逻辑约束）
-            'c_start' => 'required|date_format:Y-m-d H:i:s|after:now', // 开始时间需晚于当前
+            'c_start' => 'required|date_format:Y-m-d H:i:s', 
             'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start', // 结束时间需晚于开始时间
         ], [
             // 自定义错误提示（可选，增强可读性）
             'c_course_id.max' => '课程ID长度不能超过5个字符',
             'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
-            'c_start.after' => '开始时间必须晚于当前时间',
             'c_end.after' => '结束时间必须晚于开始时间'       
         ]);
         if ($validator->fails()) {
@@ -232,12 +273,11 @@ public function index(Request $request)
             'c_description' => 'nullable|string',
             'c_config_id' => 'required|integer|exists:c_scene_configs,c_config_id',
             // 新增：同store的时间字段验证
-            'c_start' => 'required|date_format:Y-m-d H:i:s|after:now',
+            'c_start' => 'required|date_format:Y-m-d H:i:s',
             'c_end' => 'required|date_format:Y-m-d H:i:s|after:c_start',
         ], [
             // 自定义错误提示
             'c_start.date_format' => '开始时间格式必须为 Y-m-d H:i:s',
-            'c_start.after' => '开始时间必须晚于当前时间',
             'c_end.after' => '结束时间必须晚于开始时间',
         ]);
         if ($validator->fails()) {
