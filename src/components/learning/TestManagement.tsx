@@ -877,10 +877,7 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
   // 打开删除用户确认弹窗
   const handleOpenDeleteConfirm = (user: TestUser, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (user.submit_time || user.correct_status === 2) {
-      showSnackbar('已交卷/已批改的用户不允许删除', 'warning');
-      return;
-    }
+    // 关键修改：移除对提交状态的检查，允许删除已交卷/已批改的用户
     setUserToDelete(user);
     setDeleteConfirmOpen(true);
   };
@@ -1196,11 +1193,6 @@ const renderConfirmDialog = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               用户将无法继续参加此测试
             </Typography>
-            {userToDelete.submit_time && (
-              <Alert severity="info">
-                该用户已提交答卷，解除关联后仍可查看历史记录
-              </Alert>
-            )}
           </Box>
         </DialogContent>
         <DialogActions>

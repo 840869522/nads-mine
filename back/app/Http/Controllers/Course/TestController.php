@@ -1129,13 +1129,6 @@ public function destroy(Request $request)
             );
         }
 
-        if ($deleteResult === -1) {
-            return $this->_response(
-                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                '删除失败：已交卷/已批改的记录不允许删除'
-            );
-        }
-
         // 4. 删除成功（返回删除的核心信息，方便前端同步更新列表）
         return $this->_response(
             GlobalResponse::$HTTP_STATUS_OK_CODE,

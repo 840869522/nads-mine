@@ -680,25 +680,25 @@ const handleCancelEnterTest = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip 
-                        title={!isInProgress ? "测试未开始或已结束，无法查看成绩" : "查看成绩"} 
-                        placement="top"
+                    <Tooltip 
+                      title="查看成绩" 
+                      placement="top"
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() => handleViewScores(test)}
+                        disabled={!isTestValid || isScoresLoading} // 关键修改：移除 !isInProgress 条件
+                        sx={{
+                          color: (!isTestValid || isScoresLoading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
+                          '&:hover': {
+                            backgroundColor: (!isTestValid || isScoresLoading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
+                          },
+                          borderRadius: 1
+                        }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewScores(test)}
-                          disabled={!isTestValid || !isInProgress || isScoresLoading} // 关键修改：只有进行中才能查看成绩
-                          sx={{
-                            color: (!isTestValid || !isInProgress || isScoresLoading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
-                            '&:hover': {
-                              backgroundColor: (!isTestValid || !isInProgress || isScoresLoading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
-                            },
-                            borderRadius: 1
-                          }}
-                        >
-                          {isScoresLoading ? <CircularProgress size={16} /> : <VisibilityIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
+                        {isScoresLoading ? <CircularProgress size={16} /> : <VisibilityIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>

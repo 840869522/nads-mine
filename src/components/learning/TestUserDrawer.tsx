@@ -817,15 +817,11 @@ const handleAddSelectedUsers = () => {
       <InfoIcon color="info" />
     </IconButton>
     
-    <IconButton 
+      <IconButton 
       edge="end" 
       onClick={(e) => onDeleteUser(user, e)}
       sx={{ color: isDarkMode ? '#f44336' : '#d32f2f' }}
-      disabled={
-        isDeleting || 
-        // 实验类型不检查交卷状态，理论测试才检查
-        (!isExperiment && (!!user.submit_time || user.correct_status === 2))
-      }
+      disabled={isDeleting} // 关键修改：移除对提交状态的检查
     >
       {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
     </IconButton>
