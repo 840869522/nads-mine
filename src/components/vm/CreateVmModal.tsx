@@ -12,6 +12,7 @@ import {
   Checkbox
 } from "@mui/material";
 import Autocomplete from '@mui/material/Autocomplete';
+import {customFetch} from "@/utils/fetch.ts";
 
 interface VmImage {
   name: string;
@@ -41,7 +42,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       setForm(f => ({ ...f, image: name }));
       setImages([]);
     } else {
-      fetch("/back/api/vms/images")
+      customFetch("/back/api/vms/images")
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -62,7 +63,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   };
 
   const handleSubmit = async () => {
-    await fetch("/back/api/vms/create", {
+    await customFetch("/back/api/vms/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form)

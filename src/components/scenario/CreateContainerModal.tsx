@@ -17,6 +17,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import {customFetch} from "@/utils/fetch.ts";
 
 const API_BASE = '/back/api';
 
@@ -47,7 +48,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
       setImage(fixedImage);
       setImages([]);
     } else if (user) {
-      fetch(`${API_BASE}/images`)
+      customFetch(`${API_BASE}/images`)
         .then(res => res.json())
         .then(data => setImages(data));
     }
@@ -87,7 +88,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
 
   const handleSubmit = async () => {
     if (!user || !image) return;
-    await fetch(`${API_BASE}/containers`, {
+    await customFetch(`${API_BASE}/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
