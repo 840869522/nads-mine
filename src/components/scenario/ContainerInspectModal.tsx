@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress, useTheme, Slide } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
+import {customFetch} from "@/utils/fetch.ts";
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement<any, any> },
@@ -25,7 +26,7 @@ const ContainerInspectModal: React.FC<ContainerInspectModalProps> = ({ open, con
   useEffect(() => {
     if (open && containerId) {
       setLoading(true);
-      fetch(`${API_BASE}/containers/${containerId}/inspect`)
+      customFetch(`${API_BASE}/containers/${containerId}/inspect`)
         .then(res => res.json())
         .then(setData)
         .finally(() => setLoading(false));
