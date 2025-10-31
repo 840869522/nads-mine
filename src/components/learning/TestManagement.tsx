@@ -5,7 +5,7 @@ import {
   IconButton, Tooltip, Pagination, Grid,
   Snackbar, Alert, CircularProgress, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  DialogContentText
+  DialogContentText,  TablePagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -118,9 +118,9 @@ const TestManagement = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [startDate, setStartDate] = useState<moment.Moment | null>(null);
   const [endDate, setEndDate] = useState<moment.Moment | null>(null);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10); // 默认10
   const [pageExperiment, setPageExperiment] = useState<number>(1);
   const [pageTheory, setPageTheory] = useState<number>(1);
-   const [rowsPerPage] = useState<number>(5);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [currentTest, setCurrentTest] = useState<TestData | null>(null);
@@ -181,6 +181,28 @@ const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
     fetchTheoryTests(1);
   }
 };
+
+  // 处理页码变化
+  const handleChangePage = (event: unknown, newPage: number) => {
+    if (activeTab === 'experiment') {
+      setPageExperiment(newPage + 1);
+    } else {
+      setPageTheory(newPage + 1);
+    }
+  };
+
+  // 处理每页行数变化
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    
+    // 重置到第一页
+    if (activeTab === 'experiment') {
+      setPageExperiment(1);
+    } else {
+      setPageTheory(1);
+    }
+  };
 
   // 获取场景配置
   const fetchSceneConfigs = async () => {
@@ -938,7 +960,7 @@ const getFilteredTests = () => {
 // 渲染测试表格
 // 修改 renderTestTable 函数
 const renderTestTable = (page: number, setPage: React.Dispatch<React.SetStateAction<number>>) => {
-  const filtered = getFilteredTests();  // 现在 tests 已经是过滤后的
+  const filtered = getFilteredTests();
   const currentPage = activeTab === 'experiment' ? pageExperiment : pageTheory;
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
@@ -1103,18 +1125,19 @@ const renderTestTable = (page: number, setPage: React.Dispatch<React.SetStateAct
         </Table>
       </TableContainer>
 
-       {/* 使用内部计算的 pageCount */}
-      {pageCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-          <Pagination
-            count={pageCount}
-            page={page}
-            onChange={(e, value) => setPage(value)}
-            shape="rounded"
-            color="primary"
-          />
-        </Box>
-      )}
+      <TablePagination
+        rowsPerPageOptions={[10, 30, 50]}
+        component="div"
+        count={filtered.length}
+        rowsPerPage={rowsPerPage}
+        page={currentPage - 1}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage="每页行数:"
+        labelDisplayedRows={({ from, to, count }) => 
+          `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`
+        }
+      />
     </Box>
   );
 };
