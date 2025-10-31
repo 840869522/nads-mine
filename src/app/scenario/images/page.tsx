@@ -58,7 +58,7 @@ const ImageManagementPage: React.FC = () => {
   const [createModalImage, setCreateModalImage] = useState<string | null>(null);
 
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumns, setShowColumns] = useState({ size: true, uploadDate: true });
   const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
@@ -343,7 +343,7 @@ const ImageManagementPage: React.FC = () => {
                   autoHeight
                   rows={filteredImages}
                   columns={columns}
-                  pageSizeOptions={[5, 10, 25]}
+                  pageSizeOptions={[5, 10,20, 25,50]}
                   paginationModel={{ pageSize: rowsPerPage, page }}
                   onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
                   columnVisibilityModel={showColumns}

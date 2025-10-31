@@ -210,7 +210,7 @@ const VmImageManagementPage: React.FC = () => {
     const theme = useTheme()
     const [search, setSearch] = useState('')
     const [page, setPage] = useState(0)
-    const [rowsPerPage, setRowsPerPage] = useState(10)
+    const [rowsPerPage, setRowsPerPage] = useState(20)
     const filteredImages = images.filter(img =>
         img.name.toLowerCase().includes(search.toLowerCase()) ||
         img.description?.toLowerCase().includes(search.toLowerCase()) ||
@@ -366,7 +366,7 @@ const VmImageManagementPage: React.FC = () => {
                     autoHeight
                     rows={filteredImages}
                     columns={columns}
-                    pageSizeOptions={[5, 10, 25]}
+                    pageSizeOptions={[5, 10,20, 25,50]}
                     paginationModel={{ pageSize: rowsPerPage, page }}
                     onPaginationModelChange={(m) => { setRowsPerPage(m.pageSize); setPage(m.page); }}
                     sx={{ '& .MuiDataGrid-columnHeaders': { bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200] } }}
