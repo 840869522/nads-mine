@@ -340,9 +340,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             </Menu>
 
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
-                <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Logs </MenuItem>
-                <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Inspect </MenuItem>
-                <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> Bind mounts </MenuItem>
+                <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看日志 </MenuItem>
+                <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看详情 </MenuItem>
+                <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 挂载点 </MenuItem>
                 <MenuItem onClick={() => {
                     const instance = instances.find(inst => inst.id === moreMenuAnchor.id);
                     if (instance) {
@@ -354,7 +354,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     }
                     setMoreMenuAnchor({ anchor: null, id: null });
                 }}>
-                    Terminal
+                    打开终端
                 </MenuItem>
             </Menu>
 

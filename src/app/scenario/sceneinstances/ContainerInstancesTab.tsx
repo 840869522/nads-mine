@@ -427,22 +427,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Logs
+                    查看日志
                 </MenuItem>
                 <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Inspect
+                    查看详情
                 </MenuItem>
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Bind mounts
+                    挂载点
                 </MenuItem>
-                <MenuItem onClick={() => {
-                    const id = moreMenuAnchor.id;
-                    setMoreMenuAnchor({ anchor: null, id: null });
-                    if (id) {
-                        void handleOpenTerminalWithAuthority(id);
-                    }
-                }}>
-                    Terminal
+                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                    打开终端
                 </MenuItem>
             </Menu>
 
