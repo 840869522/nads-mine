@@ -49,7 +49,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchText, setSearchText] = useState('');
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('runtime');
 
