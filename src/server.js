@@ -24,6 +24,7 @@ const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
 const PHP_TARGET_URL = `http://127.0.0.1:${PHP_API_PORT}`;
 const AI_CHAT_URL = `http://127.0.0.1:${AI_CHAT_PORT}`;
 
+
 let mainHttpServer;
 let guacServer;
 
@@ -47,6 +48,7 @@ app.prepare().then(() => {
         target: AI_CHAT_URL,
         changeOrigin: true,
         pathRewrite : {"^/chat/" : "/"},
+        //ws: true,
         logLevel: dev ? 'debug' : 'info',
         onProxyRes(proxyRes, req, res) {
             proxyRes.headers['Content-Type'] = 'text/event-stream';
@@ -54,12 +56,14 @@ app.prepare().then(() => {
     });
 
     // 为 Guacamole 服务创建一个新的代理
+    // 这个代理会将发往主服务器 /connect-guac 的请求转发到内部的 Guacamole 服务器
     const guacProxy = createProxyMiddleware({
         target: GUAC_TARGET_URL,
         changeOrigin: true,
         ws: true, // 这是最关键的一步: 开启 WebSocket 代理
         logLevel: dev ? 'debug' : 'info',
     });
+
 
     /* =================================================================
        2. HTTP SERVER SETUP
@@ -69,10 +73,8 @@ app.prepare().then(() => {
     mainHttpServer = createServer((req, res) => {
         const url = req.url || '';
         // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
+        // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
         if (url.startsWith('/socketio/terminal')) {
-            return ;
-        }
-        if (url.startsWith('/socketio/drone-control')) { // NEW
             return ;
         }
         if (url.startsWith('/connect-guac')) {
@@ -112,30 +114,27 @@ app.prepare().then(() => {
     guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
     guacServer.on('error', (c,e) => console.error('[Guac ERR]', e));
     guacServer.on('close', (c) =>   console.log('[Guac END]', c.connectionId));
-
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
 
-    // 现有 Socket.IO 处理终端连接
     mainHttpServer.on('connection', (socket) => {
         sockets.add(socket);
         socket.on('close', () => sockets.delete(socket));
     });
-
-    // WebSocket 升级请求处理
     mainHttpServer.on('upgrade', (req, socket, head) => {
         console.log('[upgrade] url=', req.url);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
+            console.log("find guac req！！！！！！！！！！！！！")
             guacProxy.upgrade(req, socket, head);
         } else {
+            // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
             console.log('[upgrade] non-guac ws →', req.url);
         }
     });
-
-    // 现有终端 Socket.IO
     const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
+
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
         console.log("find socketio！！！！！！！！！！！！！"+id)
@@ -153,21 +152,6 @@ app.prepare().then(() => {
         socket.on('disconnect', () => shell.kill());
     });
 
-    // NEW: 第二个 Socket.IO 服务用于无人机控制
-    const ioDrone = new Server(mainHttpServer, { path: '/socketio/drone-control' });
-    ioDrone.on('connection', (socket) => {
-        const session = typeof socket.handshake.query.session === 'string'
-            ? socket.handshake.query.session : 'default';
-        console.log('[Drone] client connected:', session);
-
-        // 示例事件：接收控制指令、状态查询等
-        socket.on('command', (cmd) => {
-            // TODO: 将 cmd 转发到你的无人机控制层
-            socket.emit('ack', { ok: true, received: cmd });
-        });
-        socket.on('ping-drone', () => socket.emit('pong-drone'));
-        socket.on('disconnect', () => console.log('[Drone] client disconnected:', session));
-    });
 
     /* =================================================================
        4. SHUTDOWN
@@ -201,6 +185,7 @@ app.prepare().then(() => {
         setTimeout(forceExit, FORCE_TIMEOUT).unref();
     });
 
+
     /* =================================================================
        5. START SERVERS
        ================================================================= */
@@ -211,7 +196,6 @@ app.prepare().then(() => {
         console.log(`> ➡️  AI proxied from /chat/`);
         console.log(`> ➡️  Guacamole proxied from /connect-guac`);
         console.log(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
-        console.log(`> ➡️  Drone control WebSocket direct at /socketio/drone-control`); // NEW
     });
 
     guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
