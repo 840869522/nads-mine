@@ -14,6 +14,7 @@ class VisualizationController extends Controller{
     private $containers;
     private $trueTargetList;
     private $falseTargetList;
+    private $instaceMap;
 
     private function getInstances(string $instance_id){
         $this->vms = SceneVmInstanceModel::where('c_scene_instances_id', $instance_id)
@@ -190,4 +191,71 @@ class VisualizationController extends Controller{
         ]);
     }
 
+    public function getAttackLog(string $instance_id){
+        $this->instaceMap ??= [];
+        $this->getInstances($instance_id);
+        $res = [];
+        foreach($this->trueTargetList as $instance){
+            $indexId = $instance_id . "_" . strtolower($instance['name']);
+            $url = "http://127.0.0.1:9200/{$indexId}/_search";
+            $data = [
+                "query" => [
+                    "bool" => [
+                        "must" => [
+                            ["term" => ["from.keyword" => "zeek"]],
+                            ["term" => ["id.orig_h.keyword" => $instance['ip']]]
+                        ]
+                    ]
+                ]
+            ];
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                CURLOPT_CONNECTTIMEOUT => 1,  // 连接超时时间（比如 5 秒）
+                CURLOPT_TIMEOUT        => 2, // 整个请求的最大执行时间（比如 10 秒）
+
+            ]);
+            $response = curl_exec($ch);
+            if (curl_errno($ch) || curl_error($ch)) {
+                Log::error('Elasticsearch 查询失败', [
+                    'error' => curl_error($ch),
+                    'index' => $indexId,
+                    'ip' => $instance['ip'],
+                    'url' => $url,
+                ]);
+                $response = null; // 避免继续处理错误响应
+                return response()->json([
+                    'code'    => 500,
+                    'message' => '失败'
+                ]);
+            }else{
+                $result = json_decode($response, true);
+                $hits = $result['hits']['hits'] ?? [];
+                $length = count($hits);
+                if ($length != 0 && isset($this->instaceMap[$indexId]) && $this->instaceMap[$indexId] < $length) {
+                    for($i = 0; $i < $this->instaceMap[$indexId] - $length; $i++){
+                        $hit = $hits[$i];
+                        $resp_h = $hit['_source']['id.resp_h'] ?? null;
+                        if($resp_h != null && $this->trueTargetList->contains('ip', $resp_h)){
+                            $res[] = [
+                                $instance['name'], $resp_h
+                            ];
+                            $this->instaceMap[] = [
+                                $indexId => $length
+                            ];
+                        }
+                    }
+                    // 键存在 且 值不等于 $length
+                }
+            }
+        }
+        return response()->json([
+            'code'    => 200,
+            'message' => '成功',
+            'data'    => $res
+        ]);
+    }
 }

@@ -41,7 +41,7 @@ function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
 }
 
 async function fetchTeamMembers(sceneId: string) {
-    const res = await fetch(`/back/api/visualization/users/${sceneId}`);
+    const res = await fetch(`/back/api/visualization/${sceneId}/users`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -53,7 +53,7 @@ async function fetchTeamMembers(sceneId: string) {
 }
 
 async function fetchTeams(sceneId: string) {
-    const res = await fetch(`/back/api/visualization/teams/${sceneId}`);
+    const res = await fetch(`/back/api/visualization/${sceneId}/teams`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -214,7 +214,7 @@ export default function FictionTeam(team:BattlefieldInfo) {
                     }
                     teams.push(item);
                 }
-                teams.sort((c: TeamInfo, d: TeamInfo) => c.teamScore - d.teamScore);
+                teams.sort((c: TeamInfo, d: TeamInfo) => d.teamScore - c.teamScore);
                 if(teams.length === 0)
                     setTeamList(blueTeamInfos);
                 else

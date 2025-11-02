@@ -413,8 +413,9 @@ Route::prefix('flag')->group(function () {
 });
 
 Route::prefix('visualization')->group(function() {
-    Route::get('vms/{instance_id}', [VisualizationController::class, 'getListVms']);
-    Route::get('users/{instance_id}', [VisualizationController::class, 'getTeamUsers']);
-    Route::get('teams/{instance_id}', [VisualizationController::class, 'getTeams']);
-    Route::get('logs/{instance_id}', [VisualizationController::class, 'getFlagLogs']);
+    Route::get('{instance_id}/vms', [VisualizationController::class, 'getListVms']);
+    Route::get('{instance_id}/users', [VisualizationController::class, 'getTeamUsers']);
+    Route::get('{instance_id}/teams', [VisualizationController::class, 'getTeams']);
+    Route::get('{instance_id}/logs', [VisualizationController::class, 'getFlagLogs']);
+    Route::get('{instance_id}/att', [VisualizationController::class, 'getAttackLog']);
 });
