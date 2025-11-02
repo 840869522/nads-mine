@@ -5,7 +5,7 @@ import {
   IconButton, Tooltip, Pagination, Grid,
   Snackbar, Alert, CircularProgress, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  DialogContentText
+  DialogContentText,  TablePagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -112,17 +112,15 @@ interface SceneConfig {
 type TestTab = 'experiment' | 'theory';
 
 const TestManagement = () => {
-  const [experimentTests, setExperimentTests] = useState<TestData[]>([]);
-  const [theoryTests, setTheoryTests] = useState<TestData[]>([]);
   const [tests, setTests] = useState<TestData[]>([]);
   const [experiments, setExperiments] = useState<ExperimentData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchText, setSearchText] = useState<string>('');
   const [startDate, setStartDate] = useState<moment.Moment | null>(null);
   const [endDate, setEndDate] = useState<moment.Moment | null>(null);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10); // 默认10
   const [pageExperiment, setPageExperiment] = useState<number>(1);
   const [pageTheory, setPageTheory] = useState<number>(1);
-   const [rowsPerPage] = useState<number>(5);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [currentTest, setCurrentTest] = useState<TestData | null>(null);
@@ -167,44 +165,58 @@ const TestManagement = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // 切换标签页
-  const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
-    setActiveTab(newValue);
-    setSearchText('');
-    setStartDate(null);
-    setEndDate(null);
-    setShowPaperManagement(false); // 切换标签时隐藏试卷管理
-    setSelectedTestId(null); // 清空选中的测试 ID
+const handleTabChange = (event: React.SyntheticEvent, newValue: TestTab) => {
+  setActiveTab(newValue);
+  setSearchText('');
+  setStartDate(null);
+  setEndDate(null);
+  setShowPaperManagement(false);
+  setSelectedTestId(null);
 
-    if (newValue === 'experiment') {
+  if (newValue === 'experiment') {
+    setPageExperiment(1);
+    fetchExperimentTests('', null, null);  // 重新加载
+  } else {
+    setPageTheory(1);
+    fetchTheoryTests(1);
+  }
+};
+
+  // 处理页码变化
+  const handleChangePage = (event: unknown, newPage: number) => {
+    if (activeTab === 'experiment') {
+      setPageExperiment(newPage + 1);
+    } else {
+      setPageTheory(newPage + 1);
+    }
+  };
+
+  // 处理每页行数变化
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    
+    // 重置到第一页
+    if (activeTab === 'experiment') {
       setPageExperiment(1);
-      fetchExperimentTests(1);
     } else {
       setPageTheory(1);
-      fetchTheoryTests(1);
     }
   };
 
   // 获取场景配置
   const fetchSceneConfigs = async () => {
     try {
-      console.log('开始获取场景配置...');
       const response = await apiClientWithToken.get('/back/api/scenarios');
-      console.log('场景配置API响应:', response);
-
       const sceneConfigsData = response.data;
-      console.log('场景配置原始数据:', sceneConfigsData);
 
       try {
         let configs = [];
         if (Array.isArray(sceneConfigsData)) {
           configs = sceneConfigsData;
-          console.log('直接使用数组数据，共', configs.length, '条');
         } else if (sceneConfigsData && Array.isArray(sceneConfigsData.data)) {
           configs = sceneConfigsData.data;
-          console.log('使用data数组数据，共', configs.length, '条');
         } else {
-          console.log('数据格式不匹配，使用空数组');
           configs = [];
         }
 
@@ -215,55 +227,40 @@ const TestManagement = () => {
             c_name: String(config.name || config.c_name)
           }));
 
-        console.log('格式化后的场景配置:', formattedConfigs);
         setSceneConfigs(formattedConfigs);
 
         if (formattedConfigs.length === 0) {
           showSnackbar('当前没有可用的场景配置', 'info');
-          console.warn('场景配置为空，请检查数据库');
         } else {
-          console.log('成功加载场景配置:', formattedConfigs.length, '条');
         }
       } catch (error: any) {
-        console.error('场景配置处理错误:', error);
         showSnackbar('获取场景配置失败: ' + (error.message || '未知错误'), 'error');
         setSceneConfigs([]);
       }
     } catch (error: any) {
-      console.error('获取场景配置失败:', error);
       showSnackbar('获取场景配置失败: ' + (error.response?.data?.message || error.message), 'error');
       setSceneConfigs([]);
     }
   };
 
-  // 在 fetchExperimentTests 函数中
-const fetchExperimentTests = async (page: number) => {
+  // 修改 fetchExperimentTests 函数
+// 修改 fetchExperimentTests：接收搜索和日期参数
+const fetchExperimentTests = async (
+  search: string = searchText,
+  start: moment.Moment | null = startDate,
+  end: moment.Moment | null = endDate
+) => {
   try {
     setLoading(true);
-    const params: any = {
-      page: page,
-      pageSize: rowsPerPage,
-      sort: 'created_at',
-      order: 'desc'
-    };
-
-    if (searchText) params.search = searchText;
-    if (startDate) params.startDate = startDate.format('YYYY-MM-DD');
-    if (endDate) params.endDate = endDate.format('YYYY-MM-DD');
-
-    console.log('请求参数:', params);
-
+    
     const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/experiments', {
-      params: params
+      params: { noPagination: true }
     });
 
     if (response.data.code === 200) {
       const experimentsData = response.data.data?.experiments || [];
-      const total = response.data.data?.total || experimentsData.length;
+      const total = experimentsData.length;
 
-      console.log('实验数据:', experimentsData, '总数:', total);
-
-      // 直接使用后端返回的数据，不要在前端进行额外处理
       const formattedExperiments = experimentsData.map((item: any) => ({
         c_id: item.c_experiment_id,
         c_name: item.c_experiment_name,
@@ -282,17 +279,27 @@ const fetchExperimentTests = async (page: number) => {
         resources: item.resources || []
       }));
 
-      // 移除前端排序，相信后端已经按正确顺序返回
-      setTests(formattedExperiments);
-      setTotalExperimentCount(total);
+      // 前端过滤
+      const filtered = formattedExperiments.filter((test: TestData) => {
+        const matchesSearch = !search || 
+          test.c_name.toLowerCase().includes(search.toLowerCase()) ||
+          test.c_description.toLowerCase().includes(search.toLowerCase()) ||
+          test.c_course_name.toLowerCase().includes(search.toLowerCase());
+
+        const matchesStart = !start || (test.c_start && moment(test.c_start).isSameOrAfter(start, 'day'));
+        const matchesEnd = !end || (test.c_end && moment(test.c_end).isSameOrBefore(end, 'day'));
+
+        return matchesSearch && matchesStart && matchesEnd;
+      });
+
+      setTests(filtered);
+      setTotalExperimentCount(filtered.length);
     } else {
-      console.error('API返回错误:', response.data);
       showSnackbar(response.data.message || '获取实验列表失败', 'error');
       setTests([]);
       setTotalExperimentCount(0);
     }
   } catch (error: any) {
-    console.error('获取实验测试列表失败详情:', error);
     showSnackbar('获取实验测试列表失败: ' + (error.response?.data?.message || error.message), 'error');
     setTests([]);
     setTotalExperimentCount(0);
@@ -301,18 +308,12 @@ const fetchExperimentTests = async (page: number) => {
   }
 };
 
-// 在 fetchTheoryTests 函数中同样修复
+// 修改 fetchTheoryTests 函数，移除分页参数
 const fetchTheoryTests = async (page: number) => {
   try {
     setLoading(true);
-    const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/test_list', {
-      params: { 
-        page, 
-        pageSize: rowsPerPage,
-        sort: 'created_at',
-        order: 'desc'
-      }
-    });
+    // 移除分页参数，获取所有数据
+    const response = await apiClientWithToken.get<ApiResponse>('/back/api/study/test/test_list');
 
     if (response.data.code === 200) {
       const responseData = response.data.data || {};
@@ -347,13 +348,12 @@ const fetchTheoryTests = async (page: number) => {
     } else {
       showSnackbar(response.data.message || '获取测试列表失败', 'error');
       setTests([]);
-      setTotalTheoryCount(0); // 关键修复：使用正确的状态
+      setTotalTheoryCount(0);
     }
   } catch (error) {
-    console.error('获取测试列表失败:', error);
     showSnackbar('获取测试列表失败', 'error');
     setTests([]);
-    setTotalTheoryCount(0); // 关键修复：使用正确的状态
+    setTotalTheoryCount(0);
   } finally {
     setLoading(false);
   }
@@ -369,7 +369,6 @@ const fetchTheoryTests = async (page: number) => {
         showSnackbar('获取用户列表失败: ' + response.data.message, 'error');
       }
     } catch (error: any) {
-      console.error('获取用户列表失败:', error);
       showSnackbar('获取用户列表失败: ' + (error.response?.data?.message || error.message), 'error');
     }
   };
@@ -402,7 +401,6 @@ const fetchTheoryTests = async (page: number) => {
         }
       }
     } catch (error: any) {
-      console.error('获取试卷列表失败:', error);
       showSnackbar('获取试卷列表失败: ' + (error.response?.data?.message || error.message), 'error');
       setPapers([]);
       return [];
@@ -450,7 +448,6 @@ const fetchTheoryTests = async (page: number) => {
         return [];
       }
     } catch (error: any) {
-      console.error('获取用户数据失败:', error);
       const errorMsg = error.response?.data?.message || error.message || '网络请求失败，请稍后重试';
       showSnackbar(`获取用户数据失败: ${errorMsg}`, 'error');
       return [];
@@ -475,7 +472,6 @@ const fetchTheoryTests = async (page: number) => {
         return false;
       }
     } catch (error: any) {
-      console.error('批量添加用户失败:', error);
       showSnackbar('批量添加用户失败: ' + (error.response?.data?.message || error.message), 'error');
       return false;
     }
@@ -510,7 +506,6 @@ const fetchTheoryTests = async (page: number) => {
         return false;
       }
     } catch (error: any) {
-      console.error('删除测试用户失败:', error);
       const errorMsg = error.response?.data?.message || error.message || '网络请求失败，请稍后重试';
       showSnackbar(`删除用户失败: ${errorMsg}`, 'error');
       return false;
@@ -536,15 +531,15 @@ const handleDeleteTest = async () => {
       setTestToDelete(null);
       // 刷新测试列表
       if (activeTab === 'experiment') {
-        await fetchExperimentTests(pageExperiment);
-      } else {
+  setPageExperiment(1);
+  fetchExperimentTests(searchText, startDate, endDate);  // 保持当前过滤条件
+} else {
         await fetchTheoryTests(pageTheory);
       }
     } else {
       showSnackbar(response.data.message || '删除失败', 'error');
     }
   } catch (error: any) {
-    console.error('删除失败:', error);
     showSnackbar('删除失败: ' + (error.response?.data?.message || error.message), 'error');
   } finally {
     setDeletingTestId(null);
@@ -563,7 +558,6 @@ const handleDeleteTest = async () => {
 
         if (response.data.code === 200) {
           const data = response.data.data;
-          console.log('fetchTestInfo - 实验原始数据:', data);
           
           const result = {
             ...data,
@@ -610,7 +604,6 @@ const handleDeleteTest = async () => {
         }
       }
     } catch (error: any) {
-      console.error('获取测试详情失败:', error);
       showSnackbar('获取测试详情失败: ' + (error.response?.data?.message || error.message), 'error');
       return null;
     }
@@ -645,22 +638,33 @@ const handleDeleteTest = async () => {
 
   // 初始化数据
 useEffect(() => {
-  fetchExperimentTests(1);
+  fetchExperimentTests('', null, null);  // 明确参数
   fetchAllUsers();
   fetchSceneConfigs();
 }, []);
 
-  // 搜索处理
 const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-  setSearchText(e.target.value);
-  setPageExperiment(1);
-  setPageTheory(1);
-  
-  // 搜索时重新获取数据
+  const val = e.target.value;
+  setSearchText(val);
   if (activeTab === 'experiment') {
-    fetchExperimentTests(1);
-  } else {
-    fetchTheoryTests(1);
+    setPageExperiment(1);
+    fetchExperimentTests(val, startDate, endDate);  // 关键：重新过滤
+  }
+};
+
+const handleStartDateChange = (newValue: moment.Moment | null) => {
+  setStartDate(newValue);
+  if (activeTab === 'experiment') {
+    setPageExperiment(1);
+    fetchExperimentTests(searchText, newValue, endDate);  // 关键
+  }
+};
+
+const handleEndDateChange = (newValue: moment.Moment | null) => {
+  setEndDate(newValue);
+  if (activeTab === 'experiment') {
+    setPageExperiment(1);
+    fetchExperimentTests(searchText, startDate, newValue);  // 关键
   }
 };
 
@@ -692,10 +696,6 @@ const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const testInfo = await fetchTestInfo(test.c_id);
     setLoading(false);
 
-    console.log('handleEditTest - 原始test对象:', test);
-    console.log('handleEditTest - fetchTestInfo返回:', testInfo);
-    console.log('handleEditTest - 将设置currentTest为:', testInfo);
-
     if (testInfo) {
       setCurrentTest(testInfo);
       setIsDialogOpen(true);
@@ -718,7 +718,6 @@ const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
       setTestUsers(users);
       setIsDrawerOpen(true);
     } catch (error) {
-      console.error("获取用户数据失败:", error);
       showSnackbar('获取用户数据失败，请检查网络连接', 'error');
     } finally {
       setLoadingUsers(false);
@@ -728,11 +727,9 @@ const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
   // 保存测试（新增或更新）
 const handleSaveTest = async (testData: TestData, files?: File[]) => {
   try {
-    console.log('保存测试数据:', testData);
 
     // 验证必填字段
     if (!testData.c_name || testData.c_name.trim() === '') {
-      console.error('测试名称缺失');
       showSnackbar('测试名称不能为空', 'error');
       return false;
     }
@@ -743,19 +740,16 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
     if (isExperiment) {
       // 实验测试的验证
       if (!testData.c_course_id) {
-        console.error('课程ID缺失');
         showSnackbar('课程ID不能为空', 'error');
         return false;
       }
       if (!testData.c_scene_config_id) {
-        console.error('实验场景配置ID缺失');
         showSnackbar('实验场景配置不能为空', 'error');
         return false;
       }
     } else {
       // 理论测试的验证
       if (!testData.c_course_id) {
-        console.error('课程ID缺失');
         showSnackbar('课程ID不能为空', 'error');
         return false;
       }
@@ -782,8 +776,6 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
         c_course_id: testData.c_course_id,
         c_config_id: testData.c_scene_config_id,
       };
-
-      console.log('发送实验请求:', { method, url, data: submitData });
 
       response = await apiClientWithToken({
         method,
@@ -812,14 +804,11 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
         submitData.id = testData.c_id;
       }
 
-      console.log('发送理论测试请求:', { url, data: submitData });
-
       response = await apiClientWithToken.post(url, submitData);
     }
 
     // 兼容 code: 200 和 201
     if (response.data.code !== 200 && response.data.code !== 201) {
-      console.error('保存测试失败:', response.data);
       showSnackbar(response.data.message || '保存测试失败', 'error');
       return false;
     }
@@ -834,7 +823,6 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
       // 获取实验ID
       const experimentId = isNew ? response.data.data?.c_experiment_id : testData.c_id;
       if (!experimentId) {
-        console.error('实验ID缺失:', response.data);
         showSnackbar('无法获取实验ID，资源上传失败', 'error');
         return false;
       }
@@ -846,11 +834,6 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
       formData.append('course_id', testData.c_course_id);
 
       try {
-        console.log('开始批量上传实验资源:', {
-          experiment_id: experimentId,
-          course_id: testData.c_course_id,
-          fileCount: files.length
-        });
 
         const uploadResponse = await apiClientWithToken.post(
           `/back/api/study/experiments/${experimentId}/resources/upload-multiple`,
@@ -860,26 +843,16 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
           }
         );
 
-        console.log('批量上传响应:', uploadResponse.data);
-
         if (uploadResponse.data.code === 200 || uploadResponse.data.code === 201) {
           message += `，资源批量上传成功，共上传 ${files.length} 个文件`;
         } else {
-          console.warn('批量上传失败:', uploadResponse.data);
           showSnackbar(`资源上传失败: ${uploadResponse.data.message || '未知错误'}`, 'warning');
         }
       } catch (error: any) {
-        console.error('批量上传实验资源失败:', error);
-        console.error('错误详情:', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message
-        });
         const errorMsg = error.response?.data?.message || error.message || '批量上传实验资源失败';
         showSnackbar(`资源上传失败: ${errorMsg}`, 'error');
       }
     } else if (isExperiment) {
-      console.log('无资源文件需要上传:', { files });
     }
 
     // 显示最终提示
@@ -890,10 +863,10 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
 
     // 使用 setTimeout 确保对话框关闭后再刷新数据
     setTimeout(() => {
-      if (isExperiment) {
-        setPageExperiment(1);
-        fetchExperimentTests(1);
-      } else {
+if (isExperiment) {
+  setPageExperiment(1);
+  fetchExperimentTests(searchText, startDate, endDate);  // 保持过滤
+} else {
         setPageTheory(1);
         fetchTheoryTests(1);
       }
@@ -901,7 +874,6 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
 
     return true;
   } catch (error: any) {
-    console.error('保存测试失败:', error);
     showSnackbar('保存测试失败: ' + (error.response?.data?.message || error.message), 'error');
     return false;
   }
@@ -934,10 +906,7 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
   // 打开删除用户确认弹窗
   const handleOpenDeleteConfirm = (user: TestUser, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (user.submit_time || user.correct_status === 2) {
-      showSnackbar('已交卷/已批改的用户不允许删除', 'warning');
-      return;
-    }
+    // 关键修改：移除对提交状态的检查，允许删除已交卷/已批改的用户
     setUserToDelete(user);
     setDeleteConfirmOpen(true);
   };
@@ -971,11 +940,12 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
     }
   };
 
-  // 过滤测试
-  const filteredTests = tests.filter(test => {
+ // 前端过滤逻辑 - 确保使用 tests 状态
+const getFilteredTests = () => {
+  return tests.filter(test => {
     const matchesSearch = test.c_name.toLowerCase().includes(searchText.toLowerCase()) ||
       test.c_description.toLowerCase().includes(searchText.toLowerCase()) ||
-      test.c_course_name.toLowerCase().includes(searchText.toLowerCase()); 
+      test.c_course_name.toLowerCase().includes(searchText.toLowerCase());
 
     const matchesStartDate = !startDate ||
       (test.c_start && moment(test.c_start).isSameOrAfter(startDate, 'day'));
@@ -985,16 +955,17 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
 
     return matchesSearch && matchesStartDate && matchesEndDate;
   });
-
-
- // 修复分页计算逻辑 - 使用专门的状态
-const pageExperimentCount = Math.ceil(totalExperimentCount / rowsPerPage);
-const pageTheoryCount = Math.ceil(totalTheoryCount / rowsPerPage);
+};
 
 // 渲染测试表格
-// 修复后的 renderTestTable 函数
-const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatch<React.SetStateAction<number>>, pageCount: number) => {
-  // 直接使用从后端获取的 tests 数据，不要在前端进行额外过滤
+// 修改 renderTestTable 函数
+const renderTestTable = (page: number, setPage: React.Dispatch<React.SetStateAction<number>>) => {
+  const filtered = getFilteredTests();
+  const currentPage = activeTab === 'experiment' ? pageExperiment : pageTheory;
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedTests = filtered.slice(startIndex, endIndex);
+  const pageCount = Math.ceil(filtered.length / rowsPerPage);
   
   if (loading) {
     return (
@@ -1004,10 +975,10 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
     );
   }
 
-  if (tests.length === 0) {
+  if (filtered.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-        没有找到匹配的测试
+        {searchText || startDate || endDate ? '没有找到匹配的测试' : '暂无测试数据'}
       </Box>
     );
   }
@@ -1036,7 +1007,7 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
             </TableRow>
           </TableHead>
           <TableBody>
-            {tests.map((test) => {
+            {paginatedTests.map((test) => {
               const status = getTestStatus(test);
               const startStr = test.c_start ? moment(test.c_start).format('YYYY-MM-DD HH:mm') : '未设置';
               const endStr = test.c_end ? moment(test.c_end).format('YYYY-MM-DD HH:mm') : '未设置';
@@ -1154,29 +1125,23 @@ const renderTestTable = (tests: TestData[], page: number, setPage: React.Dispatc
         </Table>
       </TableContainer>
 
-       {pageCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-          <Pagination
-            count={pageCount}
-            page={page}
-            onChange={(e, value) => {
-              setPage(value);
-              if (activeTab === 'experiment') {
-                fetchExperimentTests(value);
-              } else {
-                fetchTheoryTests(value);
-              }
-            }}
-            shape="rounded"
-            color="primary"
-          />
-        </Box>
-      )}
+      <TablePagination
+        rowsPerPageOptions={[10, 30, 50]}
+        component="div"
+        count={filtered.length}
+        rowsPerPage={rowsPerPage}
+        page={currentPage - 1}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage="每页行数:"
+        labelDisplayedRows={({ from, to, count }) => 
+          `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`
+        }
+      />
     </Box>
   );
 };
 
-   // 在 TestManagement.tsx 中修改 renderConfirmDialog 函数
 const renderConfirmDialog = () => {
   if (testToDelete) {
     const testToDeleteObj = tests.find(test => test.c_id === testToDelete);
@@ -1253,11 +1218,6 @@ const renderConfirmDialog = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               用户将无法继续参加此测试
             </Typography>
-            {userToDelete.submit_time && (
-              <Alert severity="info">
-                该用户已提交答卷，解除关联后仍可查看历史记录
-              </Alert>
-            )}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -1338,7 +1298,7 @@ const renderConfirmDialog = () => {
                 <DatePicker
                   label="开始日期"
                   value={startDate}
-                  onChange={(newValue) => setStartDate(newValue)}
+                  onChange={handleStartDateChange}
                   renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                   inputFormat="YYYY/MM/DD"
                 />
@@ -1349,7 +1309,7 @@ const renderConfirmDialog = () => {
                 <DatePicker
                   label="结束日期"
                   value={endDate}
-                  onChange={(newValue) => setEndDate(newValue)}
+                  onChange={handleEndDateChange}
                   renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                   inputFormat="YYYY/MM/DD"
                 />
@@ -1396,13 +1356,13 @@ const renderConfirmDialog = () => {
           
 {activeTab === 'experiment' && (
   <Box>
-    {renderTestTable(tests, pageExperiment, setPageExperiment, pageExperimentCount)}
+    {renderTestTable(pageExperiment, setPageExperiment)}
   </Box>
 )}
 
 {activeTab === 'theory' && (
   <Box>
-    {renderTestTable(tests, pageTheory, setPageTheory, pageTheoryCount)}
+    {renderTestTable(pageTheory, setPageTheory)}
   </Box>
 )}
 

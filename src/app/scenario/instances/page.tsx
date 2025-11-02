@@ -69,7 +69,7 @@ const RunningInstancesPage: React.FC = () => {
     } | null>(null);
 
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [searchTerm, setSearchTerm] = useState('');
     const [showRunningOnly, setShowRunningOnly] = useState(false);
     const [rowSelectionModel, setRowSelectionModel] = useState<{ type: 'include' | 'exclude'; ids: Set<string> }>({ type: 'include', ids: new Set() });
@@ -398,7 +398,7 @@ const RunningInstancesPage: React.FC = () => {
                         disableRowSelectionOnClick
                         rows={sortedAndFilteredInstances}
                         columns={columns}
-                        pageSizeOptions={[5, 10, 25]}
+                        pageSizeOptions={[5, 10,20, 25,50]}
                         paginationModel={{ pageSize: rowsPerPage, page }}
                         onPaginationModelChange={(m) => {
                             setRowsPerPage(m.pageSize);
@@ -418,16 +418,16 @@ const RunningInstancesPage: React.FC = () => {
             )}
             <Menu anchorEl={moreMenuAnchor.anchor} open={Boolean(moreMenuAnchor.anchor)} onClose={() => setMoreMenuAnchor({ anchor: null, id: null })}>
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Logs
+                    查看日志
                 </MenuItem>
                 <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Inspect
+                    查看详情
                 </MenuItem>
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Bind mounts
+                    挂载点
                 </MenuItem>
                 <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
-                    Terminal
+                    打开终端
                 </MenuItem>
             </Menu>
 

@@ -112,44 +112,44 @@ const ChatDialog = () => {
     const handleSend = () => {
         if (!inputValue.trim()) return;
 
-        const newMessage: Message = {
+        // 添加用户消息
+        const userMessage: Message = {
             id: Date.now().toString(),
             text: inputValue,
             role: 'user',
         };
-
-        setMessages((prev) => [...prev, newMessage]);
+        setMessages(prev => [...prev, userMessage]);
         setInputValue('');
         setIsLoading(true);
 
-        const currentMessage = { current: '' };
-        setPendingStream('');
-        if (streamUpdateTimeout.current) {
-            clearTimeout(streamUpdateTimeout.current);
-        }
-        apiClientWithToken.post("/chat/chat", JSON.stringify({ "message": newMessage.text })).then(res => {
-            setMessages((prev) => {
-                const newMessages = [...prev];
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage?.role === 'assistant') {
-                    lastMessage.text = res.data.data;
-                } else {
-                    newMessages.push({
-                        id: (Date.now() + 1).toString(),
-                        role: 'assistant',
-                        text: res.data.data,
-                    });
-                }
-                return newMessages;
-            });
+        const assistantMessageId = (Date.now() + 1).toString();
+        setMessages(prev => [...prev, {
+            id: assistantMessageId,
+            text: '',
+            role: 'assistant',
+        }]);
+        streamPostRequest(
+            "/chat/achat",
+            { "message": userMessage.text },
+            (chunk: string) => {
+                // 更新助手消息内容
+                setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMessageId
+                        ? { ...msg, text: msg.text + chunk }
+                        : msg
+                ));
+            },
+            (error: Error) => {
+                setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMessageId
+                        ? { ...msg, text: `错误：${error.message}` }
+                        : msg
+                ));
+                console.error("流式请求错误:", error);
+            }
+        ).finally(() => {
             setIsLoading(false);
-        }).catch((error) => {
-            setMessages((prev) => [
-                ...prev,
-                { id: (Date.now() + 1).toString(), role: 'assistant', text: `错误：${error.message}` },
-            ]);
-            setIsLoading(false);
-        }).finally(() => setIsLoading(false));
+        });
     };
 
     useEffect(() => {
@@ -215,58 +215,83 @@ const ChatDialog = () => {
                             }}
                         >
                             {message.role === 'assistant' ? (
-                                <Box className="markdown-content">
+                                <div className="markdown-content">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         rehypePlugins={[rehypeRaw]}
                                         components={{
-                                            think: ThinkComponent,
+                                            code({ node, inline, className, children, ...props }) {
+                                                const match = /language-(\w+)/.exec(className || '')
+                                                return !inline && match ? (
+                                                    <Box
+                                                        sx={{
+                                                            overflowX: 'auto',
+                                                            borderRadius: 1,
+                                                            bgcolor: theme.palette.mode === 'dark' ? 'grey.700' : 'grey.100',
+                                                            p: 1,
+                                                            mt: 1,
+                                                            mb: 1
+                                                        }}
+                                                    >
+                                                        <pre style={{ margin: 0 }}>
+                                                            <code className={className} {...props}>
+                                                                {children}
+                                                            </code>
+                                                        </pre>
+                                                    </Box>
+                                                ) : (
+                                                    <code className={className} {...props}>
+                                                        {children}
+                                                    </code>
+                                                )
+                                            },
+                                            // 自定义标题样式
+                                            h1: ({ children }) => (
+                                                <Typography variant="h6" component="h1" sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>
+                                                    {children}
+                                                </Typography>
+                                            ),
+                                            h2: ({ children }) => (
+                                                <Typography variant="h6" component="h2" sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>
+                                                    {children}
+                                                </Typography>
+                                            ),
+                                            h3: ({ children }) => (
+                                                <Typography variant="subtitle1" component="h3" sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>
+                                                    {children}
+                                                </Typography>
+                                            ),
+                                            // 自定义列表样式
+                                            ul: ({ children }) => (
+                                                <ul style={{ paddingLeft: '20px', margin: '10px 0' }}>
+                                                    {children}
+                                                </ul>
+                                            ),
+                                            ol: ({ children }) => (
+                                                <ol style={{ paddingLeft: '20px', margin: '10px 0' }}>
+                                                    {children}
+                                                </ol>
+                                            ),
+                                            // 自定义表格样式
                                             table: ({ children }) => (
-                                                <table className="custom-markdown-table">
+                                                <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', my: 2 }}>
                                                     {children}
-                                                </table>
-                                            ),
-                                            thead: ({ children }) => (
-                                                <thead className="custom-markdown-thead">
-                                                    {children}
-                                                </thead>
-                                            ),
-                                            tbody: ({ children }) => (
-                                                <tbody className="custom-markdown-tbody">
-                                                    {children}
-                                                </tbody>
-                                            ),
-                                            tr: ({ children }) => (
-                                                <tr className="custom-markdown-tr">
-                                                    {children}
-                                                </tr>
+                                                </Box>
                                             ),
                                             th: ({ children }) => (
-                                                <th className="custom-markdown-th" style={{
-                                                    padding: '0.6rem 1rem',
-                                                    textAlign: 'left',
-                                                    backgroundColor: '#f5f5f5',
-                                                    fontWeight: '600',
-                                                    borderBottom: '2px solid #e0e0e0'
-                                                }}>
+                                                <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left', backgroundColor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100' }}>
                                                     {children}
                                                 </th>
                                             ),
                                             td: ({ children }) => (
-                                                <td className="custom-markdown-td" style={{
-                                                    padding: '0.6rem 1rem',
-                                                    borderBottom: '1px solid #e0e0e0',
-                                                    wordBreak: 'break-word',
-                                                    whiteSpace: 'normal'
-                                                }}>
+                                                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
                                                     {children}
                                                 </td>
                                             )
                                         }}
-                                    >
-                                        {typeof message.text === 'string' ? message.text : String(message.text)}
-                                    </ReactMarkdown>
-                                </Box>
+                                        children={message.text}
+                                    />
+                                </div>
                             ) : (
                                 <Typography variant="body2" sx={{ mb: 0.5 }}>
                                     {message.text}

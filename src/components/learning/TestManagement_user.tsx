@@ -6,7 +6,7 @@ import {
   Pagination, Grid, Tooltip, Button, IconButton,
   Tabs, Tab, CircularProgress, Snackbar, Alert,
   Dialog, DialogTitle, DialogContent, DialogContentText,
-  DialogActions
+  DialogActions,TablePagination 
 } from '@mui/material';
 import { 
   Search as SearchIcon,
@@ -71,12 +71,9 @@ const apiClient = apiClientWithToken;
 // 请求拦截器 - 添加详细日志
 apiClient.interceptors.request.use(
   (config) => {
-    console.log(`[API请求] ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('[请求参数]', config.params || config.data);
     return config;
   },
   (error) => {
-    console.error('[请求错误]', error);
     return Promise.reject(error);
   }
 );
@@ -84,17 +81,9 @@ apiClient.interceptors.request.use(
 // 响应拦截器 - 添加详细日志
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`[API响应] ${response.config.url}`);
-    console.log('[响应数据]', response.data);
     return response;
   },
   (error) => {
-    console.error('[响应错误]', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message
-    });
     return Promise.reject(error);
   }
 );
@@ -204,9 +193,9 @@ const TestManagement_user = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [startDate, setStartDate] = useState<moment.Moment | null>(null);
   const [endDate, setEndDate] = useState<moment.Moment | null>(null);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10); // 默认10
   const [pagePractical, setPagePractical] = useState<number>(1);
   const [pageTheoretical, setPageTheoretical] = useState<number>(1);
-  const [rowsPerPage] = useState<number>(5);
   const [currentView, setCurrentView] = useState<'list' | 'practical' | 'theoretical' | 'scenario-management' | 'scenario-instances'>('list');
   const [currentTest, setCurrentTest] = useState<Test | null>(null);
   const [activeTab, setActiveTab] = useState<'practical' | 'theoretical'>('theoretical');
@@ -233,6 +222,28 @@ const TestManagement_user = () => {
   }>({ open: false, data: null, type: 'theory', testName: '' });
   const [scoresLoadingMap, setScoresLoadingMap] = useState<Record<string, boolean>>({});
 
+  // 处理页码变化
+  const handleChangePage = (event: unknown, newPage: number) => {
+    if (activeTab === 'practical') {
+      setPagePractical(newPage + 1);
+    } else {
+      setPageTheoretical(newPage + 1);
+    }
+  };
+
+  // 处理每页行数变化
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    
+    // 重置到第一页
+    if (activeTab === 'practical') {
+      setPagePractical(1);
+    } else {
+      setPageTheoretical(1);
+    }
+  };
+
   // 修改确认对话框状态，添加提示信息
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -244,10 +255,8 @@ const TestManagement_user = () => {
   const getAuthState = (): { isAuthenticated: boolean; username: string } => {
     try {
       const droneSimUserStr = localStorage.getItem('droneSimUser');
-      console.log('读取droneSimUser:', droneSimUserStr);
 
       if (!droneSimUserStr) {
-        console.log('认证失败：未找到droneSimUser');
         return { isAuthenticated: false, username: '' };
       }
 
@@ -256,17 +265,14 @@ const TestManagement_user = () => {
       const userUsername = userInfo?.c_username || '';
 
       if (userInfo && userUsername.trim()) {
-        console.log('认证成功：用户名=', userUsername.trim());
         return {
           isAuthenticated: true,
           username: userUsername.trim()
         };
       }
 
-      console.log('认证失败：droneSimUser结构异常或无c_username');
       return { isAuthenticated: false, username: '' };
     } catch (err) {
-      console.error('解析droneSimUser失败:', err);
       return { isAuthenticated: false, username: '' };
     }
   };
@@ -295,14 +301,14 @@ const TestManagement_user = () => {
     }
   }, [auth.isLoading]);
 
-  // 当日期筛选条件变化时重置分页
-  useEffect(() => {
-    if (activeTab === 'practical') {
-      setPagePractical(1);
-    } else {
-      setPageTheoretical(1);
-    }
-  }, [startDate, endDate, activeTab]);
+// 当日期筛选条件或每页行数变化时重置分页
+ useEffect(() => {
+  if (activeTab === 'practical') {
+    setPagePractical(1);
+  } else {
+    setPageTheoretical(1);
+  }
+}, [startDate, endDate, activeTab, rowsPerPage]); // 添加 rowsPerPage 依赖
 
   // 加载测试列表并检查考试提交状态
   const fetchTests = async (username: string) => {
@@ -310,36 +316,20 @@ const TestManagement_user = () => {
 
     try {
       setLoading(true);
-      console.log('=== 开始获取测试列表 ===');
-      console.log('当前用户名:', username);
-      console.log('理论测试API地址:', '/back/api/study/test/getUserRelatedTests');
-      console.log('实验测试API地址:', '/back/api/study/test/getUserRelatedExperiments');
 
       const [theoreticalTestsData, practicalTestsData] = await Promise.all([
         theoryTestApi.getUserTheoryTests(username),
         theoryTestApi.getUserExperimentTests(username)
       ]);
 
-      console.log('=== 后端API响应结果 ===');
-      console.log('理论测试API状态码:', theoreticalTestsData?.code);
-      console.log('理论测试API消息:', theoreticalTestsData?.message);
-      console.log('理论测试数据数量:', theoreticalTestsData?.data ? theoreticalTestsData.data.length : 0);
-      console.log('实验测试API状态码:', practicalTestsData?.code);
-      console.log('实验测试API消息:', practicalTestsData?.message);
-      console.log('实验测试数据数量:', practicalTestsData?.data ? practicalTestsData.data.length : 0);
-      console.log('理论测试原始数据:', theoreticalTestsData?.data);
-      console.log('实验测试原始数据:', practicalTestsData?.data);
-
       let formattedTheoreticalTests: Test[] = [];
       if (theoreticalTestsData?.code === 200) {
         formattedTheoreticalTests = (theoreticalTestsData.data || []).reduce((acc: Test[], test: any) => {
           if (!test.c_id || !test.c_id.trim()) {
-            console.error('过滤无效理论测试数据（缺少c_id）:', test);
             return acc;
           }
 
           const userPaperId = test.c_paper_id || test.paper_id || '';
-          console.log('理论测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
             test_id: test.c_id.trim().replace(/[{}]/g, ''),
@@ -364,12 +354,10 @@ const TestManagement_user = () => {
       if (practicalTestsData?.code === 200) {
         formattedPracticalTests = (practicalTestsData.data || []).reduce((acc: Test[], test: any) => {
           if (!test.c_id || !test.c_id.trim()) {
-            console.error('过滤无效实验测试数据（缺少c_id）:', test);
             return acc;
           }
 
           const userPaperId = test.c_paper_id || test.paper_id || '';
-          console.log('实验测试数据 - c_id:', test.c_id, 'c_paper_id:', test.c_paper_id);
 
           acc.push({
             test_id: test.c_id.trim().replace(/[{}]/g, ''),
@@ -397,7 +385,6 @@ const TestManagement_user = () => {
     // 不再调用 checkSubmissionStatus 接口
     
   } catch (err: any) {
-    console.error('加载测试列表失败:', err);
     setError(err.message || '加载测试列表失败');
   } finally {
     setLoading(false);
@@ -450,7 +437,6 @@ const TestManagement_user = () => {
     }
 
   } catch (err: any) {
-    console.error('进入测试失败:', err);
     setErrorDialog({
       open: true,
       title: '进入测试失败',
@@ -496,7 +482,6 @@ const handleCancelEnterTest = () => {
         testName: test.test_name
       });
     } catch (err: any) {
-      console.error('获取成绩失败:', err);
       setErrorDialog({
         open: true,
         title: '获取成绩失败',
@@ -548,12 +533,6 @@ const handleCancelEnterTest = () => {
     (!endDate || moment(test.test_end).isSameOrBefore(endDate, 'day'))
   );
 
-  const theoreticalPageCount = Math.ceil(filteredTheoretical.length / rowsPerPage);
-  const practicalPageCount = Math.ceil(filteredPractical.length / rowsPerPage);
-
-  const paginatedTheoretical = filteredTheoretical.slice((pageTheoretical - 1) * rowsPerPage, pageTheoretical * rowsPerPage);
-  const paginatedPractical = filteredPractical.slice((pagePractical - 1) * rowsPerPage, pagePractical * rowsPerPage);
-
   const renderDatePicker = (label: string, value: moment.Moment | null, onChange: (date: moment.Moment | null) => void) => (
     <LocalizationProvider dateAdapter={AdapterMoment}>
       <DatePicker
@@ -574,8 +553,13 @@ const handleCancelEnterTest = () => {
     </LocalizationProvider>
   );
 
-  const renderTestTable = (tests: Test[], page: number, setPage: (page: number) => void, pageCount: number, isPracticalTestTable = false) => {
-  return (
+const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
+  // 计算当前页的数据
+  const currentPage = activeTab === 'practical' ? pagePractical : pageTheoretical;
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedTests = tests.slice(startIndex, endIndex);
+    return (
     <Box>
       <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor(), boxShadow: 'none' }}>
         <Table>
@@ -607,9 +591,6 @@ const handleCancelEnterTest = () => {
                            isNotStarted ? { label: '未开始', color: 'warning' } : 
                            { label: '进行中', color: 'success' };
               const isScoresLoading = scoresLoadingMap[test.test_id] || false;
-
-              // 关键修改：定义操作区按钮的禁用条件
-              const isOperationDisabled = !isInProgress; // 只有进行中状态才能操作
 
               return (
                 <TableRow key={test.test_id} hover>
@@ -717,25 +698,25 @@ const handleCancelEnterTest = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip 
-                        title={!isInProgress ? "测试未开始或已结束，无法查看成绩" : "查看成绩"} 
-                        placement="top"
+                    <Tooltip 
+                      title="查看成绩" 
+                      placement="top"
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() => handleViewScores(test)}
+                        disabled={!isTestValid || isScoresLoading} // 关键修改：移除 !isInProgress 条件
+                        sx={{
+                          color: (!isTestValid || isScoresLoading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
+                          '&:hover': {
+                            backgroundColor: (!isTestValid || isScoresLoading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
+                          },
+                          borderRadius: 1
+                        }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewScores(test)}
-                          disabled={!isTestValid || !isInProgress || isScoresLoading} // 关键修改：只有进行中才能查看成绩
-                          sx={{
-                            color: (!isTestValid || !isInProgress || isScoresLoading) ? (isDarkMode ? '#666' : '#999') : getTextColor(),
-                            '&:hover': {
-                              backgroundColor: (!isTestValid || !isInProgress || isScoresLoading) ? 'transparent' : (isDarkMode ? '#303f9f' : '#e3f2fd')
-                            },
-                            borderRadius: 1
-                          }}
-                        >
-                          {isScoresLoading ? <CircularProgress size={16} /> : <VisibilityIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
+                        {isScoresLoading ? <CircularProgress size={16} /> : <VisibilityIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -745,24 +726,25 @@ const handleCancelEnterTest = () => {
         </Table>
       </TableContainer>
 
-      {pageCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-          <Pagination
-            count={pageCount}
-            page={page}
-            onChange={(e, value) => setPage(value)}
-            shape="rounded"
-            color="primary"
-            sx={{
-              '& .MuiPaginationItem-root': { color: getTextColor() },
-              '& .MuiPaginationItem-page.Mui-selected': {
-                backgroundColor: isDarkMode ? '#3f51b5' : '#3f51b5',
-                color: '#fff',
-              }
-            }}
-          />
-        </Box>
-      )}
+      <TablePagination
+        rowsPerPageOptions={[10, 30, 50]}
+        component="div"
+        count={tests.length}  // 这里传递总数据量
+        rowsPerPage={rowsPerPage}
+        page={currentPage - 1}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage="每页行数:"
+        labelDisplayedRows={({ from, to, count }) => 
+          `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`
+        }
+        sx={{
+          color: getTextColor(),
+          '& .MuiTablePagination-selectIcon': {
+            color: getTextColor()
+          }
+        }}
+      />
     </Box>
   );
 };
@@ -914,11 +896,11 @@ const handleCancelEnterTest = () => {
       </Box>
 
       {activeTab === 'practical' && (
-        <Box>{renderTestTable(paginatedPractical, pagePractical, setPagePractical, practicalPageCount, true)}</Box>
+        <Box>{renderTestTable(filteredPractical, pagePractical, setPagePractical, 0, true)}</Box>
       )}
 
       {activeTab === 'theoretical' && (
-        <Box>{renderTestTable(paginatedTheoretical, pageTheoretical, setPageTheoretical, theoreticalPageCount, false)}</Box>
+        <Box>{renderTestTable(filteredTheoretical, pageTheoretical, setPageTheoretical, 0, false)}</Box>
       )}
 
       {selectedExperiment && (

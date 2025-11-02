@@ -48,7 +48,7 @@ import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth"; // ★ 1. 确保 useAuth 已导入
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -64,7 +64,7 @@ interface VmInstance {
     scene_name?: string;
     uptime?: string;
     is_target: boolean;
-    can_operate: boolean | string; // 允许 can_operate 是布尔值或字符串
+    can_operate: boolean | string;
     team_id: string | null;
 }
 
@@ -162,8 +162,10 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         is_target: true,
     });
 
-    const { user } = useAuth();
+    // ★ 2. 从 useAuth hook 中获取 user 和 userTeamId ★
+    const { user, userTeamId } = useAuth();
 
+    // ... (所有操作函数 handleLifecycle, openGuacWindow, handleDelete, handleOpenLogs 保持不变)
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
@@ -246,6 +248,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
+            // ... (其他列定义保持不变)
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
             { field: 'name', headerName: '名称', flex: 1 },
             {
@@ -274,8 +277,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     const isPaused = state === 'paused';
                     const isTarget = vm.is_target;
 
-                    // ★★★ START: 最终修复版 - 引入安全的 Base64 解码 ★★★
-
+                    // ★ 3. 权限判断逻辑，与 ContainerInstancesTab.tsx 完全一致 ★
                     const safeJsonParse = (b64: string | boolean): any => {
                         if (typeof b64 !== 'string' || b64 === '') {
                             return { can_operate: !!b64, vm_stop: false, vm_restart: false, vm_shutdown: false, vm_delete: false };
@@ -295,29 +297,20 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                         const privilegedRoleStrings = ['admin', 'referee', 'administrator'];
                         const roles = currentUser.role || currentUser.user?.roles;
                         if (Array.isArray(roles)) {
-                            return roles.some(role => privilegedRoleStrings.includes(role));
+                            return roles.some(role => privilegedRoleStrings.includes(role.c_name || role));
                         }
                         return false;
                     };
 
-                    const getUserTeamId = (currentUser: any): string | null => {
-                        if (!currentUser) return null;
-                        return currentUser.team_id || currentUser.user?.team_id || null;
-                    };
-
-                    const isAdminOrReferee = isPrivilegedUser(user);
-                    const userTeamId = getUserTeamId(user);
-
-                    const isTeamMember = !!(userTeamId && vm.team_id && String(userTeamId) === String(vm.team_id));
-
-                    const hasVncPermission = isAdminOrReferee || isTeamMember;
-
                     const canOperateGeneral = safeJsonParse(vm.can_operate);
-
-                    // ★★★ END: 最终修复版 ★★★
+                    const isAdminOrReferee = isPrivilegedUser(user);
+                    const isOwnTeamTarget = !!(userTeamId && vm.team_id && String(userTeamId) === String(vm.team_id));
+                    const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
+                    const hasVncPermission = isAdminOrReferee || isOwnTeamTarget;
 
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            {/* ... (其他操作按钮保持不变) ... */}
                             {isRunning ? (
                                 <>
                                     <Tooltip title={canOperateGeneral?.vm_stop ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperateGeneral?.vm_stop}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
@@ -331,8 +324,25 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
                             {isTarget && (
                                 <>
-                                    <Tooltip title="提交Flag"><Box component="span"><IconButton onClick={() => setFlagSubmissionModalId(vm.id)} size="small" disabled={!isRunning || actionLoading}><FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} /></IconButton></Box></Tooltip>
-                                    <Tooltip title="Flag历史记录"><Box component="span"><IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small" disabled={actionLoading}><HistoryIcon fontSize="small" color="info" /></IconButton></Box></Tooltip>
+                                    {/* ★ 4. 修改 Flag 按钮的 disabled 逻辑和 Tooltip 提示 ★ */}
+                                    <Tooltip title={canSubmitFlag ? "提交Flag" : "不能对本队靶机提交Flag"}>
+                                        <Box component="span">
+                                            <IconButton
+                                                onClick={() => setFlagSubmissionModalId(vm.id)}
+                                                size="small"
+                                                disabled={!isRunning || actionLoading || !canSubmitFlag}
+                                            >
+                                                <FlagIcon fontSize="small" color={isRunning && canSubmitFlag ? 'primary' : 'disabled'} />
+                                            </IconButton>
+                                        </Box>
+                                    </Tooltip>
+                                    <Tooltip title="Flag历史记录">
+                                        <Box component="span">
+                                            <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small" disabled={actionLoading}>
+                                                <HistoryIcon fontSize="small" color="info" />
+                                            </IconButton>
+                                        </Box>
+                                    </Tooltip>
                                 </>
                             )}
 
@@ -358,7 +368,8 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 },
             },
         ],
-        [actionLoading, showColumns, handleOpenLogs, user]
+        // ★ 5. 将 user 和 userTeamId 添加到依赖数组中 ★
+        [actionLoading, showColumns, handleOpenLogs, user, userTeamId]
     );
 
     const filteredRows = React.useMemo(() => {
@@ -373,6 +384,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     return (
         <Box>
+            {/* ... (所有 JSX 保持不变) ... */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
                 <Typography variant="h6">虚拟机列表</Typography>
                 <TextField variant="outlined" placeholder="搜索虚拟机..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ width: { xs: "100%", sm: 260 } }} />

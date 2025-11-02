@@ -122,7 +122,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         showSnackbar('用户未登录，请重新登录', 'error');
       }
     } catch (err) {
-      console.error('解析用户信息失败:', err);
       setError('用户信息解析失败，请重新登录');
       setErrorDetails({ message: '用户信息解析失败，请重新登录' });
       showSnackbar('用户信息解析失败，请重新登录', 'error');
@@ -132,7 +131,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   useEffect(() => {
     if (view !== 'intro') return;
     if (!currentUsername) {
-      console.log('等待用户名加载...');
       return;
     }
     if (!test.c_paper_id || !test.c_paper_id.trim()) {
@@ -148,19 +146,12 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         setError(null);
         setErrorDetails(null);
 
-        console.log('获取试卷参数:', { 
-          testId: test.test_id, 
-          username: currentUsername,
-          testType: test.c_type,
-          paperId: test.c_paper_id
-        });
 
         const res: ApiResponse = await theoryTestApi.getExamPaper(
           test.test_id,
           currentUsername,
           test.c_type
         );
-        console.log('获取试卷响应:', JSON.stringify(res, null, 2));
 
         if (!res || typeof res !== 'object' || res.code === undefined) {
           throw new Error('无效的响应格式');
@@ -200,11 +191,9 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
 
         formattedPaper.questions.forEach((question, index) => {
           if (!question.id || !question.type || !question.content || !question.score) {
-            console.warn(`题目 ${index + 1} 格式错误:`, question);
             throw new Error(`试卷题目 ${question.id || index + 1} 格式错误`);
           }
           if ((question.type === 'single' || question.type === 'multiple') && (!question.options || question.options.length === 0)) {
-            console.warn(`题目 ${question.id} 缺少选项:`, question);
             throw new Error(`题目 ${question.id} 缺少选项`);
           }
         });
@@ -213,7 +202,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         showSnackbar('试卷加载成功', 'success');
       } catch (err: any) {
         const errorMsg = err.response?.data?.message || err.message || '网络异常，无法获取试卷';
-        console.error('获取试卷失败:', JSON.stringify(err.response?.data || err, null, 2));
         setError(errorMsg);
         setErrorDetails({ 
           code: err.code || err.response?.data?.code || '未知',
@@ -232,10 +220,8 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   useEffect(() => {
     if (!paperData || view !== 'intro' || submitted) return;
 
-    console.log('paperData 已加载，进行时间检查:', { paperId: paperData.paperId });
      // 练习模式不进行时间检查
     if (test.c_type === '练习') {
-      console.log('练习模式，跳过时间限制');
       return;
     }
 
@@ -246,8 +232,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
       const start = parseInt(savedStartTime, 10);
       const elapsed = Math.floor((Date.now() - start) / 1000);
       const remaining = totalDuration - elapsed;
-
-      console.log('恢复时间:', { elapsed, remaining });
 
       if (remaining <= 0) {
         setTimeLeft(0);
@@ -300,7 +284,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         setAnswers(JSON.parse(savedAnswers));
         showSnackbar('已恢复上次保存的答题进度', 'success');
       } catch (e) {
-        console.error('解析保存的答案失败:', e);
       }
     }
   }, [test.test_id]);
@@ -333,15 +316,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         throw new Error('试卷已提交，无法重复提交');
       }
 
-      console.log('准备提交试卷:', {
-        test_id: test.test_id,
-        username: currentUsername,
-        paper_id: paperData.paperId,
-        questions: paperData.questions.length,
-        answers: Object.keys(answers).length,
-        test_type: test.c_type
-      });
-
       const answerGroups: Array<{
         type: number;
         data: Array<{ question_id: string; answer: string }>;
@@ -354,17 +328,14 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         const userAnswer = answers[question.id];
         
         if (!userAnswer) {
-          console.warn(`题目 ${question.id} 没有答案，跳过`);
           return;
         }
 
         if (!paperData.questions.some(q => q.id === question.id)) {
-          console.warn(`题目 ${question.id} 不存在于试卷中，跳过`);
           return;
         }
 
         if (question.id === '1') {
-          console.warn(`题目 ${question.id} 可能无效，跳过`);
           return;
         }
 
@@ -375,7 +346,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                 .map(id => {
                   const option = question.options?.find(opt => opt.optionId === id);
                   if (!option) {
-                    console.warn(`题目 ${question.id} 的选项 ${id} 不存在`);
                     return null;
                   }
                   return option.content;
@@ -386,7 +356,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         } else if (question.type === 'single') {
           const option = question.options?.find(opt => opt.optionId === userAnswer);
           if (!option) {
-            console.warn(`题目 ${question.id} 的选项 ${userAnswer} 不存在`);
             return;
           }
           formattedAnswer = option.content;
@@ -395,16 +364,8 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         }
 
         if (!formattedAnswer) {
-          console.warn(`题目 ${question.id} 的答案格式化失败，跳过`);
           return;
         }
-
-        console.log(`处理题目 ${question.id}:`, {
-          type: question.type,
-          backendType,
-          userAnswer,
-          formattedAnswer
-        });
 
         typeMap[backendType].push({
           question_id: question.id,
@@ -466,7 +427,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   } catch (err: any) {
     const errorMsg = err.response?.data?.message || err.message || '网络异常，交卷失败';
     const errorCode = err.response?.data?.code || err.code || '未知';
-    console.error('提交试卷失败:', JSON.stringify(err.response?.data || err, null, 2));
     setError(errorMsg);
     setErrorDetails({ 
       code: errorCode, 

@@ -116,65 +116,66 @@ const QuestionPage: React.FC = () => {
   }
 
   const getQuestionDataByName = (page: number, pagesize: number, searchName: string) => {
-    setTableLoading(true);
-    apiClientWithToken.post(`/back/api/study/test/question_list`, JSON.stringify({
-      page: page,
-      pageSize: pagesize
-    })).then(res => {
-      if (res.data.code === 200) {
-        setQuestions(res.data.data.data);
-        setQuestionsCount(res.data.data.count);
-      } else {
-        setQuestions([]);
-        setQuestionsCount(0);
-      }
-    }).finally(() => {
-      setTimeout(() => {
-        setTableLoading(false);
-      }, 300);
-    })
-  }
+  setTableLoading(true);
+  apiClientWithToken.post(`/back/api/study/test/question_search`, JSON.stringify({
+    page: page,
+    pagesize: pagesize,
+    name: searchName
+  })).then(res => {
+    if (res.data.code === 200) {
+      setQuestions(res.data.data.data);
+      setQuestionsCount(res.data.data.count);
+    } else {
+      setQuestions([]);
+      setQuestionsCount(0);
+    }
+  }).finally(() => {
+    setTimeout(() => {
+      setTableLoading(false);
+    }, 300);
+  })
+}
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm({ data: event.target.value.toLowerCase(), flag: true });
     setPage(1);
   };
 
-  const handleSearchSubmit = async () => {
-    setTableLoading(true);
-    try {
-      const res = await apiClientWithToken.post(`/back/api/support/permission/search`, JSON.stringify({
-        page: 1,
-        pagesize: rowsPerPage,
-        name: searchTerm.data || ""
-      }));
-      if (res.data.code === 200) {
-        setQuestions(res.data.data.data);
-        setQuestionsCount(res.data.data.count);
-        setPage(1);
-      } else {
-        setQuestions([]);
-        toast.error(`搜索权限时发生错误 - ${res.data.message}`, {
-          autoClose: 3000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          position: "top-right"
-        });
-        setQuestionsCount(0);
-      }
-    } catch (error) {
-      toast.error(`搜索权限时发生错误 - ${error.message}`, {
+ const handleSearchSubmit = async () => {
+  setTableLoading(true);
+  try {
+    const res = await apiClientWithToken.post(`/back/api/study/test/question_search`, JSON.stringify({
+      page: page,
+      pagesize: rowsPerPage,
+      name: searchTerm.data || ""
+    }));
+    if (res.data.code === 200) {
+      setQuestions(res.data.data.data);
+      setQuestionsCount(res.data.data.count);
+      setPage(1);
+    } else {
+      setQuestions([]);
+      toast.error(`搜索题目时发生错误 - ${res.data.message}`, {
         autoClose: 3000,
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
         position: "top-right"
       });
-    } finally {
-      setTableLoading(false);
+      setQuestionsCount(0);
     }
-  };
+  } catch (error) {
+    toast.error(`搜索题目时发生错误 - ${error.message}`, {
+      autoClose: 3000,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      position: "top-right"
+    });
+  } finally {
+    setTableLoading(false);
+  }
+};
 
   const handleAddQuestionClick = () => {
     setIsQuestionModalOpen(true);

@@ -43,7 +43,7 @@ import {
 } from "@mui/icons-material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import useSWR, { mutate as globalMutate } from "swr";
-import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
+import FlagSubmissionModal from '@/components/learning/FlagSubmissionModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
 

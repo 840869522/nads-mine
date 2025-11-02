@@ -230,11 +230,9 @@ const TestUserDrawer: React.FC<TestUserDrawerProps> = ({
           setScoreData(response.data.data);
         } else {
           setScoreData(null);
-          console.error('获取成绩失败:', response.data.message);
         }
       } catch (error: any) {
         setScoreData(null);
-        console.error('获取成绩失败:', error);
       } finally {
         setLoadingScores(false);
       }
@@ -819,15 +817,11 @@ const handleAddSelectedUsers = () => {
       <InfoIcon color="info" />
     </IconButton>
     
-    <IconButton 
+      <IconButton 
       edge="end" 
       onClick={(e) => onDeleteUser(user, e)}
       sx={{ color: isDarkMode ? '#f44336' : '#d32f2f' }}
-      disabled={
-        isDeleting || 
-        // 实验类型不检查交卷状态，理论测试才检查
-        (!isExperiment && (!!user.submit_time || user.correct_status === 2))
-      }
+      disabled={isDeleting} // 关键修改：移除对提交状态的检查
     >
       {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
     </IconButton>

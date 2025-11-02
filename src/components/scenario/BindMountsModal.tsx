@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress, Table, TableHead, TableRow, TableCell, TableBody, Slide, useTheme } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
+import {customFetch} from "@/utils/fetch.ts";
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement<any, any> },
@@ -23,7 +24,7 @@ const BindMountsModal: React.FC<BindMountsModalProps> = ({ open, containerId, on
     useEffect(() => {
         if (open && containerId) {
             setLoading(true);
-            fetch(`/api/containers/${containerId}?action=binds`)
+            customFetch(`/api/containers/${containerId}?action=binds`)
                 .then(res => res.json())
                 .then(setMounts)
                 .finally(() => setLoading(false));

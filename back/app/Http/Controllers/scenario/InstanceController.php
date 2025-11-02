@@ -21,6 +21,9 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Utils\JWTControll;      // ★ 1. 确保导入 JWTControll
 use Illuminate\Support\Facades\Cache;  // ★ 1. 确保导入 Cache
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use App\Models\ad\Team;
+use App\Models\ad\AdConfig;
 
 
 class InstanceController extends Controller
@@ -948,6 +951,153 @@ class InstanceController extends Controller
             }
         }
         unset($connection);
+    }
+
+/**
+     * 获取指定场景实例下的所有可分配节点（容器和虚拟机）。
+     *
+     * @param  \App\Models\scenario\SceneInstance  $instance
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getNodesForAssignment(SceneInstance $instance): JsonResponse
+    {
+        try {
+            // --- 步骤 1: 获取系统中所有的队伍（用于下拉菜单） ---
+            $allTeams = Team::all(['c_id', 'c_name']);
+
+            // --- 步骤 2: 从节点实例表中直接获取所有唯一的 team_id ---
+            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                ->distinct()
+                ->pluck('c_team_id');
+
+            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                ->distinct()
+                ->pluck('c_team_id');
+
+            $currentTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values();
+
+            // --- 步骤 3: 根据找到的 team_id，获取这些队伍及其成员的详细信息 ---
+            $currentTeamsWithMembers = collect([]);
+            if ($currentTeamIds->isNotEmpty()) {
+                $currentTeamsWithMembers = Team::whereIn('c_id', $currentTeamIds)
+                    ->with(['users:c_username,c_name'])
+                    ->get()
+                    ->keyBy('c_id');
+            }
+
+            // --- 步骤 4: 获取所有节点（容器和虚拟机） ---
+            $containers = $instance->containers()->get(['c_container_id', 'c_container_name', 'c_team_id']);
+            $vms = $instance->vms()->get(['c_vm_id', 'c_vm_name', 'c_team_id']);
+
+            // --- 步骤 5: 组合节点数据 ---
+            $nodes = [];
+            $nodeSources = $containers->concat($vms);
+
+            foreach ($nodeSources as $nodeSource) {
+                $isContainer = $nodeSource instanceof \App\Models\scenario\SceneContainerInstance;
+                $teamId = $nodeSource->c_team_id ? (int)$nodeSource->c_team_id : null;
+                $teamData = $teamId ? $currentTeamsWithMembers->get($teamId) : null;
+
+                $nodes[] = [
+                    'id'      => $isContainer ? $nodeSource->c_container_id : $nodeSource->c_vm_id,
+                    'name'    => $isContainer ? $nodeSource->c_container_name : $nodeSource->c_vm_name,
+                    'type'    => $isContainer ? 'container' : 'vm',
+                    'team_id' => $teamId,
+                    'team'    => $teamData ? [
+                        'c_id'   => $teamData->c_id,
+                        'c_name' => $teamData->c_name,
+                        'users'  => $teamData->users->map(function ($user) {
+                            return [
+                                'c_username' => $user->c_username,
+                                'c_name'     => $user->c_name,
+                                'is_banned'  => (bool) $user->pivot->is_banned,
+                            ];
+                        })
+                    ] : null,
+                ];
+            }
+
+            // --- 步骤 6: 返回最终的复合响应 ---
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'nodes' => collect($nodes)->sortBy('name')->values(),
+                    'all_teams' => $allTeams,
+                    'current_teams' => $currentTeamsWithMembers->values()->map(function($team) {
+                        return [
+                            'c_id'   => $team->c_id,
+                            'c_name' => $team->c_name,
+                            'users'  => $team->users->map(function ($user) {
+                                return [
+                                    'c_username' => $user->c_username,
+                                    'c_name'     => $user->c_name,
+                                    'is_banned'  => (bool) $user->pivot->is_banned,
+                                ];
+                            })
+                        ];
+                    })
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("获取实例节点及成员列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
+        }
+    }
+
+    /**
+     * 批量更新指定场景实例下节点的队伍归属。
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\scenario\SceneInstance  $instance
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateNodeAssignments(Request $request, SceneInstance $instance): JsonResponse
+    {
+        // 1. 验证输入数据
+        $validator = Validator::make($request->all(), [
+            'assignments'          => 'required|array',
+            'assignments.*.type'   => 'required|string|in:container,vm',
+            'assignments.*.id'     => 'required', // ID 可以是字符串或整数
+            'assignments.*.team_id'=> ['nullable', 'integer', 'exists:' . (new Team)->getTable() . ',c_id'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => '数据验证失败', 'errors' => $validator->errors()], 422);
+        }
+
+        $assignments = $request->input('assignments');
+
+        // 2. 使用数据库事务执行更新
+        DB::beginTransaction();
+        try {
+            foreach ($assignments as $assignment) {
+                $type   = $assignment['type'];
+                $id     = $assignment['id'];
+                $teamId = $assignment['team_id']; // 可以是 null
+
+                if ($type === 'container') {
+                    // 更新容器表，并确保该容器属于当前实例
+                    SceneContainerInstance::where('c_container_id', $id)
+                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                        ->update(['c_team_id' => $teamId]);
+                } elseif ($type === 'vm') {
+                    // 更新虚拟机表，并确保该虚拟机属于当前实例
+                    SceneVmInstance::where('c_vm_id', $id)
+                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                        ->update(['c_team_id' => $teamId]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json(['status' => 'success', 'message' => '节点队伍分配已成功更新。']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("更新节点队伍分配失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage());
+            return response()->json(['message' => '更新分配时发生服务器错误。'], 500);
+        }
     }
 
     /**

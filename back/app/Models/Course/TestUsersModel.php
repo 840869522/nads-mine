@@ -87,12 +87,11 @@ class TestUsersModel extends Model{
     }
 
 
-        /**
+            /**
      * 单个删除测试用户（根据测试ID+用户名+试卷ID联合删除）
      * @param array $params 包含c_test_id、c_username、c_paper_id的数组
-     * @return int|bool 成功返回1，记录不存在返回false，业务限制返回-1
+     * @return int|bool 成功返回1，记录不存在返回false
      */
-    // 添加static关键字，将方法声明为静态方法
     public static function deleteSingleUser(array $params)
     {
         // 1. 提取参数（确保参数完整性，与控制器验证一致）
@@ -112,11 +111,8 @@ class TestUsersModel extends Model{
             return false;
         }
 
-        // 4. 业务限制：已交卷/已批改的记录不允许删除
-        // c_submit不为null表示已交卷，c_correct=2表示已完成批改
-        if (!empty($existingRecord->c_submit) || $existingRecord->c_correct === 2) {
-            return -1; // 返回-1标识业务限制
-        }
+        // 4. 关键修改：移除对已交卷/已批改记录的业务限制
+        // 现在允许删除任何状态的记录，包括已交卷和已批改的记录
 
         // 5. 执行删除操作（联合条件删除，确保只删除目标记录）
         $deleteCount = DB::table('c_test_users')
@@ -219,18 +215,10 @@ class TestUsersModel extends Model{
             ->where($this->table . '.c_paper_id', '=', 'experiment_default')
             ->where($this->table . '.c_username', $username)
             ->select(
-                $this->table . '.c_paper_id',
-                $this->table . '.c_answers',
-                $this->table . '.c_submit',
-                $this->table . '.c_score',
-                $this->table . '.c_objective_score',
-                $this->table . '.c_test_id as test_id',
                 'c_course_experiments.c_experiment_name as c_name',
                 'c_course_experiments.c_experiment_id as c_id',
                 // 移除不存在的c_type字段引用
                 // 为保持数据结构一致，设置默认值
-                db::raw("'练习' as c_type"),
-                db::raw("'实验' as c_test_type"),
                 'c_course_experiments.c_start as test_start',
                 'c_course_experiments.c_end as test_end',
                 'c_course_experiments.c_description as c_description',

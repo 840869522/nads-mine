@@ -24,6 +24,7 @@ use App\Http\Controllers\Course\CategoryController;
 use App\Http\Controllers\Course\ResourceController;
 use App\Http\Controllers\Vm\VmController;
 use App\Http\Controllers\Course\TestController;
+use App\Http\Controllers\Course\FlagSubmissioneController;
 use App\Http\Controllers\Experiment\ExperimentController;
 use App\Http\Controllers\Experiment\ExperimentResourceController;
 use App\Http\Controllers\Course\CoursePermissionController;
@@ -79,6 +80,7 @@ Route::prefix("support")->group(function () {
         Route::post("/update_common", [UserController::class, "updateCommonUser"]);
         Route::post("/2excel", [UserController::class, "convert2Excel"]);
         Route::post("batch_add", [UserController::class , "batchImportUsers"]);
+        Route::post("/logout", [UserController::class, "logout"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -210,6 +212,8 @@ Route::prefix('scenariosinstances')->group(function () {
     Route::get('/{instance}/details', [InstanceController::class, 'getDetails'])->name('instances.details');
     // 新增：更新场景实例的 c_scene_config JSON
     Route::put('/{instance:c_scene_instances_id}/scene-config', [InstanceController::class, 'updateSceneConfig']);
+    Route::get('/{instance}/nodes', [InstanceController::class, 'getNodesForAssignment']);
+    Route::put('/{instance}/node-assignments', [InstanceController::class, 'updateNodeAssignments']);
 });
 
 Route::prefix('images')->group(function () {
@@ -268,6 +272,7 @@ Route::prefix('vms')->group(function () {
 Route::prefix('study')->group(function () {
     Route::prefix('test')->group(function(){
         Route::post('/question_add', [TestController::class, 'question_add']);
+        Route::post('/question_search', [TestController::class, 'question_search']);
         Route::post('/question_up', [TestController::class, 'question_up']);
         Route::post('/question_del', [TestController::class, 'question_del']);
         Route::post('/question_list', [TestController::class, 'question_list']);
@@ -315,6 +320,7 @@ Route::prefix('study')->group(function () {
         Route::get('index', [TestController::class, 'index']);
           // 启动场景
         Route::post('startDrill/{scenario}', [TestController::class, 'startDrill']);
+        Route::post('submitFlag', [FlagSubmissioneController::class, 'submitFlag'])->middleware('throttle:60,1');
     });
 });
 
@@ -347,7 +353,7 @@ Route::put('/ad-configs/{adConfig}', [AdConfigController::class, 'update']);
 // 删除一个演练配置 (将 {adconfig} -> {adConfig})
 Route::delete('/ad-configs/{adConfig}', [AdConfigController::class, 'destroy']);
 
-
+Route::get('/ad-configs/{adConfig}/teams-with-members', [AdConfigController::class, 'getTeamsWithMembers']);
 /**
  * 演练配置的自定义操作
  */

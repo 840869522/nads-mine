@@ -101,7 +101,6 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
           setError('获取课程列表失败');
         }
       } catch (error) {
-        console.error('获取课程列表失败:', error);
         setCourses([]); // 错误时设置为空数组
         setError('获取课程列表失败');
       }
@@ -267,13 +266,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       return false;
     }
 
-          // 时间逻辑验证
-      const now = moment();
-      if (startDate.isBefore(now, 'minute')) {
-        setError('开始时间不能早于当前时间');
-        return false;
-      }
-
+    // 时间逻辑验证 - 只保留结束时间不能早于开始时间的检查
       if (endDate.isBefore(startDate, 'minute')) {
         setError('结束时间不能早于开始时间');
         return false;
@@ -325,19 +318,12 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       // 准备提交数据 - 此时c_start和c_end已经是正确格式的字符串
       const submitData: TestData = { ...formData };
       
-      console.log('TestFormDialog - test对象:', test);
-      console.log('TestFormDialog - formData.c_id:', formData.c_id);
-      console.log('TestFormDialog - 是否删除c_id:', !test);
       
       // 如果是新增测试，移除c_id字段
       if (!test) {
         delete submitData.c_id;
-        console.log('TestFormDialog - 已删除c_id字段，新增模式');
-      } else {
-        console.log('TestFormDialog - 保留c_id字段，编辑模式');
-      }
+      };
       
-      console.log('TestFormDialog - 最终submitData:', submitData);
 
       // 提取文件对象
       const files = uploadedFiles.map(file => file.file);
@@ -349,7 +335,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
         setError('更新测试失败：服务器返回未知错误');
       }
     } catch (err) {
-      console.error('提交表单时出错:', err);
+
       setError(`更新测试失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSubmitting(false);
@@ -358,7 +344,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
 
   // 初始化表单数据
   useEffect(() => {
-    console.log('TestFormDialog - useEffect触发，open:', open, 'test:', test);
     
     if (open && test) {
       // 初始化日期 - 确保转换为Moment对象
@@ -384,7 +369,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       };
       
       setFormData(initialFormData);
-      console.log('TestFormDialog - 编辑模式，test.c_id:', test.c_id, 'formData.c_id:', initialFormData.c_id);
       
       // 如果有测试ID，获取已上传的文件
       if (test.c_id) {
@@ -392,7 +376,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       }
     } else if (open) {
       // 新增测试时的初始化
-      console.log('TestFormDialog - 新增模式');
       setStartDate(null);
       setEndDate(null);
       setUploadedFiles([]);
@@ -428,7 +411,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
         setUploadedFiles(files);
       }
     } catch (error) {
-      console.error('获取已上传文件失败:', error);
     }
   };
 
@@ -861,7 +843,6 @@ const handleEndDateChange = (date: moment.Moment | null) => {
                         />
                       )}
                       inputFormat="YYYY/MM/DD HH:mm"
-                      minDate={moment().add(1, 'minute')}
                     />
                   </Box>
                   

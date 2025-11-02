@@ -29,10 +29,10 @@ sudo apt install php8.3 php8.3-mysql php8.3-xml php8.3-fpm php8.3-common php8.3-
 #### 1.1.2下载composer(php 依赖管理工具)
 
 ```shell
-wget http://https://getcomposer.org/download/2.8.11/composer.phar
+wget http://getcomposer.org/download/2.8.11/composer.phar
 ```
 
-### 1.2 Node 和Npm安装
+### 1.2 Node 和Npm安装（两种安装任选其一）
 
 #### 1.2.1 apt 安装
 
@@ -57,7 +57,7 @@ npm -v
 #输出 X.x.x
 ```
 
-#### 1.2.2 二进制安装（可选）
+#### 1.2.2 二进制安装
 
 访问[node官网](https://nodejs.org/zh-cn/download)，下载对应的版本，如： Linux x64复制下载连接，例如：https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz
 
@@ -85,7 +85,48 @@ npm -v
 10.9.3 # 预计输出，正确输出则正确安装
 ```
 
-### 1.3 启动所需要的资源
+### 1.3 Redis 安装
+#### 1.3.1 APT 安装
+```shell
+# 更新包管理器
+sudo apt update
+
+# 安装 Redis 服务器
+sudo apt install redis-server
+
+# 启动 Redis 服务
+sudo systemctl start redis
+
+# 设置 Redis 开机自启
+sudo systemctl enable redis
+
+# 验证 Redis 是否正常运行
+redis-cli ping
+# 预期输出: PONG
+
+```
+#### 1.3.2 dcoker部署
+
+```shell
+# 拉取 Redis 官方镜像
+docker pull redis:latest
+# 如果不能拉取请使用国内镜像源， 如
+# docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/opstree/redis:v7.0.5
+# docker tag swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/opstree/redis:v7.0.5  redis:latest
+
+
+# 运行 Redis 容器
+docker run -d --name redis-server -p 6379:6379 redis:latest
+
+# 或者使用持久化存储运行 Redis
+docker run -d --name redis-server -p 6379:6379 -v /home/ubuntu/redis/data:/data redis:latest redis-server --appendonly yes
+
+# 验证 Redis 容器是否正常运行
+docker exec -it redis-server redis-cli ping
+# 预期输出: PONG
+```
+
+### 1.4 启动所需要的资源
 
 ```sheel
 |home
@@ -100,15 +141,15 @@ npm -v
 |-----nads
 |---------src
 |--------------node_modules
-|----------back
+|---------back
 |--------------vendor
-|----------composer.phar
+|---------composer.phar
 # 拷贝 node_modules vendor composer.phar
 ```
 
-#### 1.3.1 qdrant目录的创建以及nltk_data
+#### 1.4.1 qdrant目录的创建以及nltk_data
 
-##### 1.3.1.1 nltk_data
+##### 1.4.1.1 nltk_data
 
  nltk_data是nltk用来存放预训练模型、语料库、词典等数据的目录，是nltk解析文件内容所必需。
 
@@ -117,7 +158,7 @@ npm -v
 os.environ['NLTK_DATA'] = '/home/ubunut/nltk_data' # nltk_data的实际所在目录
 ```
 
-##### 1.3.1.2 创建qdrant目录
+##### 1.4.1.2 创建qdrant目录
 
 qdrant目录用于挂载到qdrant的docker容器中，以存储向量数据库的数据。
 
@@ -126,7 +167,7 @@ qdrant目录用于挂载到qdrant的docker容器中，以存储向量数据库�
 mkdir qdrant
 ```
 
-### 1.4 虚拟机脚本权限设置
+### 1.5 虚拟机脚本权限设置
 
 为vmscript文件夹中的虚拟机创建脚本添加执行权限：
 
@@ -144,7 +185,7 @@ chmod +x newvm_win7_1.sh
 chmod +x newvm_win_2003.sh
 ```
 
-### 1.5 初始存储池设置
+### 1.6 初始存储池设置
 
 **使用顺序一般是:**
 
@@ -161,9 +202,9 @@ virsh pool-start default     # 启动存储池，让其可用
 virsh pool-autostart default   # 设置存储池开机自动启动
 ```
 
-### 1.6 Liboffice 以及FFmpeg安装
+### 1.7 Liboffice 以及FFmpeg安装
 
-#### 1.6.1 Libreoffice安装
+#### 1.7.1 Libreoffice安装
 
 ```shell
 此工具用于将ppt转为pdf在网页显示
@@ -180,7 +221,7 @@ libreoffice --version
 LibreOffice 7.3.7.2 30(Build:2)
 ```
 
-#### 1.6.2 FFmpeg安装
+#### 1.7.2 FFmpeg安装
 
 ```shell
 此工具用于视频格式转化
@@ -189,9 +230,9 @@ sudo apt update
 sudo apt install ffmpeg
 ```
 
-### 1.7 关于项目启动前的配置
+### 1.8 关于项目启动前的配置
 
-#### 1.7.1 日志收集镜像配置以及交换机网络设置
+#### 1.8.1 日志收集镜像配置以及交换机网络设置
 
 ```shelll
 # 启动日志收集容器，需要启动最新的elastic-data-collector，假设镜像名为 elastic-data-collector:v1.1 那么命令如下
@@ -209,30 +250,42 @@ sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 
 注意：需要在宿主机上创建一个5601到25601的端口映射！以供访问kibana界面
 
-#### 1.7.2 关于后端配置
+#### 1.8.2 关于后端配置
 
 `后端配置为项目目录下back/.env`
 
 数据库相关的修改DB_*的配置项
 
 ```.env
+# database setting
 DB_CONNECTION=mysql
-#DB_HOST=127.0.0.1
-DB_HOST=10.12.0.101
-DB_PORT=3306
-DB_DATABASE=nads
-DB_USERNAME=nads
-DB_PASSWORD=GQip8WD02X
+DB_HOST=10.12.0.101 # 数据库地址
+DB_PORT=3306 # 数据库端口
+DB_DATABASE=nads # 数据库名
+DB_USERNAME=nads # 数据库用户名
+DB_PASSWORD=GQip***02X # 数据库用户密码
 DB_CHARSET=UTF8
+
+# cache setting
+CACHE_DRIVER=redis # cache 使用的驱动 file memory redis
+CACHE_PREFIX=cache # cache的key前缀
+
+# redis setting
+
+REDIS_CLIENT=predis
+REDIS_HOST=127.0.0.1 # redis服务地址
+REDIS_PORT=6380 # redis服务端口
+REDIS_PASSWORD=null # redis连接密码
+REDIS_DB=0  # redis的默认使用数据库
+REDIS_CACHE_DB=1 # cache使用的redis数据库
 ```
 
-#### 1.7.3 关于Python
+#### 1.8.3 关于Python
 
 需要修改下面的文件
 
 ```sehll
-<project_dir>/langchian/config.yaml
-# 修改 chatModel 和 embeddingModel 以及qdrant 的内容
+# 修改 <project_dir>/langchian/config.yaml中的chatModel 和 embeddingModel 以及qdrant 的内容
 chatModel:
   model: "gpt-oss"
   base_url: "http://43.143.151.41:3000/v1"
@@ -245,7 +298,7 @@ qdrant:
   server: "http://localhost:6333"
   
 ```
-#### 1.7.4 安装 guacd
+#### 1.8.4 安装 guacd
 
 两种方法任选其一
 1. apt安装
@@ -260,11 +313,11 @@ docker run --name guacd \
   --network host \
   -d --restart unless-stopped \
   guacamole/guacd:1.6.0
-``` 
+```
 
-### 1.8 启动
+### 1.9 启动
 
-#### 1.8.1 启动Qdrant向量数据库
+#### 1.9.1 启动Qdrant向量数据库
 
 ```shell
 # docker启动qdrant
@@ -272,9 +325,9 @@ docker run --name guacd \
 docker run -it -d -v /home/ubuntu/web/qdrant:/qdrant/storage --name qdrant_database -p 6333:6333 qdrant:1.15
 ```
 
-#### 1.8.2 构建向量数据库
+#### 1.9.2 构建向量数据库
 
-需要用到llm_parse代码，在执行之前需要激活虚拟环境并修改如下内容。修改之后，执行llm_parse的main.py。
+需要用到llm_parse代码，在执行之前需要激活虚拟环境并修改如下内容。修改之后，使用 python main.py 执行llm_parse的main.py。
 
 ```python
 # 激活虚拟环境
@@ -293,7 +346,7 @@ embedding_model = CustomEmbeddings(
 )
 ```
 
-#### 1.8.3 同步依赖并启动项目
+#### 1.9.3 同步依赖并启动项目
 
 ```shell
 cd nads/back
@@ -306,7 +359,7 @@ sudo apt install screen
 ./start.sh start
 ```
 
-#### 1.8.4 启动之后
+#### 1.9.4 启动之后
 
 ```shell
 # 进入会话查看相关服务是否启动
@@ -481,4 +534,4 @@ git apply /path/to/fix_login.patch #
 在启动中出现问题，请见 [2 维护](README.md#2-维护)
 
 ### 3.3 其他问题
-拷贝日志文件，位置为 src/front.log 和 back/back.log ，查看并与开发人员联系
+拷贝日志文件，位置为 src/front.log 、 back/back.log以及back/storage/logs/laravel.log ，查看并与开发人员联系

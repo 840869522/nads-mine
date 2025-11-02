@@ -156,6 +156,105 @@ class TestController extends Controller
     }
 
 
+    /**
+     * Notes: 搜索题目接口
+     * User: zhangnan
+     * DateTime: 2025/7/10 16:20
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function question_search(Request $request)
+    {
+        try {
+            $page = $request->input('page', 1);
+            $pageSize = $request->input('pagesize', 10);
+            $searchName = trim($request->input('name', ''));
+            
+            // 验证参数
+            $validated_data = [
+                'page' => 'integer|min:1',
+                'pagesize' => 'integer|min:1|max:100',
+                'name' => 'string|max:255'
+            ];
+            
+            $validated_msg = [
+                'page.integer' => "page字段类型错误",
+                'page.min' => "page字段最小值为1",
+                'pagesize.integer' => "pagesize字段类型错误",
+                'pagesize.min' => "pagesize字段最小值为1",
+                'pagesize.max' => "pagesize字段最大值为100",
+                'name.string' => "搜索关键词类型错误",
+                'name.max' => "搜索关键词超限"
+            ];
+            
+            $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // 构建基础查询
+            $query = "SELECT * FROM c_questions WHERE 1=1";
+            $countQuery = "SELECT COUNT(*) as total FROM c_questions WHERE 1=1";
+            $searchParams = [];
+            $countParams = [];
+            
+            // 添加搜索条件
+            if (!empty($searchName)) {
+                $query .= " AND (c_id LIKE ? OR c_question LIKE ? OR c_course_id LIKE ? OR c_tag LIKE ?)";
+                $countQuery .= " AND (c_id LIKE ? OR c_question LIKE ? OR c_course_id LIKE ? OR c_tag LIKE ?)";
+                $searchParam = "%" . $searchName . "%";
+                $searchParams = [$searchParam, $searchParam, $searchParam, $searchParam];
+                $countParams = [$searchParam, $searchParam, $searchParam, $searchParam];
+            }
+            
+            // 计算分页
+            $offset = ($page - 1) * $pageSize;
+            $query .= " ORDER BY c_create_at DESC LIMIT ? OFFSET ?";
+            
+            // 为数据查询添加分页参数
+            $dataParams = array_merge($searchParams, [$pageSize, $offset]);
+            
+            // 执行查询
+            $questions = DB::select($query, $dataParams);
+            $totalResult = DB::select($countQuery, $countParams);
+            $total = $totalResult[0]->total;
+            
+            // 格式化返回数据
+            $formattedQuestions = [];
+            foreach ($questions as $question) {
+                // 获取选项数据（如果是选择题）
+                $options = [];
+                if (in_array($question->c_type, [1, 2])) {
+                    $optionQuery = "SELECT * FROM c_question_options WHERE c_question_id = ?";
+                    $options = DB::select($optionQuery, [$question->c_id]);
+                }
+                
+                $formattedQuestions[] = [
+                    'c_id' => $question->c_id,
+                    'c_course_id' => $question->c_course_id,
+                    'c_question' => $question->c_question,
+                    'c_answer' => $question->c_answer,
+                    'c_tag' => $question->c_tag,
+                    'c_type' => $question->c_type,
+                    'c_create_at' => $question->c_create_at,
+                    'connect' => $options
+                ];
+            }
+            
+            $responseData = [
+                'data' => $formattedQuestions,
+                'count' => $total,
+                'current_page' => $page,
+                'page_size' => $pageSize,
+                'total_pages' => ceil($total / $pageSize)
+            ];
+            
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $responseData);
+            
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('搜索题目失败: ' . $e->getMessage());
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, "服务器内部错误");
+        }
+    }
 
     /**
      * 修改题目
@@ -457,354 +556,352 @@ class TestController extends Controller
         }
     }
 
-/**
- * Notes: 添加测试
- * User: zhangnan
- * DateTime: 2025/7/11 14:21
- * @param Request $request
- * @return JsonResponse
- */
-public function test_add(Request $request)
-{
-    try {
-        $c_name     = trim($request->input('name'));
-        $c_test_type     = trim($request->input('test_type'));
-        $c_type     = trim($request->input('type'));
-        $c_description     = trim($request->input('description'));
-        $c_paper_count     = trim($request->input('paper_count'));
-        $c_start     = trim($request->input('start'));
-        $c_end     = trim($request->input('end'));
-        $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
-        $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
-        
-        // 验证规则 - 新增时长验证
-        $validated_data = array(
-            'name' => 'required|max:100',
-            'test_type' => 'required|max:50',
-            'type' => 'required|max:50',
-            'description' => 'required',
-            'paper_count' => 'required|integer|max:11',
-            'start' => 'required|date|after:now|before:end',
-            'end' => 'required|date|after:now',
-            'course_id' => 'required|exists:c_courses,c_course_id',
-            // 仅考试类型需要验证时长
-            'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
-        );
-        
-        $validated_msg = array(
-            'name.required' => "名称不能为空",
-            'name.max' => "名称字数超限",
-            'description.required' => "描述不能为空",
-            'paper_count.required' => "试卷数不能为空",
-            'paper_count.integer' => "试卷数数据格式不正确",
-            'paper_count.max' => "试卷数超限",
-            'start.required' => "测试开始时间不能为空",
-            'start.date_format' => "测试开始时间不格式不正确",
-            'start.after' => "测试开始时间不能小于当前日期",
-            'start.before' => "测试结束时间不能小于测试开始时间",
-            'end.required' => "测试结束时间不能为空",
-            'end.date_format' => "测试结束时间不格式不正确",
-            'end.after' => "测试结束时间不能小于当前日期",
-            'start.date' => "测试开始时间格式不正确，请使用有效的日期格式",
-            'end.date' => "测试结束时间格式不正确，请使用有效的日期格式",
-            'course_id.required' => "课程id不能为空",
-            'course_id.exists' => "课程id不存在",
-            // 新增时长验证消息
-            'duration.required' => "测试时长不能为空",
-            'duration.integer' => "测试时长必须为整数",
-            'duration.min' => "测试时长不能小于1分钟",
-            'duration.max' => "测试时长不能超过300分钟"
-        );
-        
-        $validatedData = $request->validate($validated_data, $validated_msg);
+    /**
+     * Notes: 添加测试
+     * User: zhangnan
+     * DateTime: 2025/7/11 14:21
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_add(Request $request)
+    {
+        try {
+            $c_name     = trim($request->input('name'));
+            $c_test_type     = trim($request->input('test_type'));
+            $c_type     = trim($request->input('type'));
+            $c_description     = trim($request->input('description'));
+            $c_paper_count     = trim($request->input('paper_count'));
+            $c_start     = trim($request->input('start'));
+            $c_end     = trim($request->input('end'));
+            $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
+            $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
+            
+            // 验证规则 - 新增时长验证
+            $validated_data = array(
+                'name' => 'required|max:100',
+                'test_type' => 'required|max:50',
+                'type' => 'required|max:50',
+                'description' => 'required',
+                'paper_count' => 'required|integer|max:11',
+                'start' => 'required|date|before:end',
+                'end' => 'required|date',
+                'course_id' => 'required|exists:c_courses,c_course_id',
+                // 仅考试类型需要验证时长
+                'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
+            );
+            
+            $validated_msg = array(
+                'name.required' => "名称不能为空",
+                'name.max' => "名称字数超限",
+                'description.required' => "描述不能为空",
+                'paper_count.required' => "试卷数不能为空",
+                'paper_count.integer' => "试卷数数据格式不正确",
+                'paper_count.max' => "试卷数超限",
+                'start.required' => "测试开始时间不能为空",
+                'start.date_format' => "测试开始时间不格式不正确",
+                'start.before' => "测试结束时间不能小于测试开始时间",
+                'end.required' => "测试结束时间不能为空",
+                'end.date_format' => "测试结束时间不格式不正确",
+                'end.after' => "测试结束时间不能小于当前日期",
+                'start.date' => "测试开始时间格式不正确，请使用有效的日期格式",
+                'end.date' => "测试结束时间格式不正确，请使用有效的日期格式",
+                'course_id.required' => "课程id不能为空",
+                'course_id.exists' => "课程id不存在",
+                // 新增时长验证消息
+                'duration.required' => "测试时长不能为空",
+                'duration.integer' => "测试时长必须为整数",
+                'duration.min' => "测试时长不能小于1分钟",
+                'duration.max' => "测试时长不能超过300分钟"
+            );
+            
+            $validatedData = $request->validate($validated_data, $validated_msg);
 
-        $mod = new TestsModel();
+            $mod = new TestsModel();
 
-        // 修复：传递时长参数
-        $res = $mod->create_test_info(
-            $c_name, 
-            $c_test_type, 
-            $c_type, 
-            $c_description, 
-            $c_paper_count, 
-            $c_start, 
-            $c_end, 
-            $c_course_id,
-            $c_duration // 新增：传递时长
-        );
-        
-        if (!$res) {
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试插入失败");
+            // 修复：传递时长参数
+            $res = $mod->create_test_info(
+                $c_name, 
+                $c_test_type, 
+                $c_type, 
+                $c_description, 
+                $c_paper_count, 
+                $c_start, 
+                $c_end, 
+                $c_course_id,
+                $c_duration // 新增：传递时长
+            );
+            
+            if (!$res) {
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试插入失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
         }
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
-
-    } catch (ValidationException $e) {
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
     }
-}
 
-/**
- * Notes: 修改测试
- * User: zhangnan
- * DateTime: 2025/7/11 16:14
- * @param Request $request
- * @return JsonResponse
- */
-public function test_update(Request $request)
-{
-    try {
-        $c_id     = trim($request->input('id'));
-        $c_test_type     = trim($request->input('test_type'));
-        $c_type     = trim($request->input('type'));
-        $c_name     = trim($request->input('name'));
-        $c_description     = trim($request->input('description'));
-        $c_paper_count     = trim($request->input('paper_count'));
-        $c_start     = trim($request->input('start'));
-        $c_end     = trim($request->input('end'));
-        $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
-        $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
-        
-        // 验证规则 - 新增时长验证
-        $validated_data = array(
-            'id' => 'required|string|exists:c_tests,c_id',
-            'name' => 'required|max:100',
-            'test_type' => 'required|max:50',
-            'type' => 'required|max:50',
-            'description' => 'required',
-            'paper_count' => 'required|integer|max:11',
-            'start' => 'required|date_format:Y-m-d H:i:s|after:now|before:end',
-            'end' => 'required|date_format:Y-m-d H:i:s|after:now',
-            'course_id' => 'required|exists:c_courses,c_course_id',
-            // 仅考试类型需要验证时长
-            'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
-        );
-        
-        $validated_msg = array(
-            'id.required' => "id不能为空",
-            'id.string' => "id类型错误",
-            'id.exists' => "id不存在",
-            'name.required' => "名称不能为空",
-            'name.max' => "名称字数超限",
-            'description.required' => "描述不能为空",
-            'paper_count.required' => "试卷数不能为空",
-            'paper_count.integer' => "试卷数数据格式不正确",
-            'paper_count.max' => "试卷数超限",
-            'start.required' => "测试开始时间不能为空",
-            'start.date_format' => "测试开始时间不格式不正确",
-            'start.after' => "测试开始时间不能小于当前日期",
-            'start.before' => "测试结束时间不能小于测试开始时间",
-            'end.required' => "测试结束时间不能为空",
-            'end.date_format' => "测试结束时间不格式不正确",
-            'end.after' => "测试结束时间不能小于当前日期",
-            'course_id.required' => "课程id不能为空",
-            'course_id.exists' => "课程id不存在",
-            // 新增时长验证消息
-            'duration.required' => "测试时长不能为空",
-            'duration.integer' => "测试时长必须为整数",
-            'duration.min' => "测试时长不能小于1分钟",
-            'duration.max' => "测试时长不能超过300分钟"
-        );
-        
-        $validatedData = $request->validate($validated_data, $validated_msg);
+    /**
+     * Notes: 修改测试
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:14
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_update(Request $request)
+    {
+        try {
+            $c_id     = trim($request->input('id'));
+            $c_test_type     = trim($request->input('test_type'));
+            $c_type     = trim($request->input('type'));
+            $c_name     = trim($request->input('name'));
+            $c_description     = trim($request->input('description'));
+            $c_paper_count     = trim($request->input('paper_count'));
+            $c_start     = trim($request->input('start'));
+            $c_end     = trim($request->input('end'));
+            $c_course_id = trim($request->input('course_id')); // 修复：改为接收 course_id
+            $c_duration  = (int)trim($request->input('duration', 0)); // 新增：获取时长参数
+            
+            // 验证规则 - 新增时长验证
+            $validated_data = array(
+                'id' => 'required|string|exists:c_tests,c_id',
+                'name' => 'required|max:100',
+                'test_type' => 'required|max:50',
+                'type' => 'required|max:50',
+                'description' => 'required',
+                'paper_count' => 'required|integer|max:11',
+                'start' => 'required|date_format:Y-m-d H:i:s|before:end',
+                'end' => 'required|date_format:Y-m-d H:i:s',
+                'course_id' => 'required|exists:c_courses,c_course_id',
+                // 仅考试类型需要验证时长
+                'duration' => $c_type === '考试' ? 'required|integer|min:1|max:300' : 'integer'
+            );
+            
+            $validated_msg = array(
+                'id.required' => "id不能为空",
+                'id.string' => "id类型错误",
+                'id.exists' => "id不存在",
+                'name.required' => "名称不能为空",
+                'name.max' => "名称字数超限",
+                'description.required' => "描述不能为空",
+                'paper_count.required' => "试卷数不能为空",
+                'paper_count.integer' => "试卷数数据格式不正确",
+                'paper_count.max' => "试卷数超限",
+                'start.required' => "测试开始时间不能为空",
+                'start.date_format' => "测试开始时间不格式不正确",
+                'start.before' => "测试结束时间不能小于测试开始时间",
+                'end.required' => "测试结束时间不能为空",
+                'end.date_format' => "测试结束时间不格式不正确",
+                'end.after' => "测试结束时间不能小于当前日期",
+                'course_id.required' => "课程id不能为空",
+                'course_id.exists' => "课程id不存在",
+                // 新增时长验证消息
+                'duration.required' => "测试时长不能为空",
+                'duration.integer' => "测试时长必须为整数",
+                'duration.min' => "测试时长不能小于1分钟",
+                'duration.max' => "测试时长不能超过300分钟"
+            );
+            
+            $validatedData = $request->validate($validated_data, $validated_msg);
 
-        $mod = new TestsModel();
-        $info = $mod->get_test_info($c_id);
-        
-        // 修复：传递时长参数
-        $res = $mod->update_test_info(
-            $info, 
-            $c_name, 
-            $c_test_type, 
-            $c_type, 
-            $c_description, 
-            $c_paper_count, 
-            $c_start, 
-            $c_end, 
-            $c_course_id,
-            $c_duration // 新增：传递时长
-        );
-        
-        if (!$res) {
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试修改失败");
+            $mod = new TestsModel();
+            $info = $mod->get_test_info($c_id);
+            
+            // 修复：传递时长参数
+            $res = $mod->update_test_info(
+                $info, 
+                $c_name, 
+                $c_test_type, 
+                $c_type, 
+                $c_description, 
+                $c_paper_count, 
+                $c_start, 
+                $c_end, 
+                $c_course_id,
+                $c_duration // 新增：传递时长
+            );
+            
+            if (!$res) {
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "测试修改失败");
+            }
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
+
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
         }
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES);
-
-    } catch (ValidationException $e) {
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
     }
-}
 
 
-        /**
- * Notes: 测试删除（包含关联用户数据删除）
- * User: zhangnan
- * DateTime: 2025/7/11 16:34
- * @param Request $request
- * @return JsonResponse
- */
-public function test_del(Request $request)
-{
-    try {
-        $c_id = trim($request->input('id'));
-        $validated_data = array(
-            'id' => 'required|string|exists:c_tests,c_id',
-        );
-        $validated_msg = array(
-            'id.required' => "id不能为空",
-            'id.string' => "id类型错误",
-            'id.exists' => "id不存在",
-        );
-        $validatedData = $request->validate($validated_data, $validated_msg);
+            /**
+     * Notes: 测试删除（包含关联用户数据删除）
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:34
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_del(Request $request)
+    {
+        try {
+            $c_id = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|string|exists:c_tests,c_id',
+            );
+            $validated_msg = array(
+                'id.required' => "id不能为空",
+                'id.string' => "id类型错误",
+                'id.exists' => "id不存在",
+            );
+            $validatedData = $request->validate($validated_data, $validated_msg);
 
-        // 开启事务
-        DB::beginTransaction();
-        
-        $mod = new TestsModel();
-        
-        // 统计关联用户数据数量
-        $userCount = DB::table('c_test_users')->where('c_test_id', $c_id)->count();
-        
-        // 删除测试及关联数据
-        $res = $mod->del_test_info($c_id);
-        
-        if (!$res) {
+            // 开启事务
+            DB::beginTransaction();
+            
+            $mod = new TestsModel();
+            
+            // 统计关联用户数据数量
+            $userCount = DB::table('c_test_users')->where('c_test_id', $c_id)->count();
+            
+            // 删除测试及关联数据
+            $res = $mod->del_test_info($c_id);
+            
+            if (!$res) {
+                // 回滚事务
+                DB::rollBack();
+                
+                // 获取PDO错误信息
+                $pdo = DB::connection()->getPdo();
+                $errorInfo = $pdo->errorInfo();
+                $errorMsg = "测试删除失败，可能存在未清理的关联数据。错误信息: " . (isset($errorInfo[2]) ? $errorInfo[2] : '未知错误');
+                DLOG($errorMsg . " test_id={$c_id}", 'error', 'test_log');
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, $errorMsg);
+            }
+            
+            // 提交事务
+            DB::commit();
+            
+            // 返回成功提示，包含删除的关联用户数量
+            $message = "测试及关联的 {$userCount} 个用户数据已删除";
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
+
+        } catch (ValidationException $e) {
+            // 验证异常
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+        } catch (\Exception $e) {
             // 回滚事务
             DB::rollBack();
             
-            // 获取PDO错误信息
-            $pdo = DB::connection()->getPdo();
-            $errorInfo = $pdo->errorInfo();
-            $errorMsg = "测试删除失败，可能存在未清理的关联数据。错误信息: " . (isset($errorInfo[2]) ? $errorInfo[2] : '未知错误');
-            DLOG($errorMsg . " test_id={$c_id}", 'error', 'test_log');
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, $errorMsg);
+            // 捕获所有异常
+            DLOG("测试删除异常: [{$e->getLine()}]{$e->getMessage()} test_id={$c_id}", 'error', 'test_log');
+            return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
         }
-        
-        // 提交事务
-        DB::commit();
-        
-        // 返回成功提示，包含删除的关联用户数量
-        $message = "测试及关联的 {$userCount} 个用户数据已删除";
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
-
-    } catch (ValidationException $e) {
-        // 验证异常
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
-    } catch (\Exception $e) {
-        // 回滚事务
-        DB::rollBack();
-        
-        // 捕获所有异常
-        DLOG("测试删除异常: [{$e->getLine()}]{$e->getMessage()} test_id={$c_id}", 'error', 'test_log');
-        return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
     }
-}
 
-/**
- * Notes: 删除实验（包含关联用户和资源数据删除）
- * User: zhangnan
- * DateTime: 2025/10/02
- * @param Request $request
- * @return JsonResponse
- */
-public function experiment_del(Request $request)
-{
-    try {
-        $c_experiment_id = trim($request->input('id'));
-        $validated_data = array(
-            'id' => 'required|string|exists:c_course_experiments,c_experiment_id',
-        );
-        $validated_msg = array(
-            'id.required' => "实验ID不能为空",
-            'id.string' => "实验ID类型错误",
-            'id.exists' => "实验ID不存在",
-        );
-        $request->validate($validated_data, $validated_msg);
+    /**
+     * Notes: 删除实验（包含关联用户和资源数据删除）
+     * User: zhangnan
+     * DateTime: 2025/10/02
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function experiment_del(Request $request)
+    {
+        try {
+            $c_experiment_id = trim($request->input('id'));
+            $validated_data = array(
+                'id' => 'required|string|exists:c_course_experiments,c_experiment_id',
+            );
+            $validated_msg = array(
+                'id.required' => "实验ID不能为空",
+                'id.string' => "实验ID类型错误",
+                'id.exists' => "实验ID不存在",
+            );
+            $request->validate($validated_data, $validated_msg);
 
-        // 开启事务
-        DB::beginTransaction();
+            // 开启事务
+            DB::beginTransaction();
 
-        // 统计关联用户数据数量
-        $userCount = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->count();
-        DLOG("准备删除实验，关联用户数量: {$userCount}, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
+            // 统计关联用户数据数量
+            $userCount = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->count();
+            DLOG("准备删除实验，关联用户数量: {$userCount}, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
 
-        // 删除关联用户数据
-        $deleteUsersResult = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->delete();
-        if ($deleteUsersResult === false) {
-            DB::rollBack();
-            DLOG("删除关联用户数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联用户数据失败");
-        }
-
-        // 删除关联资源数据
-        $resources = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->get();
-        foreach ($resources as $resource) {
-            if (Storage::disk('local_resources')->exists($resource->c_resource_path)) {
-                Storage::disk('local_resources')->delete($resource->c_resource_path);
+            // 删除关联用户数据
+            $deleteUsersResult = DB::table('c_test_users')->where('c_test_id', $c_experiment_id)->delete();
+            if ($deleteUsersResult === false) {
+                DB::rollBack();
+                DLOG("删除关联用户数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联用户数据失败");
             }
-        }
-        $deleteResourcesResult = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->delete();
-        if ($deleteResourcesResult === false) {
-            DB::rollBack();
-            DLOG("删除关联资源数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联资源数据失败");
-        }
 
-        // 获取实验所属课程ID并删除实验文件夹
-        $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->first();
-        if ($experiment) {
-            $courseId = $experiment->c_course_id;
-            $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
-            if ($course) {
-                $experimentFolder = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$c_experiment_id}";
-                if (Storage::disk('local_resources')->exists($experimentFolder)) {
-                    Storage::disk('local_resources')->deleteDirectory($experimentFolder);
+            // 删除关联资源数据
+            $resources = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->get();
+            foreach ($resources as $resource) {
+                if (Storage::disk('local_resources')->exists($resource->c_resource_path)) {
+                    Storage::disk('local_resources')->delete($resource->c_resource_path);
                 }
             }
-        }
+            $deleteResourcesResult = DB::table('c_experiment_resources')->where('c_experiment_id', $c_experiment_id)->delete();
+            if ($deleteResourcesResult === false) {
+                DB::rollBack();
+                DLOG("删除关联资源数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除关联资源数据失败");
+            }
 
-        // 删除实验主表数据
-        $deleteExperimentResult = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->delete();
-        if ($deleteExperimentResult === false || $deleteExperimentResult === 0) {
+            // 获取实验所属课程ID并删除实验文件夹
+            $experiment = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->first();
+            if ($experiment) {
+                $courseId = $experiment->c_course_id;
+                $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
+                if ($course) {
+                    $experimentFolder = "courses/{$course->c_category_id}/{$courseId}/Experiment/{$c_experiment_id}";
+                    if (Storage::disk('local_resources')->exists($experimentFolder)) {
+                        Storage::disk('local_resources')->deleteDirectory($experimentFolder);
+                    }
+                }
+            }
+
+            // 删除实验主表数据
+            $deleteExperimentResult = DB::table('c_course_experiments')->where('c_experiment_id', $c_experiment_id)->delete();
+            if ($deleteExperimentResult === false || $deleteExperimentResult === 0) {
+                DB::rollBack();
+                DLOG("删除实验主表数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除实验失败");
+            }
+
+            // 提交事务
+            DB::commit();
+            DLOG("实验删除成功, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
+
+            // 返回成功提示，包含删除的关联用户数量
+            $message = "实验及关联的 {$userCount} 个用户数据已删除";
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
+
+        } catch (ValidationException $e) {
+            DLOG("验证异常: {$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+        } catch (\Exception $e) {
             DB::rollBack();
-            DLOG("删除实验主表数据失败, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
-            return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE, "删除实验失败");
+            DLOG("实验删除异常: [{$e->getLine()}]{$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
+            return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
         }
-
-        // 提交事务
-        DB::commit();
-        DLOG("实验删除成功, experiment_id={$c_experiment_id}", 'info', 'experiment_log');
-
-        // 返回成功提示，包含删除的关联用户数量
-        $message = "实验及关联的 {$userCount} 个用户数据已删除";
-        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, $message);
-
-    } catch (ValidationException $e) {
-        DLOG("验证异常: {$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
-        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
-    } catch (\Exception $e) {
-        DB::rollBack();
-        DLOG("实验删除异常: [{$e->getLine()}]{$e->getMessage()}, experiment_id={$c_experiment_id}", 'error', 'experiment_log');
-        return $this->_response(GlobalResponse::$HTTP_SYSTEM_ERROR_CODE, "系统异常：" . $e->getMessage());
     }
-}
 
 
-   /**
- * Notes: 测试列表
- * User: zhangnan
- * DateTime: 2025/7/11 16:54
- * @param Request $request
- * @return JsonResponse
- */
-public function test_list(Request $request)
-{
-    $page     = intval($request->input('page'));
-    $pageSize     = intval($request->input('pageSize'));
-    $mod = new TestsModel();
-    $res = $mod->get_test_list($pageSize, $page);
+    /**
+     * Notes: 测试列表
+     * User: zhangnan
+     * DateTime: 2025/7/11 16:54
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function test_list(Request $request)
+    {
+        $page     = intval($request->input('page'));
+        $pageSize     = intval($request->input('pageSize'));
+        $mod = new TestsModel();
+        $res = $mod->get_test_list($pageSize, $page);
 
-    return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $res);
-}
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, GlobalResponse::HTTP_STATUS_OK_MES, $res);
+    }
 
 
     /**
@@ -1027,13 +1124,6 @@ public function destroy(Request $request)
             return $this->_response(
                 GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                 '删除失败：该测试用户关联记录不存在'
-            );
-        }
-
-        if ($deleteResult === -1) {
-            return $this->_response(
-                GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
-                '删除失败：已交卷/已批改的记录不允许删除'
             );
         }
 
@@ -2088,126 +2178,126 @@ public function export_paper_to_word(Request $request)
 }
 
 
-    /**
-     * Notes:试卷修改(未完成)
-     * User: zhangnan
-     * DateTime: 2025/7/22 15:22
-     * @param Request $request
-     * @return JsonResponse|void
-     */
-    public function update_papers(Request $request)
-    {
-        $question_data = array(
-            'question'=>array(
-                array(
-                    'type'=>1,
-                    'score'=>0,
-                    'data'=>array(
-                        'question_id'=>1,
-                        'question'=>1,
-                    )
-                )
-            ),
-            'answer'=>array(
-                array(
-                    'type'=>1,
-                    'data'=>array(
-                        'question_id'=>1,
-                        'answer'=>1,
-                    )
-                )
-            )
-        );
+//     /**
+//      * Notes:试卷修改(未完成)
+//      * User: zhangnan
+//      * DateTime: 2025/7/22 15:22
+//      * @param Request $request
+//      * @return JsonResponse|void
+//      */
+//     public function update_papers(Request $request)
+//     {
+//         $question_data = array(
+//             'question'=>array(
+//                 array(
+//                     'type'=>1,
+//                     'score'=>0,
+//                     'data'=>array(
+//                         'question_id'=>1,
+//                         'question'=>1,
+//                     )
+//                 )
+//             ),
+//             'answer'=>array(
+//                 array(
+//                     'type'=>1,
+//                     'data'=>array(
+//                         'question_id'=>1,
+//                         'answer'=>1,
+//                     )
+//                 )
+//             )
+//         );
 
 
 
 
-        try {
-            $papers_id     = trim($request->input('papers_id'));
-            $validated_data = array(
-                'papers_id' => 'required|string|exists:c_papers,c_id',
-                'question_data' => 'required|array',
-                'question_data.question' => 'required|array',
-                'question_data.question.*.type' => 'required|in:1,2,3,4',
-                'question_data.question.*.score' => 'required|integer',
-                'question_data.question.*.data' => 'required|array',
-                'question_data.question.*.data.*.question_id' => 'required',
-                'question_data.question.*.data.*.question' => 'required',
-                'question_data.answer' => 'required|array',
-                'question_data.answer.*.type' => 'required|in:1,2,3,4',
-                'question_data.answer.*.data' => 'required|array',
-                'question_data.answer.*.data.*.question_id' => 'required',
-                'question_data.answer.*.data.*.answer' => 'required',
-            );
-            $validated_msg = array(
-                'papers_id.required'=>"测试不能为空",
-                'papers_id.string'=>"测试id类型错误",
-                'papers_id.exists'=>"测试id不存在",
-                'question_data.required'=>"试卷数据不能为空",
-                'question_data.array'=>"试卷数据格式不正确",
-                'question_data.question.required'=>"试卷数据中问题组不能为空",
-                'question_data.question.array'=>"试卷数据中问题组格式不正确",
-                'question_data.answer.required'=>"试卷数据中答案组不能为空",
-                'question_data.answer.array'=>"试卷数据中答案组格式不正确",
-                'question_data.answer.*.type.required'=>"试卷数据中答案组题目类型不存在",
-                'question_data.answer.*.type.in'=>"试卷数据中答案组题目类型错误",
-                'question_data.answer.*.data.required'=>"试卷数据中答案组答案数据不存在",
-                'question_data.answer.*.data.array'=>"试卷数据中答案组答案数据格式不正确",
-                'question_data.answer.*.data.*.question_id.required'=>"试卷数据中答案组答案数据question_id不存在",
-                'question_data.answer.*.data.*.answer.required'=>"试卷数据中答案组答案数据answer不存在",
-                'question_data.question.*.type.required'=>"试卷数据中问题组题目类型不存在",
-                'question_data.question.*.type.in'=>"试卷数据中问题组题目类型错误",
-                'question_data.question.*.score.required'=>"试卷数据中问题组题目分值不存在",
-                'question_data.question.*.score.integer'=>"试卷数据中问题组题目分值类型错误",
-                'question_data.question.*.data.required'=>"试卷数据中问题组题目数据不存在",
-                'question_data.question.*.data.array'=>"试卷数据中问题组题目数据格式错误",
-                'question_data.question.*.data.*.question_id.required'=>"试卷数据中问题组题目数据中question_id不存在",
-                'question_data.question.*.data.*.question.required'=>"试卷数据中问题组题目数据中question不存在",
-            );
-            $validatedData = $request->validate($validated_data, $validated_msg);
-            $verify_data = array(
-                '1'=>[],
-                '2'=>[],
-                '3'=>[],
-                '4'=>[],
-            );
-            $type_dic = array(
-                '1'=>'单选题',
-                '2'=>'多选题',
-                '3'=>'判断题',
-                '4'=>'主观题',
-            );
-            $question_mod = new QuestionsModel();
-            $question_dic = $question_mod->get_question_dic();
-            foreach($question_data['question'] as $k=>$v){
-                foreach($v['data'] as $k1=>$v1){
-                    if(!isset($question_dic[$v['type']][$v1['question_id']])){
-                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v1['question_id']."该问题不存在！");
-                    }
-                    if(in_array($v1['question_id'],$verify_data[$v['type']])){
-                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$type_dic[$v['type']]."问题存在重复！");
-                    }
-                    $question_info = $question_dic[$v['type']][$v1['question_id']];
+//         try {
+//             $papers_id     = trim($request->input('papers_id'));
+//             $validated_data = array(
+//                 'papers_id' => 'required|string|exists:c_papers,c_id',
+//                 'question_data' => 'required|array',
+//                 'question_data.question' => 'required|array',
+//                 'question_data.question.*.type' => 'required|in:1,2,3,4',
+//                 'question_data.question.*.score' => 'required|integer',
+//                 'question_data.question.*.data' => 'required|array',
+//                 'question_data.question.*.data.*.question_id' => 'required',
+//                 'question_data.question.*.data.*.question' => 'required',
+//                 'question_data.answer' => 'required|array',
+//                 'question_data.answer.*.type' => 'required|in:1,2,3,4',
+//                 'question_data.answer.*.data' => 'required|array',
+//                 'question_data.answer.*.data.*.question_id' => 'required',
+//                 'question_data.answer.*.data.*.answer' => 'required',
+//             );
+//             $validated_msg = array(
+//                 'papers_id.required'=>"测试不能为空",
+//                 'papers_id.string'=>"测试id类型错误",
+//                 'papers_id.exists'=>"测试id不存在",
+//                 'question_data.required'=>"试卷数据不能为空",
+//                 'question_data.array'=>"试卷数据格式不正确",
+//                 'question_data.question.required'=>"试卷数据中问题组不能为空",
+//                 'question_data.question.array'=>"试卷数据中问题组格式不正确",
+//                 'question_data.answer.required'=>"试卷数据中答案组不能为空",
+//                 'question_data.answer.array'=>"试卷数据中答案组格式不正确",
+//                 'question_data.answer.*.type.required'=>"试卷数据中答案组题目类型不存在",
+//                 'question_data.answer.*.type.in'=>"试卷数据中答案组题目类型错误",
+//                 'question_data.answer.*.data.required'=>"试卷数据中答案组答案数据不存在",
+//                 'question_data.answer.*.data.array'=>"试卷数据中答案组答案数据格式不正确",
+//                 'question_data.answer.*.data.*.question_id.required'=>"试卷数据中答案组答案数据question_id不存在",
+//                 'question_data.answer.*.data.*.answer.required'=>"试卷数据中答案组答案数据answer不存在",
+//                 'question_data.question.*.type.required'=>"试卷数据中问题组题目类型不存在",
+//                 'question_data.question.*.type.in'=>"试卷数据中问题组题目类型错误",
+//                 'question_data.question.*.score.required'=>"试卷数据中问题组题目分值不存在",
+//                 'question_data.question.*.score.integer'=>"试卷数据中问题组题目分值类型错误",
+//                 'question_data.question.*.data.required'=>"试卷数据中问题组题目数据不存在",
+//                 'question_data.question.*.data.array'=>"试卷数据中问题组题目数据格式错误",
+//                 'question_data.question.*.data.*.question_id.required'=>"试卷数据中问题组题目数据中question_id不存在",
+//                 'question_data.question.*.data.*.question.required'=>"试卷数据中问题组题目数据中question不存在",
+//             );
+//             $validatedData = $request->validate($validated_data, $validated_msg);
+//             $verify_data = array(
+//                 '1'=>[],
+//                 '2'=>[],
+//                 '3'=>[],
+//                 '4'=>[],
+//             );
+//             $type_dic = array(
+//                 '1'=>'单选题',
+//                 '2'=>'多选题',
+//                 '3'=>'判断题',
+//                 '4'=>'主观题',
+//             );
+//             $question_mod = new QuestionsModel();
+//             $question_dic = $question_mod->get_question_dic();
+//             foreach($question_data['question'] as $k=>$v){
+//                 foreach($v['data'] as $k1=>$v1){
+//                     if(!isset($question_dic[$v['type']][$v1['question_id']])){
+//                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$v1['question_id']."该问题不存在！");
+//                     }
+//                     if(in_array($v1['question_id'],$verify_data[$v['type']])){
+//                         return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$type_dic[$v['type']]."问题存在重复！");
+//                     }
+//                     $question_info = $question_dic[$v['type']][$v1['question_id']];
 
-                }
-            }
-
-
+//                 }
+//             }
 
 
 
 
-            $mod = new PapersModel();
-//            $info = $mod->get_paper_list($test_id);
-//            if(!$info){
-//                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
-//            }
-//            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
 
-        } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
-        }
-    }
+
+//             $mod = new PapersModel();
+// //            $info = $mod->get_paper_list($test_id);
+// //            if(!$info){
+// //                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该测试下没有试卷！");
+// //            }
+// //            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$info);
+
+//         } catch (ValidationException $e) {
+//             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+//         }
+//     }
 
 
 /**
@@ -3529,69 +3619,69 @@ public function batch_answers_name(Request $request)
         return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, "服务器内部错误");
     }
 }
-    /**
-     * Notes:查询成绩
-     * User: zhangnan
-     * DateTime: 2025/7/28 14:16
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function query_results(Request $request)
-    {
-        try {
-            $test_id = trim($request->input('test_id'));
-            $c_username     = trim($request->input('username'));
-            $validated_data = array(
-                'test_id' => 'required|string|exists:c_tests,c_id',
-                'username' => 'required|string|exists:c_users,c_username',
-            );
-            $validated_msg = array(
-                'test_id.required'=>"测试id不能为空",
-                'test_id.string'=>"测试id类型错误",
-                'test_id.exists'=>"测试id不存在",
-                'username.required'=>"考生不能为空",
-                'username.string'=>"考生类型不正确",
-                'username.exists'=>"考生不存在",
-            );
-            $validatedData = $request->validate($validated_data, $validated_msg);
-            $test_user_mod = new TestUsersModel();
-            $check_test_users = $test_user_mod->check_test_users_by_user_name($test_id,$c_username);
-            if(!$check_test_users){
-                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未查询到答卷信息！");
-            }
-            if($check_test_users->c_correct==0){
-                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"考生未交卷！");
-            }else if($check_test_users->c_correct==1){
-                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该试卷批改中！");
-            }else{
-                $res = array(
-                    'paper_id'=>$check_test_users->c_paper_id,
-                    'submit'=>$check_test_users->c_submit,
-                    'score'=>$check_test_users->c_score,
-                );
-                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
-            }
-        } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
-        }
-    }
+//     /**
+//      * Notes:查询成绩
+//      * User: zhangnan
+//      * DateTime: 2025/7/28 14:16
+//      * @param Request $request
+//      * @return JsonResponse
+//      */
+//     public function query_results(Request $request)
+//     {
+//         try {
+//             $test_id = trim($request->input('test_id'));
+//             $c_username     = trim($request->input('username'));
+//             $validated_data = array(
+//                 'test_id' => 'required|string|exists:c_tests,c_id',
+//                 'username' => 'required|string|exists:c_users,c_username',
+//             );
+//             $validated_msg = array(
+//                 'test_id.required'=>"测试id不能为空",
+//                 'test_id.string'=>"测试id类型错误",
+//                 'test_id.exists'=>"测试id不存在",
+//                 'username.required'=>"考生不能为空",
+//                 'username.string'=>"考生类型不正确",
+//                 'username.exists'=>"考生不存在",
+//             );
+//             $validatedData = $request->validate($validated_data, $validated_msg);
+//             $test_user_mod = new TestUsersModel();
+//             $check_test_users = $test_user_mod->check_test_users_by_user_name($test_id,$c_username);
+//             if(!$check_test_users){
+//                 return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"未查询到答卷信息！");
+//             }
+//             if($check_test_users->c_correct==0){
+//                 return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"考生未交卷！");
+//             }else if($check_test_users->c_correct==1){
+//                 return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"该试卷批改中！");
+//             }else{
+//                 $res = array(
+//                     'paper_id'=>$check_test_users->c_paper_id,
+//                     'submit'=>$check_test_users->c_submit,
+//                     'score'=>$check_test_users->c_score,
+//                 );
+//                 return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES,$res);
+//             }
+//         } catch (ValidationException $e) {
+//             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+//         }
+//     }
 
 
-    public function redis_test()
-    {
-        $a = array(
-            'a'=>1,
-            'b'=>2,
-            'c'=>3
-        );
-//        Cache::put('test', json_encode($a));
+//     public function redis_test()
+//     {
+//         $a = array(
+//             'a'=>1,
+//             'b'=>2,
+//             'c'=>3
+//         );
+// //        Cache::put('test', json_encode($a));
 
-        $redis = Cache::store('redis');
-        $fs = $redis->put('test',json_encode($a));//发送
-        $fs = $redis->put('test',json_encode($a),10);//带计时
-        $hq = $redis->get('test');//获取
-        $del = $redis->delete('test');//删除
-    }
+//         $redis = Cache::store('redis');
+//         $fs = $redis->put('test',json_encode($a));//发送
+//         $fs = $redis->put('test',json_encode($a),10);//带计时
+//         $hq = $redis->get('test');//获取
+//         $del = $redis->delete('test');//删除
+//     }
 
   /**
      * Notes: 获取课程及相关测试和实验列表

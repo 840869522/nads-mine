@@ -10,109 +10,180 @@ class ExperimentModel
 {
    public static function createExperiment(string $courseId, array $data): array
 {
+    DB::beginTransaction();
     try {
-        // 1. 新增：校验 c_start、c_end 必传
+        Log::info('=== 开始创建实验调试 ===');
+        Log::info('传入数据:', ['courseId' => $courseId, 'data' => $data]);
+
+        // 1. 校验必填字段
         $requiredFields = ['c_experiment_name', 'c_config_id', 'c_start', 'c_end'];
         foreach ($requiredFields as $field) {
             if (empty($data[$field])) {
+                Log::error('缺少必填字段', ['field' => $field, 'data' => $data]);
                 return [
                     'code' => 422,
                     'message' => "Missing required field: {$field}",
                 ];
             }
         }
+        Log::info('必填字段校验通过');
 
-        // 2. 新增：校验时间格式和时长逻辑（与控制器校验一致，双重保障）
+        // 2. 时间格式校验
         $startTime = strtotime($data['c_start']);
         $endTime = strtotime($data['c_end']);
-        // 校验时间格式（strtotime返回false表示格式无效）
         if (!$startTime || !$endTime) {
+            Log::error('时间格式无效', ['c_start' => $data['c_start'], 'c_end' => $data['c_end']]);
             return [
                 'code' => 422,
                 'message' => 'Invalid time format: c_start/c_end must be Y-m-d H:i:s',
             ];
         }
-        // 校验开始时间晚于当前、结束时间晚于开始时间
-        if ($startTime <= time()) {
-            return [
-                'code' => 422,
-                'message' => 'c_start must be after current time',
-            ];
-        }
-        if ($endTime <= $startTime) {
-            return [
-                'code' => 422,
-                'message' => 'c_end must be after c_start',
-            ];
-        }
+        Log::info('时间格式校验通过', ['start' => $data['c_start'], 'end' => $data['c_end']]);
 
-        // 原有逻辑：校验课程是否存在
+        // 3. 校验课程是否存在
         $course = DB::table('c_courses')->where('c_course_id', $courseId)->first();
         if (!$course) {
+            Log::error('课程不存在', ['courseId' => $courseId]);
             return [
                 'code' => 422,
                 'message' => 'Invalid course_id: Course does not exist.',
             ];
         }
+        Log::info('课程存在', ['course' => $course]);
 
-        // 原有逻辑：校验场景配置是否存在
-        if (!DB::table('c_scene_configs')->where('c_config_id', $data['c_config_id'])->exists()) {
+        // 4. 校验场景配置是否存在
+        $sceneConfig = DB::table('c_scene_configs')->where('c_config_id', $data['c_config_id'])->first();
+        if (!$sceneConfig) {
+            Log::error('场景配置不存在', ['config_id' => $data['c_config_id']]);
             return [
                 'code' => 422,
                 'message' => 'Invalid c_config_id: Scene config does not exist.',
             ];
         }
+        Log::info('场景配置存在', ['config_id' => $data['c_config_id']]);
 
-        // 原有逻辑：生成实验ID（类别ID+课程ID+递增序号）
+        // 5. 生成唯一的实验ID
         $categoryId = $course->c_category_id;
-        $existingExperiments = DB::table('c_course_experiments')
+        
+        // 方法1：查找当前课程下最大的实验编号
+        $maxExperiment = DB::table('c_course_experiments')
             ->where('c_course_id', $courseId)
-            ->count();
-        $experimentNumber = $existingExperiments + 1;
-        $experimentId = sprintf('%s%s%02d', $categoryId, $courseId, $experimentNumber); // 示例：0100101
+            ->orderBy('c_experiment_id', 'desc')
+            ->first();
 
-        // 原有逻辑：确保实验ID唯一
-        if (DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->exists()) {
-            return [
-                'code' => 422,
-                'message' => 'Experiment ID already exists.',
-            ];
+        $experimentNumber = 1;
+        if ($maxExperiment) {
+            // 从现有最大ID中提取编号部分（假设ID格式为：010100101, 010100102 等）
+            $maxId = $maxExperiment->c_experiment_id;
+            $numberPart = substr($maxId, -2); // 获取最后2位
+            $experimentNumber = intval($numberPart) + 1;
+            
+            Log::info('从最大ID提取编号', [
+                'maxId' => $maxId,
+                'numberPart' => $numberPart,
+                'nextNumber' => $experimentNumber
+            ]);
         }
 
-        // 原有逻辑：创建实验文件夹
-        $experimentFolder = "courses/{$categoryId}/{$courseId}/Experiment/{$experimentId}";
-        if (!Storage::disk('local_resources')->exists($experimentFolder)) {
-            if (!Storage::disk('local_resources')->makeDirectory($experimentFolder, 0755, true)) {
+        // 生成初始ID
+        $experimentId = sprintf('%s%s%02d', $categoryId, $courseId, $experimentNumber);
+        
+        Log::info('初始实验ID', [
+            'categoryId' => $categoryId,
+            'courseId' => $courseId,
+            'experimentNumber' => $experimentNumber,
+            'experimentId' => $experimentId
+        ]);
+
+        // 6. 双重检查：确保新生成的ID确实不存在，如果存在则递增编号
+        $retryCount = 0;
+        $maxRetries = 20; // 最大重试次数，防止无限循环
+        
+        while (DB::table('c_course_experiments')->where('c_experiment_id', $experimentId)->exists()) {
+            $retryCount++;
+            $experimentNumber++;
+            $experimentId = sprintf('%s%s%02d', $categoryId, $courseId, $experimentNumber);
+            
+            Log::warning('实验ID冲突，重新生成', [
+                'newExperimentId' => $experimentId,
+                'retryCount' => $retryCount,
+                'newNumber' => $experimentNumber
+            ]);
+            
+            if ($retryCount >= $maxRetries) {
+                Log::error('实验ID生成多次冲突，达到最大重试次数', [
+                    'courseId' => $courseId,
+                    'maxRetries' => $maxRetries
+                ]);
                 return [
                     'code' => 500,
-                    'message' => 'Failed to create experiment folder.',
+                    'message' => '无法生成唯一的实验ID，请联系管理员。',
                 ];
             }
         }
-        Log::info('Creating experiment folder', [
-            'experimentFolder' => $experimentFolder,
-            'fullPath' => Storage::disk('local_resources')->path($experimentFolder),
+
+        Log::info('最终确定的实验ID', [
+            'experimentId' => $experimentId,
+            'finalNumber' => $experimentNumber,
+            'retryCount' => $retryCount
         ]);
 
-        // 3. 核心修改：INSERT 语句添加 c_start、c_end字段和参数
-        DB::beginTransaction();
+        // 7. 创建实验文件夹
+        $experimentFolder = "courses/{$categoryId}/{$courseId}/Experiment/{$experimentId}";
+        Log::info('准备创建文件夹', ['folder' => $experimentFolder]);
+        
+        try {
+            if (!Storage::disk('local_resources')->exists($experimentFolder)) {
+                $created = Storage::disk('local_resources')->makeDirectory($experimentFolder, 0755, true);
+                if (!$created) {
+                    Log::error('文件夹创建失败', ['folder' => $experimentFolder]);
+                    return [
+                        'code' => 500,
+                        'message' => 'Failed to create experiment folder.',
+                    ];
+                }
+                Log::info('文件夹创建成功', ['folder' => $experimentFolder]);
+            } else {
+                Log::info('文件夹已存在', ['folder' => $experimentFolder]);
+            }
+        } catch (\Exception $e) {
+            Log::error('文件夹创建异常', [
+                'folder' => $experimentFolder,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+
+        // 8. 插入数据库
+        Log::info('准备插入数据库', [
+            'experimentId' => $experimentId,
+            'data' => [
+                'c_experiment_name' => $data['c_experiment_name'],
+                'c_description' => $data['c_description'] ?? null,
+                'c_config_id' => $data['c_config_id'],
+                'c_start' => $data['c_start'],
+                'c_end' => $data['c_end']
+            ]
+        ]);
+
         $result = DB::insert(
             'INSERT INTO c_course_experiments (
                 c_experiment_id, c_course_id, c_experiment_name, c_description, 
                 c_config_id, c_start, c_end, created_at, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?,  NOW(), NOW())',
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
             [
-                $experimentId,        // 1. c_experiment_id
-                $courseId,            // 2. c_course_id
-                $data['c_experiment_name'], // 3. c_experiment_name
-                $data['c_description'] ?? null, // 4. c_description
-                $data['c_config_id'], // 5. c_config_id
-                $data['c_start'],     // 6. 新增：c_start
-                $data['c_end'],       // 7. 新增：c_end
+                $experimentId,
+                $courseId,
+                $data['c_experiment_name'],
+                $data['c_description'] ?? null,
+                $data['c_config_id'],
+                $data['c_start'],
+                $data['c_end'],
             ]
         );
 
         if (!$result) {
+            Log::error('数据库插入失败', ['experimentId' => $experimentId]);
             DB::rollBack();
             return [
                 'code' => 500,
@@ -120,16 +191,26 @@ class ExperimentModel
             ];
         }
 
+        Log::info('数据库插入成功', ['experimentId' => $experimentId]);
         DB::commit();
+        
+        Log::info('=== 实验创建完成 ===', ['experimentId' => $experimentId]);
+        
         return [
             'code' => 201,
             'message' => 'Experiment created successfully.',
             'data' => ['c_experiment_id' => $experimentId],
         ];
+
     } catch (\Exception $e) {
         DB::rollBack();
-        Log::error('[GENERAL] createExperiment: ' . $e->getMessage(), [
-            'trace' => $e->getTraceAsString(),
+        Log::error('创建实验异常: ' . $e->getMessage(), [
+            'exception_class' => get_class($e),
+            'exception_message' => $e->getMessage(),
+            'exception_file' => $e->getFile(),
+            'exception_line' => $e->getLine(),
+            'stack_trace' => $e->getTraceAsString(),
+            'input_data' => ['courseId' => $courseId, 'data' => $data]
         ]);
         return [
             'code' => 500,
@@ -159,12 +240,6 @@ public static function updateExperiment(string $courseId, string $experimentId, 
             return [
                 'code' => 422,
                 'message' => 'Invalid time format: c_start/c_end must be Y-m-d H:i:s',
-            ];
-        }
-        if ($startTime <= time()) {
-            return [
-                'code' => 422,
-                'message' => 'c_start must be after current time',
             ];
         }
         if ($endTime <= $startTime) {

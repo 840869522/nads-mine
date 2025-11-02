@@ -16,6 +16,10 @@ use Illuminate\Validation\Rule;
 use App\Http\Controllers\ad\AdController;
 use App\Models\scenario\SceneConfig;
 use Illuminate\Support\Facades\Log;
+use App\Models\scenario\SceneContainerInstance;
+use App\Models\scenario\SceneVmInstance;
+use App\Models\ad\Team;
+use App\Utils\JWTControll; // ★ 1. 导入 JWTControll
 
 class AdConfigController extends Controller
 {
@@ -25,17 +29,75 @@ class AdConfigController extends Controller
         parent::__construct($req);
     }
 
+    /**
+     * ★★★ 核心修改区域: 重写 index 方法以实现权限控制 ★★★
+     */
     public function index(Request $request)
     {
         $perPage = $request->query('per_page', 10);
+        $search = $request->query('search');
+
+        $currentUser = null;
+        try {
+            $authHeader = $request->header("Authorization");
+            if ($authHeader) {
+                $jwtResult = JWTControll::decodeJWT($authHeader);
+                if ($jwtResult["err"] === null) {
+                    $currentUser = $jwtResult["data"];
+                }
+            }
+        } catch (Exception $e) {
+            Log::warning('在 AdConfigController@index 中解析JWT失败: ' . $e->getMessage());
+        }
 
         $query = AdConfig::query()->with([
-            'sceneConfig:c_config_id,c_name,c_scene',
+            'sceneConfig:c_config_id,c_name',
             'referees.user:c_username,c_name',
         ]);
-        Log::info($query->toSql());
-        if ($request->has('search') && !empty($request->search)) {
-            $search = $request->search;
+
+        if ($currentUser && isset($currentUser['c_username']) && $currentUser['c_username'] !== 'admin') {
+            $currentUsername = $currentUser['c_username'];
+
+            // a. 找到该用户所属的所有队伍ID
+            $teamIds = DB::table('c_teams_users')->where('user_id', $currentUsername)->pluck('team_id');
+
+            // 查找用户作为裁判参与的演练ID
+            $refereeAdConfigIds = DB::table('c_referees')->where('c_user_id', $currentUsername)->pluck('c_ad_config_id');
+
+            $participantAdConfigIds = collect([]);
+            if ($teamIds->isNotEmpty()) {
+                // b. 找到这些队伍参与的所有场景实例ID
+                $sceneInstanceIds = DB::table('c_scene_container_instances')
+                    ->whereIn('c_team_id', $teamIds)
+                    ->pluck('c_scene_instances_id')
+                    ->merge(
+                        DB::table('c_scene_vm_instances')
+                            ->whereIn('c_team_id', $teamIds)
+                            ->pluck('c_scene_instances_id')
+                    )
+                    ->unique();
+
+                if($sceneInstanceIds->isNotEmpty()){
+                    // c. 找到与这些场景实例关联的演练ID
+                    $participantAdConfigIds = AdConfig::whereIn('c_scene_instance_id', $sceneInstanceIds)->pluck('c_id');
+                }
+            }
+
+            // 合并作为参赛队员和作为裁判的演练ID
+            $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
+
+            if ($allVisibleAdConfigIds->isNotEmpty()) {
+                 // d. 只查询这些ID的演练
+                $query->whereIn('c_id', $allVisibleAdConfigIds);
+            } else {
+                // ★★★ 核心修复点 ★★★
+                // 如果用户既不是任何队伍的成员，也不是任何演练的裁判，
+                // 则添加一个永远为假的条件，确保返回空结果。
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        if ($search) {
             $query->where('c_drill_name', 'like', '%' . $search . '%');
         }
 
@@ -57,6 +119,8 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
+            'teams'                => 'present|array',
+            'teams.*'              => 'integer|exists:c_teams,c_id',
         ], [
             'c_drill_name.unique' => '该演练名称已被使用。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
@@ -90,16 +154,20 @@ class AdConfigController extends Controller
                 Referee::insert($refereesToInsert);
             }
 
+            if (isset($validated['teams'])) {
+                $adConfig->teams()->sync($validated['teams']);
+            }
+
             return $adConfig;
         });
 
-        $adConfig->load(['referees.user', 'sceneConfig']);
+        $adConfig->load(['referees.user', 'sceneConfig', 'teams']);
         return new AdConfigResource($adConfig);
     }
 
     public function show(AdConfig $adConfig)
     {
-        $adConfig->load(['referees.user', 'sceneConfig']);
+        $adConfig->load(['referees.user', 'sceneConfig', 'teams:c_id,c_name']);
         return new AdConfigResource($adConfig);
     }
 
@@ -116,6 +184,8 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
+            'teams'                => 'present|array',
+            'teams.*'              => 'integer|exists:c_teams,c_id',
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
@@ -135,9 +205,13 @@ class AdConfigController extends Controller
                 }
                 Referee::insert($refereesToInsert);
             }
+
+            if (isset($validated['teams'])) {
+                $adConfig->teams()->sync($validated['teams']);
+            }
         });
 
-        $adConfig->load(['referees.user', 'sceneConfig']);
+        $adConfig->load(['referees.user', 'sceneConfig', 'teams']);
         return new AdConfigResource($adConfig);
     }
 
@@ -151,7 +225,7 @@ class AdConfigController extends Controller
                 $adConfig->delete();
             });
             return response()->json(['message' => '演练 "' . $adConfig->c_drill_name . '" 已成功删除。']);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error("删除演练 '{$adConfig->c_drill_name}' 失败: " . $e->getMessage());
             return response()->json(['message' => '删除演练失败: ' . $e->getMessage()], 500);
         }
@@ -170,7 +244,7 @@ class AdConfigController extends Controller
             $this->tearDownInstanceResources($adConfig->c_scene_instance_id);
             $adConfig->update(['c_status' => 'finished', 'c_end_time' => now()]);
             return response()->json(['message' => '演练 "' . $adConfig->c_drill_name . '" 已成功停止。']);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $adConfig->update(['c_status' => 'failed']);
             Log::error('停止演练并清理资源时失败: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => '停止演练时发生错误: ' . $e->getMessage()], 500);
@@ -184,8 +258,13 @@ class AdConfigController extends Controller
             Log::warning("尝试清理一个不存在的场景实例 (ID: {$instanceId})，操作跳过。");
             return;
         }
-        // 实际的资源清理逻辑...
-        $instance->delete();
+        try {
+             $instanceController = app(InstanceController::class);
+             $instanceController->destroy($instance);
+        } catch(Exception $e) {
+             Log::error("在 tearDownInstanceResources 中调用 InstanceController@destroy 失败: " . $e->getMessage());
+             $instance->delete();
+        }
     }
 
     public function start(Request $request, AdConfig $adConfig): JsonResponse
@@ -210,14 +289,50 @@ class AdConfigController extends Controller
             $startDrillRequest = new Request([
                 'username' => $username,
                 'ad_config_id' => $adConfig->c_id,
-                // 将从 $scenario 对象中获取的拓扑 JSON 添加到请求中
-                        'topology' => $scenario->c_scene,
+                'topology' => $scenario->c_scene,
             ]);
-            // 确保 AdController::startDrill 返回的是一个 JsonResponse
             return $adController->startDrill($startDrillRequest, $scenario);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('在 AdConfigController@start 中调用 AdController@startDrill 失败: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => '启动演练时发生内部错误。'], 500);
+        }
+    }
+
+    public function getTeamsWithMembers(AdConfig $adConfig): JsonResponse
+    {
+        try {
+            if (!$adConfig->c_scene_instance_id) {
+                return response()->json(['data' => []]);
+            }
+
+            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                ->distinct()
+                ->pluck('c_team_id');
+
+            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                ->distinct()
+                ->pluck('c_team_id');
+
+            $allTeamIds = $containerTeamIds
+                            ->merge($vmTeamIds)
+                            ->unique()
+                            ->filter()
+                            ->values()
+                            ->all();
+
+            if (empty($allTeamIds)) {
+                return response()->json(['data' => []]);
+            }
+
+            $teams = Team::whereIn('c_id', $allTeamIds)
+                        ->with(['users:c_username,c_name'])
+                        ->get();
+
+            return response()->json(['data' => $teams]);
+
+        } catch (Exception $e) {
+            Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
         }
     }
 }

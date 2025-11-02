@@ -43,6 +43,7 @@ class Controller extends BaseController
                 $permissions = array_map(function ($item){
                     return $item->c_id;
                 },$permissions);
+                $jwtRes['data']['redis_id'] = $jwtRes['data']['permission'];
                 $jwtRes["data"]['permission'] = $permissions;
                 $request->merge([
                     "token_data"=>$jwtRes["data"]
