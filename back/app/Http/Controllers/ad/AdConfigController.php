@@ -19,19 +19,15 @@ use Illuminate\Support\Facades\Log;
 use App\Models\scenario\SceneContainerInstance;
 use App\Models\scenario\SceneVmInstance;
 use App\Models\ad\Team;
-use App\Utils\JWTControll; // ★ 1. 导入 JWTControll
+use App\Utils\JWTControll;
 
 class AdConfigController extends Controller
 {
     public function __construct(Request $req)
     {
-        // 构造函数留空
         parent::__construct($req);
     }
 
-    /**
-     * ★★★ 核心修改区域: 重写 index 方法以实现权限控制 ★★★
-     */
     public function index(Request $request)
     {
         $perPage = $request->query('per_page', 10);
@@ -57,16 +53,10 @@ class AdConfigController extends Controller
 
         if ($currentUser && isset($currentUser['c_username']) && $currentUser['c_username'] !== 'admin') {
             $currentUsername = $currentUser['c_username'];
-
-            // a. 找到该用户所属的所有队伍ID
             $teamIds = DB::table('c_teams_users')->where('user_id', $currentUsername)->pluck('team_id');
-
-            // 查找用户作为裁判参与的演练ID
             $refereeAdConfigIds = DB::table('c_referees')->where('c_user_id', $currentUsername)->pluck('c_ad_config_id');
-
             $participantAdConfigIds = collect([]);
             if ($teamIds->isNotEmpty()) {
-                // b. 找到这些队伍参与的所有场景实例ID
                 $sceneInstanceIds = DB::table('c_scene_container_instances')
                     ->whereIn('c_team_id', $teamIds)
                     ->pluck('c_scene_instances_id')
@@ -76,23 +66,14 @@ class AdConfigController extends Controller
                             ->pluck('c_scene_instances_id')
                     )
                     ->unique();
-
                 if($sceneInstanceIds->isNotEmpty()){
-                    // c. 找到与这些场景实例关联的演练ID
                     $participantAdConfigIds = AdConfig::whereIn('c_scene_instance_id', $sceneInstanceIds)->pluck('c_id');
                 }
             }
-
-            // 合并作为参赛队员和作为裁判的演练ID
             $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
-
             if ($allVisibleAdConfigIds->isNotEmpty()) {
-                 // d. 只查询这些ID的演练
                 $query->whereIn('c_id', $allVisibleAdConfigIds);
             } else {
-                // ★★★ 核心修复点 ★★★
-                // 如果用户既不是任何队伍的成员，也不是任何演练的裁判，
-                // 则添加一个永远为假的条件，确保返回空结果。
                 $query->whereRaw('1 = 0');
             }
         }
@@ -119,8 +100,10 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
-            'teams'                => 'present|array',
-            'teams.*'              => 'integer|exists:c_teams,c_id',
+
+            // ★★★ 核心修复: 移除对 teams 字段的验证，因为它不在这里设置 ★★★
+            // 'teams'                => 'present|array',
+            // 'teams.*'              => 'integer|exists:c_teams,c_id',
         ], [
             'c_drill_name.unique' => '该演练名称已被使用。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
@@ -154,20 +137,23 @@ class AdConfigController extends Controller
                 Referee::insert($refereesToInsert);
             }
 
-            if (isset($validated['teams'])) {
-                $adConfig->teams()->sync($validated['teams']);
-            }
+            // ★★★ 核心修复: 移除同步 teams 的逻辑 ★★★
+            // if (isset($validated['teams'])) {
+            //     $adConfig->teams()->sync($validated['teams']);
+            // }
 
             return $adConfig;
         });
 
-        $adConfig->load(['referees.user', 'sceneConfig', 'teams']);
+        // ★★★ 核心修复: 从 load() 中移除 teams ★★★
+        $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
 
     public function show(AdConfig $adConfig)
     {
-        $adConfig->load(['referees.user', 'sceneConfig', 'teams:c_id,c_name']);
+        // ★★★ 核心修复: 从 load() 中移除 teams，AdConfig 与 Team 没有直接关系 ★★★
+        $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
 
@@ -184,8 +170,10 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
-            'teams'                => 'present|array',
-            'teams.*'              => 'integer|exists:c_teams,c_id',
+
+            // ★★★ 核心修复: 移除对 teams 字段的验证 ★★★
+            // 'teams'                => 'present|array',
+            // 'teams.*'              => 'integer|exists:c_teams,c_id',
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
@@ -206,12 +194,14 @@ class AdConfigController extends Controller
                 Referee::insert($refereesToInsert);
             }
 
-            if (isset($validated['teams'])) {
-                $adConfig->teams()->sync($validated['teams']);
-            }
+            // ★★★ 核心修复: 移除同步 teams 的逻辑 ★★★
+            // if (isset($validated['teams'])) {
+            //     $adConfig->teams()->sync($validated['teams']);
+            // }
         });
 
-        $adConfig->load(['referees.user', 'sceneConfig', 'teams']);
+        // ★★★ 核心修复: 从 load() 中移除 teams ★★★
+        $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
 

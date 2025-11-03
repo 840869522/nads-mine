@@ -15,6 +15,8 @@ function Fps() {
   	const [fps, setFps] = useState(0);
   	const frameCount = useRef(0);
   	const lastFpsUpdate = useRef(performance.now());
+	const wsRef = useRef<WebSocket | null>(null);
+    const isConnected = useRef(false); // 连接标志
 
   	useEffect(() => {
     	let animationId: number;
@@ -32,6 +34,45 @@ function Fps() {
       		animationId = requestAnimationFrame(update);
     	};
 
+		function createWebSocket() {
+            console.log("🔗 尝试创建 WebSocket 连接");
+            if (isConnected.current) {
+                console.log("⚠️ WebSocket 已存在，跳过创建");
+                return;
+            }
+
+            const ws = new WebSocket("wss://10.100.0.26:7189");
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                console.log("✅ WebSocket 已连接");
+                isConnected.current = true;
+                ws.send(JSON.stringify({ action: "subscribe", topic: "uav/state" }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    console.log(msg);
+                    //setMessage((prev) => [...prev.slice(-9), msg]);
+                } catch {
+                    //setMessage((prev) => [...prev.slice(-9), event.data]);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("⚠️ WebSocket 已关闭");
+                isConnected.current = false;
+                wsRef.current = null;
+            };
+
+            ws.onerror = (err) => {
+                console.error("❌ WebSocket 错误:", err);
+                isConnected.current = false;
+            };
+        }
+
+		createWebSocket()
     	animationId = requestAnimationFrame(update);
 
     	return () => cancelAnimationFrame(animationId);
