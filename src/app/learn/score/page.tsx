@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, TextField, InputAdornment, useTheme, Chip, CircularProgress, Button, Dialog, DialogTitle, DialogContent,
-  IconButton
+  IconButton,TablePagination 
 } from '@mui/material';
 import { Search as SearchIcon, Visibility as VisibilityIcon, Download as DownloadIcon, Close as CloseIcon } from '@mui/icons-material';
 import { apiClientWithToken } from "@/utils/axios";
@@ -60,6 +60,19 @@ const ScoreManagement: React.FC = () => {
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
   const [scoreData, setScoreData] = useState<{ course_id: string; course_name: string; tests: any[]; experiments: any[] } | null>(null);
   const [loadingScores, setLoadingScores] = useState<{ [key: string]: boolean }>({}); // 修改为对象，跟踪每个课程的加载状态
+  const [page, setPage] = useState(0); // 当前页码，从0开始
+  const [rowsPerPage, setRowsPerPage] = useState(10); // 默认每页10行
+
+  // 处理页码变化
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  // 处理每页行数变化
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // 重置到第一页
+  };
 
   // 题型颜色映射
   const typeColorMap: Record<string, 'primary' | 'secondary' | 'warning' | 'success' | 'info'> = {
@@ -125,6 +138,12 @@ const ScoreManagement: React.FC = () => {
       item.description.toLowerCase().includes(searchLower)
     );
   });
+
+  // 计算分页后的数据
+  const paginatedCourses = filteredCourses.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
   // 样式辅助函数
   const getBgColor = () => isDarkMode ? '#121212' : '#f5f5f5';
@@ -192,14 +211,14 @@ const ScoreManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredCourses.length > 0 ? (
-                    filteredCourses.map((course) => (
-                      <React.Fragment key={course.course_id}>
-                        {course.items.map((item, itemIndex) => (
-                          <TableRow 
-                            key={`${course.course_id}-${item.id}`}
-                            sx={{ backgroundColor: getTableRowBgColor(itemIndex) }}
-                          >
+                 {paginatedCourses.length > 0 ? ( // 修改：使用 paginatedCourses
+                      paginatedCourses.map((course) => (
+                        <React.Fragment key={course.course_id}>
+                          {course.items.map((item, itemIndex) => (
+                            <TableRow 
+                              key={`${course.course_id}-${item.id}`}
+                              sx={{ backgroundColor: getTableRowBgColor(itemIndex) }}
+                            >
                             {itemIndex === 0 && (
                               <TableCell 
                                 rowSpan={course.items.length} 
@@ -288,6 +307,26 @@ const ScoreManagement: React.FC = () => {
                   )}
                 </TableBody>
               </Table>
+             <TablePagination
+                rowsPerPageOptions={[10, 30, 50]}
+                component="div"
+                count={filteredCourses.length} // 总数据量
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                labelRowsPerPage="每页行数:"
+                labelDisplayedRows={({ from, to, count }) => 
+                  `${from}-${to} 共 ${count !== -1 ? count : `超过 ${to}`}`
+                }
+                sx={{
+                  color: isDarkMode ? '#fff' : '#000',
+                  backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
+                  '& .MuiTablePagination-selectIcon': {
+                    color: isDarkMode ? '#fff' : '#000'
+                  }
+                }}
+              />
             </TableContainer>
           </CardContent>
         </Card>

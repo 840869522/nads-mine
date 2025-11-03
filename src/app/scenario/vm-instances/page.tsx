@@ -259,7 +259,7 @@ export default function VmPage() {
     /* ---- 本地 UI 状态 ---- */
     const [search, setSearch] = React.useState("");
     const [page, setPage] = React.useState(0);
-    const [rowsPerPage, setRowsPerPage] = React.useState(10);
+    const [rowsPerPage, setRowsPerPage] = React.useState(20);
     const [actionAnchor, setActionAnchor] = React.useState<{ anchor: HTMLElement | null; id: string | null }>({ anchor: null, id: null });
     const [actionLoading, setActionLoading] = React.useState(false);
     const [createOpen, setCreateOpen] = React.useState(false);
@@ -647,7 +647,7 @@ export default function VmPage() {
                         density="compact"
                         columnVisibilityModel={showColumns}
                         onColumnVisibilityModelChange={(m) => setShowColumns(m as any)}
-                        pageSizeOptions={[5, 10, 25]}
+                        pageSizeOptions={[5, 10,20, 25,50]}
                         paginationModel={{ pageSize: rowsPerPage, page }}
                         onPaginationModelChange={(m) => {
                             setRowsPerPage(m.pageSize);

@@ -87,12 +87,11 @@ class TestUsersModel extends Model{
     }
 
 
-        /**
+            /**
      * 单个删除测试用户（根据测试ID+用户名+试卷ID联合删除）
      * @param array $params 包含c_test_id、c_username、c_paper_id的数组
-     * @return int|bool 成功返回1，记录不存在返回false，业务限制返回-1
+     * @return int|bool 成功返回1，记录不存在返回false
      */
-    // 添加static关键字，将方法声明为静态方法
     public static function deleteSingleUser(array $params)
     {
         // 1. 提取参数（确保参数完整性，与控制器验证一致）
@@ -112,11 +111,8 @@ class TestUsersModel extends Model{
             return false;
         }
 
-        // 4. 业务限制：已交卷/已批改的记录不允许删除
-        // c_submit不为null表示已交卷，c_correct=2表示已完成批改
-        if (!empty($existingRecord->c_submit) || $existingRecord->c_correct === 2) {
-            return -1; // 返回-1标识业务限制
-        }
+        // 4. 关键修改：移除对已交卷/已批改记录的业务限制
+        // 现在允许删除任何状态的记录，包括已交卷和已批改的记录
 
         // 5. 执行删除操作（联合条件删除，确保只删除目标记录）
         $deleteCount = DB::table('c_test_users')

@@ -965,28 +965,37 @@ class InstanceController extends Controller
             // --- 步骤 1: 获取系统中所有的队伍（用于下拉菜单） ---
             $allTeams = Team::all(['c_id', 'c_name']);
 
-            // --- 步骤 2: 获取此演练当前关联的队伍，并预加载成员 ---
-            $adConfig = AdConfig::where('c_scene_instance_id', $instance->c_scene_instances_id)->first();
+            // --- 步骤 2: 从节点实例表中直接获取所有唯一的 team_id ---
+            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                ->distinct()
+                ->pluck('c_team_id');
 
+            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                ->distinct()
+                ->pluck('c_team_id');
+
+            $currentTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values();
+
+            // --- 步骤 3: 根据找到的 team_id，获取这些队伍及其成员的详细信息 ---
             $currentTeamsWithMembers = collect([]);
-            if ($adConfig) {
-                $currentTeamsWithMembers = $adConfig->teams()->with([
-                    'users:c_username,c_name'
-                ])->get()->keyBy('c_id');
+            if ($currentTeamIds->isNotEmpty()) {
+                $currentTeamsWithMembers = Team::whereIn('c_id', $currentTeamIds)
+                    ->with(['users:c_username,c_name'])
+                    ->get()
+                    ->keyBy('c_id');
             }
 
-            // --- 步骤 3: 获取所有节点（容器和虚拟机） ---
+            // --- 步骤 4: 获取所有节点（容器和虚拟机） ---
             $containers = $instance->containers()->get(['c_container_id', 'c_container_name', 'c_team_id']);
             $vms = $instance->vms()->get(['c_vm_id', 'c_vm_name', 'c_team_id']);
 
-            // --- 步骤 4: 组合节点数据 (这里的逻辑不变) ---
+            // --- 步骤 5: 组合节点数据 ---
             $nodes = [];
-            $nodeSources = $containers->concat($vms); // 合并容器和VM集合
+            $nodeSources = $containers->concat($vms);
 
             foreach ($nodeSources as $nodeSource) {
                 $isContainer = $nodeSource instanceof \App\Models\scenario\SceneContainerInstance;
                 $teamId = $nodeSource->c_team_id ? (int)$nodeSource->c_team_id : null;
-                // 从当前演练的队伍中查找队伍数据
                 $teamData = $teamId ? $currentTeamsWithMembers->get($teamId) : null;
 
                 $nodes[] = [
@@ -1008,7 +1017,7 @@ class InstanceController extends Controller
                 ];
             }
 
-            // --- 步骤 5: 返回最终的复合响应 ---
+            // --- 步骤 6: 返回最终的复合响应 ---
             return response()->json([
                 'status' => 'success',
                 'data' => [
@@ -1019,7 +1028,6 @@ class InstanceController extends Controller
                             'c_id'   => $team->c_id,
                             'c_name' => $team->c_name,
                             'users'  => $team->users->map(function ($user) {
-                                // ★★★ 在这里添加完整的格式化逻辑 ★★★
                                 return [
                                     'c_username' => $user->c_username,
                                     'c_name'     => $user->c_name,
@@ -1031,11 +1039,11 @@ class InstanceController extends Controller
                 ]
             ]);
 
-            } catch (\Exception $e) {
-                Log::error("获取实例节点及成员列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-                return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
-            }
+        } catch (\Exception $e) {
+            Log::error("获取实例节点及成员列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
         }
+    }
 
     /**
      * 批量更新指定场景实例下节点的队伍归属。

@@ -17,7 +17,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { ManagedImage } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
-import { customFetch } from '@/utils/fetch';
+import {customFetch} from "@/utils/fetch.ts";
 
 const API_BASE = '/back/api';
 

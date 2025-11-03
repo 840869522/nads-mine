@@ -242,12 +242,6 @@ public static function updateExperiment(string $courseId, string $experimentId, 
                 'message' => 'Invalid time format: c_start/c_end must be Y-m-d H:i:s',
             ];
         }
-        if ($startTime <= time()) {
-            return [
-                'code' => 422,
-                'message' => 'c_start must be after current time',
-            ];
-        }
         if ($endTime <= $startTime) {
             return [
                 'code' => 422,
