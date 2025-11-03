@@ -32,7 +32,7 @@ human_template = """
 
 chat_template = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(system_template),
-    MessagesPlaceholder(variable_name="history"),
+    # MessagesPlaceholder(variable_name="history"),
     HumanMessagePromptTemplate.from_template(human_template)
 ]
 )
@@ -54,7 +54,11 @@ retriever = vector_store.as_retriever(
     search_type="similarity",
     search_kwargs={
         'k': 6,
-        'score_threshold': 0.7
+        'score_threshold': 0.7,
+        'search_params': {
+            'hnsw_ef': 50,
+            'quantization_search': True, 
+        }
     }
 )
 
@@ -75,7 +79,7 @@ def search_document(info):
 rag_chain = (
         {
             "question": itemgetter("question"),
-            "history": itemgetter("history")
+            # "history": itemgetter("history")
         }
         | RunnableLambda(search_document)
         | chat_template
@@ -83,23 +87,23 @@ rag_chain = (
         | StrOutputParser()
 )
 
-rag_chain_memory = RunnableWithMessageHistory(
-    rag_chain,
-    get_session_history=lambda session_id: chat_memory.chat_memory,
-    # SQLChatMessageHistory(
-    #     connection_string = config['database']["uri"],
-    #     table_name= config['database']['table']
-    #     session_id=session_id,
-    #     session_id_field_name="session_id"
-    # ),
-    input_messages_key="question",
-    history_messages_key="history"
-)
+# rag_chain_memory = RunnableWithMessageHistory(
+#     rag_chain,
+#     get_session_history=lambda session_id: chat_memory.chat_memory,
+#     # SQLChatMessageHistory(
+#     #     connection_string = config['database']["uri"],
+#     #     table_name= config['database']['table']
+#     #     session_id=session_id,
+#     #     session_id_field_name="session_id"
+#     # ),
+#     input_messages_key="question",
+#     history_messages_key="history"
+# )
 
 
 async def agenerate_response(message: str):
     handler = StreamOutputHandler(chunk_threshold=3)
-    async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
+    async for chunk in rag_chain.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
         clear_chunk = chunk.strip()
         if clear_chunk:
             processed_chunk = base64.b64encode(chunk.encode("utf-8")).decode('utf-8')
@@ -107,7 +111,7 @@ async def agenerate_response(message: str):
 
 async def generate_response(message: str):
     try:
-        responses = await rag_chain_memory.ainvoke(
+        responses = await rag_chain.ainvoke(
             {"question": message},
             {"configurable": {"session_id": "session_123"}}
         )

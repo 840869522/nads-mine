@@ -21,7 +21,7 @@ const AI_CHAT_PORT = process.env.AI_CHAT_PORT || 9000;
 
 // --- Target URLs for Proxies ---
 const GUAC_TARGET_URL = `http://127.0.0.1:${GUAC_INTERNAL_PORT}`;
-const PHP_TARGET_URL = `http://127.0.0.1:${PHP_API_PORT}`;
+const PHP_TARGET_URL = "http://10.12.0.102:13000/back"; //`http://127.0.0.1:${PHP_API_PORT}`;
 const AI_CHAT_URL = `http://127.0.0.1:${AI_CHAT_PORT}`;
 
 
