@@ -3,6 +3,7 @@ import {useLayoutEffect, useRef, useState} from "react";
 import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, CallbackProperty } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
+import axios from "axios";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -150,12 +151,120 @@ interface FlagLog {
     blueLogList: LogInfo[];
 }
 
+// 定义方向枚举 (TypeScript Enum)
+export enum MovementDirection {
+    EAST = 'EAST',
+    WEST = 'WEST',
+    NORTH = 'NORTH',
+    SOUTH = 'SOUTH',
+    UP = 'UP',
+    DOWN = 'DOWN',
+}
+
+function animateEntityCardinalMove(
+    entity: Cesium.Entity,
+    direction: MovementDirection,
+    distanceInMeters: number,
+    viewer: Cesium.Viewer
+): Promise<boolean> {
+    
+    // 动画时长固定为 2.0 秒
+    const durationSeconds: number = 2.0;
+    const initialTime: Cesium.JulianDate = viewer.clock.currentTime;
+    // 计算结束时间
+    const finalTime: Cesium.JulianDate = Cesium.JulianDate.addSeconds(initialTime, durationSeconds, new Cesium.JulianDate());
+
+    // 1. 获取当前笛卡尔坐标（起点）
+    const startPosition: Cesium.Cartesian3 | undefined = entity.position?.getValue(initialTime);
+    
+    if (!startPosition) {
+        return Promise.reject(new Error('实体无效或无法获取当前位置。'));
+    }
+
+    // 2. 根据起点、方向和距离计算终点
+
+    // 获取 East-North-Up (ENU) 局部坐标系转换矩阵。
+    const modelMatrix: Cesium.Matrix4 = Cesium.Transforms.eastNorthUpToFixedFrame(startPosition, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
+    
+    // 从模型矩阵中提取局部方向向量 (Cartesian3)
+    const eastVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 0, new Cesium.Cartesian4());
+    const northVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 1, new Cesium.Cartesian4());
+    const upVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 2, new Cesium.Cartesian4());
+
+    const east: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(eastVector4, new Cesium.Cartesian3());
+    const north: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(northVector4, new Cesium.Cartesian3());
+    const up: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(upVector4, new Cesium.Cartesian3());
+    
+    let directionVector: Cesium.Cartesian3 = new Cesium.Cartesian3();
+
+    switch (direction) {
+        case MovementDirection.EAST:
+            directionVector = Cesium.Cartesian3.multiplyByScalar(east, distanceInMeters, directionVector);
+            break;
+        case MovementDirection.WEST: // 西 = -东
+            directionVector = Cesium.Cartesian3.multiplyByScalar(east, -distanceInMeters, directionVector);
+            break;
+        case MovementDirection.NORTH:
+            directionVector = Cesium.Cartesian3.multiplyByScalar(north, distanceInMeters, directionVector);
+            break;
+        case MovementDirection.SOUTH: // 南 = -北
+            directionVector = Cesium.Cartesian3.multiplyByScalar(north, -distanceInMeters, directionVector);
+            break;
+        case MovementDirection.UP:
+            directionVector = Cesium.Cartesian3.multiplyByScalar(up, distanceInMeters, directionVector);
+            break;
+        case MovementDirection.DOWN: // 下 = -上
+            directionVector = Cesium.Cartesian3.multiplyByScalar(up, -distanceInMeters, directionVector);
+            break;
+        default:
+            // TypeScript 的类型保护使我们知道这里不会被访问，但为了运行时安全仍然保留
+            return Promise.reject(new Error(`无效的方向参数: ${direction}`));
+    }
+    
+    // 计算终点位置 (起点 + 移动向量)
+    const endPosition: Cesium.Cartesian3 = Cesium.Cartesian3.add(startPosition, directionVector, new Cesium.Cartesian3());
+
+    // 3. 创建 SampledPositionProperty 并定义动画
+    const positionProperty: Cesium.SampledPositionProperty = new Cesium.SampledPositionProperty();
+    
+    positionProperty.setInterpolationOptions({
+        interpolationDegree: 1,
+        interpolationAlgorithm: Cesium.LagrangePolynomialApproximation
+    });
+
+    // 添加起点和终点
+    positionProperty.addSample(initialTime, startPosition);
+    positionProperty.addSample(finalTime, endPosition);
+
+    // 4. 赋值给实体并启动时钟
+    entity.position = positionProperty;
+    viewer.clock.shouldAnimate = true;
+    
+    // 5. 动画完成后的处理：用固定位置替换 SampledPositionProperty
+    return new Promise((resolve: (value: boolean) => void) => {
+        let finished: boolean = false;
+        
+        // 监听每一帧渲染
+        const removeListener: Cesium.Event.RemoveCallback = viewer.scene.postRender.addEventListener(() => {
+            if (Cesium.JulianDate.greaterThanOrEquals(viewer.clock.currentTime, finalTime) && !finished) {
+                removeListener();
+                finished = true;
+                
+                // 替换为 ConstantPositionProperty，固定模型在终点位置
+                entity.position = new Cesium.ConstantPositionProperty(endPosition.clone());
+                
+                resolve(true);
+            }
+        });
+    });
+}
+
 /**
  * 获取 VM 列表并拆分 trueList / falseList
  */
 async function fetchVMs(instanceId: string): Promise<VMResult> {
     try {
-        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/vms`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -170,7 +279,7 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
 
 async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
-        const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/logs`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -367,18 +476,153 @@ export default function Battlefield (adData: AdData) {
         //         console.error("解析 WebSocket 数据失败:", e, data);
         //     }
         // };
-        
-        if(adData && adData.id !== ""){
-            fetchData();
-            // websocketClient.onMessage(handleMessage);
-        }
 
-        const center1: [number, number] = [117.54, 36.17];
+        const center1: [number, number] = [117.55, 36.17];
         const latRange = 0.01;
         const lonRange = 0.01;
         const heightRange: [number, number] = [500, 1500];
 
-        const center2: [number, number] = [117.61, 36.17];
+        const center2: [number, number] = [117.60, 36.17];
+
+        const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange,1);
+        const pos = randomPositions1[0];
+        const entity = addPlaneEntity({
+            viewer,
+            name: `redPlane1`,
+            position:  [pos[0], pos[1], pos[2]],
+            heading: 0,
+            pitch: 0,
+            roll: 0
+        });
+
+        let intervalId: any;
+        
+        if(adData && adData.id !== ""){
+            fetchData();
+            let lastTime = 0;
+            let lastData : any = null;
+            const pollingCallback = () => {
+        
+                let now = Math.floor(Date.now() / 1000);
+                
+                if(now - lastTime > 3)
+                    lastTime = now;
+                else
+                    return;
+                
+                axios.get('/api/drone') 
+                    .then(response => {
+                        if(response.data.status === 200){
+                            let data = response.data.data;
+                            
+                            if(lastData === null){
+                                lastData = data;
+                                return;
+                            }
+                            if(data.x - lastData.x > 1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.EAST, 
+                                    (data.x - lastData.x) * 200, 
+                                    viewer
+                                );
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向东移动了${(data.x - lastData.x).toFixed(2)}m`
+                                    }]
+                                }));
+                            }
+                            else if(data.x - lastData.x < -1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.WEST, 
+                                    (lastData.x - data.x) * 200, 
+                                    viewer
+                                )
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向西移动了${(lastData.x - data.x).toFixed(2)}m`
+                                    }]
+                                }));
+                            }else if(data.y - lastData.y > 1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.NORTH, 
+                                    (data.y - lastData.y) * 200, 
+                                    viewer
+                                )
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向北移动了${(data.y - lastData.y).toFixed(2)}m`
+                                    }]
+                                }));
+                            }else if(data.y - lastData.y < -1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.SOUTH, 
+                                    (lastData.y - data.y) * 200, 
+                                    viewer
+                                )
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向南移动了${(lastData.y - data.y).toFixed(2)}m`
+                                    }]
+                                }));
+                            }else if(data.z - lastData.z < -1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.UP, 
+                                    (lastData.z - data.z) * 200, 
+                                    viewer
+                                )
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向上移动了${(lastData.z - data.z).toFixed(2)}m`
+                                    }]
+                                }));
+                            }else if(data.z - lastData.z > 1){
+                                animateEntityCardinalMove(
+                                    entity, 
+                                    MovementDirection.DOWN, 
+                                    (data.z - lastData.z) * 200, 
+                                    viewer
+                                )
+                                setRedTeamState(prev => ({
+                                    ...prev,
+                                    logInfo: [...prev.logInfo, {
+                                        logId: Date.now(),
+                                        logTime: new Date().toLocaleTimeString(),
+                                        logContent: `无人机向下移动了${(data.z - lastData.z).toFixed(2)}m`
+                                    }]
+                                }));
+                            }
+                            lastData = data;
+                        }
+                        console.log(`[Polling] 成功收到响应:`, response.data.data);
+                    })
+                    .catch((error: any) => {
+                        console.log('[Polling] 请求失败:', error);
+                    })
+            };
+            pollingCallback();
+            intervalId = setInterval(pollingCallback, 5000);
+            // websocketClient.onMessage(handleMessage);
+        }
         
         let canceled = false;
 
@@ -422,6 +666,7 @@ export default function Battlefield (adData: AdData) {
         return () => {
             canceled = true;
             viewer.destroy();
+            clearInterval(intervalId);
             // websocketClient.offMessage(handleMessage);
         };
     }, [adData.id]);

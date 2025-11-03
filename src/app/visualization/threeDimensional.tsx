@@ -300,7 +300,7 @@ interface FlagLog {
  */
 async function fetchVMs(instanceId: string): Promise<VMResult> {
     try {
-        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/vms`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -315,7 +315,7 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
 
 async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
-        const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/logs`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -326,6 +326,18 @@ async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
         // 异常时返回空列表，保证类型安全
         return [];
     }
+}
+
+async function fetchAttackLogs(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/${sceneId}/att`);
+    const result = await res.json();
+
+    // if (result.code !== 200) {
+    //     console.error(result.message);
+    //     return [];
+    // }
+
+    return result; // 这里是对象数组 [{ userId, username }, ...]
 }
 
 export default function ThreeDimensional(adData: AdData){
@@ -982,6 +994,31 @@ export default function ThreeDimensional(adData: AdData){
             fetchData();
         }
 
+        // setInterval(() => {
+        //     fetchAttackLogs(adData.id).then(result => {
+        //         //console.log(result);
+
+        //         if (result.code !== 200) {
+        //             const blue1 = blueNodes[0];
+        //             const blue2 = blueNodes[1];
+
+        //             if (blue1 && blue2) {
+        //                 shootRay(scene, blue1.object, blue2.object);
+        //             }
+        //         } else {
+        //             const data = result.data;
+        //             for (let i = 0; i < data.length; ++i) {
+        //                 const blue1 = blueNodes.find(n => n.ip === data[i][0]);
+        //                 const blue2 = blueNodes.find(n => n.ip === data[i][1]);
+        //                 if (blue1 && blue2) {
+        //                     shootRay(scene, blue1.object, blue2.object);
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }, 10000); // 每10秒执行一次
+
+
         let shootingPaused = false;
 
         document.addEventListener("visibilitychange", () => {
@@ -991,12 +1028,17 @@ export default function ThreeDimensional(adData: AdData){
 
         if(adData.showAttack === 1){
             setTimeout(function shootLoop() {
-                if(redSpaceships.length > 0 && blueSpaceships.length > 0){
-                    const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
-                    const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+                if(redSpaceships.length > 0 && blueSpaceships.length > 1){
+                    const index1 = Math.floor(Math.random() * blueSpaceships.length);
+                    const blue1 = blueSpaceships[index1];
+                    let index2;
+                    do {
+                        index2 = Math.floor(Math.random() * blueSpaceships.length);
+                    } while (index2 === index1);
+                    const blue2 = blueSpaceships[index2];
 
-                    if (red && blue && !shootingPaused) {
-                        shootRay(scene, red.object, blue.object);
+                    if (blue1 && blue2 && !shootingPaused) {
+                        shootRay(scene, blue1.object, blue2.object);
                     }
 
                     // 下次间隔：5~10 秒
