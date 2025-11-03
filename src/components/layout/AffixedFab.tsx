@@ -20,13 +20,12 @@ const StyledFab = styled(Fab, {
 }));
 
 interface AffixedFabWrapperProps {
-    onClick: ()=>void
+    
 }
-const AffixedFabWrapper:React.FC<AffixedFabWrapperProps> = ({onClick}) => {
+const AffixedFabWrapper:React.FC<AffixedFabWrapperProps> = () => {
     return (
         <StyledFab
-            affixed={true}
-            onClick={onClick}
+            affixed={false}
         >
             <AiIcon sx={{ color: 'primary.contrastText' }}/>
         </StyledFab>

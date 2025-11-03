@@ -22,7 +22,49 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
   const [chatOpen, setChatOpen] = useState<boolean>(false);
-  const [isCheckAuth , setIsAuthCheck] = useState<boolean>(true);
+  const [isCheckAuth, setIsAuthCheck] = useState<boolean>(true);
+  const [chatPosition, setChatPosition] = useState({ x: 100, y: 100 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - chatPosition.x,
+      y: e.clientY - chatPosition.y
+    });
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging) {
+      setChatPosition({
+        x: window.innerWidth - (e.clientX - dragOffset.x),
+      y: window.innerHeight - (e.clientY - dragOffset.y)
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
 
   useEffect(() => {
     const permissionsData = user?.permission || [];
@@ -51,18 +93,27 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const aiChat = useMemo(() => {
     if (user)
       return (
-        <Box>
-          <AffixedFabWrapper onClick={() => { setChatOpen(true) }} />
+        <Box
+          style={{
+            position: 'fixed',
+            right: `${chatPosition.x}px`,
+            bottom: `${chatPosition.y}px`,
+            cursor: isDragging ? 'grabbing' : 'grab',
+            zIndex: 1000
+          }}
+          onMouseDown={handleMouseDown}
+          onDoubleClick={() => { setChatOpen(true) }}
+        >
           {
-            chatOpen &&
-            <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} width='25vw' />
+            chatOpen ?
+              <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} width='25vw' /> : <AffixedFabWrapper />
           }
         </Box>
       )
     else {
       return null;
     }
-  }, [user, chatOpen]);
+  }, [user, chatOpen, chatPosition, isDragging]);
 
   const showSidebar = Boolean(user) && pathname !== '/login' && !pathname.startsWith('/guac') && !pathname.startsWith('/visualization');
 
