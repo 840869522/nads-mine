@@ -477,23 +477,23 @@ export default function Battlefield (adData: AdData) {
         //     }
         // };
 
-        const center1: [number, number] = [117.54, 36.17];
+        const center1: [number, number] = [117.55, 36.17];
         const latRange = 0.01;
         const lonRange = 0.01;
         const heightRange: [number, number] = [500, 1500];
 
-        const center2: [number, number] = [117.61, 36.17];
+        const center2: [number, number] = [117.60, 36.17];
 
         const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange,1);
         const pos = randomPositions1[0];
-                const entity = addPlaneEntity({
-                    viewer,
-                    name: `redPlane1`,
-                    position:  [pos[0], pos[1], pos[2]],
-                    heading: 0,
-                    pitch: 0,
-                    roll: 0
-                });
+        const entity = addPlaneEntity({
+            viewer,
+            name: `redPlane1`,
+            position:  [pos[0], pos[1], pos[2]],
+            heading: 0,
+            pitch: 0,
+            roll: 0
+        });
 
         let intervalId: any;
         
@@ -519,7 +519,7 @@ export default function Battlefield (adData: AdData) {
                                 lastData = data;
                                 return;
                             }
-                            if(data.x - lastData.x == 0){
+                            if(data.x - lastData.x > 1){
                                 animateEntityCardinalMove(
                                     entity, 
                                     MovementDirection.EAST, 
