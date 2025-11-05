@@ -3,8 +3,7 @@
 import { NextResponse } from 'next/server';
 import axios, { AxiosError } from 'axios';
 
-// 🚨 目标 URL：你的 Drone 服务的 /ping 接口
-const PING_URL = 'http://10.100.0.9:3128/uav/state';
+const DEFAULT_IP = '10.100.0.130';
 
 /**
  * Next.js API Route for GET /api/ping-drone
@@ -12,6 +11,12 @@ const PING_URL = 'http://10.100.0.9:3128/uav/state';
  * @param request Request对象 (未使用)
  */
 export async function GET(request: Request) {
+    // 1. 从 Request 对象中解析 URL 和查询参数
+    const { searchParams } = new URL(request.url);
+    
+    // 获取 ip 参数，如果不存在则使用默认值
+    const ip = searchParams.get('ip') || DEFAULT_IP;
+    const PING_URL = `http://${ip}:3128/get_control_signal`;
     console.log(`[Ping Check] Attempting to connect to: ${PING_URL}`);
 
     // axios 配置：确保不使用任何代理，直接连接目标

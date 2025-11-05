@@ -913,12 +913,18 @@ export default function ThreeDimensional(adData: AdData){
         }
 
         setTimeout(function shootLoop() {
-            if(redNodes.length > 0 && blueNodes.length > 0){
-                const red = redNodes[Math.floor(Math.random() * redNodes.length)];
-                const blue = blueNodes[Math.floor(Math.random() * blueNodes.length)];
+            console.log(blueNodes.length);
+            if(blueNodes.length > 1){
+                 const index1 = Math.floor(Math.random() * blueNodes.length);
+                    const blue1 = blueNodes[index1];
+                    let index2;
+                    do {
+                        index2 = Math.floor(Math.random() * blueNodes.length);
+                    } while (index2 === index1);
+                const blue2 = blueNodes[index2];
 
-                if (red && blue) {
-                    shootRay(scene, red.object, blue.object);
+                if (blue1 && blue2) {
+                    shootRay(scene, blue1.object, blue2.object);
                 }
 
                 // 下次间隔：5~10 秒
@@ -1027,15 +1033,17 @@ export default function ThreeDimensional(adData: AdData){
 
 
         if(adData.showAttack === 1){
+            console.log(redSpaceships.length);
             setTimeout(function shootLoop() {
-                if(redSpaceships.length > 0 && blueSpaceships.length > 1){
-                    const index1 = Math.floor(Math.random() * blueSpaceships.length);
-                    const blue1 = blueSpaceships[index1];
+                if(redSpaceships.length > 1){
+                    debugger
+                    const index1 = Math.floor(Math.random() * redSpaceships.length);
+                    const blue1 = redSpaceships[index1];
                     let index2;
                     do {
-                        index2 = Math.floor(Math.random() * blueSpaceships.length);
+                        index2 = Math.floor(Math.random() * redSpaceships.length);
                     } while (index2 === index1);
-                    const blue2 = blueSpaceships[index2];
+                    const blue2 = redSpaceships[index2];
 
                     if (blue1 && blue2 && !shootingPaused) {
                         shootRay(scene, blue1.object, blue2.object);
