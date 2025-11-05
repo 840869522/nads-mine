@@ -25,7 +25,6 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\ad\Team;
 use App\Models\ad\AdConfig;
 
-
 class InstanceController extends Controller
 {
     protected DockerService $docker;
@@ -223,6 +222,21 @@ class InstanceController extends Controller
         // 将所有数据库操作包裹在一个事务中
         DB::beginTransaction();
         try {
+
+            Log::info("正在检查是否有 AdConfig 关联此实例: {$instanceId}");
+                        $relatedAdConfig = AdConfig::where('c_scene_instance_id', $instanceId)->first();
+
+                        if ($relatedAdConfig) {
+                            Log::info("发现关联的演练配置 '{$relatedAdConfig->c_drill_name}'，将更新其状态。");
+                            $relatedAdConfig->update([
+                                'c_status' => 'finished', // 或 'archived', 根据业务逻辑决定
+                                'c_scene_instance_id' => null, // 清空关联
+                                'c_end_time' => now(),
+                            ]);
+                            Log::info("演练配置 '{$relatedAdConfig->c_drill_name}' 状态已更新。");
+                        } else {
+                            Log::info("没有发现关联的演练配置。");
+                        }
             // 步骤 1: 清理物理资源 (虚拟机、容器、交换机)
             foreach ($instance->vms as $vm) {
                 try {
@@ -589,7 +603,7 @@ class InstanceController extends Controller
      * 解析并应用拓扑差异：创建新增的交换机、容器、虚拟机，并建立必要连接。
      * 仅处理新增，不删除既有资源。
      */
-    private function applyTopologyDiff(SceneInstance $instance, array $topology): array
+    public function applyTopologyDiff(SceneInstance $instance, array $topology): array
     {
         $parsed = TopologyParser::parse($topology);
         $connections = &$parsed['connections'];
@@ -898,7 +912,7 @@ class InstanceController extends Controller
         ];
     }
 
-    private function sanitizeName(string $label): string
+    public function sanitizeName(string $label): string
     {
         return str_replace([' '], '_', $label);
     }
@@ -906,7 +920,7 @@ class InstanceController extends Controller
     /**
      * 复制 DrillController 的 IP 分配逻辑，避免与数据库中已有IP冲突。
      */
-    private function assignIpAddresses(array &$connections): void
+    public function assignIpAddresses(array &$connections): void
     {
         $vmIps = DB::table('c_scene_vm_instances')->whereNotNull('c_ip')->pluck('c_ip');
         $containerIps = DB::table('c_scene_container_instances')->whereNotNull('c_ip')->pluck('c_ip');

@@ -362,6 +362,7 @@ Route::post('/ad-configs/{adConfig}/start', [AdConfigController::class, 'start']
 // 停止演练 (简单状态变更)
 Route::post('/ad-configs/{adConfig}/stop', [AdConfigController::class, 'stop']);
 
+Route::put('/ad-configs/{adConfig}/topology', [AdConfigController::class, 'updateTopology']);
 
 /**
  * 攻防演练核心功能组 (ad)

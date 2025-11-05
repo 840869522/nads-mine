@@ -170,39 +170,39 @@ export default function Team(team:BattlefieldInfo) {
     useEffect(() => {
         let teams: TeamInfo[] = [];
         if(team.type === 1){
-            //setTeamList(redTeamInfos);
-            fetchTeamMembers(team.sceneId).then(users => {
-                for(let i = 0; i < users.length; ++i){
-                    let item: TeamInfo = {
-                        teamId: users[i].userId,
-                        teamName: users[i].userId,
-                        teamScore: getRandomDivisibleBy5() / 5
-                    }
-                    teams.push(item);
-                }
-                teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
-                if(users === null || users.length === 0)
-                    setTeamList(redTeamInfos);
-                else
-                    setTeamList(teams);
-            });
+            setTeamList(redTeamInfos);
+            // fetchTeamMembers(team.sceneId).then(users => {
+            //     for(let i = 0; i < users.length; ++i){
+            //         let item: TeamInfo = {
+            //             teamId: users[i].userId,
+            //             teamName: users[i].userId,
+            //             teamScore: getRandomDivisibleBy5() / 5
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
+            //     if(users === null || users.length === 0)
+            //         setTeamList(redTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
         }else{
-            //setTeamList(blueTeamInfos);
-            fetchTeams(team.sceneId).then(teamList => {
-                for(let j = 0; j < teamList.length; ++j){
-                    let item: TeamInfo = {
-                        teamId: teamList[j].teamId.toString(),
-                        teamName: teamList[j].teamName,
-                        teamScore: getRandomDivisibleBy5()
-                    }
-                    teams.push(item);
-                }
-                teams.sort((c: TeamInfo, d: TeamInfo) => d.teamScore - c.teamScore);
-                if(teams.length === 0)
-                    setTeamList(blueTeamInfos);
-                else
-                    setTeamList(teams);
-            });
+            setTeamList(blueTeamInfos);
+            // fetchTeams(team.sceneId).then(teamList => {
+            //     for(let j = 0; j < teamList.length; ++j){
+            //         let item: TeamInfo = {
+            //             teamId: teamList[j].teamId.toString(),
+            //             teamName: teamList[j].teamName,
+            //             teamScore: getRandomDivisibleBy5()
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((c: TeamInfo, d: TeamInfo) => d.teamScore - c.teamScore);
+            //     if(teams.length === 0)
+            //         setTeamList(blueTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
         }
     }, [team.sceneId])
 
@@ -288,14 +288,14 @@ const redTeamInfos: TeamInfo[] = [
         teamName: 'student5',
         teamScore: 10
     },
-    {
-        teamId: '6',
-        teamName: 'student6',
-        teamScore: 10
-    },
-    {
-        teamId: '7',
-        teamName: 'student7',
-        teamScore: 0
-    },
+    // {
+    //     teamId: '6',
+    //     teamName: 'student6',
+    //     teamScore: 10
+    // },
+    // {
+    //     teamId: '7',
+    //     teamName: 'student7',
+    //     teamScore: 0
+    // },
 ]

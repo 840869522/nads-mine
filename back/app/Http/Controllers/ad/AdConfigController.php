@@ -20,6 +20,8 @@ use App\Models\scenario\SceneContainerInstance;
 use App\Models\scenario\SceneVmInstance;
 use App\Models\ad\Team;
 use App\Utils\JWTControll;
+use App\Http\Controllers\scenario\InstanceController; // ★ 新增：引入 InstanceController 以复用其方法
+use Illuminate\Support\Facades\Validator;             // ★ 新增：引入 Validator 以便在新方法中使用
 
 class AdConfigController extends Controller
 {
@@ -100,10 +102,6 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
-
-            // ★★★ 核心修复: 移除对 teams 字段的验证，因为它不在这里设置 ★★★
-            // 'teams'                => 'present|array',
-            // 'teams.*'              => 'integer|exists:c_teams,c_id',
         ], [
             'c_drill_name.unique' => '该演练名称已被使用。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
@@ -137,22 +135,15 @@ class AdConfigController extends Controller
                 Referee::insert($refereesToInsert);
             }
 
-            // ★★★ 核心修复: 移除同步 teams 的逻辑 ★★★
-            // if (isset($validated['teams'])) {
-            //     $adConfig->teams()->sync($validated['teams']);
-            // }
-
             return $adConfig;
         });
 
-        // ★★★ 核心修复: 从 load() 中移除 teams ★★★
         $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
 
     public function show(AdConfig $adConfig)
     {
-        // ★★★ 核心修复: 从 load() 中移除 teams，AdConfig 与 Team 没有直接关系 ★★★
         $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
@@ -170,10 +161,6 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
-
-            // ★★★ 核心修复: 移除对 teams 字段的验证 ★★★
-            // 'teams'                => 'present|array',
-            // 'teams.*'              => 'integer|exists:c_teams,c_id',
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
@@ -193,14 +180,8 @@ class AdConfigController extends Controller
                 }
                 Referee::insert($refereesToInsert);
             }
-
-            // ★★★ 核心修复: 移除同步 teams 的逻辑 ★★★
-            // if (isset($validated['teams'])) {
-            //     $adConfig->teams()->sync($validated['teams']);
-            // }
         });
 
-        // ★★★ 核心修复: 从 load() 中移除 teams ★★★
         $adConfig->load(['referees.user', 'sceneConfig']);
         return new AdConfigResource($adConfig);
     }
@@ -323,6 +304,69 @@ class AdConfigController extends Controller
         } catch (Exception $e) {
             Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
+        }
+    }
+
+    // =========================================================================
+    // ★★★★★★★★★★★★★★★★★ 新增的功能代码 ★★★★★★★★★★★★★★★★★
+    // =========================================================================
+
+    /**
+     * 动态更新一个正在运行的攻防演练的拓扑。
+     *
+     * @param Request $request
+     * @param AdConfig $adConfig (通过路由模型绑定注入)
+     * @return JsonResponse
+     */
+    public function updateTopology(Request $request, AdConfig $adConfig): JsonResponse
+    {
+        // 步骤 A: 检查演练状态
+        if ($adConfig->c_status !== 'running' || !$adConfig->c_scene_instance_id) {
+            return response()->json(['message' => '只有正在运行的演练才能更新拓扑。'], 400);
+        }
+
+        // 步骤 B: 验证前端发来的新拓扑数据
+        try {
+            $validated = Validator::make($request->all(), [
+                'topology' => 'required|array',
+                'topology.nodes' => 'present|array',
+                'topology.edges' => 'present|array',
+            ])->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => '数据验证失败', 'errors' => $e->errors()], 422);
+        }
+
+        // 步骤 C: 找到关联的场景实例
+        $sceneInstance = SceneInstance::find($adConfig->c_scene_instance_id);
+        if (!$sceneInstance) {
+            return response()->json(['message' => '找不到关联的场景实例，无法应用变更。'], 404);
+        }
+
+        try {
+            // 步骤 D: (核心) 创建 InstanceController 实例并调用其公共方法
+            $instanceController = app(InstanceController::class);
+            $applyResult = $instanceController->applyTopologyDiff($sceneInstance, $validated['topology']);
+
+            // 步骤 E: 更新场景实例自己的拓扑配置快照，以反映最新状态
+            $sceneInstance->c_scene_config = $validated['topology'];
+            $sceneInstance->save();
+
+            Log::info('攻防演练拓扑已动态更新并应用', [
+                'ad_config_id' => $adConfig->c_id,
+                'scene_instance_id' => $sceneInstance->c_scene_instances_id
+            ]);
+
+            return response()->json([
+                'message' => '演练拓扑已成功更新并应用',
+                'applied' => $applyResult,
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('动态更新攻防演练拓扑时失败: ' . $e->getMessage(), [
+                'ad_config_id' => $adConfig->c_id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['message' => '应用拓扑变更时发生服务器错误：' . $e->getMessage()], 500);
         }
     }
 }

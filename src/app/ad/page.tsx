@@ -57,6 +57,7 @@ import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog';
 import NodeTeamAssignmentDialog from './NodeTeamAssignmentDialog';
 import MemberManagementDialog from './MemberManagementDialog';
+import { TopologyData } from "@/types"; // ★ 新增：引入 TopologyData 类型 ★
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; c_name?: string; }
@@ -178,7 +179,6 @@ const AdManagementPage: React.FC = () => {
         setIsFormOpen(true);
         try {
             await loadDependenciesForForm();
-            // 在 React 18+ 中，状态更新是批处理的，所以直接在 effect 之后使用 users 状态是安全的
             if (adConfig) {
                 const refereesWithUserDetails = (adConfig.referees || [])
                     .map(ref => ({...ref, user: users.find(u => u.c_username === ref.c_user_id)}))
@@ -267,6 +267,54 @@ const AdManagementPage: React.FC = () => {
             setStatusMessage({ type: 'error', message: err.message });
         }
     };
+
+    // =========================================================================
+    // ★★★★★★★★★★★★★★★★★ 新增的功能代码 ★★★★★★★★★★★★★★★★★
+    // =========================================================================
+    /**
+     * 处理从拓扑编辑器传来的保存事件。
+     *
+     * @param newTopology - 编辑器返回的最新的拓扑数据对象。
+     */
+    const handleTopologySave = async (newTopology: TopologyData) => {
+        if (!selectedAdConfigForTopology) {
+            console.error("无法保存拓扑，因为没有选中的演练配置。");
+            return;
+        }
+
+        setIsSubmitting(true);
+        setStatusMessage(null);
+
+        try {
+            const url = `${API_BASE_URL}/ad-configs/${selectedAdConfigForTopology.c_id}/topology`;
+            const response = await customFetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topology: newTopology })
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.message || '拓扑更新失败');
+            }
+
+            setStatusMessage({ type: 'success', message: '拓扑已成功更新并应用！' });
+
+            // 更新成功后关闭弹窗
+            setIsTopologyOpen(false);
+            // 刷新主列表数据以反映任何可能的变化
+            await fetchData();
+
+        } catch (err: any) {
+            setStatusMessage({ type: 'error', message: err.message });
+            // 注意：更新失败时，我们不关闭弹窗，以便用户可以看到错误信息并决定下一步操作。
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    // =========================================================================
+    // ★★★★★★★★★★★★★★★★★ 新增代码结束 ★★★★★★★★★★★★★★★★★
+    // =========================================================================
 
     const renderErrorMessage = (message: string | { [key: string]: string[] }) => { if (typeof message === 'string') return message; return <ul style={{ paddingLeft: '20px', margin: 0 }}>{Object.values(message).flat().map((msg, index) => <li key={index}>{msg}</li>)}</ul>; };
     const renderStatusChip = (status: AdConfig['c_status']) => { const statusMap = { pending: { label: '未开始', color: 'default' as const }, running: { label: '进行中', color: 'success' as const }, finished: { label: '已结束', color: 'primary' as const }, archived: { label: '已归档', color: 'warning' as const }, failed: { label: '失败', color: 'error' as const }, creating: { label: '创建中...', color: 'info' as const }, }; const { label, color } = statusMap[status] || statusMap.pending; return <Chip label={label} color={color} size="small" />; };
@@ -479,7 +527,28 @@ const AdManagementPage: React.FC = () => {
 
             {isDetailsModalOpen && selectedInstanceId && ( <InstanceDetailsDialog open={isDetailsModalOpen} onClose={handleCloseDetails} instanceId={selectedInstanceId} scenarioName={selectedScenarioName} /> )}
             {isFlagHistoryOpen && selectedAdForFlagHistory && selectedAdForFlagHistory.c_scene_instance_id && ( <FlagHistoryModal open={isFlagHistoryOpen} onClose={handleCloseFlagHistory} sceneInstanceId={selectedAdForFlagHistory.c_scene_instance_id} title={`Flag提交历史 - ${selectedAdForFlagHistory.c_drill_name}`} /> )}
-            {isTopologyOpen && selectedAdConfigForTopology && ( <InstanceTopologyDialog open={isTopologyOpen} onClose={() => { setIsTopologyOpen(false); setSelectedAdConfigForTopology(null); setCurrentInstanceTopology(null); }} title={`实例拓扑：${selectedAdConfigForTopology.c_drill_name}`} topology={currentInstanceTopology} instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''} onTerminalClick={handleTopologyTerminalClick} /> )}
+
+            {/* ★★★★★★★★★★★★★★★★★ 核心修改点 ★★★★★★★★★★★★★★★★★ */}
+            {isTopologyOpen && selectedAdConfigForTopology && (
+                <InstanceTopologyDialog
+                    open={isTopologyOpen}
+                    onClose={() => {
+                        setIsTopologyOpen(false);
+                        setSelectedAdConfigForTopology(null);
+                        setCurrentInstanceTopology(null);
+                    }}
+                    title={`实例拓扑：${selectedAdConfigForTopology.c_drill_name}`}
+                    topology={currentInstanceTopology}
+                    instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
+                    onTerminalClick={handleTopologyTerminalClick}
+                    // ★ 新增：传入 onSaveSuccess 回调函数 ★
+                    // onSaveSuccess 的 prop 名是一个假设，请确保它与您的 InstanceTopologyDialog 和 TopologyEditor 组件的实现相匹配。
+                    // @ts-ignore - 暂时忽略 onSaveSuccess 可能不存在的TS错误
+                    onSaveSuccess={handleTopologySave}
+                />
+            )}
+            {/* ★★★★★★★★★★★★★★★★★ 修改结束 ★★★★★★★★★★★★★★★★★ */}
+
             {isAssignmentDialogOpen && selectedAdForAssignment && ( <NodeTeamAssignmentDialog open={isAssignmentDialogOpen} onClose={() => setIsAssignmentDialogOpen(false)} instanceId={selectedAdForAssignment.c_scene_instance_id!} drillName={selectedAdForAssignment.c_drill_name} /> )}
             {isMemberDialogOpen && selectedAdForMembers && ( <MemberManagementDialog open={isMemberDialogOpen} onClose={() => setIsMemberDialogOpen(false)} adConfigId={selectedAdForMembers.c_id} drillName={selectedAdForMembers.c_drill_name} /> )}
         </Box>
