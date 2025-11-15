@@ -15,6 +15,8 @@ function Fps() {
   	const [fps, setFps] = useState(0);
   	const frameCount = useRef(0);
   	const lastFpsUpdate = useRef(performance.now());
+	const wsRef = useRef<WebSocket | null>(null);
+    const isConnected = useRef(false); // 连接标志
 
   	useEffect(() => {
     	let animationId: number;
@@ -31,7 +33,6 @@ function Fps() {
 
       		animationId = requestAnimationFrame(update);
     	};
-
     	animationId = requestAnimationFrame(update);
 
     	return () => cancelAnimationFrame(animationId);

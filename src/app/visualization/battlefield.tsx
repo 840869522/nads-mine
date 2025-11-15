@@ -1,9 +1,10 @@
 import * as Cesium from "cesium";
-import {useLayoutEffect, useRef, useState} from "react";
+import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, CallbackProperty } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
 import axios from "axios";
+import { it } from "node:test";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -14,6 +15,7 @@ interface PlaneEntityOptions {
     pitch?: number;    // 俯仰角，度
     roll?: number;     // 翻滚角，度
     modelUri?: string;
+    size?: number;
 }
 
 function generateRandomPositionsWithHeight(
@@ -47,6 +49,7 @@ function addPlaneEntity(options: PlaneEntityOptions) {
         pitch = 0,
         roll = 0,
         modelUri = '/mapdata/model/Cesium_Air.glb',
+        size = 100
     } = options;
 
      const hpr = new HeadingPitchRoll(
@@ -63,7 +66,7 @@ function addPlaneEntity(options: PlaneEntityOptions) {
         orientation: Transforms.headingPitchRollQuaternion(pos, hpr),
         model: {
             uri: modelUri,
-            minimumPixelSize: 60,
+            minimumPixelSize: size,
             maximumScale: 10000,
             show: true,
         },
@@ -169,7 +172,7 @@ function animateEntityCardinalMove(
 ): Promise<boolean> {
     
     // 动画时长固定为 2.0 秒
-    const durationSeconds: number = 2.0;
+    const durationSeconds: number = 4.0;
     const initialTime: Cesium.JulianDate = viewer.clock.currentTime;
     // 计算结束时间
     const finalTime: Cesium.JulianDate = Cesium.JulianDate.addSeconds(initialTime, durationSeconds, new Cesium.JulianDate());
@@ -312,7 +315,7 @@ export default function Battlefield (adData: AdData) {
     const [blueTeamState, setBlueTeamState] = useState<BattlefieldInfo>(blueTeam);
     const [vms, setVms] = useState<VMResult>({ trueTargetList: [], falseTargetList: [] });
 
-    useLayoutEffect(() => {
+    useEffect(() => {
         if (!containerRef.current) return;
 
         Cesium.Ion.defaultAccessToken = ''
@@ -368,50 +371,188 @@ export default function Battlefield (adData: AdData) {
         const redPlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3  }[] = [];
         const bluePlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3 }[] = [];
 
+        let lastData : any = null;
+        let dataIp = "";
+        const pollingCallback = () => {
+
+            axios.get(`/api/drone?ip=${dataIp}`)
+                .then(response => {
+                    if(response.data.status === 200){
+                        let data = response.data.data;
+                            
+                        if(lastData === null){
+                            lastData = data;
+                            return;
+                        }
+                            
+                        if(data.x - lastData.x >= 1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.EAST, 
+                                (data.x - lastData.x) * 200, 
+                                viewer
+                            );
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向东移动了${(data.x - lastData.x).toFixed(2)}m`
+                                }]
+                            }));
+                                
+                        }
+                        else if(data.x - lastData.x <= -1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.WEST, 
+                                (lastData.x - data.x) * 200, 
+                                viewer
+                            )
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向西移动了${(lastData.x - data.x).toFixed(2)}m`
+                                }]
+                            }));
+                        }else if(data.y - lastData.y >= 1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.NORTH, 
+                                (data.y - lastData.y) * 200, 
+                                viewer
+                            )
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向北移动了${(data.y - lastData.y).toFixed(2)}m`
+                                }]
+                            }));
+                        }else if(data.y - lastData.y <= -1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.SOUTH, 
+                                (lastData.y - data.y) * 200, 
+                                viewer
+                            )
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向南移动了${(lastData.y - data.y).toFixed(2)}m`
+                                }]
+                            }));
+                        }else if(data.z - lastData.z <= -1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.UP, 
+                                (lastData.z - data.z) * 200, 
+                                viewer
+                            )
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向上移动了${(lastData.z - data.z).toFixed(2)}m`
+                                }]
+                            }));
+                        }else if(data.z - lastData.z >= 1){
+                            animateEntityCardinalMove(
+                                entity, 
+                                MovementDirection.DOWN, 
+                                (data.z - lastData.z) * 200, 
+                                viewer
+                            )
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            setRedTeamState(prev => ({
+                                ...prev,
+                                logInfo: [...prev.logInfo, {
+                                    logId: Date.now(),
+                                    logTime: new Date().toLocaleTimeString(),
+                                    logContent: `无人机向下移动了${(data.z - lastData.z).toFixed(2)}m`
+                                }]
+                            }));
+                        }
+                        lastData = data;
+                    }
+                    console.log(`[Polling] 成功收到响应:`, response.data.data);
+                })
+                .catch((error: any) => {
+                    console.log('[Polling] 请求失败:', error);
+                })
+        };      
+
+        // 封装启动轮询的逻辑
+        function startPolling() {
+            const POLLING_INTERVAL = 1000; // 轮询间隔：1秒
+            debugger
+            // 1. 立即执行一次 (用于初始化 lastData，并立即获取第一批数据)
+            pollingCallback(); 
+            
+            // 2. 启动定时器，周期性执行
+            const intervalId = setInterval(pollingCallback, POLLING_INTERVAL);
+            
+            console.log(`[System] Polling started with interval ${POLLING_INTERVAL}ms.`);
+            
+            // 💡 最佳实践：如果您在 React 中使用，应该返回清理函数
+            return () => clearInterval(intervalId);
+        }
+
         async function fetchData() {
             const result = await fetchVMs(adData.id);
             setVms(result);
-            const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange, result.trueTargetList.length);
-            const randomPositions2 = generateRandomPositionsWithHeight(center2, latRange, lonRange, heightRange, result.falseTargetList.length);
-
             // 循环生成实体并存到 redPlans
             result.trueTargetList.forEach((item, index) => {
-                const pos = randomPositions1[index];
-                const entity = addPlaneEntity({
-                    viewer,
-                    name: `redPlane${index + 1}`,
-                    position:  [pos[0], pos[1], pos[2]],
-                    heading: 0,
-                    pitch: 0,
-                    roll: 0
-                });
+                const ipString = String(item.name || '').trim(); 
+                if (ipString.includes("C-2")){
+                    dataIp = item.ip; 
+                }
+                // const pos = randomPositions1[index];
+                // const entity = addPlaneEntity({
+                //     viewer,
+                //     name: `redPlane${index + 1}`,
+                //     position:  [pos[0], pos[1], pos[2]],
+                //     heading: 0,
+                //     pitch: 0,
+                //     roll: 0
+                // });
 
-                bluePlanes.push({
-                    ip: item.ip,  // 取对象中的 ip
-                    object: entity,
-                    pos: Cartesian3.fromDegrees(pos[0], pos[1], pos[2])
-                });
+                // bluePlanes.push({
+                //     ip: item.ip,  // 取对象中的 ip
+                //     object: entity,
+                //     pos: Cartesian3.fromDegrees(pos[0], pos[1], pos[2])
+                // });
             });
 
             // 循环生成实体并存到 redPlans
             result.falseTargetList.forEach((item, index) => {
-                const pos = randomPositions2[index];
-                const entity = addPlaneEntity({
-                    viewer,
-                    name: `bluePlane${index + 1}`,
-                    position: [pos[0], pos[1], pos[2]],
-                    heading: 180,
-                    pitch: 0,
-                    roll: 0
-                });
-
-                redPlanes.push({
-                    ip: item.ip,  // 取对象中的 ip
-                    object: entity,
-                    pos: Cartesian3.fromDegrees(pos[0], pos[1], pos[2])
-                });
+                const ipString = String(item.name || '').trim(); 
+                if (ipString.includes("C-2")){
+                    dataIp = item.ip; 
+                }
             });
+            
+            pollingCallback(); 
+            intervalId = setInterval(pollingCallback, 2000);
         }
+
 
         // 每 5 秒执行一次 fetchLogs
         let lastRedLogLength = 0;
@@ -477,150 +618,55 @@ export default function Battlefield (adData: AdData) {
         //     }
         // };
 
-        const center1: [number, number] = [117.54, 36.17];
+        const center1: [number, number] = [117.55, 36.17];
         const latRange = 0.01;
         const lonRange = 0.01;
         const heightRange: [number, number] = [500, 1500];
 
-        const center2: [number, number] = [117.61, 36.17];
+        const center2: [number, number] = [117.60, 36.17];
 
         const randomPositions1 = generateRandomPositionsWithHeight(center1, latRange, lonRange, heightRange,1);
+        const randomPositions2 = generateRandomPositionsWithHeight(center2, latRange, lonRange, heightRange,2);
         const pos = randomPositions1[0];
-                const entity = addPlaneEntity({
-                    viewer,
-                    name: `redPlane1`,
-                    position:  [pos[0], pos[1], pos[2]],
-                    heading: 0,
-                    pitch: 0,
-                    roll: 0
-                });
+        const pos1 = randomPositions2[0];
+        const pos2 = randomPositions2[1];
+        const entity = addPlaneEntity({
+            viewer,
+            name: `redPlane1`,
+            position:  [pos[0], pos[1], pos[2]],
+            heading: 0,
+            pitch: 0,
+            roll: 0,
+            modelUri: '/mapdata/model/CesiumDrone.glb',
+            size: 80
+        });
+
+        const entity1 = addPlaneEntity({
+            viewer,
+            name: `redPlane2`,
+            position:  [pos1[0], pos1[1], 200],
+            heading: 0,
+            pitch: 0,
+            roll: 0,
+            modelUri: '/mapdata/model/GroundVehicle.glb',
+            size: 50
+        });
+
+        const entity2 = addPlaneEntity({
+            viewer,
+            name: `redPlane2`,
+            position:  [pos2[0], pos2[1], 200],
+            heading: 0,
+            pitch: 0,
+            roll: 0,
+            modelUri: '/mapdata/model/GroundVehicle.glb',
+            size: 50
+        });
 
         let intervalId: any;
         
         if(adData && adData.id !== ""){
             fetchData();
-            let lastTime = 0;
-            let lastData : any = null;
-            const pollingCallback = () => {
-        
-                let now = Math.floor(Date.now() / 1000);
-                
-                if(now - lastTime > 3)
-                    lastTime = now;
-                else
-                    return;
-                
-                axios.get('/api/drone') 
-                    .then(response => {
-                        if(response.data.status === 200){
-                            let data = response.data.data;
-                            
-                            if(lastData === null){
-                                lastData = data;
-                                return;
-                            }
-                            if(data.x - lastData.x == 0){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.EAST, 
-                                    (data.x - lastData.x) * 200, 
-                                    viewer
-                                );
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向东移动了${(data.x - lastData.x).toFixed(2)}m`
-                                    }]
-                                }));
-                            }
-                            else if(data.x - lastData.x < -1){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.WEST, 
-                                    (lastData.x - data.x) * 200, 
-                                    viewer
-                                )
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向西移动了${(lastData.x - data.x).toFixed(2)}m`
-                                    }]
-                                }));
-                            }else if(data.y - lastData.y > 1){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.NORTH, 
-                                    (data.y - lastData.y) * 200, 
-                                    viewer
-                                )
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向北移动了${(data.y - lastData.y).toFixed(2)}m`
-                                    }]
-                                }));
-                            }else if(data.y - lastData.y < -1){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.SOUTH, 
-                                    (lastData.y - data.y) * 200, 
-                                    viewer
-                                )
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向南移动了${(lastData.y - data.y).toFixed(2)}m`
-                                    }]
-                                }));
-                            }else if(data.z - lastData.z < -1){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.UP, 
-                                    (lastData.z - data.z) * 200, 
-                                    viewer
-                                )
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向上移动了${(lastData.z - data.z).toFixed(2)}m`
-                                    }]
-                                }));
-                            }else if(data.z - lastData.z > 1){
-                                animateEntityCardinalMove(
-                                    entity, 
-                                    MovementDirection.DOWN, 
-                                    (data.z - lastData.z) * 200, 
-                                    viewer
-                                )
-                                setRedTeamState(prev => ({
-                                    ...prev,
-                                    logInfo: [...prev.logInfo, {
-                                        logId: Date.now(),
-                                        logTime: new Date().toLocaleTimeString(),
-                                        logContent: `无人机向下移动了${(data.z - lastData.z).toFixed(2)}m`
-                                    }]
-                                }));
-                            }
-                            lastData = data;
-                        }
-                        console.log(`[Polling] 成功收到响应:`, response.data.data);
-                    })
-                    .catch((error: any) => {
-                        console.log('[Polling] 请求失败:', error);
-                    })
-            };
-            pollingCallback();
-            intervalId = setInterval(pollingCallback, 5000);
             // websocketClient.onMessage(handleMessage);
         }
         
