@@ -10,10 +10,8 @@
     use App\Utils\JWTControll;
     use Exception;
     use Illuminate\Support\Facades\Cache;
-    use Illuminate\Support\Facades\Log;
+    use App\Utils\Logger;
     use Ramsey\Uuid\Uuid;
-    use Illuminate\Support\Facades\Redis;
-    use Illuminate\Support\Facades\DB;
 
     class UserController extends Controller{
         public function getAllUser(Request $req){
@@ -151,7 +149,7 @@
             try {
                 Cache::delete($jwtRes['data']['permission']);
             }catch (Exception $e) {
-                Log::info("[Error] [UserController:logout]:: ".$e);
+                Logger::error("[Error] [UserController:logout]:: ".$e);
             }
             return response()->json([
                 "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
@@ -177,7 +175,12 @@
                             "message" => GlobalResponse::$DATABASE_ERROR_MES,
                         ]);
                     }
-
+                    /* if (!user) {
+                        UserModel.createUser();
+                        return 
+                    } 
+                    
+                    */
                     $user = $modelRes["data"];
                     if (!$user || $user->c_password != $pwd) {
                         return response()->json([
@@ -196,7 +199,6 @@
                     $permissionRes = UserModel::getUserPrimissions($user->c_username);
                     $roleRes = RoleModel::getUserRole($user->c_username);
 
-                    // ★★★ 2. 调用新方法获取用户的队伍信息 ★★★
                     $teamRes = UserModel::getUserTeamId($user->c_username);
 
                     // 统一检查所有数据库查询
@@ -304,6 +306,7 @@
                             ]);
                         }
                     }catch(Exception $e) {
+                        Logger::error($e->getMessage());
                         return response()->json([
                             'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                             "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES
@@ -320,7 +323,7 @@
                         $oldPassword = $data["oldPassword"];
                         $newPassword = $data['newPassword'];
                     } catch (Exception $e) {
-                        Log::info($e->getMessage());
+                        Logger::error($e->getMessage());
                         return response()->json([
                             'code' => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
                             "message" => GlobalResponse::$HTTP_REQUEST_ERROR_MES

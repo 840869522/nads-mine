@@ -23,7 +23,6 @@ class Controller extends BaseController
         list($controller,$method) = explode("@",$action);
         $controllerName = class_basename($controller);
         $controllerName = $controllerName.".".$method;
-        // Log::info($controllerName);
 
         $res = PermissionModel::getPermissionByApi($controllerName);
 

@@ -8,7 +8,7 @@ use Exception;
 use Illuminate\Support\Facades\DB as db;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\Log as log;
+use App\Utils\Logger;
 
 class PermissionModel extends Model
 {
@@ -37,7 +37,7 @@ class PermissionModel extends Model
                 "count" => $count->count
             ];
         } catch (QueryException $e) {
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -55,7 +55,7 @@ class PermissionModel extends Model
                 "data" => $res
             ];
         } catch (QueryException $e) {
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -76,7 +76,7 @@ class PermissionModel extends Model
                 "count" => $count
             ];
         } catch (Exception $e) {
-            Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -93,7 +93,7 @@ class PermissionModel extends Model
                 "data" => $res
             ];
         } catch (Exception $e) {
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -117,7 +117,7 @@ class PermissionModel extends Model
             }
         } catch (Exception $e) {
             db::rollBack();
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -153,7 +153,7 @@ class PermissionModel extends Model
             return [];
         } catch (Exception $e) {
             db::rollBack();
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -188,7 +188,7 @@ class PermissionModel extends Model
             ];
         } catch (Exception $e) {
             db::rollBack();
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -239,7 +239,7 @@ class PermissionModel extends Model
                 ]
             ];
         } catch (Exception $e) {
-            Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE,
             ];
@@ -265,7 +265,7 @@ class PermissionModel extends Model
             ];
         } catch (Exception $e) {
             db::rollBack();
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -295,7 +295,7 @@ class PermissionModel extends Model
             ];
         } catch (Exception $e) {
             db::rollBack();
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -313,7 +313,7 @@ class PermissionModel extends Model
     private static function buildTreeData(array $menus, int $isMenu = 0, string $pid = "0", int $depth = 0): array
     {
         if ($depth > 20) {
-            Log::warning("菜单嵌套层级超过限制", ['depth' => $depth]);
+            Logger::warning("菜单嵌套层级超过限制", ['depth' => $depth]);
             return [];
         }
 
@@ -367,7 +367,7 @@ class PermissionModel extends Model
                 "data" => $menuData
             ];
         } catch (Exception $e) {
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 'code' => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -390,7 +390,7 @@ class PermissionModel extends Model
                 "count" => $count->count
             ];
         } catch (QueryException $e) {
-            log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
@@ -423,7 +423,7 @@ class PermissionModel extends Model
                 ];
             }
         }catch (Exception $e){
-            log::info('[DATABASE]: HAAPENDE ERROR : '. $e->getMessage());
+            Logger::error('[DATABASE]: HAAPENDE ERROR : '. $e->getMessage());
             return [
                 "code" => GlobalResponse::$DATABASE_ERROR_CODE
             ];
