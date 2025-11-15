@@ -44,7 +44,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     dragStart.current = { clientX: e.clientX, clientY: e.clientY };
     e.preventDefault();
   };
-const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging || !chatRef.current) return;
 
     const deltaX = dragStart.current.clientX - e.clientX; // 向右为正
@@ -95,7 +95,7 @@ const handleMouseMove = (e: MouseEvent) => {
     e.stopPropagation();
     setChatOpen(true);
   };
-  
+
 
 
   useEffect(() => {
@@ -128,19 +128,16 @@ const handleMouseMove = (e: MouseEvent) => {
         <Box
           style={{
             position: 'fixed',
-            right: `${chatPosition.x}px`,
-            bottom: `${chatPosition.y}px`,
-            cursor: isDragging ? 'grabbing' : 'grab',
+            right: '80px',
+            bottom: '70px',
             zIndex: 1000
           }}
-          onMouseDown={handleMouseDown}
-          onDoubleClick={() => { setChatOpen(true) }}
         >
           {
             chatOpen ?
               <Box data-no-drag>
                 <ChatPage open={chatOpen} onClose={() => setChatOpen(false)} width="25vw" />
-              </Box> : <AffixedFabWrapper />
+              </Box> : <AffixedFabWrapper onClick={()=> setChatOpen(true)} />
           }
         </Box>
       )
