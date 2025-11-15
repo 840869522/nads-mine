@@ -56,13 +56,13 @@ return [
 
         'single' => [
             'driver' => 'single',
-            'path' => storage_path(env('LOG_PATH','logs/laravel.log')),
+            'path' => env('LOG_PATH',storage_path('logs/laravel.log')),
             'level' => env('LOG_LEVEL', 'debug'),
         ],
 
         'daily' => [
             'driver' => 'daily',
-            'path' => storage_path(env('LOG_PATH','logs/laravel.log')),
+            'path' => env('LOG_PATH',storage_path('logs/laravel.log')),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAYS', 14),
         ],
