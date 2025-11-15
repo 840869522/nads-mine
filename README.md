@@ -257,6 +257,14 @@ sudo ovs-docker add-port ovs-switch eth1 26b --ipaddress=10.100.88.88/16
 数据库相关的修改DB_*的配置项
 
 ```.env
+# 日志配置
+LOG_CHANNEL=daily
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_PATH = "logs/laravel.log" # 日志目录 默认在back/storage/logs文件夹下，当指定值时请使用绝对路径，例如/var/log/back
+LOG_DAYS = 14 # 保存的天数
+LOG_LEVEL=info
+
+
 # database setting
 DB_CONNECTION=mysql
 DB_HOST=10.12.0.101 # 数据库地址

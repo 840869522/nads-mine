@@ -1,4 +1,6 @@
 // server.js
+import winston from 'winston';
+import "winston-daily-rotate-file";
 import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';
@@ -30,6 +32,60 @@ let guacServer;
 
 const sockets = new Set();
 
+const logger = winston.createLogger({
+    level: process.env.LOG_LEVEL || "info",
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true }),
+        winston.format.printf(({ timestamp, level, message, ...meta }) => {
+            // 自定义日志格式，包含时间、文件和错误信息
+            const fileInfo = meta.file || 'unknown';
+            const errorMessage = meta.error || message;
+            return `[${timestamp}]::[${fileInfo}]::[${level.toUpperCase()}]::${errorMessage}${meta.stack ? `\nStack: ${meta.stack}` : ''}`;
+        })
+    ),
+    transports: [
+        new winston.transports.Console({
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.simple()
+            )
+        }),
+        new winston.transports.DailyRotateFile({
+            filename: 'logs/application-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            zippedArchive: true,
+            maxSize: '20m',
+            maxFiles: '14d',
+            format: winston.format.combine(
+                winston.format.timestamp(),
+                winston.format.printf(({ timestamp, level, message, ...meta }) => {
+                    const fileInfo = meta.file || 'unknown';
+                    const errorMessage = meta.error || message;
+                    return `[${timestamp}]::[${fileInfo}]::[${level.toUpperCase()}]::${errorMessage}`;
+                })
+            )
+        }),
+        // 错误日志文件
+        new winston.transports.DailyRotateFile({
+            filename: 'logs/error-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            zippedArchive: true,
+            maxSize: '20m',
+            maxFiles: '30d',
+            level: 'error',
+            format: winston.format.combine(
+                winston.format.timestamp(),
+                winston.format.printf(({ timestamp, level, message, ...meta }) => {
+                    const fileInfo = meta.file || 'unknown';
+                    const errorMessage = meta.error || message;
+                    return `[${timestamp}]::[${fileInfo}]::[${level.toUpperCase()}]::${errorMessage}${meta.stack ? `\nStack: ${meta.stack}` : ''}`;
+                })
+            )
+        })
+    ]
+});
+
 app.prepare().then(() => {
     /* =================================================================
        1. PROXY MIDDLEWARE SETUP
@@ -47,7 +103,7 @@ app.prepare().then(() => {
     const aiChatProxy = createProxyMiddleware({
         target: AI_CHAT_URL,
         changeOrigin: true,
-        pathRewrite : {"^/chat/" : "/"},
+        pathRewrite: { "^/chat/": "/" },
         //ws: true,
         logLevel: dev ? 'debug' : 'info',
         onProxyRes(proxyRes, req, res) {
@@ -71,24 +127,28 @@ app.prepare().then(() => {
 
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer((req, res) => {
+        logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::${req.method} ${req.url}`, {
+            method: req.method,
+            url: req.url,
+            ip: req.socket.remoteAddress,
+            userAgent: req.headers['user-agent']
+        });
         const url = req.url || '';
-        // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
-        // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+
         if (url.startsWith('/socketio/terminal')) {
-            return ;
+            return;
         }
         if (url.startsWith('/connect-guac')) {
-            console.log("find guac req！！！！！！！！！！！！！")
+            logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
             return phpProxy(req, res);
         }
         if (url.startsWith('/chat/')) {
-            return aiChatProxy(req,res);
+            return aiChatProxy(req, res);
         }
 
-        // 其他所有请求都由 Next.js 处理
         return handle(req, res);
     });
 
@@ -106,14 +166,14 @@ app.prepare().then(() => {
                 rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
                 ssh: ['hostname', 'port', 'username', 'password'],
                 vnc: ['hostname', 'port', 'password'],
-                join: ['id','width','height','dpi']
+                join: ['id', 'width', 'height', 'dpi']
             },
             log: { level: 'NORMAL' },
         }
     );
-    guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
-    guacServer.on('error', (c,e) => console.error('[Guac ERR]', e));
-    guacServer.on('close', (c) =>   console.log('[Guac END]', c.connectionId));
+    guacServer.on('open', c => logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::[Guac OPEN] \t${c.connectionId}`));
+    guacServer.on('error', (c, e) => logger.error(`[${new Date().toISOString()}]::[server.js]::[INFO]::[Guac ERR] \t${e}`));
+    guacServer.on('close', (c) => logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::[Guac END] \t${c.connectionId}`));
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
@@ -123,24 +183,24 @@ app.prepare().then(() => {
         socket.on('close', () => sockets.delete(socket));
     });
     mainHttpServer.on('upgrade', (req, socket, head) => {
-        console.log('[upgrade] url=', req.url);
+        logger.log(`[${new Date().toISOString()}]::[server.js]::[INFO]::[upgrade] url= ${req.url}`);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
-            console.log("find guac req！！！！！！！！！！！！！")
+            logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
             guacProxy.upgrade(req, socket, head);
         } else {
             // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
-            console.log('[upgrade] non-guac ws →', req.url);
+            logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::[upgrade] non-guac ws →', ${req.url}`);
         }
     });
     const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
-        console.log("find socketio！！！！！！！！！！！！！"+id)
+        logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::find socketio！！！！！！！！！！！！！ \t ${id}`)
         if (typeof id !== 'string') {
             socket.disconnect(true);
-            console.log('[Terminal] No container ID provided. Disconnecting.');
+            logger.error(`[${new Date().toISOString()}]::[server.js]::[INFO]::[Terminal] No container ID provided. Disconnecting.`);
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/bash'], {
@@ -158,7 +218,7 @@ app.prepare().then(() => {
        ================================================================= */
 
     async function shutdown() {
-        console.log('[NodeJS] Shutting down…');
+        logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::[NodeJS] Shutting down…`);
         await new Promise((resolve) => io.close(resolve));
         if (guacServer) guacServer.close();
 
@@ -167,7 +227,7 @@ app.prepare().then(() => {
         await new Promise((resolve) => guacHttpServer.close(resolve));
 
         sockets.forEach((s) => s.destroy());
-        console.log('[NodeJS] Cleanup done. Exiting.');
+        logger.info(`[${new Date().toISOString()}]::[server.js]::[INFO]::[NodeJS] Cleanup done. Exiting.`);
         process.exit(0);
     }
 
@@ -191,14 +251,14 @@ app.prepare().then(() => {
        ================================================================= */
 
     mainHttpServer.listen(MAIN_PORT, () => {
-        console.log(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
-        console.log(`> ➡️  PHP proxied from /back/`);
-        console.log(`> ➡️  AI proxied from /chat/`);
-        console.log(`> ➡️  Guacamole proxied from /connect-guac`);
-        console.log(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
+        logger.info(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
+        logger.info(`> ➡️  PHP proxied from /back/`);
+        logger.info(`> ➡️  AI proxied from /chat/`);
+        logger.info(`> ➡️  Guacamole proxied from /connect-guac`);
+        logger.info(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
     });
 
     guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
-        console.log(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
+        logger.info(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
     });
 });

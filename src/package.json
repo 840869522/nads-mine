@@ -64,6 +64,8 @@
     "three": "^0.180.0",
     "three-stdlib": "^2.36.0",
     "uuid": "^11.1.0",
+    "winston": "^3.18.3",
+    "winston-daily-rotate-file": "^5.0.0",
     "xlsx": "^0.18.5",
     "zod": "^4.1.8"
   },
