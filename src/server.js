@@ -132,7 +132,7 @@ app.prepare().then(() => {
         socket.on('close', () => sockets.delete(socket));
     });
     mainHttpServer.on('upgrade', (req, socket, head) => {
-        Logger.log(`[upgrade] url= ${req.url}`);
+        infoLog(`[upgrade] url= ${req.url}`);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
             infoLog(`find guac req！！！！！！！！！！！！！`)
