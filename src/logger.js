@@ -2,6 +2,7 @@ import winston from 'winston';
 import "winston-daily-rotate-file";
 import process from "process";
 import dotenv from "dotenv";
+import path from "path";
 
 dotenv.config();
 
@@ -16,6 +17,22 @@ const formatLocalTime = () => {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
+
+const getCallerFile = ()=>{
+    const originalFunc = Error.prepareStackTrace;
+    let callerfile;
+    try {
+        const err = new Error();
+        Error.prepareStackTrace = function (err, stack) { return stack; };
+        const stack = err.stack;
+        if (stack.length > 2) {
+            callerfile = stack[2].getFileName();
+        }
+    } catch (e) {}
+    Error.prepareStackTrace = originalFunc; 
+    return callerfile ? path.basename(callerfile) : 'unknown';
+}
+
 const Logger = winston.createLogger({
     level: process.env.LOG_LEVEL || "info",
     format: winston.format.combine(
@@ -24,8 +41,8 @@ const Logger = winston.createLogger({
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
             // 自定义日志格式，包含时间、文件和错误信息
             const formattedTime = formatLocalTime();
-            const fileInfo = meta.file || 'unknown';
-            const errorMessage = meta.error || message;
+            const fileInfo =  meta.file || 'unknown';
+            const errorMessage = meta.error ||  message;
             return `[${formattedTime}]::[${fileInfo}]::[${level.toUpperCase()}]::${errorMessage}${meta.stack ? `\nStack: ${meta.stack}` : ''}`;
         })
     ),
@@ -63,7 +80,7 @@ const Logger = winston.createLogger({
                 winston.format.timestamp(),
                 winston.format.printf(({ timestamp, level, message, ...meta }) => {
                     const formattedTime = formatLocalTime();
-                    const fileInfo = meta.file || 'unknown';
+                    const fileInfo = meta.file ||  'unknown';
                     const errorMessage = meta.error || message;
                     return `[${formattedTime}]::[${fileInfo}]::[${level.toUpperCase()}]::${errorMessage}${meta.stack ? `\nStack: ${meta.stack}` : ''}`;
                 })
@@ -72,7 +89,24 @@ const Logger = winston.createLogger({
     ]
 });
 
+const errorLog = (message)=>{
+    const fileInfo = getCallerFile()
+    Logger.error(message, {file:fileInfo})
+}
+
+const infoLog = (message)=>{
+    const fileInfo = getCallerFile();
+    Logger.info(message, {file:fileInfo})
+}
+
+const wariningLog = (message)=>{
+    const fileInfo = getCallerFile()
+    Logger.warning(message, {file:fileInfo})
+}
+
 export {
-    Logger,
+    errorLog,
+    infoLog,
+    wariningLog,
     formatLocalTime
 };

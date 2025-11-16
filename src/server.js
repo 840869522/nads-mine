@@ -7,7 +7,7 @@ import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import process from 'process';
 import dotenv from "dotenv";
-import { Logger, formatLocalTime } from './logger.js';
+import { infoLog, errorLog, wariningLog, formatLocalTime } from './logger.js';
 
 dotenv.config();
 
@@ -76,7 +76,7 @@ app.prepare().then(() => {
 
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer((req, res) => {
-        Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::${req.method} ${req.url}`, {
+        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::${req.method} ${req.url}`, {
             method: req.method,
             url: req.url,
             ip: req.socket.remoteAddress,
@@ -88,7 +88,7 @@ app.prepare().then(() => {
             return;
         }
         if (url.startsWith('/connect-guac')) {
-            Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
+            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
@@ -120,9 +120,9 @@ app.prepare().then(() => {
             log: { level: 'NORMAL' },
         }
     );
-    guacServer.on('open', c => Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac OPEN] \t${c.connectionId}`));
-    guacServer.on('error', (c, e) => Logger.error(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac ERR] \t${e}`));
-    guacServer.on('close', (c) => Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac END] \t${c.connectionId}`));
+    guacServer.on('open', c => infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac OPEN] \t${c.connectionId}`));
+    guacServer.on('error', (c, e) => errorLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac ERR] \t${e}`));
+    guacServer.on('close', (c) => infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac END] \t${c.connectionId}`));
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
@@ -135,21 +135,21 @@ app.prepare().then(() => {
         Logger.log(`[${formatLocalTime()}]::[server.js]::[INFO]::[upgrade] url= ${req.url}`);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
-            Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
+            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
             guacProxy.upgrade(req, socket, head);
         } else {
             // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
-            Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::[upgrade] non-guac ws →', ${req.url}`);
+            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[upgrade] non-guac ws →', ${req.url}`);
         }
     });
     const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
-        Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::find socketio！！！！！！！！！！！！！ \t ${id}`)
+        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find socketio！！！！！！！！！！！！！ \t ${id}`)
         if (typeof id !== 'string') {
             socket.disconnect(true);
-            Logger.error(`[${formatLocalTime()}]::[server.js]::[INFO]::[Terminal] No container ID provided. Disconnecting.`);
+            errorLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Terminal] No container ID provided. Disconnecting.`);
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/bash'], {
@@ -167,7 +167,7 @@ app.prepare().then(() => {
        ================================================================= */
 
     async function shutdown() {
-        Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Shutting down…`);
+        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Shutting down…`);
         await new Promise((resolve) => io.close(resolve));
         if (guacServer) guacServer.close();
 
@@ -176,7 +176,7 @@ app.prepare().then(() => {
         await new Promise((resolve) => guacHttpServer.close(resolve));
 
         sockets.forEach((s) => s.destroy());
-        Logger.info(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Cleanup done. Exiting.`);
+        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Cleanup done. Exiting.`);
         process.exit(0);
     }
 
@@ -200,14 +200,14 @@ app.prepare().then(() => {
        ================================================================= */
 
     mainHttpServer.listen(MAIN_PORT, () => {
-        Logger.info(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
-        Logger.info(`> ➡️  PHP proxied from /back/`);
-        Logger.info(`> ➡️  AI proxied from /chat/`);
-        Logger.info(`> ➡️  Guacamole proxied from /connect-guac`);
-        Logger.info(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
+        infoLog(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
+        infoLog(`> ➡️  PHP proxied from /back/`);
+        infoLog(`> ➡️  AI proxied from /chat/`);
+        infoLog(`> ➡️  Guacamole proxied from /connect-guac`);
+        infoLog(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
     });
 
     guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
-        Logger.info(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
+        infoLog(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
     });
 });

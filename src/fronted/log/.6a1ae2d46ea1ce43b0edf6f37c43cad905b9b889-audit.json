@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "fronted\\log\\.6a1ae2d46ea1ce43b0edf6f37c43cad905b9b889-audit.json",
+    "files": [
+        {
+            "date": 1763256078160,
+            "name": "fronted\\log\\application-2025-11-16.log",
+            "hash": "cc5518c6baed3e77f176e00327a25ceba3b2f9e6d9adf6c9c6662c240da8ae40"
+        }
+    ],
+    "hashType": "sha256"
+}
