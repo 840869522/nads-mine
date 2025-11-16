@@ -76,7 +76,7 @@ app.prepare().then(() => {
 
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer((req, res) => {
-        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::${req.method} ${req.url}`, {
+        infoLog(`${req.method} ${req.url}`, {
             method: req.method,
             url: req.url,
             ip: req.socket.remoteAddress,
@@ -88,7 +88,7 @@ app.prepare().then(() => {
             return;
         }
         if (url.startsWith('/connect-guac')) {
-            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
+            infoLog(`find guac req！！！！！！！！！！！！！`)
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
@@ -120,9 +120,9 @@ app.prepare().then(() => {
             log: { level: 'NORMAL' },
         }
     );
-    guacServer.on('open', c => infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac OPEN] \t${c.connectionId}`));
-    guacServer.on('error', (c, e) => errorLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac ERR] \t${e}`));
-    guacServer.on('close', (c) => infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Guac END] \t${c.connectionId}`));
+    guacServer.on('open', c => infoLog(`[Guac OPEN] \t${c.connectionId}`));
+    guacServer.on('error', (c, e) => errorLog(`[Guac ERR] \t${e}`));
+    guacServer.on('close', (c) => infoLog(`[Guac END] \t${c.connectionId}`));
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
@@ -132,24 +132,24 @@ app.prepare().then(() => {
         socket.on('close', () => sockets.delete(socket));
     });
     mainHttpServer.on('upgrade', (req, socket, head) => {
-        Logger.log(`[${formatLocalTime()}]::[server.js]::[INFO]::[upgrade] url= ${req.url}`);
+        Logger.log(`[upgrade] url= ${req.url}`);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
-            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find guac req！！！！！！！！！！！！！`)
+            infoLog(`find guac req！！！！！！！！！！！！！`)
             guacProxy.upgrade(req, socket, head);
         } else {
             // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
-            infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[upgrade] non-guac ws →', ${req.url}`);
+            infoLog(`[upgrade] non-guac ws →', ${req.url}`);
         }
     });
     const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
-        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::find socketio！！！！！！！！！！！！！ \t ${id}`)
+        infoLog(`find socketio！！！！！！！！！！！！！ \t ${id}`)
         if (typeof id !== 'string') {
             socket.disconnect(true);
-            errorLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[Terminal] No container ID provided. Disconnecting.`);
+            errorLog(`[Terminal] No container ID provided. Disconnecting.`);
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/bash'], {
@@ -167,7 +167,7 @@ app.prepare().then(() => {
        ================================================================= */
 
     async function shutdown() {
-        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Shutting down…`);
+        infoLog(`[NodeJS] Shutting down…`);
         await new Promise((resolve) => io.close(resolve));
         if (guacServer) guacServer.close();
 
@@ -176,7 +176,7 @@ app.prepare().then(() => {
         await new Promise((resolve) => guacHttpServer.close(resolve));
 
         sockets.forEach((s) => s.destroy());
-        infoLog(`[${formatLocalTime()}]::[server.js]::[INFO]::[NodeJS] Cleanup done. Exiting.`);
+        infoLog(`[NodeJS] Cleanup done. Exiting.`);
         process.exit(0);
     }
 
