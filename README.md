@@ -287,13 +287,24 @@ REDIS_PASSWORD=null # redis连接密码
 REDIS_DB=0  # redis的默认使用数据库
 REDIS_CACHE_DB=1 # cache使用的redis数据库
 ```
+#### 1.8.3 关于前端配置
 
-#### 1.8.3 关于Python
+`此配置文件位于src/.env`
 
-需要修改下面的文件
+```.env
+# 日志配置
+LOG_LEVEL=info
+LOG_DIR= fronted/log # 日志保存地址
+LOG_MAX_SIZE=20m # 单个文件最大大小
+LOG_MAX_FILES=14d # 普通日志文件，最大保存天数
+LOG_ERROR_MAX_FILES=30d # 错误日志最大保存天数
+```
 
-```sehll
-# 修改 <project_dir>/langchian/config.yaml中的chatModel 和 embeddingModel 以及qdrant 的内容
+#### 1.8.4 关于Python
+
+需要修改下面的文件<br/>
+`修改 <project_dir>/langchian/config.yaml中的chatModel 和 embeddingModel 以及qdrant 的内容`
+```yaml
 chatModel:
   model: "gpt-oss"
   base_url: "http://43.143.151.41:3000/v1"
@@ -306,7 +317,7 @@ qdrant:
   server: "http://localhost:6333"
   
 ```
-#### 1.8.4 安装 guacd
+#### 1.8.5 安装 guacd
 
 两种方法任选其一
 1. apt安装
@@ -517,6 +528,12 @@ chatenv/bin/pip3.10
 - chatenv/bin/pip3、chatenv/bin/pip3.10 
 
   与chatenv/bin/pip 类似
+### 2.9 日志查看
+**前后端日志目录的默认位置为：**
+- 前端： nasd/src/logs
+- 后端： nads/back/storage/logs
+**如需修改日志保存位置，参照[1.8.2](#182-关于后端配置) 和[1.8.3](#183-关于前端配置)**
+
 
 # 3 更新
 
