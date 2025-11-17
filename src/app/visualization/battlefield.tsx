@@ -397,8 +397,8 @@ export default function Battlefield (adData: AdData) {
                                 (data.x - lastData.x) * 200, 
                                 viewer
                             );
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dx = data.x - lastData.x;
                             setRedTeamState(prev => ({
                                 ...prev,
@@ -417,8 +417,8 @@ export default function Battlefield (adData: AdData) {
                                 (lastData.x - data.x) * 200, 
                                 viewer
                             )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dx = lastData.x - data.x;
                             setRedTeamState(prev => ({
                                 ...prev,
@@ -436,8 +436,8 @@ export default function Battlefield (adData: AdData) {
                                 (data.y - lastData.y) * 200, 
                                 viewer
                             )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dy = data.y - lastData.y;
                             setRedTeamState(prev => ({
                                 ...prev,
@@ -454,8 +454,8 @@ export default function Battlefield (adData: AdData) {
                                 (lastData.y - data.y) * 200, 
                                 viewer
                             )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dy = lastData.y - data.y;
                             setRedTeamState(prev => ({
                                 ...prev,
@@ -473,8 +473,8 @@ export default function Battlefield (adData: AdData) {
                                 (lastData.z - data.z) * 200, 
                                 viewer
                             )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dz = lastData.z - data.z;
                             setRedTeamState(prev => ({
                                 ...prev,
@@ -491,8 +491,8 @@ export default function Battlefield (adData: AdData) {
                                 (data.z - lastData.z) * 200, 
                                 viewer
                             )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             let dz = data.z - lastData.z;
                             setRedTeamState(prev => ({
                                 ...prev,
