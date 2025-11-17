@@ -142,6 +142,7 @@ function shootLaser(viewer: Viewer, from: Cartesian3, to: Cartesian3, duration: 
 interface VMItem {
     name: string;
     ip: string;
+    teamName: string;
 }
 
 interface VMResult {
@@ -152,6 +153,12 @@ interface VMResult {
 interface FlagLog {
     redLogList: LogInfo[];
     blueLogList: LogInfo[];
+}
+
+interface Position{
+    x: number;
+    y: number;
+    z: number;
 }
 
 // 定义方向枚举 (TypeScript Enum)
@@ -172,7 +179,7 @@ function animateEntityCardinalMove(
 ): Promise<boolean> {
     
     // 动画时长固定为 2.0 秒
-    const durationSeconds: number = 4.0;
+    const durationSeconds: number = 1.5;
     const initialTime: Cesium.JulianDate = viewer.clock.currentTime;
     // 计算结束时间
     const finalTime: Cesium.JulianDate = Cesium.JulianDate.addSeconds(initialTime, durationSeconds, new Cesium.JulianDate());
@@ -371,15 +378,13 @@ export default function Battlefield (adData: AdData) {
         const redPlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3  }[] = [];
         const bluePlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3 }[] = [];
 
-        let lastData : any = null;
-        let dataIp = "";
+        let lastData : Position | null  = null;
+        let dataIp: string[] = [];
         const pollingCallback = () => {
-
-            axios.get(`/api/drone?ip=${dataIp}`)
+            axios.get(`/api/drone?ip=${dataIp[0]}&ip=${dataIp[1]}`)
                 .then(response => {
                     if(response.data.status === 200){
-                        let data = response.data.data;
-                            
+                        let data: Position = response.data.data;
                         if(lastData === null){
                             lastData = data;
                             return;
@@ -394,12 +399,13 @@ export default function Battlefield (adData: AdData) {
                             );
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dx = data.x - lastData.x;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向东移动了${(data.x - lastData.x).toFixed(2)}m`
+                                    logContent: `无人机向东移动了${dx}m`
                                 }]
                             }));
                                 
@@ -413,15 +419,17 @@ export default function Battlefield (adData: AdData) {
                             )
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dx = lastData.x - data.x;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向西移动了${(lastData.x - data.x).toFixed(2)}m`
+                                    logContent: `无人机向西移动了${dx}m`
                                 }]
                             }));
-                        }else if(data.y - lastData.y >= 1){
+                        }
+                        if(data.y - lastData.y >= 1){
                             animateEntityCardinalMove(
                                 entity, 
                                 MovementDirection.NORTH, 
@@ -430,12 +438,13 @@ export default function Battlefield (adData: AdData) {
                             )
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dy = data.y - lastData.y;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向北移动了${(data.y - lastData.y).toFixed(2)}m`
+                                    logContent: `无人机向北移动了${dy}m`
                                 }]
                             }));
                         }else if(data.y - lastData.y <= -1){
@@ -447,15 +456,17 @@ export default function Battlefield (adData: AdData) {
                             )
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dy = lastData.y - data.y;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向南移动了${(lastData.y - data.y).toFixed(2)}m`
+                                    logContent: `无人机向南移动了${dy}m`
                                 }]
                             }));
-                        }else if(data.z - lastData.z <= -1){
+                        }
+                        if(data.z - lastData.z <= -1){
                             animateEntityCardinalMove(
                                 entity, 
                                 MovementDirection.UP, 
@@ -464,12 +475,13 @@ export default function Battlefield (adData: AdData) {
                             )
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dz = lastData.z - data.z;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向上移动了${(lastData.z - data.z).toFixed(2)}m`
+                                    logContent: `无人机向下移动了${dz}m`
                                 }]
                             }));
                         }else if(data.z - lastData.z >= 1){
@@ -481,12 +493,13 @@ export default function Battlefield (adData: AdData) {
                             )
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
                             shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
+                            let dz = data.z - lastData.z;
                             setRedTeamState(prev => ({
                                 ...prev,
                                 logInfo: [...prev.logInfo, {
                                     logId: Date.now(),
                                     logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向下移动了${(data.z - lastData.z).toFixed(2)}m`
+                                    logContent: `无人机向上移动了${dz}m`
                                 }]
                             }));
                         }
@@ -500,19 +513,19 @@ export default function Battlefield (adData: AdData) {
         };      
 
         // 封装启动轮询的逻辑
-        function startPolling() {
-            const POLLING_INTERVAL = 1000; // 轮询间隔：1秒
-            debugger
-            // 1. 立即执行一次 (用于初始化 lastData，并立即获取第一批数据)
-            pollingCallback(); 
-            
-            // 2. 启动定时器，周期性执行
-            const intervalId = setInterval(pollingCallback, POLLING_INTERVAL);
-            
-            console.log(`[System] Polling started with interval ${POLLING_INTERVAL}ms.`);
-            
-            // 💡 最佳实践：如果您在 React 中使用，应该返回清理函数
-            return () => clearInterval(intervalId);
+        const startPolling = async (pollingInterval: number) => {
+            // 持续轮询的循环
+            while (true) {
+                try {
+                    await pollingCallback(); // 等待 pollingCallback 完全执行完毕
+                } catch (error) {
+                    console.error('[Polling Loop] 轮询回调执行失败:', error);
+                    // 可以在此添加错误处理逻辑，例如短暂暂停或退出循环
+                }
+                
+                // 使用 Promise/setTimeout 等待设定的间隔时间，然后再进入下一次循环
+                await new Promise(resolve => setTimeout(resolve, pollingInterval));
+            }
         }
 
         async function fetchData() {
@@ -522,7 +535,9 @@ export default function Battlefield (adData: AdData) {
             result.trueTargetList.forEach((item, index) => {
                 const ipString = String(item.name || '').trim(); 
                 if (ipString.includes("C-2")){
-                    dataIp = item.ip; 
+                    dataIp.push(item.ip); 
+                }else if (ipString.includes("C-3")){
+                    dataIp.push(item.ip); 
                 }
                 // const pos = randomPositions1[index];
                 // const entity = addPlaneEntity({
@@ -545,12 +560,15 @@ export default function Battlefield (adData: AdData) {
             result.falseTargetList.forEach((item, index) => {
                 const ipString = String(item.name || '').trim(); 
                 if (ipString.includes("C-2")){
-                    dataIp = item.ip; 
+                    dataIp.push(item.ip); 
+                }else if (ipString.includes("C-3")){
+                    dataIp.push(item.ip); 
                 }
             });
+            startPolling(4000);
             
-            pollingCallback(); 
-            intervalId = setInterval(pollingCallback, 2000);
+            // pollingCallback(); 
+            // intervalId = setInterval(pollingCallback, 2000);
         }
 
 
