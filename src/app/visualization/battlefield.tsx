@@ -565,10 +565,10 @@ export default function Battlefield (adData: AdData) {
                     dataIp.push(item.ip); 
                 }
             });
-            startPolling(4000);
+            // startPolling(4000);
             
-            // pollingCallback(); 
-            // intervalId = setInterval(pollingCallback, 2000);
+            pollingCallback(); 
+            intervalId = setInterval(pollingCallback, 3000);
         }
 
 
