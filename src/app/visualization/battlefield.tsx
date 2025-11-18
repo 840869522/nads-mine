@@ -5,6 +5,7 @@ import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
 import axios from "axios";
 import { it } from "node:test";
+import { is } from "zod/v4/locales";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -269,6 +270,91 @@ function animateEntityCardinalMove(
     });
 }
 
+interface CompoundMove {
+    east: number;  // 向东的距离（米）。负数表示向西。
+    north: number; // 向北的距离（米）。负数表示向南。
+    up: number;    // 向上的距离（米）。负数表示向下。
+}
+
+/**
+ * 在 3 秒内将 Cesium 实体平滑移动一个由三个轴向分量定义的斜向距离。
+ *
+ * @param entity 要移动的实体。
+ * @param moveVector 包含 East, North, Up 轴上总位移的对象。
+ * @param viewer Cesium Viewer 实例。
+ * @returns Promise<boolean> 动画完成时解析。
+ */
+export function animateEntityCompoundMove(
+    entity: Cesium.Entity,
+    moveVector: CompoundMove,
+    viewer: Cesium.Viewer
+): Promise<boolean> {
+    
+    // 动画时长固定为 3.0 秒
+    const durationSeconds: number = 2.0;
+    const initialTime: Cesium.JulianDate = viewer.clock.currentTime;
+    const finalTime: Cesium.JulianDate = Cesium.JulianDate.addSeconds(initialTime, durationSeconds, new Cesium.JulianDate());
+
+    const startPosition: Cesium.Cartesian3 | undefined = entity.position?.getValue(initialTime);
+    
+    if (!startPosition) {
+        return Promise.reject(new Error('实体无效或无法获取当前位置。'));
+    }
+
+    // 1. 获取 East-North-Up 局部坐标系向量
+    const modelMatrix: Cesium.Matrix4 = Cesium.Transforms.eastNorthUpToFixedFrame(startPosition, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
+    
+    // 提取单位向量
+    const east: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 0, new Cesium.Cartesian4()), new Cesium.Cartesian3());
+    const north: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 1, new Cesium.Cartesian4()), new Cesium.Cartesian3());
+    const up: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 2, new Cesium.Cartesian4()), new Cesium.Cartesian3());
+    
+    // 2. 计算合成的移动向量 (Scaled Vector Sum)
+    
+    // East/West 分量
+    const eastOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(east, moveVector.east, new Cesium.Cartesian3());
+    
+    // North/South 分量
+    const northOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(north, moveVector.north, new Cesium.Cartesian3());
+    
+    // Up/Down 分量
+    const upOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(up, moveVector.up, new Cesium.Cartesian3());
+    
+    // 将三个分量向量相加，得到最终的位移向量
+    let totalOffsetVector: Cesium.Cartesian3 = Cesium.Cartesian3.add(eastOffset, northOffset, new Cesium.Cartesian3());
+    totalOffsetVector = Cesium.Cartesian3.add(totalOffsetVector, upOffset, totalOffsetVector);
+
+    // 3. 计算终点位置
+    const endPosition: Cesium.Cartesian3 = Cesium.Cartesian3.add(startPosition, totalOffsetVector, new Cesium.Cartesian3());
+
+    // 4. 定义 SampledPositionProperty 动画 (与之前一致)
+    const positionProperty: Cesium.SampledPositionProperty = new Cesium.SampledPositionProperty();
+    positionProperty.setInterpolationOptions({
+        interpolationDegree: 1,
+        interpolationAlgorithm: Cesium.LagrangePolynomialApproximation
+    });
+
+    positionProperty.addSample(initialTime, startPosition);
+    positionProperty.addSample(finalTime, endPosition);
+
+    entity.position = positionProperty;
+    viewer.clock.shouldAnimate = true;
+    
+    // 5. 动画完成后的 Promise 处理 (与之前一致)
+    return new Promise((resolve: (value: boolean) => void) => {
+        let finished: boolean = false;
+        
+        const removeListener: Cesium.Event.RemoveCallback = viewer.scene.postRender.addEventListener(() => {
+            if (Cesium.JulianDate.greaterThanOrEquals(viewer.clock.currentTime, finalTime) && !finished) {
+                removeListener();
+                finished = true;
+                entity.position = new Cesium.ConstantPositionProperty(endPosition.clone());
+                resolve(true);
+            }
+        });
+    });
+}
+
 /**
  * 获取 VM 列表并拆分 trueList / falseList
  */
@@ -380,130 +466,84 @@ export default function Battlefield (adData: AdData) {
 
         let lastData : Position | null  = null;
         let dataIp: string[] = [];
+        let id : number = 0;
         const pollingCallback = () => {
             axios.get(`/api/drone?ip=${dataIp[0]}&ip=${dataIp[1]}`)
                 .then(response => {
+                    const newLogs:LogInfo[] = [];
+                    let isMove = false;
+
                     if(response.data.status === 200){
                         let data: Position = response.data.data;
                         if(lastData === null){
                             lastData = data;
                             return;
                         }
-                            
-                        if(data.x - lastData.x >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.EAST, 
-                                (data.x - lastData.x) * 200, 
-                                viewer
-                            );
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dx = data.x - lastData.x;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向东移动了${dx}m`
-                                }]
-                            }));
-                                
+                        
+                        let dx = data.x - lastData.x;
+                        let dy = data.y - lastData.y;
+                        let dz = data.z - lastData.z;
+                        if (dx !== 0) {
+                            const direction = dx > 0 ? '东' : '西';
+                            newLogs.push({
+                                logId: id++,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dx)}m`
+                            });
+                            isMove = true;
                         }
-                        else if(data.x - lastData.x <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.WEST, 
-                                (lastData.x - data.x) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dx = lastData.x - data.x;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向西移动了${dx}m`
-                                }]
-                            }));
+                        if (dy !== 0) {
+                            const direction = dy > 0 ? '北' : '南';
+                            newLogs.push({
+                                logId: id++,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dy)}m`
+                            });
+                            isMove = true;
                         }
-                        if(data.y - lastData.y >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.NORTH, 
-                                (data.y - lastData.y) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dy = data.y - lastData.y;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向北移动了${dy}m`
-                                }]
-                            }));
-                        }else if(data.y - lastData.y <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.SOUTH, 
-                                (lastData.y - data.y) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dy = lastData.y - data.y;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向南移动了${dy}m`
-                                }]
-                            }));
-                        }
-                        if(data.z - lastData.z <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.UP, 
-                                (lastData.z - data.z) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dz = lastData.z - data.z;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向下移动了${dz}m`
-                                }]
-                            }));
-                        }else if(data.z - lastData.z >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.DOWN, 
-                                (data.z - lastData.z) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
-                            let dz = data.z - lastData.z;
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向上移动了${dz}m`
-                                }]
-                            }));
+                        if (dz !== 0) {
+                            const direction = dz > 0 ? '上' : '下';
+                            newLogs.push({
+                                logId: id++,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dz)}m`
+                            });
+                            isMove = true;
                         }
                         lastData = data;
+                        if(isMove){
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
+                            setRedTeamState(prev => {
+                                const existingContents = new Set(prev.logInfo.map(log => log.logContent))
+                                const uniqueNewLogs = newLogs.filter(newLog => 
+                                    !existingContents.has(newLog.logContent)
+                                );
+                                if (uniqueNewLogs.length > 0) {
+                                    // 如果有，则返回新状态
+                                    return {
+                                        ...prev,
+                                        logInfo: [
+                                            ...prev.logInfo, 
+                                            ...uniqueNewLogs // 只添加唯一的新日志
+                                        ]
+                                    };
+                                }
+                                return prev;
+                            });
+
+                            const diagonalMove = {
+                                east: Math.abs(dx*40) > 1000 ? 1000 * Math.sign(dx) : dx*40,   
+                                north: Math.abs(dy*40) > 1000 ? 1000 * Math.sign(dy) : dy*40,
+                                up: dz * 20 < -200 ? -200 : dz * 20 
+                            };
+
+                            animateEntityCompoundMove(
+                                entity, 
+                                diagonalMove, 
+                                viewer
+                            )
+                        }
                     }
                     console.log(`[Polling] 成功收到响应:`, response.data.data);
                 })
@@ -565,10 +605,10 @@ export default function Battlefield (adData: AdData) {
                     dataIp.push(item.ip); 
                 }
             });
-            // startPolling(4000);
+            startPolling(3000);
             
-            pollingCallback(); 
-            intervalId = setInterval(pollingCallback, 3000);
+            // pollingCallback(); 
+            // intervalId = setInterval(pollingCallback, 3000);
         }
 
 
@@ -639,7 +679,7 @@ export default function Battlefield (adData: AdData) {
         const center1: [number, number] = [117.55, 36.17];
         const latRange = 0.01;
         const lonRange = 0.01;
-        const heightRange: [number, number] = [500, 1500];
+        const heightRange: [number, number] = [1000, 1500];
 
         const center2: [number, number] = [117.60, 36.17];
 
