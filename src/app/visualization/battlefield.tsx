@@ -358,6 +358,7 @@ async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
 export default function Battlefield (adData: AdData) {
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
+    const isFirst = useRef<boolean>(true);
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
@@ -402,7 +403,6 @@ export default function Battlefield (adData: AdData) {
             canvas.height = container!.clientHeight;
         }
 
-
         addWorldImageryAsync(viewer).catch(err => {
             console.error('加载影像图层失败:', err);
         });
@@ -431,7 +431,7 @@ export default function Battlefield (adData: AdData) {
         const redPlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3  }[] = [];
         const bluePlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3 }[] = [];
 
-        let lastData : Position | null  = null;
+        let lastData : Position = { x: 0, y: 0, z: 0 };
         let dataIp: string[] = [];
         let id : number = 0;
         const pollingCallback = () => {
@@ -442,8 +442,9 @@ export default function Battlefield (adData: AdData) {
 
                     if(response.data.status === 200){
                         let data: Position = response.data.data;
-                        if(lastData === null){
+                        if(isFirst.current){
                             lastData = data;
+                            isFirst.current = false;
                             return;
                         }
                         
@@ -453,7 +454,7 @@ export default function Battlefield (adData: AdData) {
                         if (dx !== 0) {
                             const direction = dx > 0 ? '东' : '西';
                             newLogs.push({
-                                logId: id++,
+                                logId: id,
                                 logTime: new Date().toLocaleTimeString(),
                                 logContent: `无人机向${direction}移动了${Math.abs(dx)}m`
                             });
@@ -462,7 +463,7 @@ export default function Battlefield (adData: AdData) {
                         if (dy !== 0) {
                             const direction = dy > 0 ? '北' : '南';
                             newLogs.push({
-                                logId: id++,
+                                logId: id+1,
                                 logTime: new Date().toLocaleTimeString(),
                                 logContent: `无人机向${direction}移动了${Math.abs(dy)}m`
                             });
@@ -471,20 +472,29 @@ export default function Battlefield (adData: AdData) {
                         if (dz !== 0) {
                             const direction = dz > 0 ? '上' : '下';
                             newLogs.push({
-                                logId: id++,
+                                logId: id+2,
                                 logTime: new Date().toLocaleTimeString(),
                                 logContent: `无人机向${direction}移动了${Math.abs(dz)}m`
                             });
                             isMove = true;
                         }
                         lastData = data;
+                        id += 3;
                         if(isMove){
                             shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
                             // shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
                             setRedTeamState(prev => {
-                                const existingContents = new Set(prev.logInfo.map(log => log.logContent))
+                                // 定义用于创建复合键的函数
+                                const getCompositeKey = (log: any): string => {
+                                    // 使用 | 作为分隔符，确保 logTime 和 logContent 的组合是唯一的
+                                    return `${log.logTime}|${log.logContent}`;
+                                };
+                                // 1. 构建一个包含所有现有日志复合键的 Set 集合
+                                const existingKeys = new Set(prev.logInfo.map(getCompositeKey));
+
+                                // 2. 过滤 newLogs，只保留复合键在现有集合中不存在的新日志
                                 const uniqueNewLogs = newLogs.filter(newLog => 
-                                    !existingContents.has(newLog.logContent)
+                                    !existingKeys.has(getCompositeKey(newLog))
                                 );
                                 if (uniqueNewLogs.length > 0) {
                                     // 如果有，则返回新状态
@@ -578,7 +588,7 @@ export default function Battlefield (adData: AdData) {
                     dataIp.push(item.ip); 
                 }
             });
-            startPolling(3000);
+            startPolling(2000);
             // pollingCallback(); 
             // intervalId = setInterval(pollingCallback, 3000);
         }
