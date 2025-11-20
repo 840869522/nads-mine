@@ -6,6 +6,10 @@ import GuacamoleLite from 'guacamole-lite';
 import { spawn as ptySpawn } from '@homebridge/node-pty-prebuilt-multiarch';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import process from 'process';
+import dotenv from "dotenv";
+import { infoLog, errorLog, wariningLog, formatLocalTime } from './logger.js';
+
+dotenv.config();
 
 const GUAC_KEY = process.env.GUAC_KEY || '0123456789abcdef0123456789abcdef';
 
@@ -30,6 +34,7 @@ let guacServer;
 
 const sockets = new Set();
 
+
 app.prepare().then(() => {
     /* =================================================================
        1. PROXY MIDDLEWARE SETUP
@@ -47,7 +52,7 @@ app.prepare().then(() => {
     const aiChatProxy = createProxyMiddleware({
         target: AI_CHAT_URL,
         changeOrigin: true,
-        pathRewrite : {"^/chat/" : "/"},
+        pathRewrite: { "^/chat/": "/" },
         //ws: true,
         logLevel: dev ? 'debug' : 'info',
         onProxyRes(proxyRes, req, res) {
@@ -71,24 +76,28 @@ app.prepare().then(() => {
 
     // 主服务器，现在充当 Next.js、Socket.IO 和所有代理的统一入口
     mainHttpServer = createServer((req, res) => {
+        infoLog(`${req.method} ${req.url}`, {
+            method: req.method,
+            url: req.url,
+            ip: req.socket.remoteAddress,
+            userAgent: req.headers['user-agent']
+        });
         const url = req.url || '';
-        // 主要改动 (2/3): 如果请求是发往 //connect-guac，则使用 guacProxy 处理
-        // 注意: 这个处理器会同时处理普通的 HTTP 请求和 WebSocket 的 upgrade 请求
+
         if (url.startsWith('/socketio/terminal')) {
-            return ;
+            return;
         }
         if (url.startsWith('/connect-guac')) {
-            console.log("find guac req！！！！！！！！！！！！！")
+            infoLog(`find guac req！！！！！！！！！！！！！`)
             return guacProxy(req, res);
         }
         if (url.startsWith('/back/')) {
             return phpProxy(req, res);
         }
         if (url.startsWith('/chat/')) {
-            return aiChatProxy(req,res);
+            return aiChatProxy(req, res);
         }
 
-        // 其他所有请求都由 Next.js 处理
         return handle(req, res);
     });
 
@@ -106,14 +115,14 @@ app.prepare().then(() => {
                 rdp: ['hostname', 'port', 'username', 'password', 'security', 'ignore-cert'],
                 ssh: ['hostname', 'port', 'username', 'password'],
                 vnc: ['hostname', 'port', 'password'],
-                join: ['id','width','height','dpi']
+                join: ['id', 'width', 'height', 'dpi']
             },
             log: { level: 'NORMAL' },
         }
     );
-    guacServer.on('open', c => console.log('[Guac OPEN]', c.connectionId));
-    guacServer.on('error', (c,e) => console.error('[Guac ERR]', e));
-    guacServer.on('close', (c) =>   console.log('[Guac END]', c.connectionId));
+    guacServer.on('open', c => infoLog(`[Guac OPEN] \t${c.connectionId}`));
+    guacServer.on('error', (c, e) => errorLog(`[Guac ERR] \t${e}`));
+    guacServer.on('close', (c) => infoLog(`[Guac END] \t${c.connectionId}`));
     /* =================================================================
        3. SOCKET.IO AND CONNECTION HANDLING
        ================================================================= */
@@ -123,24 +132,24 @@ app.prepare().then(() => {
         socket.on('close', () => sockets.delete(socket));
     });
     mainHttpServer.on('upgrade', (req, socket, head) => {
-        console.log('[upgrade] url=', req.url);
+        infoLog(`[upgrade] url= ${req.url}`);
         if (req.url.startsWith('/connect-guac')) {
             // 把升级请求交给同一个 guacProxy 实例处理
-            console.log("find guac req！！！！！！！！！！！！！")
+            infoLog(`find guac req！！！！！！！！！！！！！`)
             guacProxy.upgrade(req, socket, head);
         } else {
             // 其他 WebSocket（例如 /api/terminal）保持现有逻辑
-            console.log('[upgrade] non-guac ws →', req.url);
+            infoLog(`[upgrade] non-guac ws →', ${req.url}`);
         }
     });
     const io = new Server(mainHttpServer, { path: '/socketio/terminal' });
 
     io.on('connection', (socket) => {
         const id = socket.handshake.query.id;
-        console.log("find socketio！！！！！！！！！！！！！"+id)
+        infoLog(`find socketio！！！！！！！！！！！！！ \t ${id}`)
         if (typeof id !== 'string') {
             socket.disconnect(true);
-            console.log('[Terminal] No container ID provided. Disconnecting.');
+            errorLog(`[Terminal] No container ID provided. Disconnecting.`);
             return;
         }
         const shell = ptySpawn('docker', ['exec', '-it', id, '/bin/bash'], {
@@ -158,7 +167,7 @@ app.prepare().then(() => {
        ================================================================= */
 
     async function shutdown() {
-        console.log('[NodeJS] Shutting down…');
+        infoLog(`[NodeJS] Shutting down…`);
         await new Promise((resolve) => io.close(resolve));
         if (guacServer) guacServer.close();
 
@@ -167,7 +176,7 @@ app.prepare().then(() => {
         await new Promise((resolve) => guacHttpServer.close(resolve));
 
         sockets.forEach((s) => s.destroy());
-        console.log('[NodeJS] Cleanup done. Exiting.');
+        infoLog(`[NodeJS] Cleanup done. Exiting.`);
         process.exit(0);
     }
 
@@ -191,14 +200,14 @@ app.prepare().then(() => {
        ================================================================= */
 
     mainHttpServer.listen(MAIN_PORT, () => {
-        console.log(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
-        console.log(`> ➡️  PHP proxied from /back/`);
-        console.log(`> ➡️  AI proxied from /chat/`);
-        console.log(`> ➡️  Guacamole proxied from /connect-guac`);
-        console.log(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
+        infoLog(`> ✅ Main server ready on http://localhost:${MAIN_PORT}`);
+        infoLog(`> ➡️  PHP proxied from /back/`);
+        infoLog(`> ➡️  AI proxied from /chat/`);
+        infoLog(`> ➡️  Guacamole proxied from /connect-guac`);
+        infoLog(`> ➡️  Terminal WebSocket direct at /socketio/terminal`);
     });
 
     guacHttpServer.listen(GUAC_INTERNAL_PORT, () => {
-        console.log(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
+        infoLog(`> ⚙️  Internal Guacamole server running on port ${GUAC_INTERNAL_PORT}`);
     });
 });

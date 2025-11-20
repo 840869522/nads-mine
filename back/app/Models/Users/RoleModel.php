@@ -5,7 +5,7 @@
     use Illuminate\Database\Eloquent\Model;
     use Illuminate\Support\Facades\DB as db;
     use Illuminate\Database\QueryException;
-    use Illuminate\Support\Facades\Log as log;
+    use App\Utils\Logger;
 
     use App\Utils\GlobalResponse;
     use Exception;
@@ -33,7 +33,7 @@
                     "count"=> $count[0]->count
                 ];
             }catch (QueryException $e) {
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -50,7 +50,7 @@
                     "code"=> GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch (Exception $e) {
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -77,7 +77,7 @@
                     ];
                 }
             }catch (QueryException $e) {
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -97,7 +97,7 @@
                     "code"=>GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             }catch (Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -124,7 +124,7 @@
                     "count"=> $count[0]->count
                 ];
             }catch(Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -148,7 +148,7 @@
                 ];
             }catch (Exception $e) {
                 db::rollBack();
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -173,7 +173,7 @@
                 return [];
             }catch (Exception $e) {
                 db::rollBack();
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=> GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -211,7 +211,7 @@
                 ];
             }catch(Exception $e) {
                 db::rollBack();
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -279,7 +279,7 @@
                     ]
                 ];
             } catch (Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                 ];
@@ -311,7 +311,7 @@
                 ];
             }catch (Exception $e) {
                 db::rollBack();
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     'code'=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -346,7 +346,7 @@
                 ];
             }catch (Exception $e) {
                 db::rollBack();
-                log::info('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : '.$e->getMessage());
                 return [
                     "code"=>GlobalResponse::$DATABASE_ERROR_CODE
                 ];

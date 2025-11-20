@@ -30,7 +30,7 @@ function getRandomDivisibleBy5(min: number = 200, max: number = 300): number {
 }
 
 async function fetchTeamMembers(sceneId: string) {
-    const res = await fetch(`/back/api/visualization/users/${sceneId}`);
+    const res = await fetch(`/back/api/visualization/${sceneId}/users`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -42,7 +42,7 @@ async function fetchTeamMembers(sceneId: string) {
 }
 
 async function fetchTeams(sceneId: string) {
-    const res = await fetch(`/back/api/visualization/teams/${sceneId}`);
+    const res = await fetch(`/back/api/visualization/${sceneId}/teams`);
     const result = await res.json();
 
     if (result.code !== 200) {
@@ -123,6 +123,25 @@ function LogInfo(props: {logList: LogInfo[]}){
     );
 }
 
+function DroneLogInfo(props: {logList: LogInfo[]}){
+    return(
+        <div className="h-[30vh]
+            bg-[rgba(0,10,30,0.6)]
+            border border-[rgba(0,150,255,0.3)]
+            bottom-[10px] overflow-y-visible
+            relative">
+            <div className="text-base mb-2 text-[#7dd3fc] h-[20px] flex items-center gap-[6px]">
+                <FontAwesomeIcon className="w-4 h-4 text-[#7dd3fc]" icon={faClipboardList}/> 无人机飞行数据
+            </div>
+            <ul className="list-none overflow-y-auto h-[calc(100%-30px)] pr-[5px] mb-2.5 text-white" id="blue-log">
+                {props.logList.slice().reverse().map((logInfo) => (
+                    <LogItem key={logInfo.logId} {...logInfo} />
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export default function Team(team:BattlefieldInfo) {
     const [teamList, setTeamList] = useState<TeamInfo[]>([])
@@ -151,39 +170,39 @@ export default function Team(team:BattlefieldInfo) {
     useEffect(() => {
         let teams: TeamInfo[] = [];
         if(team.type === 1){
-            //setTeamList(redTeamInfos);
-            fetchTeamMembers(team.sceneId).then(users => {
-                for(let i = 0; i < users.length; ++i){
-                    let item: TeamInfo = {
-                        teamId: users[i].userId,
-                        teamName: users[i].userId,
-                        teamScore: getRandomDivisibleBy5() / 5
-                    }
-                    teams.push(item);
-                }
-                teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
-                if(users === null || users.length === 0)
-                    setTeamList(redTeamInfos);
-                else
-                    setTeamList(teams);
-            });
+            setTeamList(redTeamInfos);
+            // fetchTeamMembers(team.sceneId).then(users => {
+            //     for(let i = 0; i < users.length; ++i){
+            //         let item: TeamInfo = {
+            //             teamId: users[i].userId,
+            //             teamName: users[i].userId,
+            //             teamScore: getRandomDivisibleBy5() / 5
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((a: TeamInfo, b: TeamInfo) => b.teamScore - a.teamScore);
+            //     if(users === null || users.length === 0)
+            //         setTeamList(redTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
         }else{
-            //setTeamList(blueTeamInfos);
-            fetchTeams(team.sceneId).then(teamList => {
-                for(let j = 0; j < teamList.length; ++j){
-                    let item: TeamInfo = {
-                        teamId: teamList[j].teamId.toString(),
-                        teamName: teamList[j].teamName,
-                        teamScore: getRandomDivisibleBy5()
-                    }
-                    teams.push(item);
-                }
-                teams.sort((c: TeamInfo, d: TeamInfo) => c.teamScore - d.teamScore);
-                if(teams.length === 0)
-                    setTeamList(blueTeamInfos);
-                else
-                    setTeamList(teams);
-            });
+            setTeamList(blueTeamInfos);
+            // fetchTeams(team.sceneId).then(teamList => {
+            //     for(let j = 0; j < teamList.length; ++j){
+            //         let item: TeamInfo = {
+            //             teamId: teamList[j].teamId.toString(),
+            //             teamName: teamList[j].teamName,
+            //             teamScore: getRandomDivisibleBy5()
+            //         }
+            //         teams.push(item);
+            //     }
+            //     teams.sort((c: TeamInfo, d: TeamInfo) => d.teamScore - c.teamScore);
+            //     if(teams.length === 0)
+            //         setTeamList(blueTeamInfos);
+            //     else
+            //         setTeamList(teams);
+            // });
         }
     }, [team.sceneId])
 
@@ -219,7 +238,7 @@ export default function Team(team:BattlefieldInfo) {
                 </div>
 
                 <TeamInfo teamList={teamList} />
-                {/* <LogInfo logList={logList} /> */}
+                <DroneLogInfo logList={logList} />
             </div>
         );
     }
@@ -269,14 +288,14 @@ const redTeamInfos: TeamInfo[] = [
         teamName: 'student5',
         teamScore: 10
     },
-    {
-        teamId: '6',
-        teamName: 'student6',
-        teamScore: 10
-    },
-    {
-        teamId: '7',
-        teamName: 'student7',
-        teamScore: 0
-    },
+    // {
+    //     teamId: '6',
+    //     teamName: 'student6',
+    //     teamScore: 10
+    // },
+    // {
+    //     teamId: '7',
+    //     teamName: 'student7',
+    //     teamScore: 0
+    // },
 ]

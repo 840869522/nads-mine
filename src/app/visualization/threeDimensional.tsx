@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
-import {GLTFLoader, OrbitControls} from "three-stdlib";
+import {CSS2DObject, CSS2DRenderer, GLTFLoader, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { AdData } from "./page";
@@ -283,6 +283,7 @@ const allNodePositions: Map<number, { position: THREE.Vector3, isOccupied: boole
 interface VMItem {
     name: string;
     ip: string;
+    teamName: string;
 }
 
 interface VMResult {
@@ -300,7 +301,7 @@ interface FlagLog {
  */
 async function fetchVMs(instanceId: string): Promise<VMResult> {
     try {
-        const res = await fetch(`/back/api/visualization/vms/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/vms`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -315,7 +316,7 @@ async function fetchVMs(instanceId: string): Promise<VMResult> {
 
 async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
     try {
-        const res = await fetch(`/back/api/visualization/logs/${instanceId}`);
+        const res = await fetch(`/back/api/visualization/${instanceId}/logs`);
         if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
 
         const json = await res.json();
@@ -326,6 +327,18 @@ async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
         // 异常时返回空列表，保证类型安全
         return [];
     }
+}
+
+async function fetchAttackLogs(sceneId: string) {
+    const res = await fetch(`/back/api/visualization/${sceneId}/att`);
+    const result = await res.json();
+
+    // if (result.code !== 200) {
+    //     console.error(result.message);
+    //     return [];
+    // }
+
+    return result; // 这里是对象数组 [{ userId, username }, ...]
 }
 
 export default function ThreeDimensional(adData: AdData){
@@ -366,6 +379,18 @@ export default function ThreeDimensional(adData: AdData){
         renderer.setSize(width, height);
         container.appendChild(renderer.domElement);
         container.style.backgroundColor = 'rgba(0, 50, 150, 0.6)';
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(width, height); // 尺寸与 WebGL 渲染器一致
+
+        // 设置样式，确保 HTML 标签浮动在 WebGL Canvas 上方
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // 允许鼠标点击穿透文字层到下面的 3D 场景
+        labelRenderer.domElement.style.zIndex = '10'; // 强制文字层在最上层
+
+        // 将 CSS2D 渲染器的 DOM 元素添加到与 Canvas 相同的容器中
+        container.appendChild(labelRenderer.domElement);
 
         // --- 创建四个圆环 ---
         const rings: THREE.Mesh[] = [];
@@ -808,12 +833,28 @@ export default function ThreeDimensional(adData: AdData){
 
                 for (let i = 0; i < result.trueTargetList.length; i++) {
                     const ip: string = result.trueTargetList[i].ip;
+                    const teamName: string = result.trueTargetList[i].teamName;
                     const segmentIndex: number = indicesArray[i]; // 对应 indicesArray 中前 i 个索引
     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
 
                     // 创建节点
                     const { nodeGroup, topMesh } = createNodeMesh(blueNodeMaterial);
+
+                    const element = document.createElement('div');
+                    element.className = 'node-label-blue';
+                    element.textContent = teamName;
+                    
+                    // 标签样式 (确保可见和定位)
+                    element.style.color = 'yellow';
+                    element.style.fontWeight = 'bold';
+                    element.style.backgroundColor = 'rgba(0, 0, 150, 0.7)'; // 蓝色背景
+                    element.style.padding = '2px 4px';
+                    element.style.borderRadius = '2px';
+                    element.style.marginTop = '-50px'; // 向上偏移，使其悬浮在节点上方
+
+                    const label = new CSS2DObject(element);
+                    nodeGroup.add(label); // 将标签添加到节点分组，实现跟随移动
 
                     blueNodes.push({
                         object: topMesh,
@@ -836,12 +877,28 @@ export default function ThreeDimensional(adData: AdData){
 
                 for (let i = 0; i < result.falseTargetList.length; i++) {
                     const ip: string = result.falseTargetList[i].ip;
+                    const teamName: string = result.trueTargetList[i].teamName;
                     const segmentIndex: number = indicesArray[i + redStartOffset]; // 使用偏移后的索引
                     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
 
                     // 创建节点
                     const { nodeGroup, topMesh } = createNodeMesh(redNodeMaterial);
+
+                    const element = document.createElement('div');
+                    element.className = 'node-label-blue';
+                    element.textContent = teamName;
+                    
+                    // 标签样式 (确保可见和定位)
+                    element.style.color = 'yellow';
+                    element.style.fontWeight = 'bold';
+                    element.style.backgroundColor = 'rgba(241, 11, 57, 0.7)'; // 蓝色背景
+                    element.style.padding = '2px 4px';
+                    element.style.borderRadius = '2px';
+                    element.style.marginTop = '-50px'; // 向上偏移，使其悬浮在节点上方
+
+                    const label = new CSS2DObject(element);
+                    nodeGroup.add(label); // 将标签添加到节点分组，实现跟随移动
 
                     redNodes.push({
                         object: topMesh,
@@ -901,12 +958,18 @@ export default function ThreeDimensional(adData: AdData){
         }
 
         setTimeout(function shootLoop() {
-            if(redNodes.length > 0 && blueNodes.length > 0){
-                const red = redNodes[Math.floor(Math.random() * redNodes.length)];
-                const blue = blueNodes[Math.floor(Math.random() * blueNodes.length)];
+            console.log(blueNodes.length);
+            if(blueNodes.length > 1){
+                 const index1 = Math.floor(Math.random() * blueNodes.length);
+                    const blue1 = blueNodes[index1];
+                    let index2;
+                    do {
+                        index2 = Math.floor(Math.random() * blueNodes.length);
+                    } while (index2 === index1);
+                const blue2 = blueNodes[index2];
 
-                if (red && blue) {
-                    shootRay(scene, red.object, blue.object);
+                if (blue1 && blue2) {
+                    shootRay(scene, blue1.object, blue2.object);
                 }
 
                 // 下次间隔：5~10 秒
@@ -982,6 +1045,31 @@ export default function ThreeDimensional(adData: AdData){
             fetchData();
         }
 
+        // setInterval(() => {
+        //     fetchAttackLogs(adData.id).then(result => {
+        //         //console.log(result);
+
+        //         if (result.code !== 200) {
+        //             const blue1 = blueNodes[0];
+        //             const blue2 = blueNodes[1];
+
+        //             if (blue1 && blue2) {
+        //                 shootRay(scene, blue1.object, blue2.object);
+        //             }
+        //         } else {
+        //             const data = result.data;
+        //             for (let i = 0; i < data.length; ++i) {
+        //                 const blue1 = blueNodes.find(n => n.ip === data[i][0]);
+        //                 const blue2 = blueNodes.find(n => n.ip === data[i][1]);
+        //                 if (blue1 && blue2) {
+        //                     shootRay(scene, blue1.object, blue2.object);
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }, 10000); // 每10秒执行一次
+
+
         let shootingPaused = false;
 
         document.addEventListener("visibilitychange", () => {
@@ -990,13 +1078,20 @@ export default function ThreeDimensional(adData: AdData){
 
 
         if(adData.showAttack === 1){
+            console.log(redSpaceships.length);
             setTimeout(function shootLoop() {
-                if(redSpaceships.length > 0 && blueSpaceships.length > 0){
-                    const red = redSpaceships[Math.floor(Math.random() * redSpaceships.length)];
-                    const blue = blueSpaceships[Math.floor(Math.random() * blueSpaceships.length)];
+                if(redSpaceships.length > 1){
+                    debugger
+                    const index1 = Math.floor(Math.random() * redSpaceships.length);
+                    const blue1 = redSpaceships[index1];
+                    let index2;
+                    do {
+                        index2 = Math.floor(Math.random() * redSpaceships.length);
+                    } while (index2 === index1);
+                    const blue2 = redSpaceships[index2];
 
-                    if (red && blue && !shootingPaused) {
-                        shootRay(scene, red.object, blue.object);
+                    if (blue1 && blue2 && !shootingPaused) {
+                        shootRay(scene, blue1.object, blue2.object);
                     }
 
                     // 下次间隔：5~10 秒
@@ -1013,6 +1108,7 @@ export default function ThreeDimensional(adData: AdData){
 
             // scene.rotation.y += 0.002;
             renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
             
         };
         animate();

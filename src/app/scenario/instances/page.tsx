@@ -69,7 +69,7 @@ const RunningInstancesPage: React.FC = () => {
     } | null>(null);
 
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [searchTerm, setSearchTerm] = useState('');
     const [showRunningOnly, setShowRunningOnly] = useState(false);
     const [rowSelectionModel, setRowSelectionModel] = useState<{ type: 'include' | 'exclude'; ids: Set<string> }>({ type: 'include', ids: new Set() });
@@ -398,7 +398,7 @@ const RunningInstancesPage: React.FC = () => {
                         disableRowSelectionOnClick
                         rows={sortedAndFilteredInstances}
                         columns={columns}
-                        pageSizeOptions={[5, 10, 25]}
+                        pageSizeOptions={[5, 10,20, 25,50]}
                         paginationModel={{ pageSize: rowsPerPage, page }}
                         onPaginationModelChange={(m) => {
                             setRowsPerPage(m.pageSize);

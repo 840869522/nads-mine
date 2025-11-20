@@ -7,7 +7,8 @@
     use Illuminate\Support\Facades\DB as db;
     use App\Utils\GlobalResponse;
     use Exception;
-    use Illuminate\Support\Facades\Log;
+    
+    use App\Utils\Logger;
 
     class UserModel extends Model{
 
@@ -37,7 +38,7 @@
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             } catch (QueryException $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -57,7 +58,7 @@
                     "count" => $count->count
                 ];
             } catch (Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -73,7 +74,7 @@
                     "data" => $res
                 ];
             } catch (QueryException $e) {
-                Log::info('[DATAABSE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATAABSE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -105,7 +106,7 @@
                 ];
 
             } catch (QueryException $e) {
-                Log::info('[DATABASE]: FAILED TO GET USER TEAM ID : ' . $e->getMessage());
+                Logger::error('[DATABASE]: FAILED TO GET USER TEAM ID : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                     "data" => null, // 出错时也返回 null
@@ -124,7 +125,7 @@
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             } catch (QueryException $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -140,7 +141,7 @@
                     "data" => $res,
                 ];
             } catch (Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -167,7 +168,7 @@
                     "code" => GlobalResponse::$DATABASE_SUCCESS_CODE
                 ];
             } catch (QueryException $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -204,7 +205,7 @@
                 ];
             } catch (Exception $e) {
                 db::rollBack();
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                 ];
@@ -278,7 +279,7 @@
                     ]
                 ];
             }catch (Exception $e){
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE,
                 ];
@@ -302,7 +303,7 @@
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
             } catch (Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE' . $e->getLine() . ' ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE' . $e->getLine() . ' ERROR : ' . $e->getMessage());
                 db::rollBack();
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
@@ -341,7 +342,7 @@
                 ];
             } catch (Exception $e) {
                 db::rollBack();
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -354,7 +355,7 @@
                 $email = $data["email"];
                 $name = $data['name'];
             }catch(Exception $e) {
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -375,7 +376,7 @@
                 }
              }catch(Exception $e) {
                 db::rollBack();
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -406,7 +407,7 @@
                 }
             } catch (Exception $e) {
                 db::rollBack();
-                Log::info('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
+                Logger::error('[DATABASE]: HAAPENDE ERROR : ' . $e->getMessage());
                 return [
                     "code" => GlobalResponse::$DATABASE_ERROR_CODE
                 ];
@@ -424,7 +425,7 @@
         try {
             return DB::select($sql);
         } catch (\Exception $e) {
-            Log::error('[DATABASE]: FAILED TO GET ALL USERS: ' . $e->getMessage());
+            Logger::error('[DATABASE]: FAILED TO GET ALL USERS: ' . $e->getMessage());
             return [];
         }
     }
@@ -436,7 +437,7 @@
             try {
                 return DB::select($sql);
             } catch (QueryException $e) {
-                Log::info('[DATABASE]: FAILED TO GET USERS FOR PERMISSION : ' . $e->getMessage());
+                Logger::error('[DATABASE]: FAILED TO GET USERS FOR PERMISSION : ' . $e->getMessage());
                 return []; // 出错时安全地返回一个空数组
             }
         }

@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import VectorParams, Distance, ScalarQuantization, ScalarQuantizationConfig, ScalarType, HnswConfigDiff, OptimizersConfigDiff
 from app import config
 from .CustomEmbeddings import CustomEmbeddings
 from langchain_qdrant import QdrantVectorStore
@@ -13,7 +13,25 @@ try:
     if not qdrant.collection_exists("qdrant_collection"):
         qdrant.create_collection(
             collection_name="qdrant_collection",
-            vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+            vectors_config=VectorParams(
+                size=768,
+                distance=Distance.COSINE,
+                hnsw_config=HnswConfigDiff(
+                    m=16,
+                    ef_construct=100
+                ),
+                quantization_config=ScalarQuantization(
+                    scalar=ScalarQuantizationConfig(
+                        type=ScalarType.INT8,
+                        always_ram=True,
+                    ),
+                ),
+            ),
+            optimizers_config=OptimizersConfigDiff(
+                deleted_threshold=0.2,
+                max_segment_size=1000000,
+                indexing_threshold=20000,
+            )
         )
 except:
     qdrant.close()

@@ -20,7 +20,7 @@ import base64
 
 system_template = """
     你是一个非常有用的问答助手，根据下面给出的知识和以往的对话，
-    回答给出的问题，在使用markdown格式时要符合格式规范。当你知道问题的答案时，准确的回答问题，尽量不要使用表格尽量简短；如果你不知道答案，那么直接回答“我不知道”。
+    回答给出的问题，在使用markdown格式时要符合格式规范。当你知道问题的答案时，准确的回答问题，分点时可以使用表格描述，并尽量简短；如果你不知道答案，那么直接回答“我不知道”。
     知识：{knowledge}
     重要：在你的回答中不要包含<think>标签或任何类似的内部思考标记。
 """
@@ -32,7 +32,7 @@ human_template = """
 
 chat_template = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(system_template),
-    MessagesPlaceholder(variable_name="history"),
+    # MessagesPlaceholder(variable_name="history"),
     HumanMessagePromptTemplate.from_template(human_template)
 ]
 )
@@ -54,7 +54,10 @@ retriever = vector_store.as_retriever(
     search_type="similarity",
     search_kwargs={
         'k': 6,
-        'score_threshold': 0.7
+        'score_threshold': 0.7,
+        'search_params': {
+            'hnsw_ef': 50,
+        }
     }
 )
 
@@ -75,7 +78,7 @@ def search_document(info):
 rag_chain = (
         {
             "question": itemgetter("question"),
-            "history": itemgetter("history")
+            # "history": itemgetter("history")
         }
         | RunnableLambda(search_document)
         | chat_template
@@ -83,23 +86,23 @@ rag_chain = (
         | StrOutputParser()
 )
 
-rag_chain_memory = RunnableWithMessageHistory(
-    rag_chain,
-    get_session_history=lambda session_id: chat_memory.chat_memory,
-    # SQLChatMessageHistory(
-    #     connection_string = config['database']["uri"],
-    #     table_name= config['database']['table']
-    #     session_id=session_id,
-    #     session_id_field_name="session_id"
-    # ),
-    input_messages_key="question",
-    history_messages_key="history"
-)
+# rag_chain_memory = RunnableWithMessageHistory(
+#     rag_chain,
+#     get_session_history=lambda session_id: chat_memory.chat_memory,
+#     # SQLChatMessageHistory(
+#     #     connection_string = config['database']["uri"],
+#     #     table_name= config['database']['table']
+#     #     session_id=session_id,
+#     #     session_id_field_name="session_id"
+#     # ),
+#     input_messages_key="question",
+#     history_messages_key="history"
+# )
 
 
 async def agenerate_response(message: str):
     handler = StreamOutputHandler(chunk_threshold=3)
-    async for chunk in rag_chain_memory.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
+    async for chunk in rag_chain.astream({"question": message}, {"configurable": {"session_id": "session_123"}}):
         clear_chunk = chunk.strip()
         if clear_chunk:
             processed_chunk = base64.b64encode(chunk.encode("utf-8")).decode('utf-8')
@@ -107,7 +110,7 @@ async def agenerate_response(message: str):
 
 async def generate_response(message: str):
     try:
-        responses = await rag_chain_memory.ainvoke(
+        responses = await rag_chain.ainvoke(
             {"question": message},
             {"configurable": {"session_id": "session_123"}}
         )

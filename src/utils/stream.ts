@@ -4,16 +4,16 @@ import { customFetch } from "./fetch";
  * @param str Base64 编码的字符串
  * @returns 解码后的 UTF-8 字符串
  */
-const base64ToUTF8 = (str: string): string =>{
+const base64ToUTF8 = (str: string): string => {
     try {
         // 处理 URL 安全的 Base64 (将 - 和 _ 替换为 + 和 /)
         str = str.replace(/-/g, '+').replace(/_/g, '/');
-        
+
         // 添加必要的填充
         while (str.length % 4) {
             str += '=';
         }
-        
+
         // 使用 TextDecoder 解码
         const binaryString = atob(str);
         const bytes = new Uint8Array(binaryString.length);
@@ -79,6 +79,7 @@ export const streamPostRequest = async (
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let previousChunk = ''; // 保存上一个数据块用于检查连接处的字符
 
         while (true) {
             const { done, value } = await reader.read();
@@ -91,16 +92,17 @@ export const streamPostRequest = async (
             buffer = lines.pop() || ''; // 保留未完成的行
 
             for (const line of lines) {
-
                 if (line.trim().startsWith('data:')) {
                     let dataContent = line.substring(5).trim();
                     if (dataContent) {
-                        try{
+                        try {
                             dataContent = base64ToUTF8(dataContent);
-                        }catch(decodeError){
+                            // const formattedContent = formatMarkdownContent(dataContent, previousChunk);
+                            previousChunk = dataContent;
+                            onMessage(dataContent);
+                        } catch (decodeError) {
                             throw new Error("未知错误");
                         }
-                        onMessage(dataContent); // 直接传递 data: 后的内容
                     }
                 }
             }
@@ -110,6 +112,7 @@ export const streamPostRequest = async (
             if (dataContent) {
                 try {
                     const decodedContent = base64ToUTF8(dataContent);
+                    // const formattedContent = formatMarkdownContent(decodedContent, previousChunk);
                     onMessage(decodedContent);
                 } catch (decodeError) {
                     console.warn('Base64 解码失败，使用原始数据:', decodeError);
@@ -125,3 +128,23 @@ export const streamPostRequest = async (
         controller.abort();
     }
 };
+// /**
+//  * 格式化 Markdown 内容，在检测到 | 或 - 且前面没有换行符时添加换行符
+//  * @param content 当前内容块
+//  * @param previousContent 上一个内容块
+//  * @returns 格式化后的内容
+//  */
+// const formatMarkdownContent = (content: string, previousContent: string) => {
+//     // 合并上一个内容块和当前内容块进行整体处理
+//     let combinedContent = previousContent + content;
+
+//     const pattern = /(^|[^\\n])([|])/g;
+
+//     // 替换匹配项，在 | 或 - 前添加换行符
+//     let formattedContent = combinedContent.replace(pattern, (match, prefix, symbol) => {
+//         return prefix + '\n' + symbol;
+//     });
+
+//     // 返回当前内容块部分（去除之前已处理的部分）
+//     return formattedContent.substring(previousContent.length);
+// };
