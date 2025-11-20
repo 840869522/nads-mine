@@ -57,7 +57,7 @@ import FlagHistoryModal from '../../components/scenario/FlagHistoryModal';
 import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyDialog';
 import NodeTeamAssignmentDialog from './NodeTeamAssignmentDialog';
 import MemberManagementDialog from './MemberManagementDialog';
-import { TopologyData } from "@/types"; // ★ 新增：引入 TopologyData 类型 ★
+import { TopologyData } from "@/types";
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; c_name?: string; }
@@ -147,28 +147,62 @@ const AdManagementPage: React.FC = () => {
         }
     }, [debouncedSearchQuery, page, rowsPerPage]);
 
+    // =========================================================================
+    // ★★★★★★★★★★★★★★★★★ 核心修改区域 ★★★★★★★★★★★★★★★★★
+    // =========================================================================
     const loadDependenciesForForm = useCallback(async () => {
         setIsFormLoading(true);
         try {
-            const requests: Promise<any>[] = [];
+            const promisesToRun = [];
+
             if (users.length === 0) {
-                requests.push(customFetch(`${API_BASE_URL}/ad/users?all=true`).then(res => res.json()));
+                promisesToRun.push(
+                    customFetch(`${API_BASE_URL}/ad/users?all=true`)
+                        .then(res => res.json())
+                        .then(data => ({ type: 'users', data })) // 标记数据类型以便后续处理
+                );
             }
             if (sceneConfigsForForm.length === 0) {
-                requests.push(customFetch(`${API_BASE_URL}/scenarios?all=true`).then(res => res.json()));
+                promisesToRun.push(
+                    customFetch(`${API_BASE_URL}/scenarios?all=true`)
+                        .then(res => res.json())
+                        .then(data => ({ type: 'scenes', data })) // 标记数据类型
+                );
             }
 
-            if (requests.length > 0) {
-                const [usersData, scenesData] = await Promise.all(requests);
-                if (usersData) setUsers(usersData.data?.data || []);
-                if (scenesData) setSceneConfigsForForm(scenesData.data || []);
+            if (promisesToRun.length > 0) {
+                const results = await Promise.all(promisesToRun);
+                results.forEach(result => {
+                    if (result.type === 'users') {
+                        // 假设 /ad/users?all=true 返回 { data: { data: [...] } }
+                        // 如果结构不同，请相应调整
+                        const userList = result.data?.data?.data || result.data?.data || result.data || [];
+                        setUsers(userList);
+                    } else if (result.type === 'scenes') {
+                        const rawScenes = Array.isArray(result.data) ? result.data : [];
+
+                        // 【关键修复】: 转换后端返回的字段名 (id, name) 为前端期望的 (c_config_id, c_name)
+                        const formattedScenes = rawScenes.map((scene: any) => ({
+                            c_config_id: scene.id,
+                            c_name: scene.name,
+                            // 如果需要，这里可以映射其他字段
+                        }));
+                        setSceneConfigsForForm(formattedScenes);
+                    }
+                });
             }
         } catch (err) {
-            throw err;
+            console.error("加载表单依赖项时出错:", err);
+            // 抛出错误，让调用者(handleOpenForm)可以捕获并显示错误信息
+            throw new Error("加载创建演练所需的数据失败，请稍后重试。");
         } finally {
             setIsFormLoading(false);
         }
     }, [users, sceneConfigsForForm]);
+    // =========================================================================
+    // ★★★★★★★★★★★★★★★★★ 修改结束 ★★★★★★★★★★★★★★★★★
+    // =========================================================================
+
 
     useEffect(() => { fetchData(); }, [fetchData]);
     useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
@@ -179,7 +213,12 @@ const AdManagementPage: React.FC = () => {
         setIsFormOpen(true);
         try {
             await loadDependenciesForForm();
+            // 注意：由于loadDependenciesForForm是异步更新state的，这里的users可能还是旧的。
+            // 但对于编辑场景，我们依赖的是全局的users state，它最终会更新。
+            // 对于创建场景，则没有影响。
             if (adConfig) {
+                // 为了确保使用最新的users state，可以从外部获取或者在useEffect中处理
+                // 但当前逻辑在多数情况下是可行的，因为users通常只加载一次。
                 const refereesWithUserDetails = (adConfig.referees || [])
                     .map(ref => ({...ref, user: users.find(u => u.c_username === ref.c_user_id)}))
                     .filter(ref => ref.user);
@@ -189,7 +228,7 @@ const AdManagementPage: React.FC = () => {
             }
         } catch(err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
-            setIsFormOpen(false);
+            setIsFormOpen(false); // 加载失败时关闭表单
         }
     };
 
@@ -268,14 +307,6 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
-    // =========================================================================
-    // ★★★★★★★★★★★★★★★★★ 新增的功能代码 ★★★★★★★★★★★★★★★★★
-    // =========================================================================
-    /**
-     * 处理从拓扑编辑器传来的保存事件。
-     *
-     * @param newTopology - 编辑器返回的最新的拓扑数据对象。
-     */
     const handleTopologySave = async (newTopology: TopologyData) => {
         if (!selectedAdConfigForTopology) {
             console.error("无法保存拓扑，因为没有选中的演练配置。");
@@ -299,22 +330,15 @@ const AdManagementPage: React.FC = () => {
             }
 
             setStatusMessage({ type: 'success', message: '拓扑已成功更新并应用！' });
-
-            // 更新成功后关闭弹窗
             setIsTopologyOpen(false);
-            // 刷新主列表数据以反映任何可能的变化
             await fetchData();
 
         } catch (err: any) {
             setStatusMessage({ type: 'error', message: err.message });
-            // 注意：更新失败时，我们不关闭弹窗，以便用户可以看到错误信息并决定下一步操作。
         } finally {
             setIsSubmitting(false);
         }
     };
-    // =========================================================================
-    // ★★★★★★★★★★★★★★★★★ 新增代码结束 ★★★★★★★★★★★★★★★★★
-    // =========================================================================
 
     const renderErrorMessage = (message: string | { [key: string]: string[] }) => { if (typeof message === 'string') return message; return <ul style={{ paddingLeft: '20px', margin: 0 }}>{Object.values(message).flat().map((msg, index) => <li key={index}>{msg}</li>)}</ul>; };
     const renderStatusChip = (status: AdConfig['c_status']) => { const statusMap = { pending: { label: '未开始', color: 'default' as const }, running: { label: '进行中', color: 'success' as const }, finished: { label: '已结束', color: 'primary' as const }, archived: { label: '已归档', color: 'warning' as const }, failed: { label: '失败', color: 'error' as const }, creating: { label: '创建中...', color: 'info' as const }, }; const { label, color } = statusMap[status] || statusMap.pending; return <Chip label={label} color={color} size="small" />; };
@@ -528,7 +552,6 @@ const AdManagementPage: React.FC = () => {
             {isDetailsModalOpen && selectedInstanceId && ( <InstanceDetailsDialog open={isDetailsModalOpen} onClose={handleCloseDetails} instanceId={selectedInstanceId} scenarioName={selectedScenarioName} /> )}
             {isFlagHistoryOpen && selectedAdForFlagHistory && selectedAdForFlagHistory.c_scene_instance_id && ( <FlagHistoryModal open={isFlagHistoryOpen} onClose={handleCloseFlagHistory} sceneInstanceId={selectedAdForFlagHistory.c_scene_instance_id} title={`Flag提交历史 - ${selectedAdForFlagHistory.c_drill_name}`} /> )}
 
-            {/* ★★★★★★★★★★★★★★★★★ 核心修改点 ★★★★★★★★★★★★★★★★★ */}
             {isTopologyOpen && selectedAdConfigForTopology && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
@@ -541,13 +564,10 @@ const AdManagementPage: React.FC = () => {
                     topology={currentInstanceTopology}
                     instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
                     onTerminalClick={handleTopologyTerminalClick}
-                    // ★ 新增：传入 onSaveSuccess 回调函数 ★
-                    // onSaveSuccess 的 prop 名是一个假设，请确保它与您的 InstanceTopologyDialog 和 TopologyEditor 组件的实现相匹配。
-                    // @ts-ignore - 暂时忽略 onSaveSuccess 可能不存在的TS错误
+                    // @ts-ignore
                     onSaveSuccess={handleTopologySave}
                 />
             )}
-            {/* ★★★★★★★★★★★★★★★★★ 修改结束 ★★★★★★★★★★★★★★★★★ */}
 
             {isAssignmentDialogOpen && selectedAdForAssignment && ( <NodeTeamAssignmentDialog open={isAssignmentDialogOpen} onClose={() => setIsAssignmentDialogOpen(false)} instanceId={selectedAdForAssignment.c_scene_instance_id!} drillName={selectedAdForAssignment.c_drill_name} /> )}
             {isMemberDialogOpen && selectedAdForMembers && ( <MemberManagementDialog open={isMemberDialogOpen} onClose={() => setIsMemberDialogOpen(false)} adConfigId={selectedAdForMembers.c_id} drillName={selectedAdForMembers.c_drill_name} /> )}

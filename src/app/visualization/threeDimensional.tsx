@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
-import {GLTFLoader, OrbitControls} from "three-stdlib";
+import {CSS2DObject, CSS2DRenderer, GLTFLoader, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { AdData } from "./page";
@@ -283,6 +283,7 @@ const allNodePositions: Map<number, { position: THREE.Vector3, isOccupied: boole
 interface VMItem {
     name: string;
     ip: string;
+    teamName: string;
 }
 
 interface VMResult {
@@ -378,6 +379,18 @@ export default function ThreeDimensional(adData: AdData){
         renderer.setSize(width, height);
         container.appendChild(renderer.domElement);
         container.style.backgroundColor = 'rgba(0, 50, 150, 0.6)';
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(width, height); // 尺寸与 WebGL 渲染器一致
+
+        // 设置样式，确保 HTML 标签浮动在 WebGL Canvas 上方
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // 允许鼠标点击穿透文字层到下面的 3D 场景
+        labelRenderer.domElement.style.zIndex = '10'; // 强制文字层在最上层
+
+        // 将 CSS2D 渲染器的 DOM 元素添加到与 Canvas 相同的容器中
+        container.appendChild(labelRenderer.domElement);
 
         // --- 创建四个圆环 ---
         const rings: THREE.Mesh[] = [];
@@ -820,12 +833,28 @@ export default function ThreeDimensional(adData: AdData){
 
                 for (let i = 0; i < result.trueTargetList.length; i++) {
                     const ip: string = result.trueTargetList[i].ip;
+                    const teamName: string = result.trueTargetList[i].teamName;
                     const segmentIndex: number = indicesArray[i]; // 对应 indicesArray 中前 i 个索引
     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
 
                     // 创建节点
                     const { nodeGroup, topMesh } = createNodeMesh(blueNodeMaterial);
+
+                    const element = document.createElement('div');
+                    element.className = 'node-label-blue';
+                    element.textContent = teamName;
+                    
+                    // 标签样式 (确保可见和定位)
+                    element.style.color = 'yellow';
+                    element.style.fontWeight = 'bold';
+                    element.style.backgroundColor = 'rgba(0, 0, 150, 0.7)'; // 蓝色背景
+                    element.style.padding = '2px 4px';
+                    element.style.borderRadius = '2px';
+                    element.style.marginTop = '-50px'; // 向上偏移，使其悬浮在节点上方
+
+                    const label = new CSS2DObject(element);
+                    nodeGroup.add(label); // 将标签添加到节点分组，实现跟随移动
 
                     blueNodes.push({
                         object: topMesh,
@@ -848,12 +877,28 @@ export default function ThreeDimensional(adData: AdData){
 
                 for (let i = 0; i < result.falseTargetList.length; i++) {
                     const ip: string = result.falseTargetList[i].ip;
+                    const teamName: string = result.trueTargetList[i].teamName;
                     const segmentIndex: number = indicesArray[i + redStartOffset]; // 使用偏移后的索引
                     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
 
                     // 创建节点
                     const { nodeGroup, topMesh } = createNodeMesh(redNodeMaterial);
+
+                    const element = document.createElement('div');
+                    element.className = 'node-label-blue';
+                    element.textContent = teamName;
+                    
+                    // 标签样式 (确保可见和定位)
+                    element.style.color = 'yellow';
+                    element.style.fontWeight = 'bold';
+                    element.style.backgroundColor = 'rgba(241, 11, 57, 0.7)'; // 蓝色背景
+                    element.style.padding = '2px 4px';
+                    element.style.borderRadius = '2px';
+                    element.style.marginTop = '-50px'; // 向上偏移，使其悬浮在节点上方
+
+                    const label = new CSS2DObject(element);
+                    nodeGroup.add(label); // 将标签添加到节点分组，实现跟随移动
 
                     redNodes.push({
                         object: topMesh,
@@ -1063,6 +1108,7 @@ export default function ThreeDimensional(adData: AdData){
 
             // scene.rotation.y += 0.002;
             renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
             
         };
         animate();

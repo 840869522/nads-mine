@@ -17,12 +17,16 @@ class VisualizationController extends Controller{
     private $instaceMap;
 
     private function getInstances(string $instance_id){
-        $this->vms = SceneVmInstanceModel::where('c_scene_instances_id', $instance_id)
-            ->select('c_vm_name as name', 'c_ip as ip', 'c_flag', 'c_team_id')
-            ->get();
-        $this->containers = SceneContainerInstanceModel::where('c_scene_instances_id', $instance_id)
-            ->select('c_container_name as name', 'c_ip as ip', 'c_flag', 'c_team_id')
-            ->get();
+        $this->vms = DB::table('c_scene_vm_instances as svi')
+                ->leftJoin('c_teams as t', 'svi.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->where('svi.c_scene_instances_id', $instance_id)
+                ->select('svi.c_vm_name as name', 'svi.c_ip as ip', 'svi.c_flag', 't.c_name as teamName')   // 返回对象数组
+                ->get();
+        $this->containers = DB::table('c_scene_container_instances as sci')
+                ->leftJoin('c_teams as t', 'sci.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->where('sci.c_scene_instances_id', $instance_id)
+                ->select('sci.c_container_name as name', 'sci.c_ip as ip', 'sci.c_flag', 't.c_name as teamName')   // 返回对象数组
+                ->get();
 
         $this->trueTargetList = collect();
         $this->falseTargetList = collect();
@@ -32,6 +36,7 @@ class VisualizationController extends Controller{
             $item = [
                 'name' => $vm->name,
                 'ip'   => $ip,
+                'teamName' => $vm->teamName,
             ];
 
             if (!empty($vm->c_flag)) {
@@ -46,6 +51,7 @@ class VisualizationController extends Controller{
             $item = [
                 'name' => $container->name,
                 'ip'   => $ip,
+                'teamName' => $container->teamName,
             ];
 
             if (!empty($container->c_flag)) {

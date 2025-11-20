@@ -1,10 +1,11 @@
 import * as Cesium from "cesium";
 import {useEffect, useLayoutEffect, useRef, useState} from "react";
-import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, CallbackProperty } from "cesium";
+import {Cartesian3, Color, Entity, HeadingPitchRoll, PolylineGlowMaterialProperty, Transforms, Viewer, Math as CesiumMath, CallbackProperty, JulianDate, PositionProperty } from "cesium";
 import Team, { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import { AdData } from "./page";
 import axios from "axios";
 import { it } from "node:test";
+import { is } from "zod/v4/locales";
 
 interface PlaneEntityOptions {
     viewer: Viewer;
@@ -139,9 +140,75 @@ function shootLaser(viewer: Viewer, from: Cartesian3, to: Cartesian3, duration: 
   return laserEntity;
 }
 
+function trackLineBetweenEntities(
+    viewer: Cesium.Viewer, 
+    fromEntity: Cesium.Entity, 
+    toEntity: Cesium.Entity, 
+    duration: number = 3000
+): Cesium.Entity {
+    
+    // 使用 Date.now() 计时移除
+    const startTime = Date.now();
+    const endTime = startTime + duration;
+    
+    let lineEntity: Cesium.Entity | null = null; 
+
+    // 使用 CallbackProperty 动态获取位置
+    const positions = new Cesium.CallbackProperty((time: any, result: Cesium.Cartesian3[] = []) => { 
+        
+        // 1. 检查计时
+        if (Date.now() >= endTime) {
+            if (lineEntity && viewer.entities.contains(lineEntity)) {
+                viewer.entities.remove(lineEntity);
+                viewer.scene.requestRender();
+            }
+            return undefined; 
+        }
+        
+        // 2. 获取当前 Cesium 渲染时间
+        const currentTime = viewer.clock.currentTime;
+        
+        // 3. 关键点：每帧都从实体实例上读取最新的 position 属性
+        const fromPosition = fromEntity.position;
+        const toPosition = toEntity.position;
+
+        // 4. 从最新的 position 属性中获取值
+        if (fromPosition && toPosition) {
+            const from = fromPosition.getValue(currentTime, new Cesium.Cartesian3());
+            const to = toPosition.getValue(currentTime, new Cesium.Cartesian3());
+            
+            if (from && to) {
+                result[0] = from;
+                result[1] = to;
+                return result;
+            }
+        }
+        
+        return undefined;
+        
+    }, false); // isConstant: false 保持动态更新
+
+    // 5. 创建实体
+    lineEntity = viewer.entities.add({
+        name: "动态跟踪直线",
+        polyline: {
+            positions,
+            width: 5.0,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.3,
+                color: Cesium.Color.RED.withAlpha(0.9),
+            }),
+            clampToGround: false,
+        },
+    });
+
+    return lineEntity;
+}
+
 interface VMItem {
     name: string;
     ip: string;
+    teamName: string;
 }
 
 interface VMResult {
@@ -154,6 +221,12 @@ interface FlagLog {
     blueLogList: LogInfo[];
 }
 
+interface Position{
+    x: number;
+    y: number;
+    z: number;
+}
+
 // 定义方向枚举 (TypeScript Enum)
 export enum MovementDirection {
     EAST = 'EAST',
@@ -164,98 +237,85 @@ export enum MovementDirection {
     DOWN = 'DOWN',
 }
 
-function animateEntityCardinalMove(
+interface CompoundMove {
+    east: number;  // 向东的距离（米）。负数表示向西。
+    north: number; // 向北的距离（米）。负数表示向南。
+    up: number;    // 向上的距离（米）。负数表示向下。
+}
+
+/**
+ * 在 3 秒内将 Cesium 实体平滑移动一个由三个轴向分量定义的斜向距离。
+ *
+ * @param entity 要移动的实体。
+ * @param moveVector 包含 East, North, Up 轴上总位移的对象。
+ * @param viewer Cesium Viewer 实例。
+ * @returns Promise<boolean> 动画完成时解析。
+ */
+function animateEntityCompoundMove(
     entity: Cesium.Entity,
-    direction: MovementDirection,
-    distanceInMeters: number,
+    moveVector: CompoundMove,
     viewer: Cesium.Viewer
 ): Promise<boolean> {
     
-    // 动画时长固定为 2.0 秒
-    const durationSeconds: number = 4.0;
+    // 动画时长固定为 3.0 秒
+    const durationSeconds: number = 2.0;
     const initialTime: Cesium.JulianDate = viewer.clock.currentTime;
-    // 计算结束时间
     const finalTime: Cesium.JulianDate = Cesium.JulianDate.addSeconds(initialTime, durationSeconds, new Cesium.JulianDate());
 
-    // 1. 获取当前笛卡尔坐标（起点）
     const startPosition: Cesium.Cartesian3 | undefined = entity.position?.getValue(initialTime);
     
     if (!startPosition) {
         return Promise.reject(new Error('实体无效或无法获取当前位置。'));
     }
 
-    // 2. 根据起点、方向和距离计算终点
-
-    // 获取 East-North-Up (ENU) 局部坐标系转换矩阵。
+    // 1. 获取 East-North-Up 局部坐标系向量
     const modelMatrix: Cesium.Matrix4 = Cesium.Transforms.eastNorthUpToFixedFrame(startPosition, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
     
-    // 从模型矩阵中提取局部方向向量 (Cartesian3)
-    const eastVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 0, new Cesium.Cartesian4());
-    const northVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 1, new Cesium.Cartesian4());
-    const upVector4: Cesium.Cartesian4 = Cesium.Matrix4.getColumn(modelMatrix, 2, new Cesium.Cartesian4());
-
-    const east: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(eastVector4, new Cesium.Cartesian3());
-    const north: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(northVector4, new Cesium.Cartesian3());
-    const up: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(upVector4, new Cesium.Cartesian3());
+    // 提取单位向量
+    const east: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 0, new Cesium.Cartesian4()), new Cesium.Cartesian3());
+    const north: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 1, new Cesium.Cartesian4()), new Cesium.Cartesian3());
+    const up: Cesium.Cartesian3 = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(modelMatrix, 2, new Cesium.Cartesian4()), new Cesium.Cartesian3());
     
-    let directionVector: Cesium.Cartesian3 = new Cesium.Cartesian3();
-
-    switch (direction) {
-        case MovementDirection.EAST:
-            directionVector = Cesium.Cartesian3.multiplyByScalar(east, distanceInMeters, directionVector);
-            break;
-        case MovementDirection.WEST: // 西 = -东
-            directionVector = Cesium.Cartesian3.multiplyByScalar(east, -distanceInMeters, directionVector);
-            break;
-        case MovementDirection.NORTH:
-            directionVector = Cesium.Cartesian3.multiplyByScalar(north, distanceInMeters, directionVector);
-            break;
-        case MovementDirection.SOUTH: // 南 = -北
-            directionVector = Cesium.Cartesian3.multiplyByScalar(north, -distanceInMeters, directionVector);
-            break;
-        case MovementDirection.UP:
-            directionVector = Cesium.Cartesian3.multiplyByScalar(up, distanceInMeters, directionVector);
-            break;
-        case MovementDirection.DOWN: // 下 = -上
-            directionVector = Cesium.Cartesian3.multiplyByScalar(up, -distanceInMeters, directionVector);
-            break;
-        default:
-            // TypeScript 的类型保护使我们知道这里不会被访问，但为了运行时安全仍然保留
-            return Promise.reject(new Error(`无效的方向参数: ${direction}`));
-    }
+    // 2. 计算合成的移动向量 (Scaled Vector Sum)
     
-    // 计算终点位置 (起点 + 移动向量)
-    const endPosition: Cesium.Cartesian3 = Cesium.Cartesian3.add(startPosition, directionVector, new Cesium.Cartesian3());
+    // East/West 分量
+    const eastOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(east, moveVector.east, new Cesium.Cartesian3());
+    
+    // North/South 分量
+    const northOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(north, moveVector.north, new Cesium.Cartesian3());
+    
+    // Up/Down 分量
+    const upOffset: Cesium.Cartesian3 = Cesium.Cartesian3.multiplyByScalar(up, moveVector.up, new Cesium.Cartesian3());
+    
+    // 将三个分量向量相加，得到最终的位移向量
+    let totalOffsetVector: Cesium.Cartesian3 = Cesium.Cartesian3.add(eastOffset, northOffset, new Cesium.Cartesian3());
+    totalOffsetVector = Cesium.Cartesian3.add(totalOffsetVector, upOffset, totalOffsetVector);
 
-    // 3. 创建 SampledPositionProperty 并定义动画
+    // 3. 计算终点位置
+    const endPosition: Cesium.Cartesian3 = Cesium.Cartesian3.add(startPosition, totalOffsetVector, new Cesium.Cartesian3());
+
+    // 4. 定义 SampledPositionProperty 动画 (与之前一致)
     const positionProperty: Cesium.SampledPositionProperty = new Cesium.SampledPositionProperty();
-    
     positionProperty.setInterpolationOptions({
         interpolationDegree: 1,
         interpolationAlgorithm: Cesium.LagrangePolynomialApproximation
     });
 
-    // 添加起点和终点
     positionProperty.addSample(initialTime, startPosition);
     positionProperty.addSample(finalTime, endPosition);
 
-    // 4. 赋值给实体并启动时钟
     entity.position = positionProperty;
     viewer.clock.shouldAnimate = true;
     
-    // 5. 动画完成后的处理：用固定位置替换 SampledPositionProperty
+    // 5. 动画完成后的 Promise 处理 (与之前一致)
     return new Promise((resolve: (value: boolean) => void) => {
         let finished: boolean = false;
         
-        // 监听每一帧渲染
         const removeListener: Cesium.Event.RemoveCallback = viewer.scene.postRender.addEventListener(() => {
             if (Cesium.JulianDate.greaterThanOrEquals(viewer.clock.currentTime, finalTime) && !finished) {
                 removeListener();
                 finished = true;
-                
-                // 替换为 ConstantPositionProperty，固定模型在终点位置
                 entity.position = new Cesium.ConstantPositionProperty(endPosition.clone());
-                
                 resolve(true);
             }
         });
@@ -298,6 +358,7 @@ async function fetchLogs(instanceId: string): Promise<LogInfo[]> {
 export default function Battlefield (adData: AdData) {
     const containerRef = useRef<HTMLDivElement>(null);
     const battlefieldRef = useRef<HTMLDivElement>(null);
+    const isFirst = useRef<boolean>(true);
 
     const blueTeam: BattlefieldInfo = {
         type: 0,
@@ -342,7 +403,6 @@ export default function Battlefield (adData: AdData) {
             canvas.height = container!.clientHeight;
         }
 
-
         addWorldImageryAsync(viewer).catch(err => {
             console.error('加载影像图层失败:', err);
         });
@@ -371,126 +431,102 @@ export default function Battlefield (adData: AdData) {
         const redPlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3  }[] = [];
         const bluePlanes: { ip: string; object: Cesium.Entity; pos: Cartesian3 }[] = [];
 
-        let lastData : any = null;
-        let dataIp = "";
+        let lastData : Position = { x: 0, y: 0, z: 0 };
+        let dataIp: string[] = [];
+        let id : number = 0;
         const pollingCallback = () => {
-
-            axios.get(`/api/drone?ip=${dataIp}`)
+            axios.get(`/api/drone?ip=${dataIp[0]}&ip=${dataIp[1]}`)
                 .then(response => {
+                    const newLogs:LogInfo[] = [];
+                    let isMove = false;
+
                     if(response.data.status === 200){
-                        let data = response.data.data;
-                            
-                        if(lastData === null){
+                        let data: Position = response.data.data;
+                        if(isFirst.current){
                             lastData = data;
+                            isFirst.current = false;
                             return;
                         }
-                            
-                        if(data.x - lastData.x >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.EAST, 
-                                (data.x - lastData.x) * 200, 
-                                viewer
-                            );
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向东移动了${(data.x - lastData.x).toFixed(2)}m`
-                                }]
-                            }));
-                                
+                        
+                        let dx = data.x - lastData.x;
+                        let dy = data.y - lastData.y;
+                        let dz = data.z - lastData.z;
+                        if (dx !== 0) {
+                            const direction = dx > 0 ? '东' : '西';
+                            newLogs.push({
+                                logId: id,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dx)}m`
+                            });
+                            isMove = true;
                         }
-                        else if(data.x - lastData.x <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.WEST, 
-                                (lastData.x - data.x) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向西移动了${(lastData.x - data.x).toFixed(2)}m`
-                                }]
-                            }));
-                        }else if(data.y - lastData.y >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.NORTH, 
-                                (data.y - lastData.y) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向北移动了${(data.y - lastData.y).toFixed(2)}m`
-                                }]
-                            }));
-                        }else if(data.y - lastData.y <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.SOUTH, 
-                                (lastData.y - data.y) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向南移动了${(lastData.y - data.y).toFixed(2)}m`
-                                }]
-                            }));
-                        }else if(data.z - lastData.z <= -1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.UP, 
-                                (lastData.z - data.z) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向上移动了${(lastData.z - data.z).toFixed(2)}m`
-                                }]
-                            }));
-                        }else if(data.z - lastData.z >= 1){
-                            animateEntityCardinalMove(
-                                entity, 
-                                MovementDirection.DOWN, 
-                                (data.z - lastData.z) * 200, 
-                                viewer
-                            )
-                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 1000);
-                            setRedTeamState(prev => ({
-                                ...prev,
-                                logInfo: [...prev.logInfo, {
-                                    logId: Date.now(),
-                                    logTime: new Date().toLocaleTimeString(),
-                                    logContent: `无人机向下移动了${(data.z - lastData.z).toFixed(2)}m`
-                                }]
-                            }));
+                        if (dy !== 0) {
+                            const direction = dy > 0 ? '北' : '南';
+                            newLogs.push({
+                                logId: id+1,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dy)}m`
+                            });
+                            isMove = true;
+                        }
+                        if (dz !== 0) {
+                            const direction = dz > 0 ? '上' : '下';
+                            newLogs.push({
+                                logId: id+2,
+                                logTime: new Date().toLocaleTimeString(),
+                                logContent: `无人机向${direction}移动了${Math.abs(dz)}m`
+                            });
+                            isMove = true;
                         }
                         lastData = data;
+                        id += 3;
+                        if(isMove){
+                            shootLaser(viewer, entity2.position!.getValue(viewer.clock.currentTime)!, entity1.position!.getValue(viewer.clock.currentTime)!, 800);
+                            // shootLaser(viewer, entity1.position!.getValue(viewer.clock.currentTime)!, entity.position!.getValue(viewer.clock.currentTime)!, 800);
+                            setRedTeamState(prev => {
+                                // 定义用于创建复合键的函数
+                                const getCompositeKey = (log: any): string => {
+                                    // 使用 | 作为分隔符，确保 logTime 和 logContent 的组合是唯一的
+                                    return `${log.logTime}|${log.logContent}`;
+                                };
+                                // 1. 构建一个包含所有现有日志复合键的 Set 集合
+                                const existingKeys = new Set(prev.logInfo.map(getCompositeKey));
+
+                                // 2. 过滤 newLogs，只保留复合键在现有集合中不存在的新日志
+                                const uniqueNewLogs = newLogs.filter(newLog => 
+                                    !existingKeys.has(getCompositeKey(newLog))
+                                );
+                                if (uniqueNewLogs.length > 0) {
+                                    // 如果有，则返回新状态
+                                    return {
+                                        ...prev,
+                                        logInfo: [
+                                            ...prev.logInfo, 
+                                            ...uniqueNewLogs // 只添加唯一的新日志
+                                        ]
+                                    };
+                                }
+                                return prev;
+                            });
+
+                            trackLineBetweenEntities(
+                                viewer, 
+                                entity1, // PositionProperty
+                                entity, // PositionProperty
+                                3000 // 直线将持续 3 秒
+                            );
+                            const diagonalMove = {
+                                east: Math.abs(dx*40) > 1000 ? 1000 * Math.sign(dx) : dx*40,   
+                                north: Math.abs(dy*40) > 1000 ? 1000 * Math.sign(dy) : dy*40,
+                                up: dz * 20 < -200 ? -200 : dz * 20 
+                            };
+
+                            animateEntityCompoundMove(
+                                entity, 
+                                diagonalMove, 
+                                viewer
+                            )
+                        }
                     }
                     console.log(`[Polling] 成功收到响应:`, response.data.data);
                 })
@@ -500,19 +536,19 @@ export default function Battlefield (adData: AdData) {
         };      
 
         // 封装启动轮询的逻辑
-        function startPolling() {
-            const POLLING_INTERVAL = 1000; // 轮询间隔：1秒
-            debugger
-            // 1. 立即执行一次 (用于初始化 lastData，并立即获取第一批数据)
-            pollingCallback(); 
-            
-            // 2. 启动定时器，周期性执行
-            const intervalId = setInterval(pollingCallback, POLLING_INTERVAL);
-            
-            console.log(`[System] Polling started with interval ${POLLING_INTERVAL}ms.`);
-            
-            // 💡 最佳实践：如果您在 React 中使用，应该返回清理函数
-            return () => clearInterval(intervalId);
+        const startPolling = async (pollingInterval: number) => {
+            // 持续轮询的循环
+            while (true) {
+                try {
+                    await pollingCallback(); // 等待 pollingCallback 完全执行完毕
+                } catch (error) {
+                    console.error('[Polling Loop] 轮询回调执行失败:', error);
+                    // 可以在此添加错误处理逻辑，例如短暂暂停或退出循环
+                }
+                
+                // 使用 Promise/setTimeout 等待设定的间隔时间，然后再进入下一次循环
+                await new Promise(resolve => setTimeout(resolve, pollingInterval));
+            }
         }
 
         async function fetchData() {
@@ -522,7 +558,9 @@ export default function Battlefield (adData: AdData) {
             result.trueTargetList.forEach((item, index) => {
                 const ipString = String(item.name || '').trim(); 
                 if (ipString.includes("C-2")){
-                    dataIp = item.ip; 
+                    dataIp.push(item.ip); 
+                }else if (ipString.includes("C-3")){
+                    dataIp.push(item.ip); 
                 }
                 // const pos = randomPositions1[index];
                 // const entity = addPlaneEntity({
@@ -545,12 +583,14 @@ export default function Battlefield (adData: AdData) {
             result.falseTargetList.forEach((item, index) => {
                 const ipString = String(item.name || '').trim(); 
                 if (ipString.includes("C-2")){
-                    dataIp = item.ip; 
+                    dataIp.push(item.ip); 
+                }else if (ipString.includes("C-3")){
+                    dataIp.push(item.ip); 
                 }
             });
-            
-            pollingCallback(); 
-            intervalId = setInterval(pollingCallback, 2000);
+            startPolling(2000);
+            // pollingCallback(); 
+            // intervalId = setInterval(pollingCallback, 3000);
         }
 
 
@@ -621,7 +661,7 @@ export default function Battlefield (adData: AdData) {
         const center1: [number, number] = [117.55, 36.17];
         const latRange = 0.01;
         const lonRange = 0.01;
-        const heightRange: [number, number] = [500, 1500];
+        const heightRange: [number, number] = [1200, 1500];
 
         const center2: [number, number] = [117.60, 36.17];
 
