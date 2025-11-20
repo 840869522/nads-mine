@@ -895,13 +895,13 @@ const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
         </Tabs>
       </Box>
 
-      {activeTab === 'practical' && (
-        <Box>{renderTestTable(filteredPractical, pagePractical, setPagePractical, 0, true)}</Box>
-      )}
+            {activeTab === 'practical' && (
+                  <Box>{renderTestTable(filteredPractical, true)}</Box>
+                )}
 
-      {activeTab === 'theoretical' && (
-        <Box>{renderTestTable(filteredTheoretical, pageTheoretical, setPageTheoretical, 0, false)}</Box>
-      )}
+            {activeTab === 'theoretical' && (
+                  <Box>{renderTestTable(filteredTheoretical, false)}</Box>
+                )}
 
       {selectedExperiment && (
         <ExperimentResourceDialog
