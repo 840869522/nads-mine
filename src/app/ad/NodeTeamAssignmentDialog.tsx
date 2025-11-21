@@ -1,17 +1,14 @@
-// NodeTeamAssignmentDialog.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     CircularProgress, Alert, Table, TableBody, TableCell, TableHead,
-    TableRow, MenuItem, Select, Typography, Box, Paper, IconButton, Tooltip, Chip
+    TableRow, MenuItem, Select, Typography, Box, Paper, Chip
 } from '@mui/material';
-import BlockIcon from '@mui/icons-material/Block';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { customFetch } from '@/utils/fetch';
 
-// ★ 1. 更新类型定义
+// 类型定义
 interface Member {
     c_username: string;
     c_name: string | null;
@@ -32,7 +29,7 @@ interface Node {
     team: TeamWithMembers | null;
 }
 
-// 新增：基础队伍类型，用于下拉菜单
+// 基础队伍类型，用于下拉菜单
 interface BasicTeam {
     c_id: number;
     c_name: string;
@@ -52,15 +49,14 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
                                                                                drillName
                                                                            }) => {
     const [nodes, setNodes] = useState<Node[]>([]);
-    const [allTeams, setAllTeams] = useState<BasicTeam[]>([]); // ★ 新 state, 用于下拉菜单
-    const [availableTeams, setAvailableTeams] = useState<TeamWithMembers[]>([]); // ★ 保持这个 state，用于成员展示
+    const [allTeams, setAllTeams] = useState<BasicTeam[]>([]);
+    const [availableTeams, setAvailableTeams] = useState<TeamWithMembers[]>([]);
     const [assignments, setAssignments] = useState<Record<string, number | null>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const API_BASE_URL = '/back/api';
 
-    // ★ 2. 更新 fetchData 函数
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
@@ -76,7 +72,7 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
 
             setNodes(data.nodes || []);
             setAllTeams(data.all_teams || []); // 使用 all_teams 填充下拉菜单的数据源
-            setAvailableTeams(data.current_teams || []); // 使用 current_teams (或类似字段) 填充成员信息的数据源
+            setAvailableTeams(data.current_teams || []); // 使用 current_teams 填充成员信息的数据源
 
             const initialAssignments: Record<string, number | null> = {};
             (data.nodes || []).forEach((node: Node) => {
@@ -97,30 +93,13 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
         }
     }, [open, fetchData]);
 
-    // 处理下拉菜单变更 (逻辑不变)
+    // 处理下拉菜单变更
     const handleAssignmentChange = (nodeKey: string, newTeamId: string | number) => {
         const teamId = newTeamId === 'none' ? null : Number(newTeamId);
         setAssignments(prev => ({ ...prev, [nodeKey]: teamId }));
     };
 
-    // 禁赛处理函数 (逻辑不变)
-    const handleToggleBan = async (teamId: number, username: string) => {
-        try {
-            setError(null);
-            const response = await customFetch(`${API_BASE_URL}/ad/team/${teamId}/users/${username}/toggle-ban`, {
-                method: 'POST'
-            });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || '操作失败');
-            }
-            await fetchData();
-        } catch (err) {
-            setError((err as Error).message);
-        }
-    };
-
-    // 提交变更 (逻辑不变)
+    // 提交变更
     const handleSubmit = async () => {
         setIsSubmitting(true);
         setError(null);
@@ -148,7 +127,6 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
     };
 
     return (
-        // ★ 3. 更新 JSX 渲染逻辑
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
             <DialogTitle>管理演练 "{drillName}" 节点与成员</DialogTitle>
             <DialogContent dividers>
@@ -161,14 +139,14 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 'bold' }}>节点信息</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>所属队伍与成员管理</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>所属队伍与成员列表</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {nodes.map(node => {
                                 const nodeKey = `${node.type}-${node.id}`;
                                 const assignedTeamId = assignments[nodeKey];
-                                // ★ 关键修改: 成员列表数据源现在是 availableTeams, 它包含了完整的成员信息
+                                // 成员列表数据源
                                 const currentTeamData = assignedTeamId ? availableTeams.find(t => t.c_id === assignedTeamId) : null;
 
                                 return (
@@ -187,7 +165,6 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
                                                 fullWidth
                                             >
                                                 <MenuItem value="none"><em>不分配</em></MenuItem>
-                                                {/* ★ 关键修改: 使用 allTeams 来渲染下拉选项 */}
                                                 {allTeams.map(team => (
                                                     <MenuItem key={team.c_id} value={team.c_id}>{team.c_name}</MenuItem>
                                                 ))}
@@ -203,17 +180,12 @@ const NodeTeamAssignmentDialog: React.FC<NodeTeamAssignmentDialogProps> = ({
                                                                 {user.c_name ? `${user.c_name} (${user.c_username})` : user.c_username}
                                                             </Typography>
                                                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                {/* 仅展示状态 Chip，移除操作按钮 */}
                                                                 <Chip
                                                                     label={user.is_banned ? '已禁赛' : '正常'}
                                                                     color={user.is_banned ? 'error' : 'success'}
                                                                     size="small"
-                                                                    sx={{ mr: 1 }}
                                                                 />
-                                                                <Tooltip title={user.is_banned ? '解除禁赛' : '标记作弊并禁赛'}>
-                                                                    <IconButton size="small" onClick={() => handleToggleBan(currentTeamData.c_id, user.c_username)}>
-                                                                        {user.is_banned ? <CheckCircleOutlineIcon fontSize="small" color="success" /> : <BlockIcon fontSize="small" color="error" />}
-                                                                    </IconButton>
-                                                                </Tooltip>
                                                             </Box>
                                                         </Paper>
                                                     ))}
