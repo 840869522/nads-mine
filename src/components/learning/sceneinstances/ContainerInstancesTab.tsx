@@ -227,18 +227,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                 </IconButton>
                             </span>
                         </Tooltip>
-                        {/* 只有靶机才显示Flag提交按钮 */}
-                        {isTarget && (
-                            <>
-                                <Tooltip title="提交Flag">
-                                    <span>
-                                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
-                                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
-                            </>
-                        )}
+                        <Tooltip title="提交Flag">
+                    <span>
+                        <IconButton onClick={() => setFlagSubmissionModalId(instance.id)} size="small" disabled={!isRunning}>
+                            <FlagIcon fontSize="small" color={isRunning ? 'primary' : 'disabled'} />
+                        </IconButton>
+                    </span>
+                </Tooltip>
                         <Tooltip title="日志">
                             <span>
                                 <IconButton onClick={() => handleOpenLogs(instance)} size="small">
