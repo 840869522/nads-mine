@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useState, useEffect, useCallback, FormEvent, MouseEvent} from 'react';
+import React, {useState, useEffect, useCallback, FormEvent, MouseEvent, useMemo, useRef} from 'react';
 
 // MUI 组件导入
 import Box from '@mui/material/Box';
@@ -58,6 +58,7 @@ import InstanceTopologyDialog from '../scenario/sceneinstances/InstanceTopologyD
 import NodeTeamAssignmentDialog from './NodeTeamAssignmentDialog';
 import MemberManagementDialog from './MemberManagementDialog';
 import { TopologyData } from "@/types";
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 
 // --- 类型定义 ---
 interface User { c_username: string; c_email?: string; c_name?: string; }
@@ -66,6 +67,22 @@ interface SceneConfigForAd { c_config_id: number; c_name: string; topology_json?
 interface AdConfig { c_id: string; c_drill_name: string; c_description: string | null; c_scene_config_id: number | null; c_scene_instance_id: string | null; c_status: 'pending' | 'running' | 'finished' | 'archived' | 'failed' | 'creating'; c_start_time: string | null; c_end_time: string | null; c_type: number | null; c_show_attack: number | null; referees: AdReferee[]; sceneConfig?: { c_name: string; } | null; nodeAssignments?: any[]; }
 interface TopologyNode { id: string; label: string; type: 'container' | 'virtual_machine' | 'switch' | 'nat_bridge'; }
 
+
+// --- 辅助组件 ---
+
+const ClientOnlyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [hasMounted, setHasMounted] = useState(false);
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
+
+    if (!hasMounted) {
+        return null;
+    }
+
+    return <>{children}</>;
+};
 
 function LinearProgressWithLabel(props: LinearProgressProps & { value: number; label: string }) {
     return (
@@ -83,6 +100,50 @@ function LinearProgressWithLabel(props: LinearProgressProps & { value: number; l
 
 const AdManagementPage: React.FC = () => {
     const { user } = useAuth();
+    const { permissions } = userPermissionContext();
+
+    const [isClient, setIsClient] = useState(false);
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    // ★★★ 权限配置区域 ★★★
+    const currentUsername = (user as any)?.user?.c_username || (user as any)?.c_username;
+    const currentName = (user as any)?.user?.c_name || (user as any)?.c_name;
+    const isAdminUser = currentUsername === 'admin';
+    const rawUserPermissions = (user as any)?.user?.permission || (user as any)?.permission || [];
+
+    // 通用权限检查函数
+    const checkPermission = (permKey: string) => {
+        return isClient && (
+            isAdminUser ||
+            (permissions?.includes(permKey) ?? false) ||
+            (rawUserPermissions && rawUserPermissions.includes(permKey))
+        );
+    };
+
+    // 定义所有按钮的权限开关
+    const canCreate        = checkPermission('ad_add');         // 创建演练
+    const canEdit          = checkPermission('ad_update');           // 编辑演练
+    const canDelete        = checkPermission('ad_destroy');         // 删除演练
+
+    const canStartDrill    = checkPermission('ad_start');          // 启动演练
+    const canManageMembers = checkPermission('ad:member:ban');     // 成员禁赛
+    const canAssignNodes   = checkPermission('ad:node:assign');    // 节点分配
+    const canViewFlags     = checkPermission('ad:flag:history');   // Flag历史
+    const canStopDrill     = checkPermission('ad_stop');           // 停止演练
+    const canViewTopology  = checkPermission('ad:topology:view');  // 查看拓扑
+    const canViewDetails   = checkPermission('ad:instance:view');  // 查看详情
+
+    // ★★★ 新增：定义是否有权访问运行中的管理工具栏 ★★★
+    // 只要拥有其中任何一个权限，或者是管理员/裁判，就可以看到这块区域
+    // (区域内部具体的按钮还会再次检查各自的权限)
+    const canAccessRunningTools = isAdminUser || canManageMembers || canAssignNodes || canViewFlags || canStopDrill;
+
+
+    const startTimeRef = useRef<HTMLInputElement>(null);
+    const endTimeRef = useRef<HTMLInputElement>(null);
+
     const API_BASE_URL = '/back/api';
 
     const [adConfigs, setAdConfigs] = useState<AdConfig[]>([]);
@@ -128,6 +189,19 @@ const AdManagementPage: React.FC = () => {
     const [progressMessage, setProgressMessage] = useState('');
     const [progressError, setProgressError] = useState<string | null>(null);
 
+    useEffect(() => {
+        if (isFormOpen && !isFormLoading && editingAdConfig) {
+            if (startTimeRef.current && editingAdConfig.c_start_time) {
+                const localStartTime = new Date(new Date(editingAdConfig.c_start_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                startTimeRef.current.value = localStartTime;
+            }
+            if (endTimeRef.current && editingAdConfig.c_end_time) {
+                const localEndTime = new Date(new Date(editingAdConfig.c_end_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                endTimeRef.current.value = localEndTime;
+            }
+        }
+    }, [isFormOpen, isFormLoading, editingAdConfig]);
+
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setStatusMessage(null);
@@ -147,9 +221,6 @@ const AdManagementPage: React.FC = () => {
         }
     }, [debouncedSearchQuery, page, rowsPerPage]);
 
-    // =========================================================================
-    // ★★★★★★★★★★★★★★★★★ 核心修改区域 ★★★★★★★★★★★★★★★★★
-    // =========================================================================
     const loadDependenciesForForm = useCallback(async () => {
         setIsFormLoading(true);
         try {
@@ -159,14 +230,14 @@ const AdManagementPage: React.FC = () => {
                 promisesToRun.push(
                     customFetch(`${API_BASE_URL}/ad/users?all=true`)
                         .then(res => res.json())
-                        .then(data => ({ type: 'users', data })) // 标记数据类型以便后续处理
+                        .then(data => ({ type: 'users', data }))
                 );
             }
             if (sceneConfigsForForm.length === 0) {
                 promisesToRun.push(
                     customFetch(`${API_BASE_URL}/scenarios?all=true`)
                         .then(res => res.json())
-                        .then(data => ({ type: 'scenes', data })) // 标记数据类型
+                        .then(data => ({ type: 'scenes', data }))
                 );
             }
 
@@ -174,18 +245,13 @@ const AdManagementPage: React.FC = () => {
                 const results = await Promise.all(promisesToRun);
                 results.forEach(result => {
                     if (result.type === 'users') {
-                        // 假设 /ad/users?all=true 返回 { data: { data: [...] } }
-                        // 如果结构不同，请相应调整
                         const userList = result.data?.data?.data || result.data?.data || result.data || [];
                         setUsers(userList);
                     } else if (result.type === 'scenes') {
                         const rawScenes = Array.isArray(result.data) ? result.data : [];
-
-                        // 【关键修复】: 转换后端返回的字段名 (id, name) 为前端期望的 (c_config_id, c_name)
                         const formattedScenes = rawScenes.map((scene: any) => ({
                             c_config_id: scene.id,
                             c_name: scene.name,
-                            // 如果需要，这里可以映射其他字段
                         }));
                         setSceneConfigsForForm(formattedScenes);
                     }
@@ -193,16 +259,11 @@ const AdManagementPage: React.FC = () => {
             }
         } catch (err) {
             console.error("加载表单依赖项时出错:", err);
-            // 抛出错误，让调用者(handleOpenForm)可以捕获并显示错误信息
             throw new Error("加载创建演练所需的数据失败，请稍后重试。");
         } finally {
             setIsFormLoading(false);
         }
     }, [users, sceneConfigsForForm]);
-    // =========================================================================
-    // ★★★★★★★★★★★★★★★★★ 修改结束 ★★★★★★★★★★★★★★★★★
-    // =========================================================================
-
 
     useEffect(() => { fetchData(); }, [fetchData]);
     useEffect(() => { setPage(0); }, [debouncedSearchQuery]);
@@ -213,12 +274,7 @@ const AdManagementPage: React.FC = () => {
         setIsFormOpen(true);
         try {
             await loadDependenciesForForm();
-            // 注意：由于loadDependenciesForForm是异步更新state的，这里的users可能还是旧的。
-            // 但对于编辑场景，我们依赖的是全局的users state，它最终会更新。
-            // 对于创建场景，则没有影响。
             if (adConfig) {
-                // 为了确保使用最新的users state，可以从外部获取或者在useEffect中处理
-                // 但当前逻辑在多数情况下是可行的，因为users通常只加载一次。
                 const refereesWithUserDetails = (adConfig.referees || [])
                     .map(ref => ({...ref, user: users.find(u => u.c_username === ref.c_user_id)}))
                     .filter(ref => ref.user);
@@ -228,7 +284,7 @@ const AdManagementPage: React.FC = () => {
             }
         } catch(err) {
             setStatusMessage({ type: 'error', message: (err as Error).message });
-            setIsFormOpen(false); // 加载失败时关闭表单
+            setIsFormOpen(false);
         }
     };
 
@@ -312,27 +368,16 @@ const AdManagementPage: React.FC = () => {
             console.error("无法保存拓扑，因为没有选中的演练配置。");
             return;
         }
-
         setIsSubmitting(true);
         setStatusMessage(null);
-
         try {
             const url = `${API_BASE_URL}/ad-configs/${selectedAdConfigForTopology.c_id}/topology`;
-            const response = await customFetch(url, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topology: newTopology })
-            });
-
+            const response = await customFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topology: newTopology }) });
             const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.message || '拓扑更新失败');
-            }
-
+            if (!response.ok) throw new Error(result.message || '拓扑更新失败');
             setStatusMessage({ type: 'success', message: '拓扑已成功更新并应用！' });
             setIsTopologyOpen(false);
             await fetchData();
-
         } catch (err: any) {
             setStatusMessage({ type: 'error', message: err.message });
         } finally {
@@ -344,53 +389,14 @@ const AdManagementPage: React.FC = () => {
     const renderStatusChip = (status: AdConfig['c_status']) => { const statusMap = { pending: { label: '未开始', color: 'default' as const }, running: { label: '进行中', color: 'success' as const }, finished: { label: '已结束', color: 'primary' as const }, archived: { label: '已归档', color: 'warning' as const }, failed: { label: '失败', color: 'error' as const }, creating: { label: '创建中...', color: 'info' as const }, }; const { label, color } = statusMap[status] || statusMap.pending; return <Chip label={label} color={color} size="small" />; };
     const mapTypeToString = (type: number | null) => { switch (type) { case 1: return '无人机类型'; case 2: return '科幻类型'; default: return '默认'; } };
     const mapShowAttackToString = (show: number | null) => { switch (show) { case 1: return <Chip label="是" color="success" size="small" />; case 0: return <Chip label="否" color="default" size="small" />; default: return <Chip label="未设置" color="default" size="small" />; } };
-    const handleStopDrill = async (adConfig: AdConfig) => {
-        if (!window.confirm(`您确定要停止演练 "${adConfig.c_drill_name}" 吗？`)) return;
-        setIsSubmitting(true);
-        setStatusMessage(null);
-        try {
-            const response = await customFetch(`${API_BASE_URL}/ad-configs/${adConfig.c_id}/stop`, { method: 'POST' });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message || '停止演练失败');
-            setStatusMessage({ type: 'success', message: result.message || '演练已成功停止！' });
-            await fetchData();
-        } catch (err) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    const handleStopDrill = async (adConfig: AdConfig) => { if (!window.confirm(`您确定要停止演练 "${adConfig.c_drill_name}" 吗？`)) return; setIsSubmitting(true); setStatusMessage(null); try { const response = await customFetch(`${API_BASE_URL}/ad-configs/${adConfig.c_id}/stop`, { method: 'POST' }); const result = await response.json(); if (!response.ok) throw new Error(result.message || '停止演练失败'); setStatusMessage({ type: 'success', message: result.message || '演练已成功停止！' }); await fetchData(); } catch (err) { setStatusMessage({ type: 'error', message: (err as Error).message }); } finally { setIsSubmitting(false); } };
     const handleDeleteConfirmation = (adConfig: AdConfig) => { setAdConfigToDelete(adConfig); setIsConfirmOpen(true); };
-    const handleDeleteAdConfig = async () => {
-        if (!adConfigToDelete) return;
-        setIsSubmitting(true);
-        try {
-            await customFetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' });
-            setStatusMessage({ type: 'success', message: `演练 "${adConfigToDelete.c_drill_name}" 已删除。` });
-            await fetchData();
-        } catch (err) {
-            setStatusMessage({ type: 'error', message: (err as Error).message });
-        } finally {
-            setIsSubmitting(false);
-            setIsConfirmOpen(false);
-            setAdConfigToDelete(null);
-        }
-    };
+    const handleDeleteAdConfig = async () => { if (!adConfigToDelete) return; setIsSubmitting(true); try { await customFetch(`${API_BASE_URL}/ad-configs/${adConfigToDelete.c_id}`, { method: 'DELETE' }); setStatusMessage({ type: 'success', message: `演练 "${adConfigToDelete.c_drill_name}" 已删除。` }); await fetchData(); } catch (err) { setStatusMessage({ type: 'error', message: (err as Error).message }); } finally { setIsSubmitting(false); setIsConfirmOpen(false); setAdConfigToDelete(null); } };
     const handleViewDetails = (adConfig: AdConfig) => { if (adConfig.c_scene_instance_id) { setSelectedInstanceId(adConfig.c_scene_instance_id); setSelectedScenarioName(adConfig.c_drill_name); setIsDetailsModalOpen(true); } else { setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看实例详情。' }); } };
     const handleCloseDetails = () => { setIsDetailsModalOpen(false); };
     const handleOpenAssignmentDialog = (adConfig: AdConfig) => { if (adConfig.c_status === 'running' && adConfig.c_scene_instance_id) { setSelectedAdForAssignment(adConfig); setIsAssignmentDialogOpen(true); } else { setStatusMessage({ type: 'warning', message: '只有进行中的演练才能分配节点队伍。' }); } };
     const handleOpenMemberDialog = (adConfig: AdConfig) => { if (adConfig.c_status === 'running') { setSelectedAdForMembers(adConfig); setIsMemberDialogOpen(true); } else { setStatusMessage({ type: 'warning', message: '只有进行中的演练才能管理成员。' }); } };
-    const handleViewTopology = async (adConfig: AdConfig) => {
-        if (!adConfig.c_scene_instance_id) { setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看拓扑。' }); return; }
-        setIsSubmitting(true);
-        setStatusMessage(null);
-        try {
-            const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${adConfig.c_scene_instance_id}/config`);
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message || '获取实例拓扑数据失败');
-            if (result && result.c_scene_config) { setCurrentInstanceTopology(result.c_scene_config); setSelectedAdConfigForTopology(adConfig); setIsTopologyOpen(true); } else { throw new Error('从实例数据中未找到有效的拓扑信息。'); }
-        } catch (err: any) { setStatusMessage({ type: 'error', message: err.message }); } finally { setIsSubmitting(false); }
-    };
+    const handleViewTopology = async (adConfig: AdConfig) => { if (!adConfig.c_scene_instance_id) { setStatusMessage({ type: 'warning', message: '此演练尚未启动，无法查看拓扑。' }); return; } setIsSubmitting(true); setStatusMessage(null); try { const response = await customFetch(`${API_BASE_URL}/scenariosinstances/${adConfig.c_scene_instance_id}/config`); const result = await response.json(); if (!response.ok) throw new Error(result.message || '获取实例拓扑数据失败'); if (result && result.c_scene_config) { setCurrentInstanceTopology(result.c_scene_config); setSelectedAdConfigForTopology(adConfig); setIsTopologyOpen(true); } else { throw new Error('从实例数据中未找到有效的拓扑信息。'); } } catch (err: any) { setStatusMessage({ type: 'error', message: err.message }); } finally { setIsSubmitting(false); } };
     const handleTopologyTerminalClick = async (node: TopologyNode, instanceId: string): Promise<void> => { /* ... */ };
     const handleRefereeLevelChange = (user_id: string, newLevel: string) => { setSelectedReferees(prev => prev.map(ref => ref.c_user_id === user_id ? { ...ref, c_level: newLevel } : ref)); };
     const handleOpenView = (adConfig: AdConfig) => { if (adConfig.c_scene_instance_id && adConfig.c_status === "running") { const data = { id: adConfig.c_scene_instance_id, type: adConfig.c_type, showAttack: adConfig.c_show_attack }; localStorage.setItem('adData', JSON.stringify(data)); window.open('/visualization', '_blank'); } else { setStatusMessage({ type: 'warning', message: '演练未启动，无可视化界面。' }); } };
@@ -400,14 +406,15 @@ const AdManagementPage: React.FC = () => {
     const handleCloseFlagHistory = () => { setIsFlagHistoryOpen(false); setTimeout(() => setSelectedAdForFlagHistory(null), 300); };
     const isAdmin = (user as any)?.user?.c_username === 'admin';
 
-
     return (
         <Box sx={{ p: 3, maxWidth: '1600px', margin: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h4" component="h1" fontWeight="bold">攻防演练管理</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <TextField variant="outlined" size="small" placeholder="搜索演练名称..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ minWidth: '300px' }} />
-                    <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()} disabled={isLoading}>创建新演练</Button>
+                    {canCreate && (
+                        <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={() => handleOpenForm()} disabled={isLoading}>创建新演练</Button>
+                    )}
                 </Box>
             </Box>
 
@@ -431,41 +438,108 @@ const AdManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.map((adConfig) => (
-                                    <TableRow hover key={adConfig.c_id}>
-                                        <TableCell>{adConfig.c_drill_name}</TableCell>
-                                        <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
-                                        <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={referee.c_user_id} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
-                                        <TableCell>{adConfig.sceneConfig?.c_name || '未关联'}</TableCell>
-                                        <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
-                                        <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
-                                        <TableCell>{adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}</TableCell>
-                                        <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
-                                        <TableCell align="right">
-                                            {['pending', 'finished', 'archived', 'failed'].includes(adConfig.c_status) && (
-                                                <Tooltip title="开始/重新开始演练">
+                                : adConfigs.map((adConfig) => {
+                                    const isReferee = (adConfig.referees || []).some(ref => {
+                                        if (ref.c_user_id === currentUsername) return true;
+                                        if (currentName && ref.c_user_id === currentName) return true;
+                                        if (ref.user && ref.user.c_username === currentUsername) return true;
+                                        return false;
+                                    });
+
+                                    return (
+                                        <TableRow hover key={adConfig.c_id}>
+                                            <TableCell>{adConfig.c_drill_name}</TableCell>
+                                            <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
+                                            <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={referee.c_user_id} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
+                                            <TableCell>{adConfig.sceneConfig?.c_name || '未关联'}</TableCell>
+                                            <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
+                                            <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
+                                            <TableCell>
+                                                <ClientOnlyWrapper>
+                                                    {adConfig.c_start_time ? new Date(adConfig.c_start_time).toLocaleString() : '未设置'}
+                                                </ClientOnlyWrapper>
+                                            </TableCell>
+                                            <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
+                                            <TableCell align="right">
+                                                {/* ★ 启动演练按钮：加上了 canStartDrill 权限检查 */}
+                                                {['pending', 'finished', 'archived', 'failed'].includes(adConfig.c_status) && canStartDrill && (
+                                                    <Tooltip title="开始/重新开始演练">
                                                     <span>
                                                         <IconButton color="success" onClick={() => handleAdAction(adConfig)} disabled={!adConfig.c_scene_config_id || isSubmitting}>
                                                             <PlayArrowIcon />
                                                         </IconButton>
                                                     </span>
-                                                </Tooltip>
-                                            )}
-                                            {adConfig.c_status === 'running' && (isAdmin || (adConfig.referees || []).some(ref => ref.c_user_id === (user as any)?.user?.c_username)) && (
-                                                <>
-                                                    <Tooltip title="成员管理 (禁赛)"><span><IconButton color="error" onClick={() => handleOpenMemberDialog(adConfig)}><BlockIcon /></IconButton></span></Tooltip>
-                                                    <Tooltip title="节点队伍分配"><span><IconButton color="secondary" onClick={() => handleOpenAssignmentDialog(adConfig)} disabled={!adConfig.c_scene_instance_id}><GroupWorkIcon /></IconButton></span></Tooltip>
-                                                    <Tooltip title="Flag历史"><IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}><FlagIcon /></IconButton></Tooltip>
-                                                    <Tooltip title="停止演练"><IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}><StopCircleIcon /></IconButton></Tooltip>
-                                                </>
-                                            )}
-                                            <Tooltip title="查看拓扑"><span><IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.c_scene_instance_id || isSubmitting}><AccountTreeIcon /></IconButton></span></Tooltip>
-                                            <Tooltip title="查看实例详情"><IconButton color="info" onClick={() => handleViewDetails(adConfig)} disabled={adConfig.c_status !== 'running' || !adConfig.c_scene_instance_id}><VisibilityIcon /></IconButton></Tooltip>
-                                            <Tooltip title="编辑"><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status === 'running'}><EditIcon /></IconButton></Tooltip>
-                                            <Tooltip title="删除"><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={isSubmitting}><DeleteIcon /></IconButton></Tooltip>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                                    </Tooltip>
+                                                )}
+
+                                                {/* ★★★ 核心修正点：使用 canAccessRunningTools 来决定是否显示这一组管理按钮 ★★★ */}
+                                                {adConfig.c_status === 'running' && canAccessRunningTools && (
+                                                    <>
+                                                        {canManageMembers && (
+                                                            <Tooltip title="成员管理 (禁赛)">
+                                                          <span>
+                                                            <IconButton color="error" onClick={() => handleOpenMemberDialog(adConfig)}>
+                                                              <BlockIcon />
+                                                            </IconButton>
+                                                          </span>
+                                                            </Tooltip>
+                                                        )}
+
+                                                        {canAssignNodes && (
+                                                            <Tooltip title="节点队伍分配">
+                                                            <span>
+                                                                <IconButton color="secondary" onClick={() => handleOpenAssignmentDialog(adConfig)} disabled={!adConfig.c_scene_instance_id}>
+                                                                    <GroupWorkIcon />
+                                                                </IconButton>
+                                                            </span>
+                                                            </Tooltip>
+                                                        )}
+
+                                                        {canViewFlags && (
+                                                            <Tooltip title="Flag历史">
+                                                                <IconButton color="info" onClick={() => handleOpenFlagHistory(adConfig)} disabled={!adConfig.c_scene_instance_id}>
+                                                                    <FlagIcon />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )}
+
+                                                        {canStopDrill && (
+                                                            <Tooltip title="停止演练">
+                                                                <IconButton color="warning" onClick={() => handleStopDrill(adConfig)} disabled={isSubmitting}>
+                                                                    <StopCircleIcon />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {canViewTopology && (
+                                                    <Tooltip title="查看拓扑">
+                                                    <span>
+                                                        <IconButton color="secondary" onClick={() => handleViewTopology(adConfig)} disabled={!adConfig.c_scene_instance_id || isSubmitting}>
+                                                            <AccountTreeIcon />
+                                                        </IconButton>
+                                                    </span>
+                                                    </Tooltip>
+                                                )}
+
+                                                {canViewDetails && (
+                                                    <Tooltip title="查看实例详情">
+                                                        <IconButton color="info" onClick={() => handleViewDetails(adConfig)} disabled={adConfig.c_status !== 'running' || !adConfig.c_scene_instance_id}>
+                                                            <VisibilityIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+
+                                                {canEdit && (
+                                                    <Tooltip title="编辑"><IconButton color="primary" onClick={() => handleOpenForm(adConfig)} disabled={adConfig.c_status === 'running'}><EditIcon /></IconButton></Tooltip>
+                                                )}
+                                                {canDelete && (
+                                                    <Tooltip title="删除"><IconButton color="error" onClick={() => handleDeleteConfirmation(adConfig)} disabled={isSubmitting}><DeleteIcon /></IconButton></Tooltip>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    )})
                             }
                         </TableBody>
                     </Table>
@@ -474,6 +548,7 @@ const AdManagementPage: React.FC = () => {
             </Paper>
 
             <Dialog key={editingAdConfig?.c_id || 'new-ad-config-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
+                {/* ... Dialog Content (保持不变) ... */}
                 <form onSubmit={handleFormSubmit}>
                     <DialogTitle>{editingAdConfig ? '编辑演练配置' : '创建新演练'}</DialogTitle>
                     <DialogContent>
@@ -515,8 +590,8 @@ const AdManagementPage: React.FC = () => {
                                         )}
                                     </Box>
                                     <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                                        <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_start_time ? new Date(new Date(editingAdConfig.c_start_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} />
-                                        <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} defaultValue={editingAdConfig?.c_end_time ? new Date(new Date(editingAdConfig.c_end_time).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} />
+                                        <TextField margin="dense" name="c_start_time" label="计划开始时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} inputRef={startTimeRef} />
+                                        <TextField margin="dense" name="c_end_time" label="计划结束时间" type="datetime-local" fullWidth InputLabelProps={{ shrink: true }} inputRef={endTimeRef} />
                                     </Stack>
                                 </>
                             )}
@@ -530,6 +605,7 @@ const AdManagementPage: React.FC = () => {
                 </form>
             </Dialog>
 
+            {/* ... 其他 Dialogs ... */}
             <Dialog open={isProgressModalOpen} aria-labelledby="progress-dialog-title">
                 <DialogTitle id="progress-dialog-title">演练启动中</DialogTitle>
                 <DialogContent sx={{ minWidth: 400, p: 3 }}>
@@ -564,7 +640,6 @@ const AdManagementPage: React.FC = () => {
                     topology={currentInstanceTopology}
                     instanceId={selectedAdConfigForTopology.c_scene_instance_id || ''}
                     onTerminalClick={handleTopologyTerminalClick}
-                    // @ts-ignore
                     onSaveSuccess={handleTopologySave}
                 />
             )}
