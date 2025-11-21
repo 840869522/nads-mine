@@ -26,11 +26,10 @@ const handleResponse = async (response: Response): Promise<Response> => {
         }
         if (data?.code === 405){
             toast.error(data.message, {
-                autoClose: 3000,
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
-                position: "top-right"
+                position: "top-center"
             });
         }
     }
