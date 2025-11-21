@@ -263,7 +263,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                   <ViewInstancesIcon />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="启动演练">
+              <Tooltip title="启动测试">
                 <span>
                   <IconButton
                     color="success"
