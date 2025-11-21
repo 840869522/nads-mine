@@ -20,8 +20,9 @@ use App\Models\scenario\SceneContainerInstance;
 use App\Models\scenario\SceneVmInstance;
 use App\Models\ad\Team;
 use App\Utils\JWTControll;
-use App\Http\Controllers\scenario\InstanceController; // ★ 新增：引入 InstanceController 以复用其方法
-use Illuminate\Support\Facades\Validator;             // ★ 新增：引入 Validator 以便在新方法中使用
+use App\Http\Controllers\scenario\InstanceController;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache; // ★ 引入 Cache
 
 class AdConfigController extends Controller
 {
@@ -36,12 +37,27 @@ class AdConfigController extends Controller
         $search = $request->query('search');
 
         $currentUser = null;
+        $userPermissions = []; // ★ 存储当前用户的权限列表
+
         try {
             $authHeader = $request->header("Authorization");
             if ($authHeader) {
                 $jwtResult = JWTControll::decodeJWT($authHeader);
                 if ($jwtResult["err"] === null) {
                     $currentUser = $jwtResult["data"];
+
+                    // ★★★ 1. 从缓存中获取用户的真实权限列表 ★★★
+                    if (isset($currentUser['permission'])) {
+                        $cacheKey = $currentUser['permission']; // JWT里存的是缓存Key
+                        $cachedData = Cache::get($cacheKey);
+
+                        // 转换格式：数据库出来的可能是对象数组，我们需要纯字符串数组
+                        if ($cachedData) {
+                            $userPermissions = array_map(function($item) {
+                                return is_object($item) ? $item->c_id : $item;
+                            }, $cachedData);
+                        }
+                    }
                 }
             }
         } catch (Exception $e) {
@@ -53,29 +69,60 @@ class AdConfigController extends Controller
             'referees.user:c_username,c_name',
         ]);
 
-        if ($currentUser && isset($currentUser['c_username']) && $currentUser['c_username'] !== 'admin') {
-            $currentUsername = $currentUser['c_username'];
-            $teamIds = DB::table('c_teams_users')->where('user_id', $currentUsername)->pluck('team_id');
-            $refereeAdConfigIds = DB::table('c_referees')->where('c_user_id', $currentUsername)->pluck('c_ad_config_id');
-            $participantAdConfigIds = collect([]);
-            if ($teamIds->isNotEmpty()) {
-                $sceneInstanceIds = DB::table('c_scene_container_instances')
-                    ->whereIn('c_team_id', $teamIds)
-                    ->pluck('c_scene_instances_id')
-                    ->merge(
-                        DB::table('c_scene_vm_instances')
-                            ->whereIn('c_team_id', $teamIds)
-                            ->pluck('c_scene_instances_id')
-                    )
-                    ->unique();
-                if($sceneInstanceIds->isNotEmpty()){
-                    $participantAdConfigIds = AdConfig::whereIn('c_scene_instance_id', $sceneInstanceIds)->pluck('c_id');
+        // ★★★ 2. RBAC 核心逻辑修正 ★★★
+
+        // 定义一个标志：是否允许查看所有数据
+        $canViewAll = false;
+
+        // 情况 A: 是 admin (保留作为兜底)
+        if ($currentUser && isset($currentUser['c_username']) && $currentUser['c_username'] === 'admin') {
+            $canViewAll = true;
+        }
+
+        // 情况 B: 拥有 'ad' (模块管理) 权限的用户
+        // 只要用户拥有 'ad' 权限，就被视为该模块的管理者，可以看到所有数据
+        if (in_array('ad', $userPermissions)) {
+            $canViewAll = true;
+        }
+
+        // ★★★ 3. 如果没有“查看所有”的权限，则执行严格过滤 ★★★
+        if (!$canViewAll) {
+            if ($currentUser && isset($currentUser['c_username'])) {
+                $currentUsername = $currentUser['c_username'];
+
+                // 1. 获取所属队伍
+                $teamIds = DB::table('c_teams_users')->where('user_id', $currentUsername)->pluck('team_id');
+
+                // 2. 获取作为裁判的演练
+                $refereeAdConfigIds = DB::table('c_referees')->where('c_user_id', $currentUsername)->pluck('c_ad_config_id');
+
+                // 3. 获取作为队员的演练
+                $participantAdConfigIds = collect([]);
+                if ($teamIds->isNotEmpty()) {
+                    $sceneInstanceIds = DB::table('c_scene_container_instances')
+                        ->whereIn('c_team_id', $teamIds)
+                        ->pluck('c_scene_instances_id')
+                        ->merge(
+                            DB::table('c_scene_vm_instances')
+                                ->whereIn('c_team_id', $teamIds)
+                                ->pluck('c_scene_instances_id')
+                        )
+                        ->unique();
+                    if($sceneInstanceIds->isNotEmpty()){
+                        $participantAdConfigIds = AdConfig::whereIn('c_scene_instance_id', $sceneInstanceIds)->pluck('c_id');
+                    }
                 }
-            }
-            $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
-            if ($allVisibleAdConfigIds->isNotEmpty()) {
-                $query->whereIn('c_id', $allVisibleAdConfigIds);
+
+                // 4. 合并可见 ID
+                $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
+
+                if ($allVisibleAdConfigIds->isNotEmpty()) {
+                    $query->whereIn('c_id', $allVisibleAdConfigIds);
+                } else {
+                    $query->whereRaw('1 = 0'); // 无权查看任何数据
+                }
             } else {
+                // 未登录或解析失败
                 $query->whereRaw('1 = 0');
             }
         }

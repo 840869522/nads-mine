@@ -24,12 +24,12 @@ const handleResponse = async (response: Response): Promise<Response> => {
             setTimeout(() => { }, 200);
             window.location.href = "/login"
         }
-        if (data?.code === 405 ) {
-            toast.error(data?.message, {
-                autoClose: 3000,
+        if (data?.code === 405){
+            toast.error(data.message, {
                 closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
+                position: "top-center"
             });
         }
     }

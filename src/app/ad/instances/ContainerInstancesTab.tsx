@@ -39,7 +39,6 @@ interface ContainerInstancesTabProps {
 
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
-    // ★ 1. 从 useAuth hook 中获取 user 和 userTeamId ★
     const { user, userTeamId } = useAuth();
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
@@ -111,7 +110,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         }
     }, [instanceId, fetchInstanceDetails]);
 
-    // 原始版本中的操作函数，保持不变
     const handleStartInstance = useCallback((instance: RunningInstance) => {
         setConfirmActionProps({
             title: `启动实例: ${instance.name}`,
@@ -165,7 +163,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setLogsModalId(instance.id);
     }, []);
 
-    // 原始版本中需要的权限辅助函数，保持不变
     const isPrivilegedUser = useCallback((currentUser: any): boolean => {
         if (!currentUser) return false;
         const privilegedRoles = ['admin', 'referee', 'administrator'];
@@ -207,36 +204,55 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                const safeJsonParse = (b64: string | boolean): any => {
-                    if (typeof b64 !== 'string' || b64 === '') {
-                        return { can_operate: !!b64 };
+                // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 核心修复区域 START ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+                const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
+                    // 定义一个包含所有权限并默认值为 false 的基础对象
+                    const defaultPermissions = {
+                        can_operate: false,
+                        container_stop: false,
+                        container_delete: false,
+                        container_restart: false, // 假设未来可能有这个权限
+                    };
+
+                    // 如果输入不是有效的字符串，则根据输入的布尔值设置 can_operate，其他保持 false
+                    if (typeof b64 !== 'string' || b64.trim() === '') {
+                        return {
+                            ...defaultPermissions,
+                            can_operate: !!b64,
+                        };
                     }
+
                     try {
                         const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
-                        return JSON.parse(atob(paddedB64));
+                        const decodedJson = JSON.parse(atob(paddedB64));
+
+                        // 使用解码后的对象覆盖默认值，确保所有字段都存在
+                        return {
+                            ...defaultPermissions,
+                            ...decodedJson,
+                        };
                     } catch (e) {
                         console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
-                        return { can_operate: false };
+                        // 如果解析失败，返回完全禁用的权限对象
+                        return defaultPermissions;
                     }
                 };
+                // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 核心修复区域 END ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
                 const canOperateGeneral = safeJsonParse(instance.can_operate);
                 const isAdminOrReferee = isPrivilegedUser(user);
 
-                // ★ 2. 在这里添加Flag提交的权限判断逻辑 ★
                 const isOwnTeamTarget = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
                 const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
 
-                // 终端权限逻辑保持不变
                 const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
                 const hasTerminalPermission = isAdminOrReferee || isTeamMember;
 
                 return (
                     <Box>
-                        {/* 原始版本的启动/暂停、停止、删除按钮逻辑，保持不变 */}
                         <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
-                                <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.can_operate}>
+                                <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.container_restart}>
                                     {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={canOperateGeneral?.can_operate ? "success" : "disabled"} />}
                                 </IconButton>
                             </Box>
@@ -258,7 +274,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
                         {isTarget && (
                             <>
-                                {/* ★ 3. 修改 Flag 按钮的 disabled 逻辑和 Tooltip 提示 ★ */}
                                 <Tooltip title={canSubmitFlag ? "提交Flag" : "不能对本队靶机提交Flag"}>
                                     <Box component="span">
                                         <IconButton
@@ -293,7 +308,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 );
             }
         }
-        // ★ 4. 将 userTeamId 添加到依赖数组中 ★
     ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, user, userTeamId, isPrivilegedUser, getUserTeamId]);
 
     const filteredContainers = useMemo(() => {
@@ -307,7 +321,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
 
     return (
         <Box>
-            {/* ... JSX 保持不变 ... */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                 <Typography variant="h6">容器列表</Typography>
                 <TextField variant="outlined" placeholder="搜索容器名称或镜像..." onChange={(e) => setSearchTerm(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} />
@@ -349,7 +362,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                         const isAdmin = isPrivilegedUser(user);
                         const isMember = !!(getUserTeamId(user) && instance.team_id && String(getUserTeamId(user)) === String(instance.team_id));
                         if(isAdmin || isMember) {
-                            openTerminal(moreMenuAnchor.id!); // Non-null assertion is safe here
+                            openTerminal(moreMenuAnchor.id!);
                         }
                     }
                     setMoreMenuAnchor({ anchor: null, id: null });
