@@ -30,6 +30,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { toast } from 'react-toastify';
 
 const API_BASE = "/back";
 
@@ -204,17 +205,14 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 核心修复区域 START ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
                 const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
-                    // 定义一个包含所有权限并默认值为 false 的基础对象
                     const defaultPermissions = {
                         can_operate: false,
                         container_stop: false,
                         container_delete: false,
-                        container_restart: false, // 假设未来可能有这个权限
+                        container_restart: false,
                     };
 
-                    // 如果输入不是有效的字符串，则根据输入的布尔值设置 can_operate，其他保持 false
                     if (typeof b64 !== 'string' || b64.trim() === '') {
                         return {
                             ...defaultPermissions,
@@ -225,19 +223,15 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     try {
                         const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
                         const decodedJson = JSON.parse(atob(paddedB64));
-
-                        // 使用解码后的对象覆盖默认值，确保所有字段都存在
                         return {
                             ...defaultPermissions,
                             ...decodedJson,
                         };
                     } catch (e) {
                         console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
-                        // 如果解析失败，返回完全禁用的权限对象
                         return defaultPermissions;
                     }
                 };
-                // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 核心修复区域 END ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
                 const canOperateGeneral = safeJsonParse(instance.can_operate);
                 const isAdminOrReferee = isPrivilegedUser(user);
@@ -249,7 +243,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const hasTerminalPermission = isAdminOrReferee || isTeamMember;
 
                 return (
-                    <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
                                 <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.container_restart}>
@@ -356,16 +350,33 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看日志 </MenuItem>
                 <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看详情 </MenuItem>
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 挂载点 </MenuItem>
-                <MenuItem onClick={() => {
-                    const instance = instances.find(inst => inst.id === moreMenuAnchor.id);
-                    if (instance) {
-                        const isAdmin = isPrivilegedUser(user);
-                        const isMember = !!(getUserTeamId(user) && instance.team_id && String(getUserTeamId(user)) === String(instance.team_id));
-                        if(isAdmin || isMember) {
-                            openTerminal(moreMenuAnchor.id!);
-                        }
-                    }
+
+                <MenuItem onClick={async () => {
+                    const instanceId = moreMenuAnchor.id;
+                    if (!instanceId) return;
+
                     setMoreMenuAnchor({ anchor: null, id: null });
+
+                    try {
+                        const res = await customFetch(`/back/api/containers/${instanceId}/terminal-with-authority`);
+
+                        if (!res.ok) {
+                            let errorMsg = "无法打开终端";
+                            try {
+                                const data = await res.json();
+                                if (data.message) errorMsg = data.message;
+                            } catch(e) {}
+
+                            toast.error(errorMsg);
+                            return;
+                        }
+
+                        openTerminal(instanceId);
+
+                    } catch (e) {
+                        console.error("Terminal check failed", e);
+                        toast.error("权限检查请求失败");
+                    }
                 }}>
                     打开终端
                 </MenuItem>

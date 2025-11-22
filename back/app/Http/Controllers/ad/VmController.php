@@ -27,6 +27,51 @@ class VmController extends Controller
         $this->cliService = $cliService;
     }
 
+private function checkUserBanForVm($username, $vmId)
+    {
+        try {
+            // 1. 通过 VM ID 找到它属于哪个场景实例
+            // 注意：这里假设传入的是数据库主键 ID (integer)
+            // 如果传入的是 UUID 字符串 (c_vm_name)，请根据实际情况调整查询条件
+            $vmInstance = DB::table('c_scene_vm_instances')->where('c_vm_id', $vmId)->first();
+
+            if (!$vmInstance || !$vmInstance->c_scene_instances_id) {
+                // 尝试按名称查（兼容性处理）
+                if (!$vmInstance) {
+                     $vmInstance = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
+                }
+                if (!$vmInstance || !$vmInstance->c_scene_instances_id) {
+                    return false;
+                }
+            }
+
+            // 2. 通过场景实例 ID 找到对应的演练配置
+            $adConfigId = DB::table('c_ad_configs')
+                ->where('c_scene_instance_id', $vmInstance->c_scene_instances_id)
+                ->value('c_id');
+
+            if (!$adConfigId) {
+                return false;
+            }
+
+            // 3. 检查禁赛表
+            $isBanned = DB::table('c_ad_user_bans')
+                ->where('c_ad_config_id', $adConfigId)
+                ->where('c_user_id', $username)
+                ->exists();
+
+            if ($isBanned) {
+                Log::info("拦截 VM 操作：用户 {$username} 已被禁赛", ['vm_id' => $vmId]);
+            }
+
+            return $isBanned;
+
+        } catch (\Exception $e) {
+            Log::error("检查 VM 操作禁赛状态失败: " . $e->getMessage());
+            return false;
+        }
+    }
+
     private function isValidImageFile(string $path): bool
     {
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
@@ -616,11 +661,102 @@ class VmController extends Controller
     {
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
+        $auth = $request->header("Authorization", null);
+        $jwtRes = JWTControll::decodeJWT($auth);
 
         if ($jwtRes["err"] != null) {
-            return response()->json(['error' => '无效的令牌'], 401);
+            return response()->json(['error' => 'Invalid token'], 401);
+        }
+        $username = $jwtRes["data"]["id"] ?? null;
+        if (empty($username)) {
+            return response()->json(['error' => 'Unable to identify user'], 401);
+        }
+    // ★★★ 新增：禁赛检查 ★★★
+            try {
+                $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmQueryName)->first();
+                if ($vmRecord) {
+                    if ($this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
+                        return response()->json([
+                            'code' => 403,
+                            'error' => 'User is banned',
+                            'message' => '您已被禁赛，无法连接此虚拟机！'
+                        ], 403);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Guac 获取前的禁赛检查出错: " . $e->getMessage());
+            }
+            // ★★★ 结束新增 ★★★
+
+        // Access control: privileged roles bypass; others must be team members and not banned in this drill
+        $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+        try {
+            $roles = DB::table('c_users_roles')
+                ->where('c_user_id', $username)
+                ->pluck('c_role_id')
+                ->map(fn ($role) => strtolower((string) $role));
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch user roles for VM guac authority: ' . $e->getMessage());
+            return response()->json(['error' => 'Database query failed'], 500);
+        }
+
+        if (!$roles->contains(fn ($r) => in_array($r, $privilegedRoles, true))) {
+            try {
+                $vmRecord = DB::table('c_scene_vm_instances')
+                    ->where('c_vm_name', $vmQueryName)
+                    ->select('c_team_id', 'c_scene_instances_id')
+                    ->first();
+            } catch (\Throwable $e) {
+                Log::error('Failed to fetch VM record for guac authority: ' . $e->getMessage());
+                return response()->json(['error' => 'Database query failed'], 500);
+            }
+
+            $teamId = $vmRecord->c_team_id ?? null;
+            $normalizedTeamId = $teamId !== null ? trim((string) $teamId) : '';
+
+            if ($vmRecord && $normalizedTeamId !== '') {
+                try {
+                    $isMember = DB::table('c_teams_users')
+                        ->where('team_id', $normalizedTeamId)
+                        ->where('user_id', $username)
+                        ->exists();
+                } catch (\Throwable $e) {
+                    Log::error('Failed to verify team membership for VM guac authority: ' . $e->getMessage());
+                    return response()->json(['error' => 'Database query failed'], 500);
+                }
+
+                if (!$isMember) {
+                    return response()->json([
+                        'error' => 'Unauthorized to access this VM',
+                        'message' => 'User is not in the VM team',
+                    ], 403);
+                }
+
+                try {
+                    $adConfigId = DB::table('c_ad_configs')
+                        ->where('c_scene_instance_id', $vmRecord->c_scene_instances_id)
+                        ->value('c_id');
+                } catch (\Throwable $e) {
+                    Log::error('Failed to fetch ad_config for VM guac authority: ' . $e->getMessage());
+                    $adConfigId = null;
+                }
+
+                if ($adConfigId) {
+                    $isBannedInAd = DB::table('c_ad_user_bans')
+                        ->where('c_ad_config_id', $adConfigId)
+                        ->where('c_user_id', $username)
+                        ->where(function ($q) {
+                            $q->whereNull('c_expires_at')->orWhere('c_expires_at', '>', now());
+                        })
+                        ->exists();
+                    if ($isBannedInAd) {
+                        return response()->json([
+                            'error' => 'User is banned',
+                            'message' => 'This account is banned in the current drill; console access denied',
+                        ], 403);
+                    }
+                }
+            }
         }
 
         try {
@@ -656,14 +792,13 @@ class VmController extends Controller
         }
 
         return response()->json([
-            'host' => $ip ?? '无效',
+            'host' => $ip ?? 'invalid',
             'ssh_port' => 22,
             'rdp_port' => 3389,
             'vnc_port' => $vncPort,
         ], 200);
     }
-
-    // GET /vms/{vm_id}
+// GET /vms/{vm_id}
     public function getVmInfo($vmId)
     {
         try {
@@ -759,6 +894,25 @@ class VmController extends Controller
     // POST /vms/{vm_id}/actions/{action}
     public function manageVmLifecycle($vmId, $action)
     {
+    // ★★★ 新增：禁赛检查 ★★★
+            $request = request();
+            $auth = $request->header("Authorization", null);
+            if ($auth) {
+                try {
+                    $jwtRes = JWTControll::decodeJWT($auth);
+                    $username = $jwtRes["data"]["id"] ?? null;
+                    if ($username) {
+                        $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
+                        if (!$vmRecord) {
+                             $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
+                        }
+                        if ($vmRecord && $this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
+                             return response()->json(['message' => '您已被禁赛，无法操作此虚拟机！'], 403);
+                        }
+                    }
+                } catch (\Exception $e) {}
+            }
+            // ★★★ 结束新增 ★★★
         $map = [
             'start' => 'start',
             'pause' => 'suspend',

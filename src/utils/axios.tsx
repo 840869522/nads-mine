@@ -58,7 +58,8 @@ apiClientWithToken.interceptors.response.use(
         }
         if (res.data.code === 405 ) {
             toast.error(res.data.message, {
-                closeOnClick: true,
+                autoClose: false,
+		closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
                 position: "top-center"

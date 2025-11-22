@@ -26,7 +26,8 @@ const handleResponse = async (response: Response): Promise<Response> => {
         }
         if (data?.code === 405){
             toast.error(data.message, {
-                closeOnClick: true,
+                autoClose: false,
+		closeOnClick: true,
                 pauseOnHover: true,
                 draggable: true,
                 position: "top-center"

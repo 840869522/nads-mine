@@ -45,64 +45,64 @@ class FlagSubmissionController extends BaseController
     {
         // 1. 直接从请求头中验证JWT token
         $authHeader = $request->header('Authorization');
-        
+
         if (!$authHeader) {
             Log::warning("Flag提交失败：Authorization头缺失", [
                 'request_ip' => $request->ip(),
                 'all_headers' => $request->headers->all()
             ]);
-            
+
             return $this->_response(
                 GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 '请先登录后再提交Flag。如果已登录，请刷新页面重试。'
             );
         }
-        
+
         // 直接使用Authorization头作为token（项目原有逻辑）
         $token = $authHeader;
-        
+
         // 解码JWT token
         try {
             $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
-            
+
             if ($jwtResult['err'] !== null) {
                 Log::warning("Flag提交失败：JWT token无效", [
                     'jwt_error' => $jwtResult['err'],
                     'request_ip' => $request->ip()
                 ]);
-                
+
                 return $this->_response(
                     GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
                     'Token已过期或无效，请重新登录。'
                 );
             }
-            
+
             $tokenData = $jwtResult['data'];
             if (!isset($tokenData['id']) || empty($tokenData['id'])) {
                 Log::error("Flag提交失败：JWT token中缺少用户ID", [
                     'token_data' => $tokenData
                 ]);
-                
+
                 return $this->_response(
                     GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                     'Token数据异常，请重新登录。'
                 );
             }
-            
+
             $username = $tokenData['id'];
-            
+
         } catch (\Exception $e) {
             Log::error("Flag提交失败：JWT解码异常", [
                 'error' => $e->getMessage(),
                 'auth_header' => substr($authHeader, 0, 20) . '...'
             ]);
-            
+
             return $this->_response(
                 GlobalResponse::$HTTP_SERVER_ERROR_CODE,
                 'Token解码失败，请重新登录。'
             );
         }
-        
+
         // 验证用户是否在数据库中存在
         try {
             $userExists = \App\Models\Users\UserModel::getUserById($username);
@@ -111,7 +111,7 @@ class FlagSubmissionController extends BaseController
                     'username' => $username,
                     'user_check_result' => $userExists
                 ]);
-                
+
                 return $this->_response(
                     GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                     '用户账户不存在或已被禁用，请联系管理员。'
@@ -122,7 +122,7 @@ class FlagSubmissionController extends BaseController
                 'username' => $username,
                 'error' => $e->getMessage()
             ]);
-            
+
             return $this->_response(
                 GlobalResponse::$HTTP_SERVER_ERROR_CODE,
                 '系统错误，请稍后重试。'
@@ -183,7 +183,33 @@ class FlagSubmissionController extends BaseController
         $instance_id = $request->input('instance_id');
         $instance_type = $request->input('instance_type');
         $submittedFlag = $request->input('flag');
-        
+
+        // 1. 查找演练配置
+                $adConfig = DB::table('c_ad_configs')
+                    ->where('c_scene_instance_id', $c_scene_instances_id)
+                    ->first();
+
+                $banRecord = null;
+                $adConfigId = null;
+
+                if ($adConfig) {
+                    $adConfigId = $adConfig->c_id;
+                    // 2. 查找禁赛记录
+                    $banRecord = DB::table('c_ad_user_bans')
+                        ->where('c_ad_config_id', $adConfigId)
+                        ->where('c_user_id', $username)
+                        ->first();
+                }
+
+
+                // ★★★ 正式的拦截逻辑 ★★★
+                if ($banRecord) {
+                    return $this->_response(
+                        GlobalResponse::$HTTP_STATUS_ERROR_CODE,
+                        '您已被禁赛，无法提交 Flag！'
+                    );
+                }
+
         // 在代码中进行Flag格式验证，防止转义问题
         $flagPattern = '/^flag\\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\}$/';
         if (!preg_match($flagPattern, $submittedFlag)) {
@@ -484,7 +510,7 @@ class FlagSubmissionController extends BaseController
                     $instance_name = $instance->c_vm_name;
                 }
             }
-            
+
             $this->sendRedisMessage([
                 'event' => 'flag_submission',
                 'user_id' => $username,
@@ -535,17 +561,17 @@ class FlagSubmissionController extends BaseController
     {
         // 1. 直接从请求头中验证JWT token
         $authHeader = $request->header('Authorization');
-        
+
         if (!$authHeader) {
             return $this->_response(
                 GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 '请先登录后再查看历史记录。'
             );
         }
-        
+
         // 直接使用Authorization头作为token（项目原有逻辑）
         $token = $authHeader;
-        
+
         // 解码JWT token
         try {
             $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
@@ -632,17 +658,17 @@ class FlagSubmissionController extends BaseController
             $formattedHistory = $history->map(function ($record) {
                 $instanceId = $record->c_container_instance_id ?? $record->c_vm_instance_id;
                 $instanceType = $record->c_container_instance_id ? 'docker' : 'vm';
-                
+
                 // 获取靶机IP地址和名称
                 $instanceIp = 'Unknown IP';
                 $instanceName = 'Unknown Instance';
                 $sceneId = null;
-                
+
                 if ($record->containerInstance) {
                     $instanceIp = $record->containerInstance->c_ip ?? 'Unknown IP';
                     $instanceName = $record->containerInstance->c_container_name ?? 'Unknown Container';
                     $sceneId = $record->containerInstance->c_scene_instances_id;
-                    
+
                     // 调试日志
                     Log::info('Container Instance Debug', [
                         'container_id' => $record->c_container_instance_id,
@@ -654,7 +680,7 @@ class FlagSubmissionController extends BaseController
                     $instanceIp = $record->vmInstance->c_ip ?? 'Unknown IP';
                     $instanceName = $record->vmInstance->c_vm_name ?? 'Unknown VM';
                     $sceneId = $record->vmInstance->c_scene_instances_id;
-                    
+
                     // 调试日志
                     Log::info('VM Instance Debug', [
                         'vm_id' => $record->c_vm_instance_id,
@@ -697,16 +723,16 @@ class FlagSubmissionController extends BaseController
     {
         // 1. JWT token验证
         $authHeader = $request->header('Authorization');
-        
+
         if (!$authHeader) {
             return $this->_response(
                 GlobalResponse::$HTTP_STATUS_ERROR_CODE,
                 '请先登录后再查看最新提交记录。'
             );
         }
-        
+
         $token = str_replace('Bearer ', '', $authHeader);
-        
+
         try {
             $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
             if ($jwtResult['err'] !== null || !isset($jwtResult['data']['id'])) {
@@ -743,7 +769,7 @@ class FlagSubmissionController extends BaseController
             $query = FlagSubmissionModel::query()
                 ->select([
                     'c_submission_id',
-                    'c_username', 
+                    'c_username',
                     'c_submitted_at',
                     'c_is_correct',
                     'c_points_earned',
@@ -775,7 +801,7 @@ class FlagSubmissionController extends BaseController
             $formattedSubmissions = $submissions->map(function ($record) {
                 $instanceType = $record->c_container_instance_id ? 'docker' : 'vm';
                 $instanceName = 'Unknown Instance';
-                
+
                 if ($record->containerInstance) {
                     $instanceName = $record->containerInstance->c_container_name ?? 'Unknown Container';
                 } elseif ($record->vmInstance) {
@@ -800,7 +826,7 @@ class FlagSubmissionController extends BaseController
             // 5. 返回统计信息
             $stats = [
                 'total_returned' => $formattedSubmissions->count(),
-                'latest_timestamp' => $formattedSubmissions->isNotEmpty() ? 
+                'latest_timestamp' => $formattedSubmissions->isNotEmpty() ?
                     $formattedSubmissions->first()['c_submitted_at'] : null,
                 'server_time' => now()->toDateTimeString(),
             ];
@@ -826,11 +852,11 @@ class FlagSubmissionController extends BaseController
     {
         // 1. 用户身份验证（可选，允许匿名访问）
         $authHeader = $request->header('Authorization');
-        
+
         if ($authHeader) {
             // 直接使用Authorization头作为token（项目原有逻辑）
             $token = $authHeader;
-            
+
             try {
                 $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
                 if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {
@@ -876,11 +902,11 @@ class FlagSubmissionController extends BaseController
     {
         // 1. 用户身份验证（可选，允许匿名访问）
         $authHeader = $request->header('Authorization');
-        
+
         if ($authHeader) {
             // 直接使用Authorization头作为token（项目原有逻辑）
             $token = $authHeader;
-            
+
             try {
                 $jwtResult = \App\Utils\JWTControll::decodeJWT($token);
                 if ($jwtResult['err'] === null && isset($jwtResult['data']['id'])) {

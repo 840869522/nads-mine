@@ -107,13 +107,15 @@ const AdManagementPage: React.FC = () => {
         setIsClient(true);
     }, []);
 
-    // ★★★ 权限配置区域 ★★★
+    // ★★★ 1. 权限检查逻辑 (扩展版) ★★★
+
     const currentUsername = (user as any)?.user?.c_username || (user as any)?.c_username;
     const currentName = (user as any)?.user?.c_name || (user as any)?.c_name;
     const isAdminUser = currentUsername === 'admin';
+
     const rawUserPermissions = (user as any)?.user?.permission || (user as any)?.permission || [];
 
-    // 通用权限检查函数
+    // 辅助函数：检查是否有某个特定权限
     const checkPermission = (permKey: string) => {
         return isClient && (
             isAdminUser ||
@@ -123,15 +125,15 @@ const AdManagementPage: React.FC = () => {
     };
 
     // 定义所有按钮的权限开关
-    const canCreate        = checkPermission('ad_add');         // 创建演练
-    const canEdit          = checkPermission('ad_update');           // 编辑演练
-    const canDelete        = checkPermission('ad_destroy');         // 删除演练
+    const canCreate        = checkPermission('ad:create');         // 创建演练
+    const canEdit          = checkPermission('ad:edit');           // 编辑演练
+    const canDelete        = checkPermission('ad:delete');         // 删除演练
 
-    const canStartDrill    = checkPermission('ad_start');          // 启动演练
+    const canStartDrill    = checkPermission('ad:start');          // 启动演练
     const canManageMembers = checkPermission('ad:member:ban');     // 成员禁赛
     const canAssignNodes   = checkPermission('ad:node:assign');    // 节点分配
     const canViewFlags     = checkPermission('ad:flag:history');   // Flag历史
-    const canStopDrill     = checkPermission('ad_stop');           // 停止演练
+    const canStopDrill     = checkPermission('ad:stop');           // 停止演练
     const canViewTopology  = checkPermission('ad:topology:view');  // 查看拓扑
     const canViewDetails   = checkPermission('ad:instance:view');  // 查看详情
 
@@ -438,7 +440,7 @@ const AdManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.map((adConfig) => {
+                                : adConfigs.map((adConfig, index) => {
                                     const isReferee = (adConfig.referees || []).some(ref => {
                                         if (ref.c_user_id === currentUsername) return true;
                                         if (currentName && ref.c_user_id === currentName) return true;
@@ -447,10 +449,10 @@ const AdManagementPage: React.FC = () => {
                                     });
 
                                     return (
-                                        <TableRow hover key={adConfig.c_id}>
+                                        <TableRow hover key={`${adConfig.c_id}-${index}`}>
                                             <TableCell>{adConfig.c_drill_name}</TableCell>
                                             <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
-                                            <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={referee.c_user_id} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
+                                            <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee, rIndex ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={`${referee.c_user_id}-${rIndex}`} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
                                             <TableCell>{adConfig.sceneConfig?.c_name || '未关联'}</TableCell>
                                             <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
                                             <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
@@ -461,7 +463,6 @@ const AdManagementPage: React.FC = () => {
                                             </TableCell>
                                             <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
                                             <TableCell align="right">
-                                                {/* ★ 启动演练按钮：加上了 canStartDrill 权限检查 */}
                                                 {['pending', 'finished', 'archived', 'failed'].includes(adConfig.c_status) && canStartDrill && (
                                                     <Tooltip title="开始/重新开始演练">
                                                     <span>
@@ -472,7 +473,6 @@ const AdManagementPage: React.FC = () => {
                                                     </Tooltip>
                                                 )}
 
-                                                {/* ★★★ 核心修正点：使用 canAccessRunningTools 来决定是否显示这一组管理按钮 ★★★ */}
                                                 {adConfig.c_status === 'running' && canAccessRunningTools && (
                                                     <>
                                                         {canManageMembers && (
@@ -548,7 +548,6 @@ const AdManagementPage: React.FC = () => {
             </Paper>
 
             <Dialog key={editingAdConfig?.c_id || 'new-ad-config-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
-                {/* ... Dialog Content (保持不变) ... */}
                 <form onSubmit={handleFormSubmit}>
                     <DialogTitle>{editingAdConfig ? '编辑演练配置' : '创建新演练'}</DialogTitle>
                     <DialogContent>
@@ -605,7 +604,6 @@ const AdManagementPage: React.FC = () => {
                 </form>
             </Dialog>
 
-            {/* ... 其他 Dialogs ... */}
             <Dialog open={isProgressModalOpen} aria-labelledby="progress-dialog-title">
                 <DialogTitle id="progress-dialog-title">演练启动中</DialogTitle>
                 <DialogContent sx={{ minWidth: 400, p: 3 }}>

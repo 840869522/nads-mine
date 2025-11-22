@@ -332,43 +332,52 @@ class AdConfigController extends Controller
     }
 
     public function getTeamsWithMembers(AdConfig $adConfig): JsonResponse
-    {
-        try {
-            if (!$adConfig->c_scene_instance_id) {
-                return response()->json(['data' => []]);
+        {
+            try {
+                if (!$adConfig->c_scene_instance_id) {
+                    return response()->json(['data' => []]);
+                }
+
+                // 1. 找出所有参与的队伍 ID
+                $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                    ->distinct()->pluck('c_team_id');
+                $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                    ->distinct()->pluck('c_team_id');
+                $allTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values()->all();
+
+                if (empty($allTeamIds)) {
+                    return response()->json(['data' => []]);
+                }
+
+                // 2. 获取队伍及其成员
+                $teams = Team::whereIn('c_id', $allTeamIds)
+                            ->with(['users:c_username,c_name'])
+                            ->get();
+
+                // 3. 查询该演练下的所有禁赛记录 (新表)
+                $bannedUserIds = DB::table('c_ad_user_bans')
+                    ->where('c_ad_config_id', $adConfig->c_id)
+                    ->pluck('c_user_id')
+                    ->toArray();
+
+                // 4. ★★★ 显式注入新字段 ★★★
+                foreach ($teams as $team) {
+                    foreach ($team->users as $user) {
+                        // 检查用户是否在禁赛名单中
+                        $isBanned = in_array($user->c_username, $bannedUserIds);
+
+                        // 直接挂载一个新属性，避开 pivot 的干扰
+                        $user->current_drill_banned = $isBanned;
+                    }
+                }
+
+                return response()->json(['data' => $teams]);
+
+            } catch (Exception $e) {
+                Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
             }
-
-            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                ->distinct()
-                ->pluck('c_team_id');
-
-            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                ->distinct()
-                ->pluck('c_team_id');
-
-            $allTeamIds = $containerTeamIds
-                            ->merge($vmTeamIds)
-                            ->unique()
-                            ->filter()
-                            ->values()
-                            ->all();
-
-            if (empty($allTeamIds)) {
-                return response()->json(['data' => []]);
-            }
-
-            $teams = Team::whereIn('c_id', $allTeamIds)
-                        ->with(['users:c_username,c_name'])
-                        ->get();
-
-            return response()->json(['data' => $teams]);
-
-        } catch (Exception $e) {
-            Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
         }
-    }
-
     public function updateTopology(Request $request, AdConfig $adConfig): JsonResponse
     {
         if ($adConfig->c_status !== 'running' || !$adConfig->c_scene_instance_id) {

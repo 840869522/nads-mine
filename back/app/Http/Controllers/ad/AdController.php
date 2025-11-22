@@ -376,9 +376,4 @@ class AdController extends Controller
             if (empty($connection['target']['ip'])) { $connection['target']['ip'] = $getNextIp(); }
         }
     }
-
-    public function _get_global_directory(): string
-    {
-        return '/opt/Tactics-Blade';
-    }
 }

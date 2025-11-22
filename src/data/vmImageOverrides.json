@@ -372,5 +372,11 @@
   },
   "v_tar_IPCimplant.qcow2": {
     "osType": "win7_1"
+  },
+  "Report_V1.0.qcow2": {
+    "osType": "kali"
+  },
+  "Report_v1.1.qcow2": {
+    "osType": "kali"
   }
 }
