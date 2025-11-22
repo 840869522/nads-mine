@@ -30,7 +30,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
-import { toast } from 'react-toastify';
+import { v4 as uuidv4 } from 'uuid';									
 
 const API_BASE = "/back";
 
@@ -38,9 +38,50 @@ interface ContainerInstancesTabProps {
     instanceId: string | null;
 }
 
+interface SupportUserResponse {
+    code: number;
+    message: string;
+    data?: {
+        c_username?: string;
+        role?: string[];
+        [key: string]: unknown;
+    };
+}							   
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const { user, userTeamId } = useAuth();
+	const authUsername = useMemo(
+        () => ((user?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
+        [user]
+    );
+    const { data: supportUserResponse, error: supportUserError } = useSWR<SupportUserResponse>(
+        authUsername ? ['/back/api/support/user/id', authUsername] : null,
+        ([url, id]) =>
+            customFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).then(async (res) => {
+                if (!res.ok) {
+                    const message = res.statusText || '获取用户信息失败';
+                    throw new Error(message);
+                }
+                return res.json();
+            }),
+        {
+            revalidateOnFocus: false,
+        }
+    );
+    useEffect(() => {
+        if (supportUserError) {
+            console.warn('[Container Terminal] 获取用户信息失败:', supportUserError.message);
+        }
+    }, [supportUserError]);
+    const supportUserData = supportUserResponse?.data;
+    const effectiveUsername = useMemo(
+        () => supportUserData?.c_username ?? authUsername,
+        [supportUserData?.c_username, authUsername]
+    );
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +96,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const [flagHistoryModalOpen, setFlagHistoryModalOpen] = useState(false);
     const { openTerminal } = useExecTerminal();
+    const [permissionAlert, setPermissionAlert] = useState<{ type: 'info' | 'error'; message: string } | null>(null);
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
@@ -161,7 +203,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails, user]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        setLogsModalId(instance.id);
+        const base =
+            typeof window !== 'undefined'
+                ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
     }, []);
 
     const isPrivilegedUser = useCallback((currentUser: any): boolean => {
@@ -205,14 +260,17 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
+                // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 核心修复区域 START ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
                 const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
+                    // 定义一个包含所有权限并默认值为 false 的基础对象
                     const defaultPermissions = {
                         can_operate: false,
                         container_stop: false,
                         container_delete: false,
-                        container_restart: false,
+                        container_restart: false, // 假设未来可能有这个权限
                     };
 
+                    // 如果输入不是有效的字符串，则根据输入的布尔值设置 can_operate，其他保持 false
                     if (typeof b64 !== 'string' || b64.trim() === '') {
                         return {
                             ...defaultPermissions,
@@ -223,15 +281,19 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     try {
                         const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
                         const decodedJson = JSON.parse(atob(paddedB64));
+
+                        // 使用解码后的对象覆盖默认值，确保所有字段都存在
                         return {
                             ...defaultPermissions,
                             ...decodedJson,
                         };
                     } catch (e) {
                         console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
+                        // 如果解析失败，返回完全禁用的权限对象
                         return defaultPermissions;
                     }
                 };
+                // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 核心修复区域 END ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
                 const canOperateGeneral = safeJsonParse(instance.can_operate);
                 const isAdminOrReferee = isPrivilegedUser(user);
@@ -243,7 +305,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const hasTerminalPermission = isAdminOrReferee || isTeamMember;
 
                 return (
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box>
                         <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
                                 <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.container_restart}>
@@ -312,9 +374,62 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             (c.imageName || '').toLowerCase().includes(lowerCaseSearchTerm)
         );
     }, [instances, searchTerm]);
+	const handleOpenTerminalWithAuthority = useCallback(async (containerId: string) => {
+        try {
+            const payload: Record<string, unknown> = {};
+            if (effectiveUsername) {
+                payload.username = effectiveUsername;
+            }
+            if (supportUserData) {
+                payload.user = supportUserData;
+                if (Array.isArray(supportUserData.role)) {
+                    payload.roles = supportUserData.role;
+                }
+            }
+
+            const hasPayload = Object.keys(payload).length > 0;
+            const response = await customFetch(
+                `${API_BASE}/api/containers/${containerId}/terminal-with-authority`,
+                hasPayload
+                    ? {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                      }
+                    : undefined
+            );
+            let data: any = null;
+            try {
+                data = await response.clone().json();
+            } catch (err) {
+                data = null;
+            }
+
+            if (!response.ok || (data && data.allowed === false)) {
+                const message = data?.message || data?.error || '无权访问该容器终端';
+                setPermissionAlert({ type: 'error', message });
+                return;
+            }
+
+            if (data?.message) {
+                setPermissionAlert({ type: 'info', message: data.message });
+            } else {
+                setPermissionAlert(null);
+            }
+
+            openTerminal(containerId);
+        } catch (error) {
+            setPermissionAlert({ type: 'error', message: '终端权限校验失败，请稍后重试。' });
+        }
+    }, [effectiveUsername, openTerminal, supportUserData]);
 
     return (
         <Box>
+            {permissionAlert && (
+                <MuiAlert severity={permissionAlert.type} sx={{ mb: 2 }}>
+                    {permissionAlert.message}
+                </MuiAlert>
+            )}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                 <Typography variant="h6">容器列表</Typography>
                 <TextField variant="outlined" placeholder="搜索容器名称或镜像..." onChange={(e) => setSearchTerm(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} />
@@ -350,32 +465,11 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setLogsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看日志 </MenuItem>
                 <MenuItem onClick={() => { setInspectModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 查看详情 </MenuItem>
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}> 挂载点 </MenuItem>
-
-                <MenuItem onClick={async () => {
-                    const instanceId = moreMenuAnchor.id;
-                    if (!instanceId) return;
-
+                <MenuItem onClick={() => {
+                    const id = moreMenuAnchor.id;
                     setMoreMenuAnchor({ anchor: null, id: null });
-
-                    try {
-                        const res = await customFetch(`/back/api/containers/${instanceId}/terminal-with-authority`);
-
-                        if (!res.ok) {
-                            let errorMsg = "无法打开终端";
-                            try {
-                                const data = await res.json();
-                                if (data.message) errorMsg = data.message;
-                            } catch(e) {}
-
-                            toast.error(errorMsg);
-                            return;
-                        }
-
-                        openTerminal(instanceId);
-
-                    } catch (e) {
-                        console.error("Terminal check failed", e);
-                        toast.error("权限检查请求失败");
+                    if (id) {
+                        void handleOpenTerminalWithAuthority(id);
                     }
                 }}>
                     打开终端
