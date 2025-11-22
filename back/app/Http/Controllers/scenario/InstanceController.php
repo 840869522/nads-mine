@@ -974,90 +974,107 @@ class InstanceController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     public function getNodesForAssignment(SceneInstance $instance): JsonResponse
-    {
-        try {
-            // --- 步骤 1: 获取系统中所有的队伍（用于下拉菜单） ---
-            $allTeams = Team::all(['c_id', 'c_name']);
+        {
+            try {
+                // --- 步骤 1: 获取系统中所有的队伍（用于下拉菜单） ---
+                $allTeams = Team::all(['c_id', 'c_name']);
 
-            // --- 步骤 2: 从节点实例表中直接获取所有唯一的 team_id ---
-            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
-                ->distinct()
-                ->pluck('c_team_id');
+                // --- 步骤 2: 从节点实例表中直接获取所有唯一的 team_id ---
+                $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                    ->distinct()
+                    ->pluck('c_team_id');
 
-            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
-                ->distinct()
-                ->pluck('c_team_id');
+                $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
+                    ->distinct()
+                    ->pluck('c_team_id');
 
-            $currentTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values();
+                $currentTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values();
 
-            // --- 步骤 3: 根据找到的 team_id，获取这些队伍及其成员的详细信息 ---
-            $currentTeamsWithMembers = collect([]);
-            if ($currentTeamIds->isNotEmpty()) {
-                $currentTeamsWithMembers = Team::whereIn('c_id', $currentTeamIds)
-                    ->with(['users:c_username,c_name'])
-                    ->get()
-                    ->keyBy('c_id');
-            }
+                // --- 步骤 3: 根据找到的 team_id，获取这些队伍及其成员的详细信息 ---
+                $currentTeamsWithMembers = collect([]);
 
-            // --- 步骤 4: 获取所有节点（容器和虚拟机） ---
-            $containers = $instance->containers()->get(['c_container_id', 'c_container_name', 'c_team_id']);
-            $vms = $instance->vms()->get(['c_vm_id', 'c_vm_name', 'c_team_id']);
+                // ★★★ 新增：先找到对应的 AdConfig ID，用于查询禁赛表 ★★★
+                $adConfigId = AdConfig::where('c_scene_instance_id', $instance->c_scene_instances_id)->value('c_id');
+                $bannedUserIds = [];
+                if ($adConfigId) {
+                    $bannedUserIds = DB::table('c_ad_user_bans')
+                        ->where('c_ad_config_id', $adConfigId)
+                        ->pluck('c_user_id')
+                        ->toArray();
+                }
 
-            // --- 步骤 5: 组合节点数据 ---
-            $nodes = [];
-            $nodeSources = $containers->concat($vms);
+                if ($currentTeamIds->isNotEmpty()) {
+                    $currentTeamsWithMembers = Team::whereIn('c_id', $currentTeamIds)
+                        ->with(['users:c_username,c_name'])
+                        ->get()
+                        ->keyBy('c_id');
+                }
 
-            foreach ($nodeSources as $nodeSource) {
-                $isContainer = $nodeSource instanceof \App\Models\scenario\SceneContainerInstance;
-                $teamId = $nodeSource->c_team_id ? (int)$nodeSource->c_team_id : null;
-                $teamData = $teamId ? $currentTeamsWithMembers->get($teamId) : null;
+                // --- 步骤 4: 获取所有节点（容器和虚拟机） ---
+                $containers = $instance->containers()->get(['c_container_id', 'c_container_name', 'c_team_id']);
+                $vms = $instance->vms()->get(['c_vm_id', 'c_vm_name', 'c_team_id']);
 
-                $nodes[] = [
-                    'id'      => $isContainer ? $nodeSource->c_container_id : $nodeSource->c_vm_id,
-                    'name'    => $isContainer ? $nodeSource->c_container_name : $nodeSource->c_vm_name,
-                    'type'    => $isContainer ? 'container' : 'vm',
-                    'team_id' => $teamId,
-                    'team'    => $teamData ? [
-                        'c_id'   => $teamData->c_id,
-                        'c_name' => $teamData->c_name,
-                        'users'  => $teamData->users->map(function ($user) {
-                            return [
-                                'c_username' => $user->c_username,
-                                'c_name'     => $user->c_name,
-                                'is_banned'  => (bool) $user->pivot->is_banned,
-                            ];
-                        })
-                    ] : null,
-                ];
-            }
+                // --- 步骤 5: 组合节点数据 ---
+                $nodes = [];
+                $nodeSources = $containers->concat($vms);
 
-            // --- 步骤 6: 返回最终的复合响应 ---
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'nodes' => collect($nodes)->sortBy('name')->values(),
-                    'all_teams' => $allTeams,
-                    'current_teams' => $currentTeamsWithMembers->values()->map(function($team) {
-                        return [
-                            'c_id'   => $team->c_id,
-                            'c_name' => $team->c_name,
-                            'users'  => $team->users->map(function ($user) {
+                foreach ($nodeSources as $nodeSource) {
+                    $isContainer = $nodeSource instanceof \App\Models\scenario\SceneContainerInstance;
+                    $teamId = $nodeSource->c_team_id ? (int)$nodeSource->c_team_id : null;
+                    $teamData = $teamId ? $currentTeamsWithMembers->get($teamId) : null;
+
+                    $nodes[] = [
+                        'id'      => $isContainer ? $nodeSource->c_container_id : $nodeSource->c_vm_id,
+                        'name'    => $isContainer ? $nodeSource->c_container_name : $nodeSource->c_vm_name,
+                        'type'    => $isContainer ? 'container' : 'vm',
+                        'team_id' => $teamId,
+                        'team'    => $teamData ? [
+                            'c_id'   => $teamData->c_id,
+                            'c_name' => $teamData->c_name,
+                            'users'  => $teamData->users->map(function ($user) use ($bannedUserIds) {
+                                // ★★★ 核心修改：使用新表的查询结果 ★★★
+                                $isBanned = in_array($user->c_username, $bannedUserIds);
                                 return [
                                     'c_username' => $user->c_username,
                                     'c_name'     => $user->c_name,
-                                    'is_banned'  => (bool) $user->pivot->is_banned,
+                                    'is_banned'  => $isBanned, // 使用新计算的状态
                                 ];
                             })
-                        ];
-                    })
-                ]
-            ]);
+                        ] : null,
+                    ];
+                }
 
-        } catch (\Exception $e) {
-            Log::error("获取实例节点及成员列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
+                // --- 步骤 6: 返回最终的复合响应 ---
+                // 这里的 current_teams 也需要更新状态，因为前端下拉框里可能会用到
+                $formattedCurrentTeams = $currentTeamsWithMembers->values()->map(function($team) use ($bannedUserIds) {
+                    return [
+                        'c_id'   => $team->c_id,
+                        'c_name' => $team->c_name,
+                        'users'  => $team->users->map(function ($user) use ($bannedUserIds) {
+                            $isBanned = in_array($user->c_username, $bannedUserIds);
+                            return [
+                                'c_username' => $user->c_username,
+                                'c_name'     => $user->c_name,
+                                'is_banned'  => $isBanned, // 使用新计算的状态
+                            ];
+                        })
+                    ];
+                });
+
+                return response()->json([
+                    'status' => 'success',
+                    'data' => [
+                        'nodes' => collect($nodes)->sortBy('name')->values(),
+                        'all_teams' => $allTeams,
+                        'current_teams' => $formattedCurrentTeams
+                    ]
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error("获取实例节点及成员列表失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                return response()->json(['message' => '获取节点列表时发生服务器错误。'], 500);
+            }
         }
-    }
 
     /**
      * 批量更新指定场景实例下节点的队伍归属。

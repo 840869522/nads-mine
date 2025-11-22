@@ -33,8 +33,6 @@ import {
     PowerSettingsNew as ForceOffIcon,
     Delete as DeleteIcon,
     DesktopWindows as VncIcon,
-    Terminal as SshIcon,
-    LaptopWindows as RdpIcon,
     KeyboardArrowDown as ArrowDownIcon,
     ViewColumn as ViewColumnIcon,
     Refresh as RefreshIcon,
@@ -48,7 +46,8 @@ import FlagSubmissionModal from '@/components/scenario/FlagSubmissionModal';
 import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
-import { useAuth } from "@/hooks/useAuth"; // ★ 1. 确保 useAuth 已导入
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-toastify"; // 引入 toast 用于显示错误
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -84,16 +83,9 @@ interface OverviewData {
 interface VmInstancesTabProps {
     instanceId: string | null;
 }
-interface SupportUserResponse {
-    code: number;
-    message: string;
-    data?: {
-        c_username?: string;
-        [key: string]: unknown;
-    };
-}
-/* ---------- SWR Hooks (无改动) ---------- */
-const fetcher = (url: string) =>customFetch(url).then((r) => r.json());
+
+/* ---------- SWR Hooks ---------- */
+const fetcher = (url: string) => customFetch(url).then((r) => r.json());
 
 function useVmInstances(instanceId: string | null, forceRef?: React.MutableRefObject<number>) {
     const {
@@ -150,41 +142,6 @@ function stateIcon(state: VmInstance["state"]) {
 const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const forceRefreshUntil = React.useRef(0);
-	const { user: authUser } = useAuth();
-    const authUsername = React.useMemo(
-        () => ((authUser?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
-        [authUser]
-    );
-    const { data: currentUser, error: currentUserError } = useSWR<SupportUserResponse>(
-        authUsername ? ['/back/api/support/user/id', authUsername] : null,
-        ([url, id]) =>
-            customFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id }),
-            }).then(async (res) => {
-                if (!res.ok) {
-                    const message = res.statusText || '获取用户信息失败';
-                    throw new Error(message);
-                }
-                return res.json();
-            }),
-        {
-            revalidateOnFocus: false,
-        }
-    );
-    const effectiveUsername = currentUser?.data?.c_username ?? authUsername;
-    React.useEffect(() => {
-        if (currentUserError) {
-            console.log(`[Guac Authority] 获取用户信息失败: ${currentUserError.message}`);
-        }
-    }, [currentUserError]);
-	const [blockedVnc, setBlockedVnc] = React.useState<Record<string, boolean>>({});
-
-    const selectedVm = React.useMemo(
-        () => data?.find((vm) => vm.id === actionAnchor.id) ?? null,
-        [data, actionAnchor.id]
-    );
     const { data, isLoading, isValidating, mutate } = useVmInstances(instanceId, forceRefreshUntil);
 
     const [search, setSearch] = React.useState("");
@@ -204,10 +161,8 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         is_target: true,
     });
 
-    // ★ 2. 从 useAuth hook 中获取 user 和 userTeamId ★
     const { user, userTeamId } = useAuth();
 
-    // ... (所有操作函数 handleLifecycle, openGuacWindow, handleDelete, handleOpenLogs 保持不变)
     const handleLifecycle = async (vm: VmInstance, action: string) => {
         setActionLoading(true);
         forceRefreshUntil.current = Date.now() + 30_000;
@@ -215,12 +170,12 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             const res = await customFetch(`/back/api/ad/vms/${vm.name}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || res.statusText);
+                throw new Error(err.message || err.detail || res.statusText); // 优先显示 message
             }
             await mutate();
             await globalMutate(`/back/api/vms/${vm.id}`);
         } catch (e: any) {
-            alert(e.message || "Operation failed");
+            toast.error(e.message || "操作失败"); // 使用 toast 显示错误
         } finally {
             setActionLoading(false);
         }
@@ -243,61 +198,30 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         form.remove();
     };
 
+    // ★★★ 修复：解析后端中文错误提示 ★★★
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
-        const params = new URLSearchParams({ method: proto, vm_name: vmName });
-        if (effectiveUsername) {
-            params.append('username', effectiveUsername);
-        } else {
-            const reason = currentUserError?.message || '当前用户信息尚未加载';
-            console.log(`[Guac Authority] ${reason}`);
-            alert(reason);
-            setActionAnchor({ anchor: null, id: null });
-            return;
-        }
-
         try {
-            const res = await customFetch(`/back/api/vms/${vmName}/guac-with-authority?${params.toString()}`);
-            let payload: any = null;
-            try {
-                payload = await res.json();
-            } catch (err) {
-                payload = null;
-            }
+            const res = await customFetch(`/back/api/ad/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
 
             if (!res.ok) {
-                const message = payload?.error ?? payload?.message ?? 'Guacamole info request failed';
-                if (proto === 'vnc') {
-                    setBlockedVnc((prev) => ({ ...prev, [vmName]: true }));
-                }
-                console.log(`[Guac Authority] ${message}`);
-                const error = new Error(message);
-                (error as any).__alreadyLogged = true;
-                throw error;
+                // 尝试解析 JSON 错误信息
+                let errorMessage = '连接请求失败';
+                try {
+                    const errorData = await res.json();
+                    if (errorData.message) {
+                        errorMessage = errorData.message; // 获取后端 "您已被禁赛..."
+                    }
+                } catch (e) {}
+                throw new Error(errorMessage);
             }
 
-            if (!payload) {
-                throw new Error('Guacamole info response is invalid');
-            }
-
-            const info = payload;
+            const info = await res.json();
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
             openGuacWindow({ type: proto, hostname: info.host, port: String(port) });
-            if (proto === 'vnc') {
-                setBlockedVnc((prev) => {
-                    if (!prev[vmName]) return prev;
-                    const { [vmName]: _removed, ...rest } = prev;
-                    return rest;
-                });
-            }
         } catch (e: any) {
-            if (!e?.__alreadyLogged) {
-                console.log('打开连接失败：', e?.message ?? e);
-            }
-            alert(e?.message || 'Failed to open connection');
-        } finally {
-            setActionAnchor({ anchor: null, id: null });
+            toast.error(e.message || '连接失败'); // 使用 toast 显示中文错误
         }
-													
+        setActionAnchor({ anchor: null, id: null });
     };
 
     const handleDelete = async (vm: VmInstance) => {
@@ -307,20 +231,18 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             const res = await customFetch(`/back/api/vms/${vm.id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || res.statusText);
+                throw new Error(err.message || err.detail || res.statusText);
             }
             await mutate();
         } catch (e: any) {
-            alert(e.message || 'Failed to delete');
+            toast.error(e.message || '删除失败');
         } finally {
             setActionLoading(false);
         }
     };
 
     const handleOpenLogs = React.useCallback((vm: VmInstance) => {
-        const base =
-            typeof window !== 'undefined'
-                ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
+        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
         const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
         const id = uuidv4();
         const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
@@ -336,7 +258,6 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     const columns = React.useMemo<GridColDef<VmInstance>[]>(
         () => [
-            // ... (其他列定义保持不变)
             { field: 'status', headerName: '状态', width: 80, renderCell: (p) => <VmInfoCell id={p.row.id} width={20}>{d => stateIcon(d.status as any)}</VmInfoCell> },
             { field: 'name', headerName: '名称', flex: 1 },
             {
@@ -365,7 +286,6 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                     const isPaused = state === 'paused';
                     const isTarget = vm.is_target;
 
-                    // ★ 3. 权限判断逻辑，与 ContainerInstancesTab.tsx 完全一致 ★
                     const safeJsonParse = (b64: string | boolean): any => {
                         if (typeof b64 !== 'string' || b64 === '') {
                             return { can_operate: !!b64, vm_stop: false, vm_restart: false, vm_shutdown: false, vm_delete: false };
@@ -375,14 +295,13 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                             const jsonString = atob(paddedB64);
                             return JSON.parse(jsonString);
                         } catch (e) {
-                            console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
                             return { can_operate: false, vm_stop: false, vm_restart: false, vm_shutdown: false, vm_delete: false };
                         }
                     };
 
                     const isPrivilegedUser = (currentUser: any): boolean => {
                         if (!currentUser) return false;
-                        const privilegedRoleStrings = ['admin', 'referee', 'administrator'];
+                        const privilegedRoleStrings = ['admin', 'referee', 'administrator', 'operations', 'guidance']; // 补充角色
                         const roles = currentUser.role || currentUser.user?.roles;
                         if (Array.isArray(roles)) {
                             return roles.some(role => privilegedRoleStrings.includes(role.c_name || role));
@@ -392,13 +311,15 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
                     const canOperateGeneral = safeJsonParse(vm.can_operate);
                     const isAdminOrReferee = isPrivilegedUser(user);
+                    // 判断是否是本队靶机
                     const isOwnTeamTarget = !!(userTeamId && vm.team_id && String(userTeamId) === String(vm.team_id));
+                    // 提交Flag权限：管理员/裁判可以直接提交，或者非本队靶机可以提交
                     const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
+                    // 操作权限：管理员/裁判可以直接操作，或者本队靶机可以操作
                     const hasVncPermission = isAdminOrReferee || isOwnTeamTarget;
 
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {/* ... (其他操作按钮保持不变) ... */}
                             {isRunning ? (
                                 <>
                                     <Tooltip title={canOperateGeneral?.vm_stop ? "暂停" : "无权限"}><Box component="span"><IconButton size="small" onClick={() => handleLifecycle(vm, 'pause')} disabled={actionLoading || !canOperateGeneral?.vm_stop}><PauseIcon fontSize="small" /></IconButton></Box></Tooltip>
@@ -412,7 +333,6 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
                             {isTarget && (
                                 <>
-                                    {/* ★ 4. 修改 Flag 按钮的 disabled 逻辑和 Tooltip 提示 ★ */}
                                     <Tooltip title={canSubmitFlag ? "提交Flag" : "不能对本队靶机提交Flag"}>
                                         <Box component="span">
                                             <IconButton
@@ -456,7 +376,6 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 },
             },
         ],
-        // ★ 5. 将 user 和 userTeamId 添加到依赖数组中 ★
         [actionLoading, showColumns, handleOpenLogs, user, userTeamId]
     );
 
@@ -472,7 +391,6 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
 
     return (
         <Box>
-            {/* ... (所有 JSX 保持不变) ... */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
                 <Typography variant="h6">虚拟机列表</Typography>
                 <TextField variant="outlined" placeholder="搜索虚拟机..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }} sx={{ width: { xs: "100%", sm: 260 } }} />
@@ -495,14 +413,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Box>
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
-                <MenuItem
-                    disabled={!selectedVm || !!blockedVnc[selectedVm.name] || !effectiveUsername}
-                    onClick={() => {
-                        if (selectedVm) {
-                            handleGuac(selectedVm.name, 'vnc');
-                        }
-                    }}
-                >
+                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}>
                     <VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台
                 </MenuItem>
             </Menu>
