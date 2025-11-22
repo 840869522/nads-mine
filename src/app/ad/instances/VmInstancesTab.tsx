@@ -84,7 +84,14 @@ interface OverviewData {
 interface VmInstancesTabProps {
     instanceId: string | null;
 }
-
+interface SupportUserResponse {
+    code: number;
+    message: string;
+    data?: {
+        c_username?: string;
+        [key: string]: unknown;
+    };
+}
 /* ---------- SWR Hooks (无改动) ---------- */
 const fetcher = (url: string) =>customFetch(url).then((r) => r.json());
 
@@ -143,6 +150,41 @@ function stateIcon(state: VmInstance["state"]) {
 const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const forceRefreshUntil = React.useRef(0);
+	const { user: authUser } = useAuth();
+    const authUsername = React.useMemo(
+        () => ((authUser?.user as { c_username?: string } | undefined)?.c_username) ?? undefined,
+        [authUser]
+    );
+    const { data: currentUser, error: currentUserError } = useSWR<SupportUserResponse>(
+        authUsername ? ['/back/api/support/user/id', authUsername] : null,
+        ([url, id]) =>
+            customFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).then(async (res) => {
+                if (!res.ok) {
+                    const message = res.statusText || '获取用户信息失败';
+                    throw new Error(message);
+                }
+                return res.json();
+            }),
+        {
+            revalidateOnFocus: false,
+        }
+    );
+    const effectiveUsername = currentUser?.data?.c_username ?? authUsername;
+    React.useEffect(() => {
+        if (currentUserError) {
+            console.log(`[Guac Authority] 获取用户信息失败: ${currentUserError.message}`);
+        }
+    }, [currentUserError]);
+	const [blockedVnc, setBlockedVnc] = React.useState<Record<string, boolean>>({});
+
+    const selectedVm = React.useMemo(
+        () => data?.find((vm) => vm.id === actionAnchor.id) ?? null,
+        [data, actionAnchor.id]
+    );
     const { data, isLoading, isValidating, mutate } = useVmInstances(instanceId, forceRefreshUntil);
 
     const [search, setSearch] = React.useState("");
@@ -202,16 +244,60 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     };
 
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
+        const params = new URLSearchParams({ method: proto, vm_name: vmName });
+        if (effectiveUsername) {
+            params.append('username', effectiveUsername);
+        } else {
+            const reason = currentUserError?.message || '当前用户信息尚未加载';
+            console.log(`[Guac Authority] ${reason}`);
+            alert(reason);
+            setActionAnchor({ anchor: null, id: null });
+            return;
+        }
+
         try {
-            const res = await customFetch(`/back/api/ad/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
-            if (!res.ok) throw new Error('Guacamole info request failed');
-            const info = await res.json();
+            const res = await customFetch(`/back/api/vms/${vmName}/guac-with-authority?${params.toString()}`);
+            let payload: any = null;
+            try {
+                payload = await res.json();
+            } catch (err) {
+                payload = null;
+            }
+
+            if (!res.ok) {
+                const message = payload?.error ?? payload?.message ?? 'Guacamole info request failed';
+                if (proto === 'vnc') {
+                    setBlockedVnc((prev) => ({ ...prev, [vmName]: true }));
+                }
+                console.log(`[Guac Authority] ${message}`);
+                const error = new Error(message);
+                (error as any).__alreadyLogged = true;
+                throw error;
+            }
+
+            if (!payload) {
+                throw new Error('Guacamole info response is invalid');
+            }
+
+            const info = payload;
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
             openGuacWindow({ type: proto, hostname: info.host, port: String(port) });
+            if (proto === 'vnc') {
+                setBlockedVnc((prev) => {
+                    if (!prev[vmName]) return prev;
+                    const { [vmName]: _removed, ...rest } = prev;
+                    return rest;
+                });
+            }
         } catch (e: any) {
-            alert(e.message || 'Failed to open connection');
+            if (!e?.__alreadyLogged) {
+                console.log('打开连接失败：', e?.message ?? e);
+            }
+            alert(e?.message || 'Failed to open connection');
+        } finally {
+            setActionAnchor({ anchor: null, id: null });
         }
-        setActionAnchor({ anchor: null, id: null });
+													
     };
 
     const handleDelete = async (vm: VmInstance) => {
@@ -232,7 +318,9 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
     };
 
     const handleOpenLogs = React.useCallback((vm: VmInstance) => {
-        const base = process.env.NEXT_PUBLIC_KIBANA_BASE_URL || 'http://10.12.0.102:25601';
+        const base =
+            typeof window !== 'undefined'
+                ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
         const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
         const id = uuidv4();
         const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
@@ -407,7 +495,14 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             </Box>
 
             <Menu anchorEl={actionAnchor.anchor} open={Boolean(actionAnchor.anchor)} onClose={() => setActionAnchor({ anchor: null, id: null })}>
-                <MenuItem onClick={() => { const vm = data?.find(v=>v.id===actionAnchor.id); if(vm) handleGuac(vm.name,'vnc'); }}>
+                <MenuItem
+                    disabled={!selectedVm || !!blockedVnc[selectedVm.name] || !effectiveUsername}
+                    onClick={() => {
+                        if (selectedVm) {
+                            handleGuac(selectedVm.name, 'vnc');
+                        }
+                    }}
+                >
                     <VncIcon fontSize="small" sx={{ mr: 1 }} /> VNC 控制台
                 </MenuItem>
             </Menu>

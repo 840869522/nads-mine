@@ -435,7 +435,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 <MenuItem onClick={() => { setBindsModalId(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
                     挂载点
                 </MenuItem>
-                <MenuItem onClick={() => { if (moreMenuAnchor.id) openTerminal(moreMenuAnchor.id); setMoreMenuAnchor({ anchor: null, id: null }); }}>
+                <MenuItem onClick={() => {
+                    const id = moreMenuAnchor.id;
+                    setMoreMenuAnchor({ anchor: null, id: null });
+                    if (id) {
+                        void handleOpenTerminalWithAuthority(id);
+                    }
+                }}>
                     打开终端
                 </MenuItem>
             </Menu>
