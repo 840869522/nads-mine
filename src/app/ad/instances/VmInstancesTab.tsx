@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box,
     Button,
@@ -47,7 +47,7 @@ import FlagHistoryModal from '@/components/scenario/FlagHistoryModal';
 import { v4 as uuidv4 } from 'uuid';
 import { customFetch } from '@/utils/fetch';
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "react-toastify"; // 引入 toast 用于显示错误
+import { toast } from "react-toastify";
 
 /* ---------- 类型定义 ---------- */
 interface VmInstance {
@@ -170,12 +170,12 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             const res = await customFetch(`/back/api/ad/vms/${vm.name}/actions/${action}`, { method: "POST" });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.detail || res.statusText); // 优先显示 message
+                throw new Error(err.message || err.detail || res.statusText);
             }
             await mutate();
             await globalMutate(`/back/api/vms/${vm.id}`);
         } catch (e: any) {
-            toast.error(e.message || "操作失败"); // 使用 toast 显示错误
+            toast.error(e.message || "操作失败");
         } finally {
             setActionLoading(false);
         }
@@ -198,18 +198,16 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         form.remove();
     };
 
-    // ★★★ 修复：解析后端中文错误提示 ★★★
     const handleGuac = async (vmName: string, proto: 'ssh' | 'rdp' | 'vnc') => {
         try {
             const res = await customFetch(`/back/api/ad/vms/${vmName}/guac?method=${proto}&vm_name=${encodeURIComponent(vmName)}`);
 
             if (!res.ok) {
-                // 尝试解析 JSON 错误信息
                 let errorMessage = '连接请求失败';
                 try {
                     const errorData = await res.json();
                     if (errorData.message) {
-                        errorMessage = errorData.message; // 获取后端 "您已被禁赛..."
+                        errorMessage = errorData.message;
                     }
                 } catch (e) {}
                 throw new Error(errorMessage);
@@ -219,7 +217,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
             const port = proto === 'ssh' ? info.ssh_port : proto === 'rdp' ? info.rdp_port : info.vnc_port;
             openGuacWindow({ type: proto, hostname: info.host, port: String(port) });
         } catch (e: any) {
-            toast.error(e.message || '连接失败'); // 使用 toast 显示中文错误
+            toast.error(e.message || '连接失败');
         }
         setActionAnchor({ anchor: null, id: null });
     };
@@ -254,6 +252,30 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
         }));
         const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
         window.open(url, '_blank');
+    }, []);
+
+    // ★★★ 核心修改：基于角色判断特权用户 (加入 operations 和 guidance) ★★★
+    const isPrivilegedUser = useCallback((currentUser: any): boolean => {
+        if (!currentUser) return false;
+
+        // 1. 获取用户名和角色列表
+        const username = currentUser.user?.c_username || currentUser.c_username || currentUser.username;
+        const roles = currentUser.role || currentUser.user?.roles || [];
+
+        // 2. Admin 账号直接放行
+        if (username === 'admin') return true;
+
+        // 3. 检查角色是否在特权列表中
+        const privilegedRoles = ['admin', 'referee', 'administrator', 'operations', 'guidance'];
+
+        if (Array.isArray(roles)) {
+            return roles.some(role => {
+                const roleName = typeof role === 'string' ? role : role.c_name;
+                return privilegedRoles.includes(roleName);
+            });
+        }
+
+        return false;
     }, []);
 
     const columns = React.useMemo<GridColDef<VmInstance>[]>(
@@ -299,24 +321,21 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                         }
                     };
 
-                    const isPrivilegedUser = (currentUser: any): boolean => {
-                        if (!currentUser) return false;
-                        const privilegedRoleStrings = ['admin', 'referee', 'administrator', 'operations', 'guidance']; // 补充角色
-                        const roles = currentUser.role || currentUser.user?.roles;
-                        if (Array.isArray(roles)) {
-                            return roles.some(role => privilegedRoleStrings.includes(role.c_name || role));
-                        }
-                        return false;
-                    };
+                    const backendPermissions = safeJsonParse(vm.can_operate);
+                    const isAdminOrPrivileged = isPrivilegedUser(user);
 
-                    const canOperateGeneral = safeJsonParse(vm.can_operate);
-                    const isAdminOrReferee = isPrivilegedUser(user);
-                    // 判断是否是本队靶机
-                    const isOwnTeamTarget = !!(userTeamId && vm.team_id && String(userTeamId) === String(vm.team_id));
-                    // 提交Flag权限：管理员/裁判可以直接提交，或者非本队靶机可以提交
-                    const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
-                    // 操作权限：管理员/裁判可以直接操作，或者本队靶机可以操作
-                    const hasVncPermission = isAdminOrReferee || isOwnTeamTarget;
+                    // ★★★ 核心修改：特权用户强制获得所有操作权限 ★★★
+                    const canOperateGeneral = isAdminOrPrivileged ? {
+                        can_operate: true,
+                        vm_stop: true,
+                        vm_restart: true,
+                        vm_shutdown: true,
+                        vm_delete: true
+                    } : backendPermissions;
+
+                    const isOwnTeamTarget = !!(user && user.team_id && vm.team_id && String(user.team_id) === String(vm.team_id));
+                    const canSubmitFlag = isAdminOrPrivileged || !isOwnTeamTarget;
+                    const hasVncPermission = isAdminOrPrivileged || isOwnTeamTarget;
 
                     return (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -376,7 +395,7 @@ const VmInstancesTab: React.FC<VmInstancesTabProps> = ({ instanceId }) => {
                 },
             },
         ],
-        [actionLoading, showColumns, handleOpenLogs, user, userTeamId]
+        [actionLoading, showColumns, handleOpenLogs, user, isPrivilegedUser]
     );
 
     const filteredRows = React.useMemo(() => {

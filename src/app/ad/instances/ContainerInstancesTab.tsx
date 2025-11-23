@@ -13,6 +13,7 @@ import {
     History as HistoryIcon,
     Article as ArticleIcon
 } from '@mui/icons-material';
+import useSWR, { mutate as globalMutate } from "swr";
 
 import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
 
@@ -164,13 +165,30 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setLogsModalId(instance.id);
     }, []);
 
+    // ★★★ 核心修改：基于角色判断特权用户 (移除 ad:view:all，加入 operations) ★★★
     const isPrivilegedUser = useCallback((currentUser: any): boolean => {
         if (!currentUser) return false;
-        const privilegedRoles = ['admin', 'referee', 'administrator'];
-        const roles = currentUser.role || currentUser.user?.roles;
+
+        // 1. Admin 账号硬编码检查
+        const username = currentUser.user?.c_username || currentUser.c_username || currentUser.username;
+        if (username === 'admin') return true;
+
+        // 2. 定义拥有全权限的角色列表
+        // 这里加入了 'operations' (运维)
+        const privilegedRoles = ['admin', 'referee', 'administrator', 'operations'];
+
+        // 3. 获取用户角色列表
+        const roles = currentUser.role || currentUser.user?.roles || [];
+
+        // 4. 检查是否包含特权角色
         if (Array.isArray(roles)) {
-            return roles.some(role => privilegedRoles.includes(role.c_name || role));
+            return roles.some(role => {
+                // 兼容角色可能是字符串，也可能是对象的情况
+                const roleName = typeof role === 'string' ? role : role.c_name;
+                return privilegedRoles.includes(roleName);
+            });
         }
+
         return false;
     }, []);
 
@@ -233,14 +251,22 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     }
                 };
 
-                const canOperateGeneral = safeJsonParse(instance.can_operate);
-                const isAdminOrReferee = isPrivilegedUser(user);
+                const backendPermissions = safeJsonParse(instance.can_operate);
+                const isAdminOrPrivileged = isPrivilegedUser(user);
+
+                // ★★★ 特权用户强制获得所有操作权限 ★★★
+                const canOperateGeneral = isAdminOrPrivileged ? {
+                    can_operate: true,
+                    container_stop: true,
+                    container_delete: true,
+                    container_restart: true
+                } : backendPermissions;
 
                 const isOwnTeamTarget = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
-                const canSubmitFlag = isAdminOrReferee || !isOwnTeamTarget;
+                const canSubmitFlag = isAdminOrPrivileged || !isOwnTeamTarget;
 
                 const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
-                const hasTerminalPermission = isAdminOrReferee || isTeamMember;
+                const hasTerminalPermission = isAdminOrPrivileged || isTeamMember;
 
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
