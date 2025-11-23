@@ -433,6 +433,7 @@ export default function Battlefield (adData: AdData) {
 
         let lastData : Position = { x: 0, y: 0, z: 0 };
         let dataIp: string[] = [];
+        let isFirstFetch = true;
         let id : number = 0;
         const pollingCallback = () => {
             axios.get(`/api/drone?ip=${dataIp[0]}&ip=${dataIp[1]}`)
@@ -442,9 +443,9 @@ export default function Battlefield (adData: AdData) {
 
                     if(response.data.status === 200){
                         let data: Position = response.data.data;
-                        if(isFirst.current){
+                        if(isFirstFetch){
                             lastData = data;
-                            isFirst.current = false;
+                            isFirstFetch = false;
                             return;
                         }
                         
@@ -527,7 +528,10 @@ export default function Battlefield (adData: AdData) {
                                 viewer
                             )
                         }
-                    }
+                    }else if(response.data.status !== 200 && !isFirstFetch){
+                        isFirstFetch = true;
+                        lastData = { x: 0, y: 0, z: 0 };
+                    }   
                     console.log(`[Polling] 成功收到响应:`, response.data.data);
                 })
                 .catch((error: any) => {

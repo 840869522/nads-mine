@@ -53,7 +53,6 @@ interface Team {
     members?: User[];
 }
 
-// MODIFIED: 更新 TeamDrill 类型定义
 interface TeamDrill {
     c_id: string;
     c_drill_name: string;
@@ -62,7 +61,6 @@ interface TeamDrill {
     scene_config: {
         c_name: string;
     } | null;
-    // (可选但推荐) 后端可以返回队伍在此演练中的角色
     pivot?: {
         c_role: string;
     }
@@ -157,15 +155,17 @@ const Page: React.FC = () => {
 
         setIsUsersLoading(true);
         try {
-            const response = await customFetch(`${API_BASE_URL}/ad/users`);
+            // 保持之前的修复：添加 ?page=-1 参数以请求所有用户数据
+            const response = await customFetch(`${API_BASE_URL}/ad/users?page=-1`);
             if (!response.ok) {
                 throw new Error('获取用户列表失败');
             }
             const result = await response.json();
 
-            if (result && result.data && Array.isArray(result.data.data)) {
-                const rawUsers = result.data.data;
-                const formattedUsers: User[] = rawUsers.map((user: any) => ({
+            const userList = result.data?.data || [];
+
+            if (Array.isArray(userList)) {
+                const formattedUsers: User[] = userList.map((user: any) => ({
                     u_id: user.c_username,
                     u_name: user.c_name
                 }));
@@ -388,12 +388,22 @@ const Page: React.FC = () => {
                         {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
                         <TextField autoFocus margin="dense" id="name" name="name" label="队伍名称" type="text" fullWidth variant="outlined" defaultValue={editingTeam?.c_name || ''} required />
                         <Autocomplete
-                            multiple id="team-members" options={allUsers}
+                            multiple
+                            id="team-members"
+                            options={allUsers}
                             getOptionLabel={(option) => option.u_name ? `${option.u_id}(${option.u_name})` : option.u_id}
                             value={allUsers.filter(user => selectedMemberIds.includes(user.u_id))}
                             onChange={(_, newValue) => { setSelectedMemberIds(newValue.map(user => user.u_id)); }}
                             isOptionEqualToValue={(option, value) => option.u_id === value.u_id}
-                            loading={isUsersLoading} noOptionsText="没有可用选项"
+                            loading={isUsersLoading}
+                            noOptionsText="没有可用选项"
+                            // === 修改点：设置 ListboxProps 以限制高度并开启滚动 ===
+                            ListboxProps={{
+                                style: {
+                                    maxHeight: 250, // 限制下拉列表最大高度
+                                    overflow: 'auto' // 内容超出时显示滚动条
+                                }
+                            }}
                             renderInput={(params) => (
                                 <TextField {...params} variant="outlined" label="添加队员 (可选)" placeholder="搜索并选择用户..."
                                            InputProps={{ ...params.InputProps, endAdornment: (<>{isUsersLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps.endAdornment}</>), }}

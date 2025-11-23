@@ -22,7 +22,7 @@ use App\Models\ad\Team;
 use App\Utils\JWTControll;
 use App\Http\Controllers\scenario\InstanceController;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Cache; // ★ 引入 Cache
+use Illuminate\Support\Facades\Cache;
 
 class AdConfigController extends Controller
 {
@@ -37,7 +37,7 @@ class AdConfigController extends Controller
         $search = $request->query('search');
 
         $currentUser = null;
-        $userPermissions = []; // ★ 存储当前用户的权限列表
+        $userPermissions = [];
 
         try {
             $authHeader = $request->header("Authorization");
@@ -45,23 +45,21 @@ class AdConfigController extends Controller
                 $jwtResult = JWTControll::decodeJWT($authHeader);
                 if ($jwtResult["err"] === null) {
                     $currentUser = $jwtResult["data"];
-
-                    // ★★★ 1. 从缓存中获取用户的真实权限列表 ★★★
+                    // 解析权限列表
                     if (isset($currentUser['permission'])) {
-                        $cacheKey = $currentUser['permission']; // JWT里存的是缓存Key
-                        $cachedData = Cache::get($cacheKey);
-
-                        // 转换格式：数据库出来的可能是对象数组，我们需要纯字符串数组
+                        $cachedData = Cache::get($currentUser['permission']);
                         if ($cachedData) {
                             $userPermissions = array_map(function($item) {
-                                return is_object($item) ? $item->c_id : $item;
+                                if (is_object($item)) return (string)$item->c_id;
+                                if (is_array($item)) return (string)($item['c_id'] ?? '');
+                                return is_string($item) ? $item : '';
                             }, $cachedData);
                         }
                     }
                 }
             }
         } catch (Exception $e) {
-            Log::warning('在 AdConfigController@index 中解析JWT失败: ' . $e->getMessage());
+            Log::warning('JWT Error: ' . $e->getMessage());
         }
 
         $query = AdConfig::query()->with([
@@ -69,36 +67,50 @@ class AdConfigController extends Controller
             'referees.user:c_username,c_name',
         ]);
 
-        // ★★★ 2. RBAC 核心逻辑修正 ★★★
+        // ============================================================
+        // ★★★ 核心逻辑：基于“关键业务权限”的鉴权 ★★★
+        // ============================================================
 
-        // 定义一个标志：是否允许查看所有数据
         $canViewAll = false;
+        $currentUsername = $currentUser['id'] ?? null;
 
-        // 情况 A: 是 admin (保留作为兜底)
-        if ($currentUser && isset($currentUser['c_username']) && $currentUser['c_username'] === 'admin') {
+        // 1. Admin 永远放行
+        if ($currentUsername === 'admin') {
             $canViewAll = true;
         }
 
-        // 情况 B: 拥有 'ad' (模块管理) 权限的用户
-        // 只要用户拥有 'ad' 权限，就被视为该模块的管理者，可以看到所有数据
-        if (in_array('ad', $userPermissions)) {
+        // 2. 检查“工作人员”特有权限
+        // 只要拥有下列任意一个高级权限，就视为工作人员，允许查看全局数据
+        $staffPermissions = [
+            'ad_start',
+            'ad_stop',
+            'ad:node:assign',
+        ];
+
+        // 取交集：如果交集不为空，说明拥有“上帝视角”的资格
+        if (!empty(array_intersect($staffPermissions, $userPermissions))) {
             $canViewAll = true;
         }
 
-        // ★★★ 3. 如果没有“查看所有”的权限，则执行严格过滤 ★★★
+        // ============================================================
+        // 数据过滤 (针对学生、普通裁判等无高级权限用户)
+        // ============================================================
         if (!$canViewAll) {
-            if ($currentUser && isset($currentUser['c_username'])) {
-                $currentUsername = $currentUser['c_username'];
+            if ($currentUsername) {
 
-                // 1. 获取所属队伍
-                $teamIds = DB::table('c_teams_users')->where('user_id', $currentUsername)->pluck('team_id');
+                // A. 裁判数据 (裁判只能看自己判决的)
+                $refereeAdConfigIds = DB::table('c_referees')
+                    ->where('c_user_id', $currentUsername)
+                    ->pluck('c_ad_config_id');
 
-                // 2. 获取作为裁判的演练
-                $refereeAdConfigIds = DB::table('c_referees')->where('c_user_id', $currentUsername)->pluck('c_ad_config_id');
-
-                // 3. 获取作为队员的演练
+                // B. 队员数据 (学生只能看自己参加的)
                 $participantAdConfigIds = collect([]);
+                $teamIds = DB::table('c_teams_users')
+                    ->where('user_id', $currentUsername)
+                    ->pluck('team_id');
+
                 if ($teamIds->isNotEmpty()) {
+                    // 查找关联实例 (兼容大小写和空格)
                     $sceneInstanceIds = DB::table('c_scene_container_instances')
                         ->whereIn('c_team_id', $teamIds)
                         ->pluck('c_scene_instances_id')
@@ -107,22 +119,25 @@ class AdConfigController extends Controller
                                 ->whereIn('c_team_id', $teamIds)
                                 ->pluck('c_scene_instances_id')
                         )
-                        ->unique();
-                    if($sceneInstanceIds->isNotEmpty()){
-                        $participantAdConfigIds = AdConfig::whereIn('c_scene_instance_id', $sceneInstanceIds)->pluck('c_id');
+                        ->unique()
+                        ->map(fn($id) => strtolower(trim((string)$id)))
+                        ->values();
+
+                    if ($sceneInstanceIds->isNotEmpty()) {
+                        $participantAdConfigIds = DB::table('c_ad_configs')
+                            ->whereIn(DB::raw('LOWER(c_scene_instance_id)'), $sceneInstanceIds->toArray())
+                            ->pluck('c_id');
                     }
                 }
 
-                // 4. 合并可见 ID
                 $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
 
                 if ($allVisibleAdConfigIds->isNotEmpty()) {
                     $query->whereIn('c_id', $allVisibleAdConfigIds);
                 } else {
-                    $query->whereRaw('1 = 0'); // 无权查看任何数据
+                    $query->whereRaw('1 = 0');
                 }
             } else {
-                // 未登录或解析失败
                 $query->whereRaw('1 = 0');
             }
         }
@@ -138,6 +153,7 @@ class AdConfigController extends Controller
 
     public function store(Request $request)
     {
+        // ★★★ 修改验证规则：添加 unique 唯一性校验 ★★★
         $validated = $request->validate([
             'c_drill_name'      => 'required|string|max:255|unique:c_ad_configs,c_drill_name',
             'c_description'     => 'nullable|string',
@@ -150,7 +166,8 @@ class AdConfigController extends Controller
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
         ], [
-            'c_drill_name.unique' => '该演练名称已被使用。',
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_drill_name.unique' => '该演练名称已被使用，请更换一个名称。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
         ]);
 
@@ -197,8 +214,14 @@ class AdConfigController extends Controller
 
     public function update(Request $request, AdConfig $adConfig)
     {
+        // ★★★ 修改验证规则：更新时排除自身的唯一性校验 ★★★
         $validated = $request->validate([
-            'c_drill_name'      => ['required', 'string', 'max:255', Rule::unique('c_ad_configs')->ignore($adConfig->c_id, 'c_id')],
+            'c_drill_name'      => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('c_ad_configs', 'c_drill_name')->ignore($adConfig->c_id, 'c_id')
+            ],
             'c_description'     => 'nullable|string',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
@@ -208,6 +231,9 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
+        ], [
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_drill_name.unique' => '该演练名称已被使用，请更换一个名称。',
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
@@ -323,28 +349,38 @@ class AdConfigController extends Controller
                 return response()->json(['data' => []]);
             }
 
+            // 1. 找出所有参与的队伍 ID
             $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                ->distinct()
-                ->pluck('c_team_id');
-
+                ->distinct()->pluck('c_team_id');
             $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                ->distinct()
-                ->pluck('c_team_id');
-
-            $allTeamIds = $containerTeamIds
-                            ->merge($vmTeamIds)
-                            ->unique()
-                            ->filter()
-                            ->values()
-                            ->all();
+                ->distinct()->pluck('c_team_id');
+            $allTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values()->all();
 
             if (empty($allTeamIds)) {
                 return response()->json(['data' => []]);
             }
 
+            // 2. 获取队伍及其成员
             $teams = Team::whereIn('c_id', $allTeamIds)
                         ->with(['users:c_username,c_name'])
                         ->get();
+
+            // 3. 查询该演练下的所有禁赛记录 (新表)
+            $bannedUserIds = DB::table('c_ad_user_bans')
+                ->where('c_ad_config_id', $adConfig->c_id)
+                ->pluck('c_user_id')
+                ->toArray();
+
+            // 4. ★★★ 显式注入新字段 ★★★
+            foreach ($teams as $team) {
+                foreach ($team->users as $user) {
+                    // 检查用户是否在禁赛名单中
+                    $isBanned = in_array($user->c_username, $bannedUserIds);
+
+                    // 直接挂载一个新属性，避开 pivot 的干扰
+                    $user->current_drill_banned = $isBanned;
+                }
+            }
 
             return response()->json(['data' => $teams]);
 
@@ -354,25 +390,12 @@ class AdConfigController extends Controller
         }
     }
 
-    // =========================================================================
-    // ★★★★★★★★★★★★★★★★★ 新增的功能代码 ★★★★★★★★★★★★★★★★★
-    // =========================================================================
-
-    /**
-     * 动态更新一个正在运行的攻防演练的拓扑。
-     *
-     * @param Request $request
-     * @param AdConfig $adConfig (通过路由模型绑定注入)
-     * @return JsonResponse
-     */
     public function updateTopology(Request $request, AdConfig $adConfig): JsonResponse
     {
-        // 步骤 A: 检查演练状态
         if ($adConfig->c_status !== 'running' || !$adConfig->c_scene_instance_id) {
             return response()->json(['message' => '只有正在运行的演练才能更新拓扑。'], 400);
         }
 
-        // 步骤 B: 验证前端发来的新拓扑数据
         try {
             $validated = Validator::make($request->all(), [
                 'topology' => 'required|array',
@@ -383,18 +406,15 @@ class AdConfigController extends Controller
             return response()->json(['message' => '数据验证失败', 'errors' => $e->errors()], 422);
         }
 
-        // 步骤 C: 找到关联的场景实例
         $sceneInstance = SceneInstance::find($adConfig->c_scene_instance_id);
         if (!$sceneInstance) {
             return response()->json(['message' => '找不到关联的场景实例，无法应用变更。'], 404);
         }
 
         try {
-            // 步骤 D: (核心) 创建 InstanceController 实例并调用其公共方法
             $instanceController = app(InstanceController::class);
             $applyResult = $instanceController->applyTopologyDiff($sceneInstance, $validated['topology']);
 
-            // 步骤 E: 更新场景实例自己的拓扑配置快照，以反映最新状态
             $sceneInstance->c_scene_config = $validated['topology'];
             $sceneInstance->save();
 

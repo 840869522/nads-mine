@@ -107,13 +107,15 @@ const AdManagementPage: React.FC = () => {
         setIsClient(true);
     }, []);
 
-    // ★★★ 权限配置区域 ★★★
+    // ★★★ 1. 权限检查逻辑 (扩展版) ★★★
+
     const currentUsername = (user as any)?.user?.c_username || (user as any)?.c_username;
     const currentName = (user as any)?.user?.c_name || (user as any)?.c_name;
     const isAdminUser = currentUsername === 'admin';
+
     const rawUserPermissions = (user as any)?.user?.permission || (user as any)?.permission || [];
 
-    // 通用权限检查函数
+    // 辅助函数：检查是否有某个特定权限
     const checkPermission = (permKey: string) => {
         return isClient && (
             isAdminUser ||
@@ -136,8 +138,6 @@ const AdManagementPage: React.FC = () => {
     const canViewDetails   = checkPermission('ad:instance:view');  // 查看详情
 
     // ★★★ 新增：定义是否有权访问运行中的管理工具栏 ★★★
-    // 只要拥有其中任何一个权限，或者是管理员/裁判，就可以看到这块区域
-    // (区域内部具体的按钮还会再次检查各自的权限)
     const canAccessRunningTools = isAdminUser || canManageMembers || canAssignNodes || canViewFlags || canStopDrill;
 
 
@@ -162,6 +162,7 @@ const AdManagementPage: React.FC = () => {
     const [sceneConfigsForForm, setSceneConfigsForForm] = useState<SceneConfigForAd[]>([]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // 修改：message 类型现在更明确地包含对象结构
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; message: string | { [key: string]: string[] } } | null>(null);
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -290,6 +291,7 @@ const AdManagementPage: React.FC = () => {
 
     const handleCloseForm = () => { setIsFormOpen(false); setEditingAdConfig(null); setSelectedReferees([]); };
 
+    // ★★★ 核心修改：更新后的表单提交逻辑 ★★★
     const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -311,19 +313,33 @@ const AdManagementPage: React.FC = () => {
         try {
             const url = editingAdConfig ? `${API_BASE_URL}/ad-configs/${editingAdConfig.c_id}` : `${API_BASE_URL}/ad-configs`;
             const method = editingAdConfig ? 'PUT' : 'POST';
-            const response = await customFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adConfigData) });
+
+            const response = await customFetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json' // ★ 确保后端返回 JSON 错误
+                },
+                body: JSON.stringify(adConfigData)
+            });
+
             const result = await response.json();
+
             if (!response.ok) {
-                if (response.status === 422 && result.errors) throw new Error(JSON.stringify(result.errors));
+                // ★ 优先处理验证错误 422
+                if (response.status === 422 && result.errors) {
+                    setStatusMessage({ type: 'error', message: result.errors });
+                    return; // 终止执行，保留在表单页面
+                }
                 throw new Error(result.message || '操作失败');
             }
+
             setStatusMessage({ type: 'success', message: result.message || '操作成功！' });
             handleCloseForm();
             await fetchData();
         } catch (error) {
-            let errorMessage: string | { [key: string]: string[] } = (error as Error).message;
-            try { errorMessage = JSON.parse(errorMessage); } catch (e) { /* is string */ }
-            setStatusMessage({ type: 'error', message: errorMessage });
+            // 处理普通字符串错误
+            setStatusMessage({ type: 'error', message: (error as Error).message });
         } finally {
             setIsSubmitting(false);
         }
@@ -385,7 +401,18 @@ const AdManagementPage: React.FC = () => {
         }
     };
 
-    const renderErrorMessage = (message: string | { [key: string]: string[] }) => { if (typeof message === 'string') return message; return <ul style={{ paddingLeft: '20px', margin: 0 }}>{Object.values(message).flat().map((msg, index) => <li key={index}>{msg}</li>)}</ul>; };
+    // ★★★ 核心修改：改进错误渲染函数，支持对象格式 ★★★
+    const renderErrorMessage = (message: string | { [key: string]: string[] }) => {
+        if (typeof message === 'string') return message;
+        return (
+            <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                {Object.values(message).flat().map((msg, index) => (
+                    <li key={index}>{msg}</li>
+                ))}
+            </ul>
+        );
+    };
+
     const renderStatusChip = (status: AdConfig['c_status']) => { const statusMap = { pending: { label: '未开始', color: 'default' as const }, running: { label: '进行中', color: 'success' as const }, finished: { label: '已结束', color: 'primary' as const }, archived: { label: '已归档', color: 'warning' as const }, failed: { label: '失败', color: 'error' as const }, creating: { label: '创建中...', color: 'info' as const }, }; const { label, color } = statusMap[status] || statusMap.pending; return <Chip label={label} color={color} size="small" />; };
     const mapTypeToString = (type: number | null) => { switch (type) { case 1: return '无人机类型'; case 2: return '科幻类型'; default: return '默认'; } };
     const mapShowAttackToString = (show: number | null) => { switch (show) { case 1: return <Chip label="是" color="success" size="small" />; case 0: return <Chip label="否" color="default" size="small" />; default: return <Chip label="未设置" color="default" size="small" />; } };
@@ -438,7 +465,7 @@ const AdManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading ? ( <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell></TableRow> )
-                                : adConfigs.map((adConfig) => {
+                                : adConfigs.map((adConfig, index) => {
                                     const isReferee = (adConfig.referees || []).some(ref => {
                                         if (ref.c_user_id === currentUsername) return true;
                                         if (currentName && ref.c_user_id === currentName) return true;
@@ -447,10 +474,10 @@ const AdManagementPage: React.FC = () => {
                                     });
 
                                     return (
-                                        <TableRow hover key={adConfig.c_id}>
+                                        <TableRow hover key={`${adConfig.c_id}-${index}`}>
                                             <TableCell>{adConfig.c_drill_name}</TableCell>
                                             <TableCell align="center">{renderStatusChip(adConfig.c_status)}</TableCell>
-                                            <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={referee.c_user_id} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
+                                            <TableCell><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{(adConfig.referees || []).map((referee, rIndex ) => { const refereeName = referee.user?.c_name || referee.user?.c_username || '未知用户'; return <Chip key={`${referee.c_user_id}-${rIndex}`} label={`${refereeName} (${referee.c_level})`} size="small" />; })}</Stack></TableCell>
                                             <TableCell>{adConfig.sceneConfig?.c_name || '未关联'}</TableCell>
                                             <TableCell>{mapTypeToString(adConfig.c_type)}</TableCell>
                                             <TableCell>{mapShowAttackToString(adConfig.c_show_attack)}</TableCell>
@@ -461,7 +488,6 @@ const AdManagementPage: React.FC = () => {
                                             </TableCell>
                                             <TableCell sx={{fontWeight: 'bold'}}><IconButton color="primary" onClick={() => handleOpenView(adConfig)}><ScreenShareIcon /></IconButton></TableCell>
                                             <TableCell align="right">
-                                                {/* ★ 启动演练按钮：加上了 canStartDrill 权限检查 */}
                                                 {['pending', 'finished', 'archived', 'failed'].includes(adConfig.c_status) && canStartDrill && (
                                                     <Tooltip title="开始/重新开始演练">
                                                     <span>
@@ -472,7 +498,6 @@ const AdManagementPage: React.FC = () => {
                                                     </Tooltip>
                                                 )}
 
-                                                {/* ★★★ 核心修正点：使用 canAccessRunningTools 来决定是否显示这一组管理按钮 ★★★ */}
                                                 {adConfig.c_status === 'running' && canAccessRunningTools && (
                                                     <>
                                                         {canManageMembers && (
@@ -548,14 +573,19 @@ const AdManagementPage: React.FC = () => {
             </Paper>
 
             <Dialog key={editingAdConfig?.c_id || 'new-ad-config-form'} open={isFormOpen} onClose={handleCloseForm} fullWidth maxWidth="md">
-                {/* ... Dialog Content (保持不变) ... */}
                 <form onSubmit={handleFormSubmit}>
                     <DialogTitle>{editingAdConfig ? '编辑演练配置' : '创建新演练'}</DialogTitle>
                     <DialogContent>
                         {isFormLoading ? ( <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box> )
                             : (
                                 <>
-                                    {statusMessage && statusMessage.type === 'error' && <Alert severity="error" sx={{ mb: 2 }}>{renderErrorMessage(statusMessage.message)}</Alert>}
+                                    {/* ★★★ 3. 确保 Alert 组件能显示 statusMessage 中的内容 ★★★ */}
+                                    {statusMessage && statusMessage.type === 'error' && (
+                                        <Alert severity="error" sx={{ mb: 2 }}>
+                                            {renderErrorMessage(statusMessage.message)}
+                                        </Alert>
+                                    )}
+
                                     <TextField autoFocus margin="dense" name="c_drill_name" label="演练名称" type="text" fullWidth required defaultValue={editingAdConfig?.c_drill_name || ''} />
                                     <TextField margin="dense" name="c_description" label="演练描述 (可选)" type="text" fullWidth multiline rows={3} defaultValue={editingAdConfig?.c_description || ''} />
                                     <TextField select fullWidth margin="dense" label="场景模板" name="c_scene_config_id" defaultValue={editingAdConfig?.c_scene_config_id || ''}>
@@ -605,7 +635,6 @@ const AdManagementPage: React.FC = () => {
                 </form>
             </Dialog>
 
-            {/* ... 其他 Dialogs ... */}
             <Dialog open={isProgressModalOpen} aria-labelledby="progress-dialog-title">
                 <DialogTitle id="progress-dialog-title">演练启动中</DialogTitle>
                 <DialogContent sx={{ minWidth: 400, p: 3 }}>
@@ -644,7 +673,7 @@ const AdManagementPage: React.FC = () => {
                 />
             )}
 
-            {isAssignmentDialogOpen && selectedAdForAssignment && ( <NodeTeamAssignmentDialog open={isAssignmentDialogOpen} onClose={() => setIsAssignmentDialogOpen(false)} instanceId={selectedAdForAssignment.c_scene_instance_id!} drillName={selectedAdForAssignment.c_drill_name} /> )}
+            {isAssignmentDialogOpen && selectedAdForAssignment && ( <NodeTeamAssignmentDialog open={isAssignmentDialogOpen} onClose={() => setIsAssignmentDialogOpen(false)} instanceId={selectedAdForAssignment.c_scene_instance_id!} drillName={selectedAdForAssignment.c_drill_name} referees={selectedAdForAssignment.referees || []} /> )}
             {isMemberDialogOpen && selectedAdForMembers && ( <MemberManagementDialog open={isMemberDialogOpen} onClose={() => setIsMemberDialogOpen(false)} adConfigId={selectedAdForMembers.c_id} drillName={selectedAdForMembers.c_drill_name} /> )}
         </Box>
     );

@@ -1,5 +1,3 @@
-// 文件路径: app/ad/MemberManagementDialog.tsx
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -7,7 +5,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     CircularProgress, Alert, Table, TableBody, TableCell, TableHead,
     TableRow, Chip, IconButton, Tooltip, Box, Typography,
-    Accordion, AccordionSummary, AccordionDetails // ★ 修正拼写错误
+    Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BlockIcon from '@mui/icons-material/Block';
@@ -18,8 +16,11 @@ import { customFetch } from "@/utils/fetch";
 interface Member {
     c_username: string;
     c_name: string | null;
-    pivot: {
-        is_banned: boolean;
+    // ★ 新增字段定义
+    current_drill_banned?: boolean;
+    // 保留 pivot 以防万一，但不再主要依赖它
+    pivot?: {
+        is_banned?: boolean;
     };
 }
 
@@ -75,7 +76,13 @@ const MemberManagementDialog: React.FC<MemberManagementDialogProps> = ({
         try {
             setError(null);
             const response = await customFetch(`${API_BASE_URL}/ad/team/${teamId}/users/${username}/toggle-ban`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ad_config_id: adConfigId
+                })
             });
 
             if (!response.ok) {
@@ -118,25 +125,30 @@ const MemberManagementDialog: React.FC<MemberManagementDialogProps> = ({
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {team.users.map(user => (
-                                            <TableRow hover key={user.c_username}>
-                                                <TableCell>{user.c_name ? `${user.c_name} (${user.c_username})` : user.c_username}</TableCell>
-                                                <TableCell align="center">
-                                                    <Chip
-                                                        label={user.pivot.is_banned ? '已禁赛' : '正常'}
-                                                        color={user.pivot.is_banned ? 'error' : 'success'}
-                                                        size="small"
-                                                    />
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Tooltip title={user.pivot.is_banned ? '解除禁赛' : '标记作弊并禁赛'}>
-                                                        <IconButton onClick={() => handleToggleBan(team.c_id, user.c_username)}>
-                                                            {user.pivot.is_banned ? <CheckCircleOutlineIcon color="success" /> : <BlockIcon color="error" />}
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {team.users.map(user => {
+                                            // ★★★ 核心修改：读取新字段 ★★★
+                                            // 优先使用 current_drill_banned，如果没有则回退到 pivot（虽然 pivot 可能是旧的）
+                                            const isBanned = user.current_drill_banned === true;
+
+                                            return (
+                                                <TableRow hover key={user.c_username}>
+                                                    <TableCell>{user.c_name ? `${user.c_name} (${user.c_username})` : user.c_username}</TableCell>
+                                                    <TableCell align="center">
+                                                        <Chip
+                                                            label={isBanned ? '已禁赛' : '正常'}
+                                                            color={isBanned ? 'error' : 'success'}
+                                                            size="small"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        <Tooltip title={isBanned ? '解除禁赛' : '标记作弊并禁赛'}>
+                                                            <IconButton onClick={() => handleToggleBan(team.c_id, user.c_username)}>
+                                                                {isBanned ? <CheckCircleOutlineIcon color="success" /> : <BlockIcon color="error" />}
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )})}
                                     </TableBody>
                                 </Table>
                             </AccordionDetails>
