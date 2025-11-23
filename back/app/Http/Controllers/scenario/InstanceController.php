@@ -24,6 +24,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use App\Models\ad\Team;
 use App\Models\ad\AdConfig;
+use App\Models\ad\TeamUsers;
+use App\Models\ad\Referee;
 
 class InstanceController extends Controller
 {
@@ -977,7 +979,7 @@ class InstanceController extends Controller
         {
             try {
                 // --- 步骤 1: 获取系统中所有的队伍（用于下拉菜单） ---
-                $allTeams = Team::all(['c_id', 'c_name']);
+                $allTeams = Team::with('users:c_username,c_name')->get(['c_id', 'c_name']);
 
                 // --- 步骤 2: 从节点实例表中直接获取所有唯一的 team_id ---
                 $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $instance->c_scene_instances_id)
@@ -1084,52 +1086,104 @@ class InstanceController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     public function updateNodeAssignments(Request $request, SceneInstance $instance): JsonResponse
-    {
-        // 1. 验证输入数据
-        $validator = Validator::make($request->all(), [
-            'assignments'          => 'required|array',
-            'assignments.*.type'   => 'required|string|in:container,vm',
-            'assignments.*.id'     => 'required', // ID 可以是字符串或整数
-            'assignments.*.team_id'=> ['nullable', 'integer', 'exists:' . (new Team)->getTable() . ',c_id'],
-        ]);
+        {
+            // 1. 基础格式验证
+            $validator = Validator::make($request->all(), [
+                'assignments'          => 'required|array',
+                'assignments.*.type'   => 'required|string|in:container,vm',
+                'assignments.*.id'     => 'required',
+                'assignments.*.team_id'=> ['nullable', 'integer', 'exists:' . (new Team)->getTable() . ',c_id'],
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json(['message' => '数据验证失败', 'errors' => $validator->errors()], 422);
-        }
-
-        $assignments = $request->input('assignments');
-
-        // 2. 使用数据库事务执行更新
-        DB::beginTransaction();
-        try {
-            foreach ($assignments as $assignment) {
-                $type   = $assignment['type'];
-                $id     = $assignment['id'];
-                $teamId = $assignment['team_id']; // 可以是 null
-
-                if ($type === 'container') {
-                    // 更新容器表，并确保该容器属于当前实例
-                    SceneContainerInstance::where('c_container_id', $id)
-                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
-                        ->update(['c_team_id' => $teamId]);
-                } elseif ($type === 'vm') {
-                    // 更新虚拟机表，并确保该虚拟机属于当前实例
-                    SceneVmInstance::where('c_vm_id', $id)
-                        ->where('c_scene_instances_id', $instance->c_scene_instances_id)
-                        ->update(['c_team_id' => $teamId]);
-                }
+            if ($validator->fails()) {
+                return response()->json(['message' => '数据验证失败', 'errors' => $validator->errors()], 422);
             }
 
-            DB::commit();
+            $assignments = $request->input('assignments');
 
-            return response()->json(['status' => 'success', 'message' => '节点队伍分配已成功更新。']);
+            // ★★★ START: 业务冲突校验逻辑 ★★★
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("更新节点队伍分配失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage());
-            return response()->json(['message' => '更新分配时发生服务器错误。'], 500);
+            // 提取所有被选中的有效 team_id (过滤掉 null)
+            $selectedTeamIds = collect($assignments)
+                ->pluck('team_id')
+                ->filter()
+                ->map(fn($id) => (int)$id)
+                ->values();
+
+            if ($selectedTeamIds->isNotEmpty()) {
+
+                // 【校验 1】: 队伍不能重复 (不同节点不能分配给同一队伍)
+                if ($selectedTeamIds->unique()->count() !== $selectedTeamIds->count()) {
+                    return response()->json([
+                        'message' => '校验失败：存在多个节点分配给了同一个队伍。请确保每个节点对应不同的对抗队伍。'
+                    ], 422);
+                }
+
+                // 【校验 2】: 成员冲突 (同一个用户不能同时在红蓝两队)
+                $conflictCheck = TeamUsers::verifyConflict($selectedTeamIds->toArray());
+                if ($conflictCheck['has_conflict']) {
+                    $names = implode(', ', $conflictCheck['conflicting_members']);
+                    return response()->json([
+                        'message' => "校验失败：用户 [{$names}] 同时存在于两支对战队伍中，无法进行对抗。"
+                    ], 422);
+                }
+
+                // 【校验 3】: 裁判冲突 (队员不能是裁判)
+                // 先反查演练配置
+                $adConfig = AdConfig::where('c_scene_instance_id', $instance->c_scene_instances_id)->first();
+
+                if ($adConfig) {
+                    // 获取该演练的所有裁判
+                    $refereeIds = Referee::where('c_ad_config_id', $adConfig->c_id)
+                        ->pluck('c_user_id')
+                        ->toArray();
+
+                    if (!empty($refereeIds)) {
+                        // 获取所有参赛选手的ID
+                        $playerIds = TeamUsers::get_teams_users($selectedTeamIds->toArray());
+
+                        // 取交集
+                        $conflictReferees = array_intersect($refereeIds, $playerIds);
+
+                        if (!empty($conflictReferees)) {
+                            $names = implode(', ', $conflictReferees);
+                            return response()->json([
+                                'message' => "校验失败：用户 [{$names}] 既是本场演练的裁判，又是参赛选手。"
+                            ], 422);
+                        }
+                    }
+                }
+            }
+            // ★★★ END: 业务冲突校验逻辑 ★★★
+
+            // 2. 执行数据库更新 (原有逻辑)
+            DB::beginTransaction();
+            try {
+                foreach ($assignments as $assignment) {
+                    $type   = $assignment['type'];
+                    $id     = $assignment['id'];
+                    $teamId = $assignment['team_id'];
+
+                    if ($type === 'container') {
+                        SceneContainerInstance::where('c_container_id', $id)
+                            ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                            ->update(['c_team_id' => $teamId]);
+                    } elseif ($type === 'vm') {
+                        SceneVmInstance::where('c_vm_id', $id)
+                            ->where('c_scene_instances_id', $instance->c_scene_instances_id)
+                            ->update(['c_team_id' => $teamId]);
+                    }
+                }
+
+                DB::commit();
+                return response()->json(['status' => 'success', 'message' => '节点队伍分配已成功更新。']);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("更新节点队伍分配失败 (Instance ID: {$instance->c_scene_instances_id}): " . $e->getMessage());
+                return response()->json(['message' => '更新分配时发生服务器错误。'], 500);
+            }
         }
-    }
 
     /**
      * 加载 vmImageOverrides.json 内容

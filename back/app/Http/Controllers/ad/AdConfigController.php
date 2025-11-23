@@ -32,127 +32,128 @@ class AdConfigController extends Controller
     }
 
     public function index(Request $request)
-        {
-            $perPage = $request->query('per_page', 10);
-            $search = $request->query('search');
+    {
+        $perPage = $request->query('per_page', 10);
+        $search = $request->query('search');
 
-            $currentUser = null;
-            $userPermissions = [];
+        $currentUser = null;
+        $userPermissions = [];
 
-            try {
-                $authHeader = $request->header("Authorization");
-                if ($authHeader) {
-                    $jwtResult = JWTControll::decodeJWT($authHeader);
-                    if ($jwtResult["err"] === null) {
-                        $currentUser = $jwtResult["data"];
-                        // 解析权限列表
-                        if (isset($currentUser['permission'])) {
-                            $cachedData = Cache::get($currentUser['permission']);
-                            if ($cachedData) {
-                                $userPermissions = array_map(function($item) {
-                                    if (is_object($item)) return (string)$item->c_id;
-                                    if (is_array($item)) return (string)($item['c_id'] ?? '');
-                                    return is_string($item) ? $item : '';
-                                }, $cachedData);
-                            }
+        try {
+            $authHeader = $request->header("Authorization");
+            if ($authHeader) {
+                $jwtResult = JWTControll::decodeJWT($authHeader);
+                if ($jwtResult["err"] === null) {
+                    $currentUser = $jwtResult["data"];
+                    // 解析权限列表
+                    if (isset($currentUser['permission'])) {
+                        $cachedData = Cache::get($currentUser['permission']);
+                        if ($cachedData) {
+                            $userPermissions = array_map(function($item) {
+                                if (is_object($item)) return (string)$item->c_id;
+                                if (is_array($item)) return (string)($item['c_id'] ?? '');
+                                return is_string($item) ? $item : '';
+                            }, $cachedData);
                         }
                     }
                 }
-            } catch (Exception $e) {
-                Log::warning('JWT Error: ' . $e->getMessage());
             }
+        } catch (Exception $e) {
+            Log::warning('JWT Error: ' . $e->getMessage());
+        }
 
-            $query = AdConfig::query()->with([
-                'sceneConfig:c_config_id,c_name',
-                'referees.user:c_username,c_name',
-            ]);
+        $query = AdConfig::query()->with([
+            'sceneConfig:c_config_id,c_name',
+            'referees.user:c_username,c_name',
+        ]);
 
-            // ============================================================
-            // ★★★ 核心逻辑：基于“关键业务权限”的鉴权 ★★★
-            // ============================================================
+        // ============================================================
+        // ★★★ 核心逻辑：基于“关键业务权限”的鉴权 ★★★
+        // ============================================================
 
-            $canViewAll = false;
-            $currentUsername = $currentUser['id'] ?? null;
+        $canViewAll = false;
+        $currentUsername = $currentUser['id'] ?? null;
 
-            // 1. Admin 永远放行
-            if ($currentUsername === 'admin') {
-                $canViewAll = true;
-            }
+        // 1. Admin 永远放行
+        if ($currentUsername === 'admin') {
+            $canViewAll = true;
+        }
 
-            // 2. 检查“工作人员”特有权限
-            // 只要拥有下列任意一个高级权限，就视为工作人员，允许查看全局数据
-            $staffPermissions = [
-                'ad_start',
-                'ad_stop',
-                'ad:node:assign',
-            ];
+        // 2. 检查“工作人员”特有权限
+        // 只要拥有下列任意一个高级权限，就视为工作人员，允许查看全局数据
+        $staffPermissions = [
+            'ad_start',
+            'ad_stop',
+            'ad:node:assign',
+        ];
 
-            // 取交集：如果交集不为空，说明拥有“上帝视角”的资格
-            if (!empty(array_intersect($staffPermissions, $userPermissions))) {
-                $canViewAll = true;
-            }
+        // 取交集：如果交集不为空，说明拥有“上帝视角”的资格
+        if (!empty(array_intersect($staffPermissions, $userPermissions))) {
+            $canViewAll = true;
+        }
 
-            // ============================================================
-            // 数据过滤 (针对学生、普通裁判等无高级权限用户)
-            // ============================================================
-            if (!$canViewAll) {
-                if ($currentUsername) {
+        // ============================================================
+        // 数据过滤 (针对学生、普通裁判等无高级权限用户)
+        // ============================================================
+        if (!$canViewAll) {
+            if ($currentUsername) {
 
-                    // A. 裁判数据 (裁判只能看自己判决的)
-                    $refereeAdConfigIds = DB::table('c_referees')
-                        ->where('c_user_id', $currentUsername)
-                        ->pluck('c_ad_config_id');
+                // A. 裁判数据 (裁判只能看自己判决的)
+                $refereeAdConfigIds = DB::table('c_referees')
+                    ->where('c_user_id', $currentUsername)
+                    ->pluck('c_ad_config_id');
 
-                    // B. 队员数据 (学生只能看自己参加的)
-                    $participantAdConfigIds = collect([]);
-                    $teamIds = DB::table('c_teams_users')
-                        ->where('user_id', $currentUsername)
-                        ->pluck('team_id');
+                // B. 队员数据 (学生只能看自己参加的)
+                $participantAdConfigIds = collect([]);
+                $teamIds = DB::table('c_teams_users')
+                    ->where('user_id', $currentUsername)
+                    ->pluck('team_id');
 
-                    if ($teamIds->isNotEmpty()) {
-                        // 查找关联实例 (兼容大小写和空格)
-                        $sceneInstanceIds = DB::table('c_scene_container_instances')
-                            ->whereIn('c_team_id', $teamIds)
-                            ->pluck('c_scene_instances_id')
-                            ->merge(
-                                DB::table('c_scene_vm_instances')
-                                    ->whereIn('c_team_id', $teamIds)
-                                    ->pluck('c_scene_instances_id')
-                            )
-                            ->unique()
-                            ->map(fn($id) => strtolower(trim((string)$id)))
-                            ->values();
+                if ($teamIds->isNotEmpty()) {
+                    // 查找关联实例 (兼容大小写和空格)
+                    $sceneInstanceIds = DB::table('c_scene_container_instances')
+                        ->whereIn('c_team_id', $teamIds)
+                        ->pluck('c_scene_instances_id')
+                        ->merge(
+                            DB::table('c_scene_vm_instances')
+                                ->whereIn('c_team_id', $teamIds)
+                                ->pluck('c_scene_instances_id')
+                        )
+                        ->unique()
+                        ->map(fn($id) => strtolower(trim((string)$id)))
+                        ->values();
 
-                        if ($sceneInstanceIds->isNotEmpty()) {
-                            $participantAdConfigIds = DB::table('c_ad_configs')
-                                ->whereIn(DB::raw('LOWER(c_scene_instance_id)'), $sceneInstanceIds->toArray())
-                                ->pluck('c_id');
-                        }
+                    if ($sceneInstanceIds->isNotEmpty()) {
+                        $participantAdConfigIds = DB::table('c_ad_configs')
+                            ->whereIn(DB::raw('LOWER(c_scene_instance_id)'), $sceneInstanceIds->toArray())
+                            ->pluck('c_id');
                     }
+                }
 
-                    $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
+                $allVisibleAdConfigIds = $participantAdConfigIds->merge($refereeAdConfigIds)->unique();
 
-                    if ($allVisibleAdConfigIds->isNotEmpty()) {
-                        $query->whereIn('c_id', $allVisibleAdConfigIds);
-                    } else {
-                        $query->whereRaw('1 = 0');
-                    }
+                if ($allVisibleAdConfigIds->isNotEmpty()) {
+                    $query->whereIn('c_id', $allVisibleAdConfigIds);
                 } else {
                     $query->whereRaw('1 = 0');
                 }
+            } else {
+                $query->whereRaw('1 = 0');
             }
-
-            if ($search) {
-                $query->where('c_drill_name', 'like', '%' . $search . '%');
-            }
-
-            $adConfigs = $query->latest('c_create_at')->paginate($perPage);
-
-            return AdConfigResource::collection($adConfigs);
         }
+
+        if ($search) {
+            $query->where('c_drill_name', 'like', '%' . $search . '%');
+        }
+
+        $adConfigs = $query->latest('c_create_at')->paginate($perPage);
+
+        return AdConfigResource::collection($adConfigs);
+    }
 
     public function store(Request $request)
     {
+        // ★★★ 修改验证规则：添加 unique 唯一性校验 ★★★
         $validated = $request->validate([
             'c_drill_name'      => 'required|string|max:255|unique:c_ad_configs,c_drill_name',
             'c_description'     => 'nullable|string',
@@ -165,7 +166,8 @@ class AdConfigController extends Controller
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
         ], [
-            'c_drill_name.unique' => '该演练名称已被使用。',
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_drill_name.unique' => '该演练名称已被使用，请更换一个名称。',
             'referees.*.c_user_id.exists' => '提供的一个或多个裁判用户不存在。',
         ]);
 
@@ -212,8 +214,14 @@ class AdConfigController extends Controller
 
     public function update(Request $request, AdConfig $adConfig)
     {
+        // ★★★ 修改验证规则：更新时排除自身的唯一性校验 ★★★
         $validated = $request->validate([
-            'c_drill_name'      => ['required', 'string', 'max:255', Rule::unique('c_ad_configs')->ignore($adConfig->c_id, 'c_id')],
+            'c_drill_name'      => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('c_ad_configs', 'c_drill_name')->ignore($adConfig->c_id, 'c_id')
+            ],
             'c_description'     => 'nullable|string',
             'c_scene_config_id' => 'nullable|integer|exists:c_scene_configs,c_config_id',
             'c_start_time'      => 'nullable|date',
@@ -223,6 +231,9 @@ class AdConfigController extends Controller
             'referees'          => 'present|array',
             'referees.*.c_user_id' => 'required|string|exists:c_users,c_username',
             'referees.*.c_level'   => ['required', 'string', Rule::in(['主裁判', '普通裁判', '技术专家'])],
+        ], [
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_drill_name.unique' => '该演练名称已被使用，请更换一个名称。',
         ]);
 
         DB::transaction(function () use ($adConfig, $validated) {
@@ -332,52 +343,53 @@ class AdConfigController extends Controller
     }
 
     public function getTeamsWithMembers(AdConfig $adConfig): JsonResponse
-        {
-            try {
-                if (!$adConfig->c_scene_instance_id) {
-                    return response()->json(['data' => []]);
-                }
-
-                // 1. 找出所有参与的队伍 ID
-                $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                    ->distinct()->pluck('c_team_id');
-                $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
-                    ->distinct()->pluck('c_team_id');
-                $allTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values()->all();
-
-                if (empty($allTeamIds)) {
-                    return response()->json(['data' => []]);
-                }
-
-                // 2. 获取队伍及其成员
-                $teams = Team::whereIn('c_id', $allTeamIds)
-                            ->with(['users:c_username,c_name'])
-                            ->get();
-
-                // 3. 查询该演练下的所有禁赛记录 (新表)
-                $bannedUserIds = DB::table('c_ad_user_bans')
-                    ->where('c_ad_config_id', $adConfig->c_id)
-                    ->pluck('c_user_id')
-                    ->toArray();
-
-                // 4. ★★★ 显式注入新字段 ★★★
-                foreach ($teams as $team) {
-                    foreach ($team->users as $user) {
-                        // 检查用户是否在禁赛名单中
-                        $isBanned = in_array($user->c_username, $bannedUserIds);
-
-                        // 直接挂载一个新属性，避开 pivot 的干扰
-                        $user->current_drill_banned = $isBanned;
-                    }
-                }
-
-                return response()->json(['data' => $teams]);
-
-            } catch (Exception $e) {
-                Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-                return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
+    {
+        try {
+            if (!$adConfig->c_scene_instance_id) {
+                return response()->json(['data' => []]);
             }
+
+            // 1. 找出所有参与的队伍 ID
+            $containerTeamIds = SceneContainerInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                ->distinct()->pluck('c_team_id');
+            $vmTeamIds = SceneVmInstance::where('c_scene_instances_id', $adConfig->c_scene_instance_id)
+                ->distinct()->pluck('c_team_id');
+            $allTeamIds = $containerTeamIds->merge($vmTeamIds)->unique()->filter()->values()->all();
+
+            if (empty($allTeamIds)) {
+                return response()->json(['data' => []]);
+            }
+
+            // 2. 获取队伍及其成员
+            $teams = Team::whereIn('c_id', $allTeamIds)
+                        ->with(['users:c_username,c_name'])
+                        ->get();
+
+            // 3. 查询该演练下的所有禁赛记录 (新表)
+            $bannedUserIds = DB::table('c_ad_user_bans')
+                ->where('c_ad_config_id', $adConfig->c_id)
+                ->pluck('c_user_id')
+                ->toArray();
+
+            // 4. ★★★ 显式注入新字段 ★★★
+            foreach ($teams as $team) {
+                foreach ($team->users as $user) {
+                    // 检查用户是否在禁赛名单中
+                    $isBanned = in_array($user->c_username, $bannedUserIds);
+
+                    // 直接挂载一个新属性，避开 pivot 的干扰
+                    $user->current_drill_banned = $isBanned;
+                }
+            }
+
+            return response()->json(['data' => $teams]);
+
+        } catch (Exception $e) {
+            Log::error("获取演练成员列表失败 for ad_config_id: {$adConfig->c_id}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => '获取成员列表时发生服务器错误。'], 500);
         }
+    }
+
     public function updateTopology(Request $request, AdConfig $adConfig): JsonResponse
     {
         if ($adConfig->c_status !== 'running' || !$adConfig->c_scene_instance_id) {

@@ -15,32 +15,31 @@
 
     class UserController extends Controller{
         public function getAllUser(Request $req){
-            $reqData =  $req->json()->all();
-            try {
-                $page = $reqData["page"];
-                $pagesize = $reqData["pagesize"];
-            } catch (Exception $_) {
-                $page = 1;
-                $pagesize = 10;
+                // 使用 input 方法获取参数，如果不存在则使用默认值
+                // input() 既可以读取 GET 的 Query Param，也可以读取 POST 的 JSON Body
+                // page 为 -1 时，Model 层会返回所有数据
+                $page = (int)$req->input('page', 1);
+                $pagesize = (int)$req->input('pagesize', 10);
+
+                $modelRes = UserModel::getAllUser($page, $pagesize);
+
+                if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
+                    return response()->json([
+                        "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                        "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                        "data" =>[
+                            'data' =>$modelRes['data'],
+                            'count'=> $modelRes['count']
+                        ]
+                    ]);
+                else {
+                    return response()->json([
+                        "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                        "message" => GlobalResponse::$DATABASE_ERROR_MES,
+                        "data" => null
+                    ]);
+                }
             }
-            $modelRes = UserModel::getAllUser($page, $pagesize);
-            if ($modelRes['code'] == GlobalResponse::$DATABASE_SUCCESS_CODE)
-                return response()->json([
-                    "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
-                    "message" => GlobalResponse::HTTP_STATUS_OK_MES,
-                    "data" =>[
-                        'data' =>$modelRes['data'],
-                        'count'=> $modelRes['count']
-                    ]
-                ]);
-            else {
-                return response()->json([
-                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
-                    "message" => GlobalResponse::$DATABASE_ERROR_MES,
-                    "data" => null
-                ]);
-            }
-        }
 
         public function convert2Excel(Request $req) {
             $reqData = $req->json()->all();
@@ -177,9 +176,9 @@
                     }
                     /* if (!user) {
                         UserModel.createUser();
-                        return 
-                    } 
-                    
+                        return
+                    }
+
                     */
                     $user = $modelRes["data"];
                     if (!$user || $user->c_password != $pwd) {

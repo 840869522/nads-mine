@@ -34,12 +34,17 @@ class TeamController extends Controller
 
     public function store(Request $request)
     {
+        // ★★★ 修改验证规则：添加 unique 唯一性校验 ★★★
         $validatedData = $request->validate([
             'c_name'        => 'required|string|max:255|unique:c_teams,c_name',
             'c_description' => 'nullable|string|max:1000',
             'users'         => 'nullable|array',
             'users.*'       => 'string|exists:c_users,c_username',
+        ], [
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_name.unique' => '该队伍名称已存在，请使用其他名称。'
         ]);
+
         DB::beginTransaction();
         try {
             $team = Team::create([
@@ -66,12 +71,22 @@ class TeamController extends Controller
 
     public function update(Request $request, Team $team)
     {
+        // ★★★ 修改验证规则：更新时排除自身的唯一性校验 ★★★
         $validatedData = $request->validate([
-            'c_name' => ['required', 'string', 'max:255', Rule::unique('c_teams', 'c_name')->ignore($team->c_id, 'c_id'),],
+            'c_name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('c_teams', 'c_name')->ignore($team->c_id, 'c_id'),
+            ],
             'c_description' => 'nullable|string|max:1000',
             'users'         => 'nullable|array',
             'users.*'       => 'string|exists:c_users,c_username',
+        ], [
+            // ★★★ 添加自定义错误提示 ★★★
+            'c_name.unique' => '该队伍名称已存在，请使用其他名称。'
         ]);
+
         DB::beginTransaction();
         try {
             $team->update(['c_name' => $validatedData['c_name'], 'c_description' => $validatedData['c_description'] ?? null,]);
@@ -93,153 +108,143 @@ class TeamController extends Controller
     }
 
     public function toggleUserBanStatus(Team $team, UserModel $user, Request $request)
-        {
-            $validated = $request->validate([
-                // 优先使用 ad_config_id；如果缺省，可传 scene_instance_id 兜底
-                'ad_config_id'       => ['nullable', 'string', 'exists:c_ad_configs,c_id'],
-                'scene_instance_id'  => ['nullable', 'string', 'exists:c_ad_configs,c_scene_instance_id'],
-                'reason'             => ['nullable', 'string'],
-                'expires_at'         => ['nullable', 'date'],
-            ]);
+    {
+        $validated = $request->validate([
+            // 优先使用 ad_config_id；如果缺省，可传 scene_instance_id 兜底
+            'ad_config_id'       => ['nullable', 'string', 'exists:c_ad_configs,c_id'],
+            'scene_instance_id'  => ['nullable', 'string', 'exists:c_ad_configs,c_scene_instance_id'],
+            'reason'             => ['nullable', 'string'],
+            'expires_at'         => ['nullable', 'date'],
+        ]);
 
-            // Ensure the user belongs to the team
-            $isMember = DB::table('c_teams_users')
-                ->where('team_id', $team->c_id)
-                ->where('user_id', $user->c_username)
-                ->exists();
-            if (!$isMember) {
-                return response()->json(['message' => "用户 {$user->c_username} 不属于队伍 {$team->c_name}"], 404);
-            }
+        // Ensure the user belongs to the team
+        $isMember = DB::table('c_teams_users')
+            ->where('team_id', $team->c_id)
+            ->where('user_id', $user->c_username)
+            ->exists();
+        if (!$isMember) {
+            return response()->json(['message' => "用户 {$user->c_username} 不属于队伍 {$team->c_name}"], 404);
+        }
 
-            $adConfigId = $validated['ad_config_id'] ?? $request->input('adConfigId');
-            $sceneInstanceId = null;
+        $adConfigId = $validated['ad_config_id'] ?? $request->input('adConfigId');
+        $sceneInstanceId = null;
 
-            if (empty($adConfigId)) {
-                // 尝试用场景实例ID反查演练
-                $sceneInstanceIdInput = $validated['scene_instance_id'] ?? $request->input('scene_instance_id');
-                if ($sceneInstanceIdInput) {
-                    $adConfigId = DB::table('c_ad_configs')
-                        ->where('c_scene_instance_id', $sceneInstanceIdInput)
-                        ->value('c_id');
-                    $sceneInstanceId = $sceneInstanceIdInput;
+        if (empty($adConfigId)) {
+            // 尝试用场景实例ID反查演练
+            $sceneInstanceIdInput = $validated['scene_instance_id'] ?? $request->input('scene_instance_id');
+            if ($sceneInstanceIdInput) {
+                $adConfigId = DB::table('c_ad_configs')
+                    ->where('c_scene_instance_id', $sceneInstanceIdInput)
+                    ->value('c_id');
+                $sceneInstanceId = $sceneInstanceIdInput;
+            } else {
+                // ★★★ 核心修复：分步查询，避开 JOIN 字符集冲突 ★★★
+                $teamId = $team->c_id;
+
+                // 1. 先找出该队伍关联的所有场景实例ID (Container)
+                $conInstanceIds = DB::table('c_scene_container_instances')
+                    ->where('c_team_id', $teamId)
+                    ->pluck('c_scene_instances_id');
+
+                // 2. 找出该队伍关联的所有场景实例ID (VM)
+                $vmInstanceIds = DB::table('c_scene_vm_instances')
+                    ->where('c_team_id', $teamId)
+                    ->pluck('c_scene_instances_id');
+
+                // 3. 合并去重，并转为字符串数组
+                $allInstanceIds = $conInstanceIds->merge($vmInstanceIds)
+                    ->unique()
+                    ->map(fn($id) => (string)$id)
+                    ->values()
+                    ->toArray();
+
+                if (empty($allInstanceIds)) {
+                        // 这种情况通常不应该发生，除非队伍虽然参加了演练但还没分到节点
+                        // 这里不做强硬报错，而是留空让后面逻辑处理
+                        $candidateAdIds = collect([]);
                 } else {
-                    // ★★★ 核心修复：分步查询，避开 JOIN 字符集冲突 ★★★
-                    $teamId = $team->c_id;
+                    // 4. 根据实例ID反查演练配置
+                    $candidateAdIds = DB::table('c_ad_configs')
+                        ->whereIn('c_scene_instance_id', $allInstanceIds)
+                        ->pluck('c_id');
+                }
 
-                    // 1. 先找出该队伍关联的所有场景实例ID (Container)
-                    $conInstanceIds = DB::table('c_scene_container_instances')
-                        ->where('c_team_id', $teamId)
-                        ->pluck('c_scene_instances_id');
-
-                    // 2. 找出该队伍关联的所有场景实例ID (VM)
-                    $vmInstanceIds = DB::table('c_scene_vm_instances')
-                        ->where('c_team_id', $teamId)
-                        ->pluck('c_scene_instances_id');
-
-                    // 3. 合并去重，并转为字符串数组
-                    $allInstanceIds = $conInstanceIds->merge($vmInstanceIds)
-                        ->unique()
-                        ->map(fn($id) => (string)$id)
-                        ->values()
-                        ->toArray();
-
-                    if (empty($allInstanceIds)) {
-                         // 这种情况通常不应该发生，除非队伍虽然参加了演练但还没分到节点
-                         // 这里不做强硬报错，而是留空让后面逻辑处理
-                         $candidateAdIds = collect([]);
+                if ($candidateAdIds->count() === 1) {
+                    $adConfigId = $candidateAdIds->first();
+                    $sceneInstanceId = DB::table('c_ad_configs')->where('c_id', $adConfigId)->value('c_scene_instance_id');
+                } elseif ($candidateAdIds->count() > 1) {
+                    // 优先选择唯一运行中的演练
+                    $runningId = DB::table('c_ad_configs')
+                        ->whereIn('c_id', $candidateAdIds)
+                        ->where('c_status', 'running')
+                        ->orderByDesc('c_update_at')
+                        ->value('c_id');
+                    if ($runningId) {
+                        $adConfigId = $runningId;
                     } else {
-                        // 4. 根据实例ID反查演练配置
-                        $candidateAdIds = DB::table('c_ad_configs')
-                            ->whereIn('c_scene_instance_id', $allInstanceIds)
-                            ->pluck('c_id');
-                    }
-
-                    if ($candidateAdIds->count() === 1) {
-                        $adConfigId = $candidateAdIds->first();
-                        $sceneInstanceId = DB::table('c_ad_configs')->where('c_id', $adConfigId)->value('c_scene_instance_id');
-                    } elseif ($candidateAdIds->count() > 1) {
-                        // 优先选择唯一运行中的演练
-                        $runningId = DB::table('c_ad_configs')
+                        $adConfigId = DB::table('c_ad_configs')
                             ->whereIn('c_id', $candidateAdIds)
-                            ->where('c_status', 'running')
                             ->orderByDesc('c_update_at')
                             ->value('c_id');
-                        if ($runningId) {
-                            $adConfigId = $runningId;
-                        } else {
-                            $adConfigId = DB::table('c_ad_configs')
-                                ->whereIn('c_id', $candidateAdIds)
-                                ->orderByDesc('c_update_at')
-                                ->value('c_id');
-                        }
-                        if ($adConfigId) {
-                            $sceneInstanceId = DB::table('c_ad_configs')->where('c_id', $adConfigId)->value('c_scene_instance_id');
-                        }
+                    }
+                    if ($adConfigId) {
+                        $sceneInstanceId = DB::table('c_ad_configs')->where('c_id', $adConfigId)->value('c_scene_instance_id');
                     }
                 }
             }
+        }
 
-            if (empty($adConfigId)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => '无法定位该用户当前参与的演练，请确保演练已启动且队伍已分配节点。',
-                ], 422);
-            }
+        if (empty($adConfigId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => '无法定位该用户当前参与的演练，请确保演练已启动且队伍已分配节点。',
+            ], 422);
+        }
 
-            $adConfig = AdConfig::find($adConfigId);
-            if (!$adConfig) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "未找到演练配置：{$adConfigId}",
-                ], 404);
-            }
-            // 若未显式传 scene_instance_id，则取演练关联的实例
-            $sceneInstanceId = $sceneInstanceId ?: $adConfig->c_scene_instance_id;
+        $adConfig = AdConfig::find($adConfigId);
+        if (!$adConfig) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "未找到演练配置：{$adConfigId}",
+            ], 404);
+        }
+        // 若未显式传 scene_instance_id，则取演练关联的实例
+        $sceneInstanceId = $sceneInstanceId ?: $adConfig->c_scene_instance_id;
 
-            $ban = DB::table('c_ad_user_bans')
-                ->where('c_ad_config_id', $adConfigId)
-                ->where('c_user_id', $user->c_username)
-                ->first();
+        $ban = DB::table('c_ad_user_bans')
+            ->where('c_ad_config_id', $adConfigId)
+            ->where('c_user_id', $user->c_username)
+            ->first();
 
-            if ($ban) {
-                DB::table('c_ad_user_bans')->where('c_id', $ban->c_id)->delete();
-                return response()->json([
-                    'status' => 'success',
-                    'message' => "已解除禁赛用户 '{$user->c_username}'",
-                    'data' => ['is_banned' => false],
-                ]);
-            }
-
-            DB::table('c_ad_user_bans')->insert([
-                'c_id'                 => (string) Str::uuid(),
-                'c_ad_config_id'       => $adConfigId,
-                'c_scene_instances_id' => $sceneInstanceId,
-                'c_user_id'            => $user->c_username,
-                'c_reason'             => $validated['reason'] ?? null,
-                'c_expires_at'         => $validated['expires_at'] ?? null,
-                'c_create_at'          => now(),
-                'c_update_at'          => now(),
-            ]);
-
+        if ($ban) {
+            DB::table('c_ad_user_bans')->where('c_id', $ban->c_id)->delete();
             return response()->json([
                 'status' => 'success',
-                'message' => "已禁赛用户 '{$user->c_username}'",
-                'data' => ['is_banned' => true],
+                'message' => "已解除禁赛用户 '{$user->c_username}'",
+                'data' => ['is_banned' => false],
             ]);
         }
 
+        DB::table('c_ad_user_bans')->insert([
+            'c_id'                 => (string) Str::uuid(),
+            'c_ad_config_id'       => $adConfigId,
+            'c_scene_instances_id' => $sceneInstanceId,
+            'c_user_id'            => $user->c_username,
+            'c_reason'             => $validated['reason'] ?? null,
+            'c_expires_at'         => $validated['expires_at'] ?? null,
+            'c_create_at'          => now(),
+            'c_update_at'          => now(),
+        ]);
 
+        return response()->json([
+            'status' => 'success',
+            'message' => "已禁赛用户 '{$user->c_username}'",
+            'data' => ['is_banned' => true],
+        ]);
+    }
 
-    /**
-     * 获取指定队伍参与的所有演练。
-     *
-     * @param  Team  $team
-     * @return JsonResponse
-     */
     public function getDrills(Team $team): JsonResponse
     {
-        // === MODIFIED START: 重写演练查询逻辑 ===
-
         // 步骤 1 & 2: 查找队伍关联的所有场景实例ID
         // 从虚拟机实例表中查找
         $instanceIdsFromVms = DB::table('c_scene_vm_instances')
@@ -298,16 +303,8 @@ class TeamController extends Controller
             'status' => 'success',
             'data' => $drills,
         ]);
-        // === MODIFIED END ===
     }
 
-    /**
-     * ★★★ 新增：获取多个队伍的所有成员ID ★★★
-     * 这个方法用于支持前端在指派裁判时进行角色冲突检查。
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
     public function getMembersByTeamIds(Request $request): JsonResponse
     {
         $validated = $request->validate([
