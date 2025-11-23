@@ -34,6 +34,16 @@ export interface Scenario {
     topology_json: TopologyData;
 }
 
+// 定义实例的数据结构
+interface ScenarioInstance {
+    instance_id: string;
+    scenario_name: string;
+    username: string;
+    runtime: string;
+    status: 'CREATING' | 'RUNNING' | 'FAILED' | 'STOPPED';
+    test_id?: string;
+}
+
 type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
@@ -47,6 +57,7 @@ interface ScenarioManagementPageProps {
 const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId, username, onBack, onViewInstances }) => {
     const { user } = useAuth();
     const [scenarios, setScenarios] = useState<Scenario[]>([]);
+    const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchText, setSearchText] = useState('');
@@ -66,56 +77,99 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     // 查看拓扑功能启用状态
     const isTopologyEnabled = true;
 
- const fetchScenarios = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-        let response;
-        if (testId) {
-            response = await customFetch(`/back/api/study/test/getScenarioByTestId/${testId}`);
-        } else {
-            response = await customFetch('/back/api/scenarios');
-        }
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: '获取场景列表失败' }));
-            throw new Error(errorData.message || '获取场景列表失败');
-        }
-        const result = await response.json();
-        console.log('Fetched scenarios response:', result); // 调试日志
+    // 获取场景列表
+    const fetchScenarios = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            let response;
+            if (testId) {
+                response = await customFetch(`/back/api/study/test/getScenarioByTestId/${testId}`);
+            } else {
+                response = await customFetch('/back/api/scenarios');
+            }
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: '获取场景列表失败' }));
+                throw new Error(errorData.message || '获取场景列表失败');
+            }
+            const result = await response.json();
+            console.log('Fetched scenarios response:', result); // 调试日志
 
-        // 假设后端返回格式为 { code, message, data }
-        if (result.code !== 200) { // 使用硬编码 200 替代 GlobalResponse.HTTP_STATUS_OK_CODE
-            throw new Error(result.message || '后端返回错误状态');
-        }
+            // 假设后端返回格式为 { code, message, data }
+            if (result.code !== 200) { // 使用硬编码 200 替代 GlobalResponse.HTTP_STATUS_OK_CODE
+                throw new Error(result.message || '后端返回错误状态');
+            }
 
-        const data = result.data;
-        if (!data) {
-            throw new Error('后端返回数据为空');
-        }
+            const data = result.data;
+            if (!data) {
+                throw new Error('后端返回数据为空');
+            }
 
-        // 确保数据是数组，并过滤掉无效项
-        const scenariosData = (Array.isArray(data) ? data : [data]).filter(
-            (item): item is Scenario => item && typeof item === 'object' && 'name' in item && 'id' in item
+            // 确保数据是数组，并过滤掉无效项
+            const scenariosData = (Array.isArray(data) ? data : [data]).filter(
+                (item): item is Scenario => item && typeof item === 'object' && 'name' in item && 'id' in item
+            );
+
+            if (scenariosData.length === 0) {
+                console.warn('没有有效的场景数据');
+                setError('没有找到与测试ID关联的场景数据');
+            }
+
+            setScenarios(scenariosData);
+        } catch (err: any) {
+            console.error('Fetch scenarios error:', err);
+            setError(err.message || '发生未知错误');
+            setScenarios([]);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [testId]);
+
+    // 获取实例列表
+    const fetchInstances = useCallback(async () => {
+        if (!testId) return;
+
+        try {
+            const response = await customFetch(`/back/api/study/test/index?test_id=${testId}`);
+            if (!response.ok) {
+                console.error('获取实例列表失败');
+                return;
+            }
+
+            const result = await response.json();
+            if (result.code === 200) {
+                const instancesData = Array.isArray(result.data) ? result.data : [result.data];
+                setInstances(instancesData.filter((inst: any) => inst && inst.instance_id));
+            }
+        } catch (err) {
+            console.error('Fetch instances error:', err);
+        }
+    }, [testId]);
+
+    // 检查场景是否有运行中的实例
+    const hasRunningInstance = (scenarioName: string) => {
+        return instances.some(inst => 
+            inst.scenario_name === scenarioName && 
+            inst.status !== 'STOPPED' && 
+            inst.status !== 'FAILED'
         );
+    };
 
-        if (scenariosData.length === 0) {
-            console.warn('没有有效的场景数据');
-            setError('没有找到与测试ID关联的场景数据');
-        }
+    // 获取场景对应的实例ID
+    const getScenarioInstanceId = (scenarioName: string) => {
+        const instance = instances.find(inst => inst.scenario_name === scenarioName);
+        return instance?.instance_id || null;
+    };
 
-        setScenarios(scenariosData);
-    } catch (err: any) {
-        console.error('Fetch scenarios error:', err);
-        setError(err.message || '发生未知错误');
-        setScenarios([]);
-    } finally {
-        setIsLoading(false);
-    }
-}, [testId]);
-
+    // 初始化加载数据
     useEffect(() => {
-        fetchScenarios();
-    }, [fetchScenarios]);
+        const loadData = async () => {
+            setIsLoading(true);
+            await Promise.all([fetchScenarios(), fetchInstances()]);
+            setIsLoading(false);
+        };
+        loadData();
+    }, [fetchScenarios, fetchInstances]);
 
     // 更新 handleSaveSuccess
     const handleSaveSuccess = () => {
@@ -123,105 +177,89 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     };
 
     const handleRefresh = () => {
-        fetchScenarios();
+        setIsLoading(true);
+        Promise.all([fetchScenarios(), fetchInstances()]).finally(() => {
+            setIsLoading(false);
+        });
     };
 
     // 启动场景 - 修改：需要传入test_id
     const handleStartDrill = async (scenario: Scenario) => {
-    const currentUsername = username || (user?.user as any)?.c_username;
+        const currentUsername = username || (user?.user as any)?.c_username;
 
-    if (!currentUsername) {
-        alert('无法获取当前用户名，请确保您已登录。');
-        return;
-    }
-
-    if (!testId) {
-        alert('缺少测试ID参数');
-        return;
-    }
-
-    if (!window.confirm(`您确定要启动场景 "${scenario.name}" 的演练吗？`)) {
-        return;
-    }
-
-    setStartingScenarioId(scenario.id);
-    setError(null);
-
-    try {
-        // 关键修改：在URL中包含场景ID
-        const response = await customFetch(`/back/api/study/test/startDrill/${scenario.id}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({ 
-                username: currentUsername,
-                test_id: testId
-            }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || '启动失败');
+        if (!currentUsername) {
+            alert('无法获取当前用户名，请确保您已登录。');
+            return;
         }
 
-        alert(result.message);
-        fetchScenarios();
-    } catch (err: any) {
-        setError(err.message || '发生未知网络错误');
-        alert(`启动失败: ${err.message}`);
-    } finally {
-        setStartingScenarioId(null);
-    }
-};
-
-    // 新增：查看实例详情 - 需要先获取该场景的实例列表
-    const handleViewDetails = async (scenario: Scenario) => {
         if (!testId) {
             alert('缺少测试ID参数');
             return;
         }
 
+        // 检查是否已经有运行中的实例
+        if (hasRunningInstance(scenario.name)) {
+            alert('该场景已有运行中的实例，无法重复启动');
+            return;
+        }
+
+        if (!window.confirm(`您确定要启动场景 "${scenario.name}" 的演练吗？`)) {
+            return;
+        }
+
+        setStartingScenarioId(scenario.id);
+        setError(null);
+
         try {
-            // 获取该场景的实例列表
-            const response = await customFetch(`/back/api/study/test/index?test_id=${testId}`);
-            if (!response.ok) {
-                throw new Error('获取实例列表失败');
-            }
+            // 关键修改：在URL中包含场景ID
+            const response = await customFetch(`/back/api/study/test/startDrill/${scenario.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    username: currentUsername,
+                    test_id: testId
+                }),
+            });
 
             const result = await response.json();
-            if (result.code !== 200) {
-                throw new Error(result.message || '获取实例列表失败');
+
+            if (!response.ok) {
+                throw new Error(result.message || '启动失败');
             }
 
-            // 查找该场景的实例
-            const instances = Array.isArray(result.data) ? result.data : [result.data];
-            const scenarioInstance = instances.find((inst: any) => 
-                inst.scenario_name === scenario.name && inst.instance_id
-            );
-
-            if (!scenarioInstance) {
-                alert('该场景尚未启动或没有可用的实例');
-                return;
-            }
-
-            // 设置选中的实例信息并打开详情对话框
-            setSelectedInstanceId(scenarioInstance.instance_id);
-            setSelectedScenarioName(scenario.name);
-            setIsDetailsModalOpen(true);
-
+            alert(result.message);
+            // 启动成功后刷新实例列表
+            await fetchInstances();
         } catch (err: any) {
-            alert(`获取实例信息失败: ${err.message}`);
+            setError(err.message || '发生未知网络错误');
+            alert(`启动失败: ${err.message}`);
+        } finally {
+            setStartingScenarioId(null);
         }
     };
 
-    // 新增：查看拓扑
+    // 查看实例详情
+    const handleViewDetails = (scenario: Scenario) => {
+        const instanceId = getScenarioInstanceId(scenario.name);
+        
+        if (!instanceId) {
+            alert('该场景尚未启动或没有可用的实例');
+            return;
+        }
+
+        setSelectedInstanceId(instanceId);
+        setSelectedScenarioName(scenario.name);
+        setIsDetailsModalOpen(true);
+    };
+
+    // 查看拓扑
     const handleViewTopology = (scenario: Scenario) => {
         setSelectedScenarioName(scenario.name);
         setSelectedTopology(scenario.topology_json);
-        setSelectedInstanceId(''); // 拓扑查看不需要实例ID
+        setSelectedInstanceId(getScenarioInstanceId(scenario.name) || '');
         setIsTopologyOpen(true);
     };
 
@@ -306,55 +344,64 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
       ) : paginatedScenarios.length === 0 ? (
         <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><Typography color="text.secondary">{searchText ? "没有找到匹配的场景。" : "没有可用的场景。"}</Typography></TableCell></TableRow>
       ) : (
-        paginatedScenarios.map((scenario) => (
-          <TableRow key={scenario.id} hover>
-            <TableCell sx={{ fontWeight: 'medium' }}>{scenario.name}</TableCell>
-            <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <Tooltip title={scenario.description} placement="top-start"><span>{scenario.description}</span></Tooltip>
-            </TableCell>
-            <TableCell>
-              {moment(scenario.uploadDate).isValid()
-                ? moment(scenario.uploadDate).format('YYYY-MM-DD')
-                : moment().format('YYYY-MM-DD')}
-            </TableCell>
-            <TableCell align="right">
-              {/* 修改：查看实例按钮现在直接打开详情对话框 */}
-              <Tooltip title="查看实例详情">
-                <IconButton
-                  color="primary"
-                  size="small"
-                  onClick={() => handleViewDetails(scenario)}
-                >
-                  <ViewIcon />
-                </IconButton>
-              </Tooltip>
-              {/* 新增：查看拓扑按钮 */}
-              {isTopologyEnabled && (
-                <Tooltip title="查看拓扑">
-                  <IconButton
-                    color="secondary"
-                    size="small"
-                    onClick={() => handleViewTopology(scenario)}
-                  >
-                    <TopologyIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title="启动测试">
-                <span>
-                  <IconButton
-                    color="success"
-                    size="small"
-                    onClick={() => handleStartDrill(scenario)}
-                    disabled={startingScenarioId === scenario.id}
-                  >
-                    {startingScenarioId === scenario.id ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </TableCell>
-          </TableRow>
-        ))
+        paginatedScenarios.map((scenario) => {
+            const hasInstance = hasRunningInstance(scenario.name);
+            const isStarting = startingScenarioId === scenario.id;
+            
+            return (
+                <TableRow key={scenario.id} hover>
+                    <TableCell sx={{ fontWeight: 'medium' }}>{scenario.name}</TableCell>
+                    <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Tooltip title={scenario.description} placement="top-start"><span>{scenario.description}</span></Tooltip>
+                    </TableCell>
+                    <TableCell>
+                    {moment(scenario.uploadDate).isValid()
+                        ? moment(scenario.uploadDate).format('YYYY-MM-DD')
+                        : moment().format('YYYY-MM-DD')}
+                    </TableCell>
+                    <TableCell align="right">
+                    {/* 查看实例详情按钮 */}
+                    <Tooltip title={hasInstance ? "查看实例详情" : "该场景尚未启动"}>
+                        <span>
+                        <IconButton
+                            color="primary"
+                            size="small"
+                            onClick={() => handleViewDetails(scenario)}
+                            disabled={!hasInstance}
+                        >
+                            <ViewIcon />
+                        </IconButton>
+                        </span>
+                    </Tooltip>
+                    {/* 查看拓扑按钮 */}
+                    {isTopologyEnabled && (
+                        <Tooltip title="查看拓扑">
+                        <IconButton
+                            color="secondary"
+                            size="small"
+                            onClick={() => handleViewTopology(scenario)}
+                        >
+                            <TopologyIcon />
+                        </IconButton>
+                        </Tooltip>
+                    )}
+                    {/* 启动测试按钮 - 如果已有实例则禁用 */}
+                    <Tooltip title={hasInstance ? "该场景已有运行中的实例" : "启动测试"}>
+                        <span>
+                        <IconButton
+                            color="success"
+                            size="small"
+                            onClick={() => handleStartDrill(scenario)}
+                            disabled={hasInstance || isStarting}
+                        >
+                            {isStarting ? <CircularProgress size={20} color="inherit" /> : <StartIcon />}
+                        </IconButton>
+                        </span>
+                    </Tooltip>
+                    </TableCell>
+                </TableRow>
+            );
+        })
       )}
     </TableBody>
   </Table>
@@ -372,7 +419,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                 />
             </Paper>
 
-            {/* 新增：详情对话框 - 参数与 manage_instances_page 完全一致 */}
+            {/* 详情对话框 */}
             {isDetailsModalOpen && selectedInstanceId && (
                 <InstanceDetailsDialog
                     open={isDetailsModalOpen}
@@ -382,7 +429,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                 />
             )}
 
-            {/* 新增：拓扑对话框 */}
+            {/* 拓扑对话框 */}
             {isTopologyOpen && (
                 <InstanceTopologyDialog
                     open={isTopologyOpen}
