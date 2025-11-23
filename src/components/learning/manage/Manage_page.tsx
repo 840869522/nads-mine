@@ -11,12 +11,18 @@ import {
     Search as SearchIcon,
     PlayCircleOutline as StartIcon,
     Visibility as ViewInstancesIcon,
-    ArrowBack as ArrowBackIcon
+    ArrowBack as ArrowBackIcon,
+    AccountTree as TopologyIcon,
+    Visibility as ViewIcon
 } from '@mui/icons-material';
 import moment from 'moment';
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+
+// 导入详情和拓扑对话框组件
+import InstanceDetailsDialog from '../sceneinstances/InstanceDetailsDialog';
+import InstanceTopologyDialog from '../sceneinstances/InstanceTopologyDialog';
 
 // 定义场景的数据结构
 export interface Scenario {
@@ -49,6 +55,16 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     const [order, setOrder] = useState<Order>('desc');
     const [orderBy, setOrderBy] = useState<SortableKeys>('uploadDate');
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null);
+
+    // 新增状态用于控制详情和拓扑弹窗
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isTopologyOpen, setIsTopologyOpen] = useState(false);
+    const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+    const [selectedScenarioName, setSelectedScenarioName] = useState<string>('');
+    const [selectedTopology, setSelectedTopology] = useState<any>(null);
+
+    // 查看拓扑功能启用状态
+    const isTopologyEnabled = true;
 
  const fetchScenarios = useCallback(async () => {
     setIsLoading(true);
@@ -161,6 +177,54 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
     }
 };
 
+    // 新增：查看实例详情 - 需要先获取该场景的实例列表
+    const handleViewDetails = async (scenario: Scenario) => {
+        if (!testId) {
+            alert('缺少测试ID参数');
+            return;
+        }
+
+        try {
+            // 获取该场景的实例列表
+            const response = await customFetch(`/back/api/study/test/index?test_id=${testId}`);
+            if (!response.ok) {
+                throw new Error('获取实例列表失败');
+            }
+
+            const result = await response.json();
+            if (result.code !== 200) {
+                throw new Error(result.message || '获取实例列表失败');
+            }
+
+            // 查找该场景的实例
+            const instances = Array.isArray(result.data) ? result.data : [result.data];
+            const scenarioInstance = instances.find((inst: any) => 
+                inst.scenario_name === scenario.name && inst.instance_id
+            );
+
+            if (!scenarioInstance) {
+                alert('该场景尚未启动或没有可用的实例');
+                return;
+            }
+
+            // 设置选中的实例信息并打开详情对话框
+            setSelectedInstanceId(scenarioInstance.instance_id);
+            setSelectedScenarioName(scenario.name);
+            setIsDetailsModalOpen(true);
+
+        } catch (err: any) {
+            alert(`获取实例信息失败: ${err.message}`);
+        }
+    };
+
+    // 新增：查看拓扑
+    const handleViewTopology = (scenario: Scenario) => {
+        setSelectedScenarioName(scenario.name);
+        setSelectedTopology(scenario.topology_json);
+        setSelectedInstanceId(''); // 拓扑查看不需要实例ID
+        setIsTopologyOpen(true);
+    };
+
     const handleRequestSort = (property: SortableKeys) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -254,15 +318,28 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                 : moment().format('YYYY-MM-DD')}
             </TableCell>
             <TableCell align="right">
-              <Tooltip title="查看实例">
+              {/* 修改：查看实例按钮现在直接打开详情对话框 */}
+              <Tooltip title="查看实例详情">
                 <IconButton
-                  color="info"
+                  color="primary"
                   size="small"
-                  onClick={() => onViewInstances(scenario.name, testId || '')}
+                  onClick={() => handleViewDetails(scenario)}
                 >
-                  <ViewInstancesIcon />
+                  <ViewIcon />
                 </IconButton>
               </Tooltip>
+              {/* 新增：查看拓扑按钮 */}
+              {isTopologyEnabled && (
+                <Tooltip title="查看拓扑">
+                  <IconButton
+                    color="secondary"
+                    size="small"
+                    onClick={() => handleViewTopology(scenario)}
+                  >
+                    <TopologyIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="启动测试">
                 <span>
                   <IconButton
@@ -294,6 +371,27 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     labelRowsPerPage="每页行数:"
                 />
             </Paper>
+
+            {/* 新增：详情对话框 - 参数与 manage_instances_page 完全一致 */}
+            {isDetailsModalOpen && selectedInstanceId && (
+                <InstanceDetailsDialog
+                    open={isDetailsModalOpen}
+                    onClose={() => setIsDetailsModalOpen(false)}
+                    instanceId={selectedInstanceId}
+                    scenarioName={selectedScenarioName} 
+                />
+            )}
+
+            {/* 新增：拓扑对话框 */}
+            {isTopologyOpen && (
+                <InstanceTopologyDialog
+                    open={isTopologyOpen}
+                    onClose={() => setIsTopologyOpen(false)}
+                    title={`场景拓扑：${selectedScenarioName}`}
+                    topology={selectedTopology}
+                    instanceId={selectedInstanceId || ''}
+                />
+            )}
         </Paper>
     );
 };
