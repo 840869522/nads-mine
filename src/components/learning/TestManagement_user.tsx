@@ -829,7 +829,7 @@ const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight="bold" color={getTextColor()}>
-          测试管理
+          用户测试
         </Typography>
 
         {isAuthenticated && username && (

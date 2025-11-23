@@ -27,8 +27,8 @@ interface TheoryTestProps {
     test_id: string;
     c_name: string;
     c_type: '考试' | '练习';
-    c_start: string;
-    c_end: string;
+    test_start: string;
+    test_end: string;
     c_description: string;
     duration: number;
     c_paper_id: string;
@@ -651,7 +651,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                   <Typography variant="body1" sx={{ display: 'flex', mb: 1.5 }}>
                     <Box component="span" sx={{ minWidth: 80, fontWeight: 600 }}>开始时间:</Box> 
                     <Box component="span" sx={{ color: getSecondaryTextColor() }}>
-                      {moment(test.c_start).format('YYYY-MM-DD HH:mm')}
+                      {moment(test.test_start).format('YYYY-MM-DD HH:mm')}
                     </Box>
                   </Typography>
                 </Grid>
@@ -659,7 +659,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                   <Typography variant="body1" sx={{ display: 'flex', mb: 1.5 }}>
                     <Box component="span" sx={{ minWidth: 80, fontWeight: 600 }}>结束时间:</Box> 
                     <Box component="span" sx={{ color: getSecondaryTextColor() }}>
-                      {moment(test.c_end).format('YYYY-MM-DD HH:mm')}
+                      {moment(test.test_end).format('YYYY-MM-DD HH:mm')}
                     </Box>
                   </Typography>
                 </Grid>
