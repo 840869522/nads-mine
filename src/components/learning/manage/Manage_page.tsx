@@ -161,6 +161,11 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
         return instance?.instance_id || null;
     };
 
+    // 检查场景是否有任何实例（包括已停止或失败的）
+    const hasAnyInstance = (scenarioName: string) => {
+        return instances.some(inst => inst.scenario_name === scenarioName);
+    };
+
     // 初始化加载数据
     useEffect(() => {
         const loadData = async () => {
@@ -257,9 +262,16 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
 
     // 查看拓扑
     const handleViewTopology = (scenario: Scenario) => {
+        const instanceId = getScenarioInstanceId(scenario.name);
+        
+        if (!instanceId) {
+            alert('该场景尚未启动或没有可用的实例');
+            return;
+        }
+
         setSelectedScenarioName(scenario.name);
         setSelectedTopology(scenario.topology_json);
-        setSelectedInstanceId(getScenarioInstanceId(scenario.name) || '');
+        setSelectedInstanceId(instanceId);
         setIsTopologyOpen(true);
     };
 
@@ -346,6 +358,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
       ) : (
         paginatedScenarios.map((scenario) => {
             const hasInstance = hasRunningInstance(scenario.name);
+            const hasAnyInst = hasAnyInstance(scenario.name);
             const isStarting = startingScenarioId === scenario.id;
             
             return (
@@ -373,16 +386,19 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                         </IconButton>
                         </span>
                     </Tooltip>
-                    {/* 查看拓扑按钮 */}
+                    {/* 查看拓扑按钮 - 只有在有实例的情况下才能使用 */}
                     {isTopologyEnabled && (
-                        <Tooltip title="查看拓扑">
-                        <IconButton
-                            color="secondary"
-                            size="small"
-                            onClick={() => handleViewTopology(scenario)}
-                        >
-                            <TopologyIcon />
-                        </IconButton>
+                        <Tooltip title={hasAnyInst ? "查看拓扑" : "该场景尚未启动，无法查看拓扑"}>
+                            <span>
+                            <IconButton
+                                color="secondary"
+                                size="small"
+                                onClick={() => handleViewTopology(scenario)}
+                                disabled={!hasAnyInst}
+                            >
+                                <TopologyIcon />
+                            </IconButton>
+                            </span>
                         </Tooltip>
                     )}
                     {/* 启动测试按钮 - 如果已有实例则禁用 */}

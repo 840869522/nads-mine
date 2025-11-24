@@ -51,6 +51,29 @@ interface ExperimentHistory {
   }>;
 }
 
+interface TestScoreData {
+  course_id: string;
+  course_name: string;
+  test_id: string;
+  test_name: string;
+  category: '理论测试' | '实验' | '课程整体';
+  scores?: TheoryScore[];
+  history?: ExperimentHistory[];
+  // 新增课程整体成绩字段
+  tests?: Array<{
+    test_id: string;
+    test_name: string;
+    category: string;
+    scores: TheoryScore[];
+  }>;
+  experiments?: Array<{
+    test_id: string;
+    test_name: string;
+    category: string;
+    history: ExperimentHistory[];
+  }>;
+}
+
 const ScoreManagement: React.FC = () => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -58,10 +81,10 @@ const ScoreManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
-  const [scoreData, setScoreData] = useState<{ course_id: string; course_name: string; tests: any[]; experiments: any[] } | null>(null);
-  const [loadingScores, setLoadingScores] = useState<{ [key: string]: boolean }>({}); // 修改为对象，跟踪每个课程的加载状态
-  const [page, setPage] = useState(0); // 当前页码，从0开始
-  const [rowsPerPage, setRowsPerPage] = useState(10); // 默认每页10行
+  const [scoreData, setScoreData] = useState<TestScoreData | null>(null);
+  const [loadingScores, setLoadingScores] = useState<{ [key: string]: boolean }>({});
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // 处理页码变化
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -71,7 +94,7 @@ const ScoreManagement: React.FC = () => {
   // 处理每页行数变化
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0); // 重置到第一页
+    setPage(0);
   };
 
   // 题型颜色映射
@@ -102,12 +125,44 @@ const ScoreManagement: React.FC = () => {
     }
   };
 
-  // 查看课程成绩
-  const handleViewScores = async (courseId: string) => {
-    setLoadingScores((prev) => ({ ...prev, [courseId]: true })); // 设置当前课程的加载状态
+// 查看课程成绩
+const handleViewCourseScores = async (courseId: string) => {
+  setLoadingScores((prev) => ({ ...prev, [courseId]: true }));
+  try {
+    const response = await apiClientWithToken.get('/back/api/study/test/get_test_scores', {
+      params: { course_id: courseId }
+    });
+    if (response.data?.code === 200) {
+      // 直接使用后端返回的数据结构，不要重新映射
+      setScoreData({
+        ...response.data.data,
+        // 添加必要的字段用于显示
+        test_id: courseId,
+        test_name: response.data.data.course_name,
+        category: '课程整体'
+      });
+      setScoreDialogOpen(true);
+    } else {
+      alert(response.data?.message || '获取成绩失败');
+    }
+  } catch (error) {
+    alert('获取课程成绩失败');
+  } finally {
+    setLoadingScores((prev) => ({ ...prev, [courseId]: false }));
+  }
+};
+
+  // 查看单个测试/实验成绩（新增功能）
+  const handleViewTestScores = async (courseId: string, testId: string, testName: string, category: '理论测试' | '实验') => {
+    const loadingKey = `${courseId}-${testId}`;
+    setLoadingScores((prev) => ({ ...prev, [loadingKey]: true }));
     try {
-      const response = await apiClientWithToken.get('/back/api/study/test/get_test_scores', {
-        params: { course_id: courseId }
+      const response = await apiClientWithToken.get('/back/api/study/test/get_test_score_detail', {
+        params: { 
+          course_id: courseId,
+          test_id: testId,
+          category: category
+        }
       });
       if (response.data?.code === 200) {
         setScoreData(response.data.data);
@@ -118,13 +173,18 @@ const ScoreManagement: React.FC = () => {
     } catch (error) {
       alert('获取成绩失败');
     } finally {
-      setLoadingScores((prev) => ({ ...prev, [courseId]: false })); // 恢复当前课程的加载状态
+      setLoadingScores((prev) => ({ ...prev, [loadingKey]: false }));
     }
   };
 
-  // 下载课程成绩
-  const handleDownloadScores = (courseId: string) => {
+  // 下载课程成绩（原有功能）
+  const handleDownloadCourseScores = (courseId: string) => {
     window.open(`/back/api/study/test/download_test_scores?course_id=${courseId}`, '_blank');
+  };
+
+  // 下载单个测试/实验成绩（新增功能）
+  const handleDownloadTestScores = (courseId: string, testId: string, category: '理论测试' | '实验') => {
+    window.open(`/back/api/study/test/download_test_score_detail?course_id=${courseId}&test_id=${testId}&category=${category}`, '_blank');
   };
 
   // 过滤课程
@@ -211,7 +271,7 @@ const ScoreManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                 {paginatedCourses.length > 0 ? ( // 修改：使用 paginatedCourses
+                 {paginatedCourses.length > 0 ? (
                       paginatedCourses.map((course) => (
                         <React.Fragment key={course.course_id}>
                           {course.items.map((item, itemIndex) => (
@@ -252,45 +312,77 @@ const ScoreManagement: React.FC = () => {
                             <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>
                               {item.description || '无描述'}
                             </TableCell>
-                            {itemIndex === 0 && (
-                              <TableCell 
-                                rowSpan={course.items.length} 
-                                sx={{ 
-                                  verticalAlign: 'middle',
-                                  textAlign: 'center'
-                                }}
-                              >
-                                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                                  <Button
-                                    variant="contained"
-                                    size="small"
-                                    startIcon={<VisibilityIcon />}
-                                    onClick={() => handleViewScores(course.course_id)}
-                                    disabled={loadingScores[course.course_id] || false} // 修改：仅禁用当前课程的按钮
-                                    sx={{ 
-                                      backgroundColor: isDarkMode ? '#3f51b5' : '#1976d2',
-                                      '&:hover': { backgroundColor: isDarkMode ? '#5c6bc0' : '#1565c0' }
-                                    }}
-                                  >
-                                    查看成绩
-                                  </Button>
-                                  <Button
-                                    variant="contained"
-                                    size="small"
-                                    startIcon={<DownloadIcon />}
-                                    onClick={() => handleDownloadScores(course.course_id)}
-                                    sx={{ 
-                                      backgroundColor: isDarkMode ? '#0288d1' : '#0288d1',
-                                      '&:hover': { backgroundColor: isDarkMode ? '#03a9f4' : '#0277bd' }
-                                    }}
-                                  >
-                                    下载成绩
-                                  </Button>
-                                </Box>
-                              </TableCell>
-                            )}
+                            <TableCell sx={{ verticalAlign: 'middle' }}>
+                              <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+                                {/* 单个测试/实验的操作按钮 */}
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  startIcon={<VisibilityIcon />}
+                                  onClick={() => handleViewTestScores(course.course_id, item.id, item.name, item.category)}
+                                  disabled={loadingScores[`${course.course_id}-${item.id}`] || false}
+                                  sx={{ 
+                                    backgroundColor: isDarkMode ? '#3f51b5' : '#1976d2',
+                                    '&:hover': { backgroundColor: isDarkMode ? '#5c6bc0' : '#1565c0' }
+                                  }}
+                                >
+                                  查看成绩
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  startIcon={<DownloadIcon />}
+                                  onClick={() => handleDownloadTestScores(course.course_id, item.id, item.category)}
+                                  sx={{ 
+                                    backgroundColor: isDarkMode ? '#0288d1' : '#0288d1',
+                                    '&:hover': { backgroundColor: isDarkMode ? '#03a9f4' : '#0277bd' }
+                                  }}
+                                >
+                                  下载成绩
+                                </Button>
+                              </Box>
+                            </TableCell>
                           </TableRow>
                         ))}
+                        {/* 课程级别的操作按钮 */}
+                        <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
+                          <TableCell colSpan={6} sx={{ 
+                            color: isDarkMode ? '#fff' : '#000',
+                            fontWeight: 'bold',
+                            textAlign: 'right'
+                          }}>
+                            课程整体操作：
+                          </TableCell>
+                          <TableCell sx={{ verticalAlign: 'middle' }}>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<VisibilityIcon />}
+                                onClick={() => handleViewCourseScores(course.course_id)}
+                                disabled={loadingScores[course.course_id] || false}
+                                sx={{ 
+                                  borderColor: isDarkMode ? '#3f51b5' : '#1976d2',
+                                  color: isDarkMode ? '#fff' : '#1976d2'
+                                }}
+                              >
+                                查看课程成绩
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<DownloadIcon />}
+                                onClick={() => handleDownloadCourseScores(course.course_id)}
+                                sx={{ 
+                                  borderColor: isDarkMode ? '#0288d1' : '#0288d1',
+                                  color: isDarkMode ? '#fff' : '#0288d1'
+                                }}
+                              >
+                                下载课程成绩
+                              </Button>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
                       </React.Fragment>
                     ))
                   ) : (
@@ -310,7 +402,7 @@ const ScoreManagement: React.FC = () => {
              <TablePagination
                 rowsPerPageOptions={[10, 30, 50]}
                 component="div"
-                count={filteredCourses.length} // 总数据量
+                count={filteredCourses.length}
                 rowsPerPage={rowsPerPage}
                 page={page}
                 onPageChange={handleChangePage}
@@ -340,16 +432,131 @@ const ScoreManagement: React.FC = () => {
           sx={{ '& .MuiDialog-paper': { backgroundColor: getCardBgColor() } }}
         >
           <DialogTitle sx={{ color: isDarkMode ? '#fff' : '#000', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {scoreData?.course_name} 成绩详情
+            {scoreData?.test_name} 成绩详情
             <IconButton onClick={() => setScoreDialogOpen(false)}>
               <CloseIcon sx={{ color: isDarkMode ? '#fff' : '#000' }} />
             </IconButton>
           </DialogTitle>
           <DialogContent>
-            {scoreData?.tests?.map((test) => (
-              <Box key={test.test_id} sx={{ mb: 4 }}>
+            {/* 课程整体成绩显示 - 新增 */}
+            {scoreData?.category === '课程整体' && (
+              <>
+                {/* 显示理论测试成绩 */}
+                {scoreData.tests?.map((test) => (
+                  <Box key={test.test_id} sx={{ mb: 4 }}>
+                    <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
+                      理论测试: {test.test_name}
+                    </Typography>
+                    <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>用户名</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>试卷名称</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>开始时间</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>提交时间</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>总分</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>客观题分</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>主观题分</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {test.scores?.map((user: TheoryScore) =>
+                            user.papers.map((paper, index) => (
+                              <TableRow key={`${user.username}-${paper.paper_id}`} sx={{ backgroundColor: getTableRowBgColor(index) }}>
+                                {index === 0 && (
+                                  <TableCell rowSpan={user.papers.length} sx={{ color: isDarkMode ? '#fff' : '#000', verticalAlign: 'middle' }}>
+                                    {user.username}
+                                  </TableCell>
+                                )}
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.paper_name}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.start_time}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.submit_time}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.total_score}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.objective_score}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{paper.subjective_score}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                          {(!test.scores || test.scores.length === 0) && (
+                            <TableRow>
+                              <TableCell colSpan={7} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
+                                无成绩记录
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                ))}
+                
+                {/* 显示实验成绩 */}
+                {scoreData.experiments?.map((experiment) => (
+                  <Box key={experiment.test_id} sx={{ mb: 4 }}>
+                    <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
+                      实验: {experiment.test_name}
+                    </Typography>
+                    <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>用户名</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>提交时间</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>是否正确</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>尝试次数</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>获得积分</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>靶机IP</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>靶机名称</TableCell>
+                            <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>靶机类型</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {experiment.history?.map((user: ExperimentHistory) =>
+                            user.history.map((record, index) => (
+                              <TableRow key={`${user.username}-${record.c_submission_id}`} sx={{ backgroundColor: getTableRowBgColor(index) }}>
+                                {index === 0 && (
+                                  <TableCell rowSpan={user.history.length} sx={{ color: isDarkMode ? '#fff' : '#000', verticalAlign: 'middle' }}>
+                                    {user.username}
+                                  </TableCell>
+                                )}
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.c_submitted_at}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.c_is_correct ? '是' : '否'}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.c_attempt_count}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.c_points_earned}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.instance_ip}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.instance_name}</TableCell>
+                                <TableCell sx={{ color: isDarkMode ? '#fff' : '#000' }}>{record.instance_type}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                          {(!experiment.history || experiment.history.length === 0) && (
+                            <TableRow>
+                              <TableCell colSpan={8} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
+                                无提交历史
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                ))}
+                
+                {/* 无数据提示 */}
+                {scoreData && (!scoreData.tests || scoreData.tests.length === 0) && (!scoreData.experiments || scoreData.experiments.length === 0) && (
+                  <Typography sx={{ color: isDarkMode ? '#aaa' : '#777', textAlign: 'center' }}>
+                    无成绩或提交历史
+                  </Typography>
+                )}
+              </>
+            )}
+
+            {/* 理论测试成绩显示 */}
+            {scoreData?.category === '理论测试' && scoreData.scores && (
+              <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
-                  理论测试: {test.test_name}
+                  理论测试: {scoreData.test_name}
                 </Typography>
                 <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
                   <Table>
@@ -365,7 +572,7 @@ const ScoreManagement: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {test.scores?.map((user: TheoryScore) =>
+                      {scoreData.scores.map((user: TheoryScore) =>
                         user.papers.map((paper, index) => (
                           <TableRow key={`${user.username}-${paper.paper_id}`} sx={{ backgroundColor: getTableRowBgColor(index) }}>
                             {index === 0 && (
@@ -382,7 +589,7 @@ const ScoreManagement: React.FC = () => {
                           </TableRow>
                         ))
                       )}
-                      {test.scores?.length === 0 && (
+                      {scoreData.scores.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
                             无成绩记录
@@ -393,11 +600,13 @@ const ScoreManagement: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Box>
-            ))}
-            {scoreData?.experiments?.map((experiment) => (
-              <Box key={experiment.test_id} sx={{ mb: 4 }}>
+            )}
+
+            {/* 实验成绩显示 */}
+            {scoreData?.category === '实验' && scoreData.history && (
+              <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
-                  实验: {experiment.test_name}
+                  实验: {scoreData.test_name}
                 </Typography>
                 <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
                   <Table>
@@ -414,7 +623,7 @@ const ScoreManagement: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {experiment.history?.map((user: ExperimentHistory) =>
+                      {scoreData.history.map((user: ExperimentHistory) =>
                         user.history.map((record, index) => (
                           <TableRow key={`${user.username}-${record.c_submission_id}`} sx={{ backgroundColor: getTableRowBgColor(index) }}>
                             {index === 0 && (
@@ -432,7 +641,7 @@ const ScoreManagement: React.FC = () => {
                           </TableRow>
                         ))
                       )}
-                      {experiment.history?.length === 0 && (
+                      {scoreData.history.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={8} align="center" sx={{ color: isDarkMode ? '#aaa' : '#777' }}>
                             无提交历史
@@ -443,8 +652,11 @@ const ScoreManagement: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Box>
-            ))}
-            {scoreData && scoreData.tests.length === 0 && scoreData.experiments.length === 0 && (
+            )}
+
+            {scoreData && 
+              ((scoreData.category === '理论测试' && (!scoreData.scores || scoreData.scores.length === 0)) ||
+               (scoreData.category === '实验' && (!scoreData.history || scoreData.history.length === 0))) && (
               <Typography sx={{ color: isDarkMode ? '#aaa' : '#777', textAlign: 'center' }}>
                 无成绩或提交历史
               </Typography>

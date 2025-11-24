@@ -285,6 +285,31 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       }
     }
 
+      // 考试类型必须填写时长
+  if (formData.c_test_type === '理论测试' && formData.c_type === '考试') {
+    // 安全检查：确保 c_duration 存在且是有效数字
+    const duration = formData.c_duration || 0;
+    
+    if (duration <= 0) {
+      setError('请输入有效的测试时长（大于0的整数）');
+      return false;
+    }
+    
+    if (duration > 300) {
+      setError('测试时长不能超过300分钟');
+      return false;
+    }
+
+    // 新增：验证测试时长是否小于等于实际可用时间
+    if (startDate && endDate) {
+      const availableMinutes = endDate.diff(startDate, 'minutes');
+      if (duration > availableMinutes) {
+        setError(`测试时长不能超过实际可用时间。实际可用时间：${availableMinutes}分钟`);
+        return false;
+      }
+    }
+  }
+  
     // 实验类型验证场景配置
     if (formData.c_test_type === '实验') {
       if (!formData.c_scene_config_id || formData.c_scene_config_id <= 0) {

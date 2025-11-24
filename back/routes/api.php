@@ -313,6 +313,8 @@ Route::prefix('study')->group(function () {
         Route::get('/get_course_tests_experiments', [TestController::class, 'get_course_tests_experiments']);
         Route::get('get_test_scores', [TestController::class, 'get_test_scores']);
         Route::get('download_test_scores', [TestController::class, 'download_test_scores']);
+        Route::get('get_test_score_detail', [TestController::class, 'get_test_score_detail']);
+        Route::get('download_test_score_detail', [TestController::class, 'download_test_score_detail']);
         Route::post('get_user_test_score', [TestController::class, 'get_user_test_score']);
         // 正确的路由配置（使用路由参数）
         Route::get('getScenarioByTestId/{testId}', [TestController::class, 'getScenarioByTestId']);

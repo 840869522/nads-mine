@@ -556,7 +556,7 @@ class TestController extends Controller
         }
     }
 
-    /**
+        /**
      * Notes: 添加测试
      * User: zhangnan
      * DateTime: 2025/7/11 14:21
@@ -615,6 +615,17 @@ class TestController extends Controller
             );
             
             $validatedData = $request->validate($validated_data, $validated_msg);
+
+            // 新增：理论测试考试类型的时长验证
+            if ($c_test_type === '理论测试' && $c_type === '考试') {
+                $startTime = strtotime($c_start);
+                $endTime = strtotime($c_end);
+                $availableMinutes = ($endTime - $startTime) / 60; // 转换为分钟
+                
+                if ($c_duration > $availableMinutes) {
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, "测试时长不能超过实际可用时间。实际可用时间：" . intval($availableMinutes) . "分钟");
+                }
+            }
 
             $mod = new TestsModel();
 
@@ -703,6 +714,17 @@ class TestController extends Controller
             );
             
             $validatedData = $request->validate($validated_data, $validated_msg);
+
+            // 新增：理论测试考试类型的时长验证
+            if ($c_test_type === '理论测试' && $c_type === '考试') {
+                $startTime = strtotime($c_start);
+                $endTime = strtotime($c_end);
+                $availableMinutes = ($endTime - $startTime) / 60; // 转换为分钟
+                
+                if ($c_duration > $availableMinutes) {
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, "测试时长不能超过实际可用时间。实际可用时间：" . intval($availableMinutes) . "分钟");
+                }
+            }
 
             $mod = new TestsModel();
             $info = $mod->get_test_info($c_id);
@@ -4301,6 +4323,464 @@ public function download_test_scores(Request $request)
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
             'course_id' => $courseId
+        ]);
+        return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '下载成绩失败：' . $e->getMessage());
+    }
+}
+
+/**
+ * Notes: 获取单个测试/实验成绩详情
+ * User: assistant
+ * DateTime: 2025/9/16 20:00
+ * @param Request $request
+ * @return JsonResponse
+ */
+public function get_test_score_detail(Request $request)
+{
+    try {
+        $courseId = trim($request->input('course_id'));
+        $testId = trim($request->input('test_id'));
+        $category = trim($request->input('category'));
+
+        $validated_data = [
+            'course_id' => 'required|string',
+            'test_id' => 'required|string',
+            'category' => 'required|string|in:理论测试,实验'
+        ];
+        $validated_msg = [
+            'course_id.required' => '课程ID不能为空',
+            'test_id.required' => '测试ID不能为空',
+            'category.required' => '类型不能为空',
+            'category.in' => '类型必须是理论测试或实验'
+        ];
+        $request->validate($validated_data, $validated_msg);
+
+        $optionalTables = ['c_scene_container_instances', 'c_scene_vm_instances'];
+        foreach ($optionalTables as $table) {
+            if (!\Illuminate\Support\Facades\Schema::hasTable($table)) {
+                Log::warning("可选表缺失: {$table}, 将使用默认值 '空'");
+            }
+        }
+
+        // 查询课程名称
+        $course = DB::table('c_courses')
+            ->where('c_course_id', $courseId)
+            ->select('c_course_name')
+            ->first();
+        if (!$course) {
+            Log::warning('课程不存在', ['course_id' => $courseId]);
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '课程不存在');
+        }
+
+        $result = [
+            'course_id' => $courseId,
+            'course_name' => $course->c_course_name,
+            'test_id' => $testId,
+            'test_name' => '',
+            'category' => $category
+        ];
+
+        if ($category === '理论测试') {
+            // 查询理论测试成绩
+            $test = DB::table('c_tests')
+                ->where('c_id', $testId)
+                ->where('c_course_id', $courseId)
+                ->where('c_type', '考试')
+                ->select('c_id', 'c_name')
+                ->first();
+
+            if (!$test) {
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '测试不存在');
+            }
+
+            $result['test_name'] = $test->c_name;
+
+            $userScores = DB::table('c_test_users')
+                ->where('c_test_id', $testId)
+                ->select('c_username', 'c_paper_id', 'c_start', 'c_submit', 'c_score', 'c_objective_score', 'c_subjective_score')
+                ->orderBy('c_username')
+                ->orderBy('c_paper_id')
+                ->get();
+
+            $papers = DB::table('c_papers')
+                ->whereIn('c_id', $userScores->pluck('c_paper_id')->unique())
+                ->select('c_id')
+                ->orderBy('c_id')
+                ->get()
+                ->values()
+                ->map(function ($paper, $index) {
+                    return [
+                        'paper_id' => $paper->c_id,
+                        'paper_name' => '试卷' . ($index + 1)
+                    ];
+                })->keyBy('paper_id')->toArray();
+
+            $formattedScores = $userScores->groupBy('c_username')->map(function ($userPapers, $username) use ($papers) {
+                return [
+                    'username' => $username,
+                    'papers' => $userPapers->map(function ($score) use ($papers) {
+                        $paperName = isset($papers[$score->c_paper_id]) ? $papers[$score->c_paper_id]['paper_name'] : '未知试卷';
+                        return [
+                            'paper_id' => $score->c_paper_id,
+                            'paper_name' => $paperName,
+                            'start_time' => $score->c_start,
+                            'submit_time' => $score->c_submit,
+                            'total_score' => isset($score->c_score) ? $score->c_score : 0,
+                            'objective_score' => isset($score->c_objective_score) ? $score->c_objective_score : 0,
+                            'subjective_score' => isset($score->c_subjective_score) ? $score->c_subjective_score : 0
+                        ];
+                    })->values()->toArray()
+                ];
+            })->values()->toArray();
+
+            $result['scores'] = $formattedScores;
+
+        } else if ($category === '实验') {
+            // 查询实验 Flag 提交历史
+            $experiment = DB::table('c_course_experiments')
+                ->where('c_experiment_id', $testId)
+                ->where('c_course_id', $courseId)
+                ->select('c_experiment_id', 'c_experiment_name', 'c_config_id')
+                ->first();
+
+            if (!$experiment) {
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '实验不存在');
+            }
+
+            $result['test_name'] = $experiment->c_experiment_name;
+
+            // 直接从 c_test_users 获取 usernames 和 c_scene_instance_id
+            $testUsers = DB::table('c_test_users')
+                ->where('c_test_id', $testId)
+                ->select('c_username', 'c_scene_instance_id')
+                ->orderBy('c_scene_instance_id', 'desc')
+                ->get()
+                ->groupBy('c_username')
+                ->map(function ($group) {
+                    return $group->first()->c_scene_instance_id;
+                })->toArray();
+
+            $usernames = array_keys($testUsers);
+            $submissionHistory = [];
+
+            if (!empty($usernames)) {
+                $sceneInstances = $testUsers;
+
+                foreach ($usernames as $username) {
+                    if (isset($sceneInstances[$username])) {
+                        $sceneInstanceId = $sceneInstances[$username];
+
+                        // 查询容器和虚拟机 ID
+                        $containerIds = SceneContainerInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                            ->pluck('c_container_id')
+                            ->toArray();
+                        $vmIds = SceneVmInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                            ->pluck('c_vm_id')
+                            ->toArray();
+
+                        // 查询 c_flag_submissions
+                        $history = FlagSubmissionModel::select([
+                                'c_submission_id',
+                                'c_username',
+                                'c_submitted_at',
+                                'c_is_correct',
+                                'c_attempt_count',
+                                'c_points_earned',
+                                'c_container_instance_id',
+                                'c_vm_instance_id',
+                                'c_submitted_flag',
+                                'c_scene_instances_id'
+                            ])
+                            ->with([
+                                'containerInstance:c_container_id,c_container_name,c_ip,c_scene_instances_id',
+                                'vmInstance:c_vm_id,c_vm_name,c_ip,c_scene_instances_id'
+                            ])
+                            ->where('c_username', $username)
+                            ->where('c_scene_instances_id', $sceneInstanceId)
+                            ->where(function ($q) use ($containerIds, $vmIds) {
+                                $q->whereIn('c_container_instance_id', $containerIds)
+                                  ->orWhereIn('c_vm_instance_id', $vmIds)
+                                  ->orWhereNull('c_container_instance_id')
+                                  ->orWhereNull('c_vm_instance_id');
+                            })
+                            ->orderBy('c_submitted_at', 'desc')
+                            ->get()
+                            ->map(function ($record) {
+                                $instanceId = isset($record->c_container_instance_id) ? $record->c_container_instance_id : (isset($record->c_vm_instance_id) ? $record->c_vm_instance_id : '空');
+                                $instanceType = isset($record->c_container_instance_id) ? 'docker' : (isset($record->c_vm_instance_id) ? 'vm' : '空');
+                                $instanceIp = '空';
+                                $instanceName = '空';
+                                $sceneId = $record->c_scene_instances_id;
+
+                                if ($record->containerInstance) {
+                                    $instanceIp = isset($record->containerInstance->c_ip) ? $record->containerInstance->c_ip : '空';
+                                    $instanceName = isset($record->containerInstance->c_container_name) ? $record->containerInstance->c_container_name : '空';
+                                } elseif ($record->vmInstance) {
+                                    $instanceIp = isset($record->vmInstance->c_ip) ? $record->vmInstance->c_ip : '空';
+                                    $instanceName = isset($record->vmInstance->c_vm_name) ? $record->vmInstance->c_vm_name : '空';
+                                }
+
+                                return [
+                                    'c_submission_id' => $record->c_submission_id,
+                                    'c_username' => $record->c_username,
+                                    'c_submitted_at' => $record->c_submitted_at,
+                                    'c_is_correct' => isset($record->c_is_correct) ? $record->c_is_correct : false,
+                                    'c_attempt_count' => isset($record->c_attempt_count) ? $record->c_attempt_count : 0,
+                                    'c_points_earned' => isset($record->c_points_earned) ? $record->c_points_earned : 0,
+                                    'c_submitted_flag' => isset($record->c_submitted_flag) ? $record->c_submitted_flag : '',
+                                    'instance_id' => $instanceId,
+                                    'instance_ip' => $instanceIp,
+                                    'instance_name' => $instanceName,
+                                    'instance_type' => $instanceType,
+                                    'c_scene_instances_id' => $sceneId,
+                                ];
+                            })->toArray();
+
+                        if (!empty($history)) {
+                            $submissionHistory[] = [
+                                'username' => $username,
+                                'history' => $history
+                            ];
+                        }
+                    }
+                }
+            }
+
+            $result['history'] = $submissionHistory;
+        }
+
+        return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '成绩获取成功', $result);
+
+    } catch (ValidationException $e) {
+        Log::warning('参数验证失败', ['error' => $e->getMessage(), 'course_id' => $courseId, 'test_id' => $testId]);
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        Log::error('获取成绩失败', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'course_id' => $courseId,
+            'test_id' => $testId
+        ]);
+        return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '获取成绩失败：' . $e->getMessage());
+    }
+}
+
+/**
+ * Notes: 下载单个测试/实验成绩 CSV
+ * User: assistant
+ * DateTime: 2025/9/16 20:00
+ * @param Request $request
+ * @return \Symfony\Component\HttpFoundation\StreamedResponse|JsonResponse
+ */
+public function download_test_score_detail(Request $request)
+{
+    try {
+        $courseId = trim($request->input('course_id'));
+        $testId = trim($request->input('test_id'));
+        $category = trim($request->input('category'));
+
+        $validated_data = [
+            'course_id' => 'required|string',
+            'test_id' => 'required|string',
+            'category' => 'required|string|in:理论测试,实验'
+        ];
+        $validated_msg = [
+            'course_id.required' => '课程ID不能为空',
+            'test_id.required' => '测试ID不能为空',
+            'category.required' => '类型不能为空',
+            'category.in' => '类型必须是理论测试或实验'
+        ];
+        $request->validate($validated_data, $validated_msg);
+
+        $course = DB::table('c_courses')
+            ->where('c_course_id', $courseId)
+            ->select('c_course_name')
+            ->first();
+        if (!$course) {
+            Log::warning('课程不存在', ['course_id' => $courseId]);
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '课程不存在');
+        }
+
+        $csvData = [];
+        $testName = '';
+
+        if ($category === '理论测试') {
+            // 查询理论测试成绩
+            $test = DB::table('c_tests')
+                ->where('c_id', $testId)
+                ->where('c_course_id', $courseId)
+                ->where('c_type', '考试')
+                ->select('c_id', 'c_name')
+                ->first();
+
+            if (!$test) {
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '测试不存在');
+            }
+
+            $testName = $test->c_name;
+
+            $userScores = DB::table('c_test_users')
+                ->where('c_test_id', $testId)
+                ->select('c_username', 'c_paper_id', 'c_start', 'c_submit', 'c_score', 'c_objective_score', 'c_subjective_score')
+                ->orderBy('c_username')
+                ->orderBy('c_paper_id')
+                ->get();
+
+            $papers = DB::table('c_papers')
+                ->whereIn('c_id', $userScores->pluck('c_paper_id')->unique())
+                ->select('c_id')
+                ->orderBy('c_id')
+                ->get()
+                ->values()
+                ->map(function ($paper, $index) {
+                    return [
+                        'paper_id' => $paper->c_id,
+                        'paper_name' => '试卷' . ($index + 1)
+                    ];
+                })->keyBy('paper_id')->toArray();
+
+            $csvData[] = "理论测试: {$testName}";
+            $csvData[] = '用户名,试卷名称,开始时间,提交时间,总分,客观题分,主观题分';
+            foreach ($userScores as $score) {
+                $paperName = isset($papers[$score->c_paper_id]) ? $papers[$score->c_paper_id]['paper_name'] : '未知试卷';
+                $csvData[] = "{$score->c_username},{$paperName},{$score->c_start},{$score->c_submit}," .
+                    (isset($score->c_score) ? $score->c_score : 0) . "," .
+                    (isset($score->c_objective_score) ? $score->c_objective_score : 0) . "," .
+                    (isset($score->c_subjective_score) ? $score->c_subjective_score : 0);
+            }
+
+        } else if ($category === '实验') {
+            // 查询实验 Flag 提交历史
+            $experiment = DB::table('c_course_experiments')
+                ->where('c_experiment_id', $testId)
+                ->where('c_course_id', $courseId)
+                ->select('c_experiment_id', 'c_experiment_name', 'c_config_id')
+                ->first();
+
+            if (!$experiment) {
+                return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, '实验不存在');
+            }
+
+            $testName = $experiment->c_experiment_name;
+
+            // 直接从 c_test_users 获取 usernames 和 c_scene_instance_id
+            $testUsers = DB::table('c_test_users')
+                ->where('c_test_id', $testId)
+                ->select('c_username', 'c_scene_instance_id')
+                ->orderBy('c_scene_instance_id', 'desc')
+                ->get()
+                ->groupBy('c_username')
+                ->map(function ($group) {
+                    return $group->first()->c_scene_instance_id;
+                })->toArray();
+
+            $usernames = array_keys($testUsers);
+
+            $csvData[] = "实验: {$testName}";
+            $csvData[] = '用户名,提交时间,是否正确,尝试次数,获得积分,提交的Flag,靶机ID,靶机IP,靶机名称,靶机类型';
+            
+            if (!empty($usernames)) {
+                $sceneInstances = $testUsers;
+
+                foreach ($usernames as $username) {
+                    if (isset($sceneInstances[$username])) {
+                        $sceneInstanceId = $sceneInstances[$username];
+
+                        // 查询容器和虚拟机 ID
+                        $containerIds = SceneContainerInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                            ->pluck('c_container_id')
+                            ->toArray();
+                        $vmIds = SceneVmInstanceModel::where('c_scene_instances_id', $sceneInstanceId)
+                            ->pluck('c_vm_id')
+                            ->toArray();
+
+                        // 查询 c_flag_submissions
+                        $history = FlagSubmissionModel::select([
+                                'c_submission_id',
+                                'c_username',
+                                'c_submitted_at',
+                                'c_is_correct',
+                                'c_attempt_count',
+                                'c_points_earned',
+                                'c_container_instance_id',
+                                'c_vm_instance_id',
+                                'c_submitted_flag',
+                                'c_scene_instances_id'
+                            ])
+                            ->with([
+                                'containerInstance:c_container_id,c_container_name,c_ip,c_scene_instances_id',
+                                'vmInstance:c_vm_id,c_vm_name,c_ip,c_scene_instances_id'
+                            ])
+                            ->where('c_username', $username)
+                            ->where('c_scene_instances_id', $sceneInstanceId)
+                            ->where(function ($q) use ($containerIds, $vmIds) {
+                                $q->whereIn('c_container_instance_id', $containerIds)
+                                  ->orWhereIn('c_vm_instance_id', $vmIds)
+                                  ->orWhereNull('c_container_instance_id')
+                                  ->orWhereNull('c_vm_instance_id');
+                            })
+                            ->orderBy('c_submitted_at', 'desc')
+                            ->get()
+                            ->map(function ($record) {
+                                $instanceId = isset($record->c_container_instance_id) ? $record->c_container_instance_id : (isset($record->c_vm_instance_id) ? $record->c_vm_instance_id : '空');
+                                $instanceType = isset($record->c_container_instance_id) ? 'docker' : (isset($record->c_vm_instance_id) ? 'vm' : '空');
+                                $instanceIp = '空';
+                                $instanceName = '空';
+                                $sceneId = $record->c_scene_instances_id;
+
+                                if ($record->containerInstance) {
+                                    $instanceIp = isset($record->containerInstance->c_ip) ? $record->containerInstance->c_ip : '空';
+                                    $instanceName = isset($record->containerInstance->c_container_name) ? $record->containerInstance->c_container_name : '空';
+                                } elseif ($record->vmInstance) {
+                                    $instanceIp = isset($record->vmInstance->c_ip) ? $record->vmInstance->c_ip : '空';
+                                    $instanceName = isset($record->vmInstance->c_vm_name) ? $record->vmInstance->c_vm_name : '空';
+                                }
+
+                                return [
+                                    'c_username' => $record->c_username,
+                                    'c_submitted_at' => $record->c_submitted_at,
+                                    'c_is_correct' => isset($record->c_is_correct) ? $record->c_is_correct : false,
+                                    'c_attempt_count' => isset($record->c_attempt_count) ? $record->c_attempt_count : 0,
+                                    'c_points_earned' => isset($record->c_points_earned) ? $record->c_points_earned : 0,
+                                    'c_submitted_flag' => isset($record->c_submitted_flag) ? $record->c_submitted_flag : '',
+                                    'instance_id' => $instanceId,
+                                    'instance_ip' => $instanceIp,
+                                    'instance_name' => $instanceName,
+                                    'instance_type' => $instanceType,
+                                    'c_scene_instances_id' => $sceneId,
+                                ];
+                            })->toArray();
+
+                        foreach ($history as $record) {
+                            $csvData[] = "{$record['c_username']},{$record['c_submitted_at']}," .
+                                ($record['c_is_correct'] ? '是' : '否') . "," .
+                                "{$record['c_attempt_count']},{$record['c_points_earned']}," .
+                                "{$record['c_submitted_flag']},{$record['instance_id']},{$record['instance_ip']},{$record['instance_name']},{$record['instance_type']}";
+                        }
+                    }
+                }
+            }
+        }
+
+        // 返回 CSV 下载
+        $csvContent = "\xEF\xBB\xBF" . implode("\n", $csvData);
+        $filename = "{$category}_{$testName}_成绩.csv";
+        $response = response($csvContent)
+            ->header('Content-Type', 'text/csv; charset=UTF-8')
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}\"")
+            ->header('Cache-Control', 'no-cache');
+
+        return $response;
+
+    } catch (ValidationException $e) {
+        Log::warning('参数验证失败', ['error' => $e->getMessage(), 'course_id' => $courseId, 'test_id' => $testId]);
+        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+    } catch (\Exception $e) {
+        Log::error('下载成绩失败', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'course_id' => $courseId,
+            'test_id' => $testId
         ]);
         return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '下载成绩失败：' . $e->getMessage());
     }
