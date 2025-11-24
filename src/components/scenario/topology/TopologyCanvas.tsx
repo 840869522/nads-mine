@@ -21,6 +21,7 @@ interface TopologyCanvasProps {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
   selectedElement: { id: string; type: 'node' | 'edge' } | null;
+  canMoveNodes: boolean;
   onNodeSelect: (nodeId: string | null, event: React.MouseEvent) => void;
   onEdgeSelect: (edgeId: string | null, event: React.MouseEvent) => void;
   onNodeDoubleClick: (nodeId: string) => void;
@@ -59,6 +60,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
   nodes,
   edges,
   selectedElement,
+  canMoveNodes,
   onNodeSelect,
   onEdgeSelect,
   onNodeDoubleClick,
@@ -90,6 +92,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 
   const handleNodeMouseDown = (event: React.MouseEvent, nodeId: string) => {
     event.stopPropagation();
+    if (!canMoveNodes) return;
     const node = nodes.find(n => n.id === nodeId);
     if (node) {
       const { x: svgX, y: svgY } = getSVGCoordinates(event);
@@ -105,7 +108,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
   };
 
   const handleGlobalMouseMove = useCallback((event: MouseEvent) => {
-    if (!draggingNodeInfo || !svgRef.current) return;
+    if (!canMoveNodes || !draggingNodeInfo || !svgRef.current) return;
     event.preventDefault();
 
     if (!isDraggingInternally) {
@@ -125,9 +128,13 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         const newY = svgY - draggingNodeInfo.offsetY;
         onNodeMove(draggingNodeInfo.id, newX, newY);
     }
-  }, [draggingNodeInfo, isDraggingInternally, getSVGCoordinates, onNodeMove, onCanvasClick, linkingState]);
+  }, [canMoveNodes, draggingNodeInfo, isDraggingInternally, getSVGCoordinates, onNodeMove, onCanvasClick, linkingState]);
 
   const handleGlobalMouseUp = useCallback((event: MouseEvent) => {
+    if (!canMoveNodes && !draggingNodeInfo) {
+      return;
+    }
+
     if (draggingNodeInfo) {
       if (isDraggingInternally) {
         const draggedNode = nodes.find(n => n.id === draggingNodeInfo.id);
@@ -143,7 +150,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
        onCanvasClick(event as any);
     }
 
-  }, [draggingNodeInfo, isDraggingInternally, nodes, onNodeMoveCommit, onCanvasClick]);
+  }, [canMoveNodes, draggingNodeInfo, isDraggingInternally, nodes, onNodeMoveCommit, onCanvasClick]);
 
 
   useEffect(() => {
@@ -285,7 +292,7 @@ const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
               onClick={(e) => handleNodeClick(e, node.id)}
               onDoubleClick={(e) => { e.stopPropagation(); if (!isDraggingInternally) onNodeDoubleClick(node.id); }}
-              className="cursor-grab active:cursor-grabbing"
+              className={canMoveNodes ? "cursor-grab active:cursor-grabbing" : "cursor-default"}
             >
               <circle
                 cx="0"

@@ -40,9 +40,10 @@ interface VirtualMachineEditModalProps {
   onClose: () => void;
   node: TopologyNode | null;
   onSave: (nodeId: string, newConfig: NodeConfig, newLabel: string) => void;
+  isEditable?: boolean;
 }
 
-const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpen, onClose, node, onSave }) => {
+const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpen, onClose, node, onSave, isEditable = true }) => {
   // --- 状态管理 ---
   const [label, setLabel] = useState('');
   const [baseImage, setBaseImage] = useState('');
@@ -162,7 +163,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
 
   // --- 保存操作 ---
   const handleSave = () => {
-    if (!node || !validate()) return;
+    if (!isEditable || !node || !validate()) return;
 
     const envString = envs
       .filter(e => e.key)
@@ -200,6 +201,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   };
 
   if (!node) return null;
+  const disabled = !isEditable;
 
   return (
       <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
@@ -215,9 +217,10 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               fullWidth
               error={!!_errors.label}
               helperText={_errors.label}
+              disabled={disabled}
             />
             <TextField label="设备类型/名称" value={node.config.deviceName} fullWidth disabled />
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" disabled={disabled}>
               <InputLabel>队伍分配</InputLabel>
               <Select
                 value={selectedTeamId}
@@ -250,6 +253,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               placeholder=""
               error={!!_errors.baseImage}
               helperText={_errors.baseImage}
+              disabled={disabled}
             />
 
             {/* 资源配置 */}
@@ -266,6 +270,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                   error={!!_errors.memory}
                   helperText={_errors.memory}
                   placeholder="例如: 1024"
+                  disabled={disabled}
                 />
                 <TextField
                   label="CPU 核心数"
@@ -277,6 +282,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                   error={!!_errors.cpu}
                   helperText={_errors.cpu}
                   placeholder="例如: 2"
+                  disabled={disabled}
                 />
                 <TextField
                   label="磁盘大小 (GB)"
@@ -288,13 +294,14 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                   error={!!_errors.diskSize}
                   helperText={_errors.diskSize}
                   placeholder="例如: 20"
+                  disabled={disabled}
                 />
               </Stack>
             </Box>
 
             {/* 是否为靶机选项 */}
             <FormControlLabel
-                control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />}
+                control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} disabled={disabled} />}
                 label="设置为靶机"
             />
 
@@ -308,6 +315,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                     value={env.key}
                     onChange={(e) => handleEnvChange(idx, 'key', e.target.value)}
                     sx={{ flex: 1 }}
+                    disabled={disabled}
                   />
                   <TextField
                     label="值"
@@ -315,13 +323,14 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
                     value={env.value}
                     onChange={(e) => handleEnvChange(idx, 'value', e.target.value)}
                     sx={{ flex: 1 }}
+                    disabled={disabled}
                   />
-                  <IconButton onClick={() => handleRemoveEnv(idx)} size="small">
+                  <IconButton onClick={() => handleRemoveEnv(idx)} size="small" disabled={disabled}>
                     <RemoveCircleOutlineIcon />
                   </IconButton>
                 </Box>
               ))}
-              <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small">
+              <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small" disabled={disabled}>
                 添加变量
               </Button>
             </Box>
@@ -329,7 +338,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>取消</Button>
-          <Button variant="contained" onClick={handleSave}>保存更改</Button>
+          <Button variant="contained" onClick={handleSave} disabled={disabled}>保存更改</Button>
         </DialogActions>
       </Dialog>
   );

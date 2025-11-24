@@ -41,6 +41,7 @@ interface TopologyToolbarProps {
   onToggleSimulation: () => void;
   mirroringEnabled: boolean;
   onToggleMirroring: () => void;
+  canOperateTopology: boolean;
   // 新增：流量镜像相关props
   availableSwitches: Array<{id: string, label: string}>; // 可选择的交换机列表
   onSelectSwitchForMirroring: (switchId: string) => void; // 选择交换机进行镜像的回调
@@ -85,6 +86,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                           onToggleSimulation,
                                                           mirroringEnabled,
                                                           onToggleMirroring,
+                                                          canOperateTopology,
                                                           // 新增：流量镜像相关props
                                                           availableSwitches,
                                                           onSelectSwitchForMirroring,
@@ -96,6 +98,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                                                           shouldResetSimulationDropdown = false,
                                                         }) => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, deviceType: DeviceType) => {
+    if (!canOperateTopology) return;
     event.dataTransfer.setData('application/reactflow', deviceType);
     event.dataTransfer.effectAllowed = 'move';
   };
@@ -152,9 +155,9 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
           {TOPOLOGY_DEVICE_TYPES.filter(device => device.type !== 'router').map(device => (
               <div
                   key={device.type}
-                  className="flex flex-col items-center p-3 border border-neutral-300 dark:border-neutral-600 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-grab shadow-sm"
+                  className={`flex flex-col items-center p-3 border border-neutral-300 dark:border-neutral-600 rounded-md shadow-sm ${canOperateTopology ? 'hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-grab active:cursor-grabbing' : 'bg-neutral-200 dark:bg-neutral-700 cursor-not-allowed opacity-60'}`}
                   onDragStart={(event) => handleDragStart(event, device.type)}
-                  draggable
+                  draggable={canOperateTopology}
                   title={`拖拽以添加 ${device.name}`}
               >
                 <DeviceIcon type={device.type} />
@@ -170,8 +173,11 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
               {/* 流量采集下拉菜单 */}
               <div className="relative" ref={collectionDropdownRef}>
                 <Button
-                  onClick={() => setIsCollectionDropdownOpen(!isCollectionDropdownOpen)}
-                  disabled={isSaving}
+                  onClick={() => {
+                    if (!canOperateTopology) return;
+                    setIsCollectionDropdownOpen(!isCollectionDropdownOpen);
+                  }}
+                  disabled={isSaving || !canOperateTopology}
                   variant={(collectionOptions.zeek || collectionOptions.sysdig) ? 'secondary' : 'outline'}
                   size="sm"
                   leftIcon={<ClipboardDocumentListIcon className="h-4 w-4"/>}
@@ -190,8 +196,9 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md shadow-lg z-50">
                     <div className="py-1">
                       <div
-                        className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                    className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
                         onClick={() => {
+                          if (!canOperateTopology) return;
                           onToggleCollectionOption('zeek');
                         }}
                       >
@@ -201,13 +208,15 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                             checked={collectionOptions.zeek}
                             onChange={() => onToggleCollectionOption('zeek')}
                             className="rounded border-neutral-300 dark:border-neutral-600 text-blue-600 focus:ring-blue-500"
+                            disabled={!canOperateTopology}
                           />
                           <span>ZEEK</span>
                         </div>
                       </div>
                       <div
-                        className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
+                    className="flex items-center px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer"
                         onClick={() => {
+                          if (!canOperateTopology) return;
                           onToggleCollectionOption('sysdig');
                         }}
                       >
@@ -217,6 +226,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                             checked={collectionOptions.sysdig}
                             onChange={() => onToggleCollectionOption('sysdig')}
                             className="rounded border-neutral-300 dark:border-neutral-600 text-blue-600 focus:ring-blue-500"
+                            disabled={!canOperateTopology}
                           />
                           <span>SYSDIG</span>
                         </div>
@@ -229,6 +239,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
               <div className="relative" ref={simulationDropdownRef}>
                 <Button
                   onClick={() => {
+                    if (!canOperateTopology) return;
                     if (isSelectingSwitchForSimulation) {
                       setIsSimulationDropdownOpen(!isSimulationDropdownOpen);
                     } else {
@@ -239,7 +250,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                       }, 0);
                     }
                   }}
-                  disabled={isSaving}
+                  disabled={isSaving || !canOperateTopology}
                   variant={simulationEnabled ? 'secondary' : 'outline'}
                   size="sm"
                   leftIcon={<BeakerIcon className="h-4 w-4"/>}
@@ -287,6 +298,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
               <div className="relative" ref={switchSelectionDropdownRef}>
                 <Button
                   onClick={() => {
+                    if (!canOperateTopology) return;
                     if (isSelectingSwitchForMirroring) {
                       setIsSwitchSelectionDropdownOpen(!isSwitchSelectionDropdownOpen);
                     } else {
@@ -297,7 +309,7 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                       }, 0);
                     }
                   }}
-                  disabled={isSaving}
+                  disabled={isSaving || !canOperateTopology}
                   variant={mirroringEnabled ? 'secondary' : 'outline'}
                   size="sm"
                   leftIcon={<ArrowsRightLeftIcon className="h-4 w-4"/>}
@@ -342,12 +354,12 @@ const TopologyToolbar: React.FC<TopologyToolbarProps> = ({
                 )}
               </div>
             </div>
-            <Button onClick={onDeleteSelected} disabled={isSaving} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
-            <Button onClick={onUndo} disabled={!canUndo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
-            <Button onClick={onRedo} disabled={!canRedo || isSaving} variant="outline" size="sm" leftIcon={<ArrowUturnRightIcon className="h-4 w-4"/>} aria-label="重做">重做</Button>
+            <Button onClick={onDeleteSelected} disabled={isSaving || !canOperateTopology} variant="danger" size="sm" leftIcon={<TrashIcon className="h-4 w-4"/>} aria-label="删除选中">删除</Button>
+            <Button onClick={onUndo} disabled={!canUndo || isSaving || !canOperateTopology} variant="outline" size="sm" leftIcon={<ArrowUturnLeftIcon className="h-4 w-4"/>} aria-label="撤销">撤销</Button>
+            <Button onClick={onRedo} disabled={!canRedo || isSaving || !canOperateTopology} variant="outline" size="sm" leftIcon={<ArrowUturnRightIcon className="h-4 w-4"/>} aria-label="重做">重做</Button>
 
             {/* 3. 替换为“保存”按钮 */}
-            <Button onClick={onSave} isLoading={isSaving} disabled={isSaving} variant="secondary" size="sm" leftIcon={<DocumentCheckIcon className="h-4 w-4"/>} aria-label="保存拓扑">{isSaving ? '保存中...' : '保存'}</Button>
+            <Button onClick={onSave} isLoading={isSaving} disabled={isSaving || !canOperateTopology} variant="secondary" size="sm" leftIcon={<DocumentCheckIcon className="h-4 w-4"/>} aria-label="保存拓扑">{isSaving ? '保存中...' : '保存'}</Button>
 
             {/* 移除了原来的导出和导入按钮以及隐藏的 input 元素 */}
           </div>

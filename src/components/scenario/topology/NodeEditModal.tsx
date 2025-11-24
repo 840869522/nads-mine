@@ -45,9 +45,10 @@ interface NodeEditModalProps {
   node: TopologyNode | null;
   onSave: (nodeId: string, newConfig: NodeConfig, newLabel: string) => void;
   allNodes?: TopologyNode[]; // 新增：接收所有节点的列表
+  isEditable?: boolean;
 }
 
-const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, onSave, allNodes = [] }) => {
+const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, onSave, allNodes = [], isEditable = true }) => {
   // --- 状态管理 ---
   const [label, setLabel] = useState('');
   const [deviceName, setDeviceName] = useState('');
@@ -196,7 +197,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
 
   // --- 保存操作 (更新) ---
   const handleSave = () => {
-    if (!node || !validate()) return;
+    if (!isEditable || !node || !validate()) return;
 
     // --- 容器相关配置 ---
     const portMappingsString = ports.filter(p => p.hostPort && p.containerPort).map(p => `${p.hostPort}:${p.containerPort}`).join(',');
@@ -244,15 +245,16 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
 
   // 过滤出可作为转发目标的节点（容器和虚拟机）
   const targetableNodes = allNodes.filter(n => ['container', 'virtual_machine'].includes(n.type));
+  const disabled = !isEditable;
 
   return (
       <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
         <DialogTitle>编辑节点: {node?.label}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <TextField label="节点名称 (标签)" value={label} onChange={(e) => setLabel(e.target.value)} required fullWidth />
+            <TextField label="节点名称 (标签)" value={label} onChange={(e) => setLabel(e.target.value)} required fullWidth disabled={disabled} />
             <TextField label="设备类型/名称" value={deviceName} fullWidth disabled />
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" disabled={disabled}>
               <InputLabel>队伍分配</InputLabel>
               <Select
                 value={selectedTeamId}
@@ -278,6 +280,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                     label="Docker 镜像"
                     value={dockerImage}
                     onChange={setDockerImage}
+                    disabled={disabled}
                     options={images.map(img => ({
                       id: img.id,
                       name: img.name,
@@ -289,29 +292,29 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                     error={!!_errors.dockerImage}
                     helperText={_errors.dockerImage}
                   />
-                  <FormControlLabel control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />} label="设置为靶机" />
+                  <FormControlLabel control={<Checkbox checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} disabled={disabled} />} label="设置为靶机" />
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
                     {ports.map((p, idx) => (
                         <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                          <TextField label="主机端口" size="small" value={p.hostPort} onChange={e => handlePortChange(idx, 'hostPort', e.target.value)} sx={{ flex: 1 }}/>
+                          <TextField label="主机端口" size="small" value={p.hostPort} onChange={e => handlePortChange(idx, 'hostPort', e.target.value)} sx={{ flex: 1 }} disabled={disabled}/>
                           <Typography>:</Typography>
-                          <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }}/>
-                          <IconButton onClick={() => handleRemovePort(idx)} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                          <TextField label="容器端口" size="small" value={p.containerPort} onChange={e => handlePortChange(idx, 'containerPort', e.target.value)} sx={{ flex: 1 }} disabled={disabled}/>
+                          <IconButton onClick={() => handleRemovePort(idx)} size="small" disabled={disabled}><RemoveCircleOutlineIcon /></IconButton>
                         </Box>
                     ))}
-                    <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddPort} size="small">添加端口</Button>
+                    <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddPort} size="small" disabled={disabled}>添加端口</Button>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>环境变量</Typography>
                     {envs.map((ev, idx) => (
                         <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                          <TextField label="变量名" size="small" value={ev.key} onChange={e => handleEnvChange(idx, 'key', e.target.value)} sx={{ flex: 1 }} />
-                          <TextField label="值" size="small" value={ev.value} onChange={e => handleEnvChange(idx, 'value', e.target.value)} sx={{ flex: 1 }} />
-                          <IconButton onClick={() => handleRemoveEnv(idx)} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                          <TextField label="变量名" size="small" value={ev.key} onChange={e => handleEnvChange(idx, 'key', e.target.value)} sx={{ flex: 1 }} disabled={disabled} />
+                          <TextField label="值" size="small" value={ev.value} onChange={e => handleEnvChange(idx, 'value', e.target.value)} sx={{ flex: 1 }} disabled={disabled} />
+                          <IconButton onClick={() => handleRemoveEnv(idx)} size="small" disabled={disabled}><RemoveCircleOutlineIcon /></IconButton>
                         </Box>
                     ))}
-                    <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small">添加变量</Button>
+                    <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddEnv} size="small" disabled={disabled}>添加变量</Button>
                   </Box>
                 </>
             )}
@@ -328,8 +331,9 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                       value={rule.hostPort}
                       onChange={e => handleIptablesRuleChange(idx, 'hostPort', e.target.value)}
                       sx={{ flex: 1 }}
+                      disabled={disabled}
                     />
-                    <FormControl size="small" sx={{ flex: 2 }}>
+                    <FormControl size="small" sx={{ flex: 2 }} disabled={disabled}>
                       <InputLabel>转发至实例</InputLabel>
                       <Select
                         value={rule.instanceName}
@@ -348,13 +352,14 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                       value={rule.instancePort}
                       onChange={e => handleIptablesRuleChange(idx, 'instancePort', e.target.value)}
                       sx={{ flex: 1 }}
+                      disabled={disabled}
                     />
-                    <IconButton onClick={() => handleRemoveIptablesRule(idx)} size="small">
+                    <IconButton onClick={() => handleRemoveIptablesRule(idx)} size="small" disabled={disabled}>
                       <RemoveCircleOutlineIcon />
                     </IconButton>
                   </Box>
                 ))}
-                <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddIptablesRule} size="small">
+                <Button startIcon={<AddCircleOutlineIcon />} onClick={handleAddIptablesRule} size="small" disabled={disabled}>
                   添加转发规则
                 </Button>
               </Box>
@@ -364,7 +369,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>取消</Button>
-          <Button variant="contained" onClick={handleSave}>保存更改</Button>
+          <Button variant="contained" onClick={handleSave} disabled={disabled}>保存更改</Button>
         </DialogActions>
       </Dialog>
   );
