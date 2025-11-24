@@ -165,7 +165,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setLogsModalId(instance.id);
     }, []);
 
-    // ★★★ 核心修改：基于角色判断特权用户 (移除 ad:view:all，加入 operations) ★★★
+
     const isPrivilegedUser = useCallback((currentUser: any): boolean => {
         if (!currentUser) return false;
 
