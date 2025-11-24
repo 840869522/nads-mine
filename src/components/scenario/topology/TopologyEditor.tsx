@@ -20,6 +20,8 @@ import Card from '../../ui/Card';
 import { Backdrop, CircularProgress } from '@mui/material';
 import SaveScenarioModal from './SaveScenarioModal';//
 import { customFetch } from '@/utils/fetch';
+import { useAuth } from '@/hooks/useAuth';
+import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
 // ... generateId, TopologyState, Reducer, initial state 等代码保持不变 ...
 const generateId = (prefix: string = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
@@ -108,6 +110,9 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     scenarioId,
     sceneInstanceId
 }) => {
+    const { user } = useAuth();
+    const { permissions } = userPermissionContext();
+
     // 所有节点和边的实时、完整信息，都统一存储在 TopologyEditor 组件的 currentTopologyState
     // 这个状态对象中的 nodes 和 edges 数组里。handleConfirmSave 函数正是从这里读取数据的。
     const [currentTopologyState, dispatch] = useReducer(topologyReducer, initialTopologyState);
@@ -161,6 +166,17 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         setUndoStack([]);
         setRedoStack([]);
     }, [initialData, onAddNode, onDeleteNode]);
+
+    const canOperateTopology = React.useMemo(() => {
+        const currentUsername = (user as any)?.user?.c_username || (user as any)?.c_username;
+        const isAdminUser = currentUsername === 'admin';
+        const rawUserPermissions = (user as any)?.user?.permission || (user as any)?.permission || [];
+        return (
+            isAdminUser ||
+            (permissions?.includes('topo_op') ?? false) ||
+            (rawUserPermissions && rawUserPermissions.includes && rawUserPermissions.includes('topo_op'))
+        );
+    }, [permissions, user]);
 
     //交互逻辑处理函数 (handle...)
     // 这些函数定义了用户在界面上的操作会产生什么效果。
@@ -236,8 +252,8 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
         pushToUndoStack(action);
     }, [nodes, pushToUndoStack, onAddNode, collectionOptions]);
     // --- 修改结束 ---
-    const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
-    const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [nodeMoveInitialPosition, pushToUndoStack]);
+    const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => { if (!canOperateTopology) return; const node = currentTopologyState.nodes.find(n => n.id === nodeId); if (node) { if (!nodeMoveInitialPosition || nodeMoveInitialPosition.id !== nodeId) setNodeMoveInitialPosition({ id: nodeId, x: node.x, y: node.y }); dispatch({ type: 'MOVE_NODE', payload: { nodeId, newX: x, newY: y } }); } }, [canOperateTopology, currentTopologyState.nodes, dispatch, nodeMoveInitialPosition]);
+    const handleNodeMoveCommit = useCallback((nodeId: string, finalX: number, finalY: number) => { if (!canOperateTopology) return; if (nodeMoveInitialPosition && nodeMoveInitialPosition.id === nodeId) { if (nodeMoveInitialPosition.x !== finalX || nodeMoveInitialPosition.y !== finalY) { const action: TopologyAction = { type: 'MOVE_NODE', payload: { nodeId, oldX: nodeMoveInitialPosition.x, oldY: nodeMoveInitialPosition.y, newX: finalX, newY: finalY } }; pushToUndoStack(action); } } setNodeMoveInitialPosition(null); }, [canOperateTopology, nodeMoveInitialPosition, pushToUndoStack]);
     // 使用包含特殊镜像容器规则的直连判定
     // 允许：至少一端为交换机，或任一端为特殊镜像容器
     // 统一与 reducer 的 canDirectlyLinkNodes 逻辑保持一致
@@ -710,6 +726,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 canRedo={redoStack.length > 0}
                 onSave={handleSave} // 在实例模式下直接保存并展示等待动画
                 isSaving={isSaving}
+                canOperateTopology={canOperateTopology}
                 collectionOptions={collectionOptions}
                 onToggleCollectionOption={handleToggleCollectionOption}
                 simulationEnabled={simulationEnabled}
@@ -739,6 +756,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                     nodes={nodes}
                     edges={edges}
                     selectedElement={selectedElement}
+                    canMoveNodes={canOperateTopology}
                     onNodeSelect={handleNodeSelect}
                     onEdgeSelect={handleEdgeSelect}
                     onNodeDoubleClick={handleNodeDoubleClick}
@@ -754,12 +772,14 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
                 onClose={() => setIsNodeEditModalOpen(false)}
                 node={editingNode}
                 onSave={saveNodeChanges}
+                isEditable={canOperateTopology}
                 allNodes={nodes} 
             />
             <VirtualMachineEditModal
                 isOpen={isVMEditModalOpen}
                 onClose={() => setIsVMEditModalOpen(false)}
                 node={editingVMNode}
+                isEditable={canOperateTopology}
                 onSave={saveVMChanges}
             />
             <EdgeEditModal

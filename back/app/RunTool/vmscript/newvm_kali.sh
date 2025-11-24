@@ -71,7 +71,7 @@ fi
 
 # ---------- 创建差分盘 ----------
 echo "FOREGROUND: Creating differential image using backing file..."
-qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 "$DESTINATION_IMAGE_PATH" 50G
+qemu-img create -f qcow2 -o backing_file="$SOURCE_IMAGE_PATH",backing_fmt=qcow2 "$DESTINATION_IMAGE_PATH" 70G
 echo "FOREGROUND: Differential image created."
 
 # ---------- 资源规格 ----------
