@@ -718,34 +718,36 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 
     return (
         <Card title="网络拓扑编辑器" className="mt-8">
-            <TopologyToolbar
-                onDeleteSelected={handleDeleteSelected}
-                onUndo={handleUndo}
-                canUndo={undoStack.length > 0}
-                onRedo={handleRedo}
-                canRedo={redoStack.length > 0}
-                onSave={handleSave} // 在实例模式下直接保存并展示等待动画
-                isSaving={isSaving}
-                canOperateTopology={canOperateTopology}
-                collectionOptions={collectionOptions}
-                onToggleCollectionOption={handleToggleCollectionOption}
-                simulationEnabled={simulationEnabled}
-                onToggleSimulation={handleToggleSimulation}
-                mirroringEnabled={mirroringEnabled}
-                onToggleMirroring={handleToggleMirroring}
-                // 新增：流量镜像相关props
-                availableSwitches={availableSwitches}
-                onSelectSwitchForMirroring={handleSelectSwitchForMirroring}
-                isSelectingSwitchForMirroring={isSelectingSwitchForMirroring}
-                shouldResetSwitchDropdown={shouldResetSwitchDropdown}
-                // 新增：流量模拟相关props
-                onSelectSwitchForSimulation={handleSelectSwitchForSimulation}
-                isSelectingSwitchForSimulation={isSelectingSwitchForSimulation}
-                shouldResetSimulationDropdown={shouldResetSimulationDropdown}
-                // onExport={handleExport}
-                // onImport={handleImport}
-                onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}
-            />
+            {canOperateTopology && (
+                <TopologyToolbar
+                    onDeleteSelected={handleDeleteSelected}
+                    onUndo={handleUndo}
+                    canUndo={undoStack.length > 0}
+                    onRedo={handleRedo}
+                    canRedo={redoStack.length > 0}
+                    onSave={handleSave} // 在实例模式下直接保存并展示等待动画
+                    isSaving={isSaving}
+                    canOperateTopology={canOperateTopology}
+                    collectionOptions={collectionOptions}
+                    onToggleCollectionOption={handleToggleCollectionOption}
+                    simulationEnabled={simulationEnabled}
+                    onToggleSimulation={handleToggleSimulation}
+                    mirroringEnabled={mirroringEnabled}
+                    onToggleMirroring={handleToggleMirroring}
+                    // 新增：流量镜像相关props
+                    availableSwitches={availableSwitches}
+                    onSelectSwitchForMirroring={handleSelectSwitchForMirroring}
+                    isSelectingSwitchForMirroring={isSelectingSwitchForMirroring}
+                    shouldResetSwitchDropdown={shouldResetSwitchDropdown}
+                    // 新增：流量模拟相关props
+                    onSelectSwitchForSimulation={handleSelectSwitchForSimulation}
+                    isSelectingSwitchForSimulation={isSelectingSwitchForSimulation}
+                    shouldResetSimulationDropdown={shouldResetSimulationDropdown}
+                    // onExport={handleExport}
+                    // onImport={handleImport}
+                    onClearSelection={() => dispatch({type: 'CLEAR_SELECTION', payload: null})}
+                />
+            )}
             <div
                 ref={svgCanvasRef}
                 onDrop={handleDrop}
