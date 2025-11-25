@@ -187,17 +187,35 @@ const handleViewCourseScores = async (courseId: string) => {
     window.open(`/back/api/study/test/download_test_score_detail?course_id=${courseId}&test_id=${testId}&category=${category}`, '_blank');
   };
 
-  // 过滤课程
-  const filteredCourses = courses.filter(course => {
-    if (!searchTerm) return true;
+    // 过滤课程和测试项
+  const filteredCourses = courses.map(course => {
+    if (!searchTerm) return course;
+    
     const searchLower = searchTerm.toLowerCase();
-    if (course.course_id.toLowerCase().includes(searchLower)) return true;
-    if (course.course_name.toLowerCase().includes(searchLower)) return true;
-    return course.items.some(item => 
+    
+    // 如果搜索词匹配课程信息，返回整个课程
+    if (
+      course.course_id.toLowerCase().includes(searchLower) ||
+      course.course_name.toLowerCase().includes(searchLower)
+    ) {
+      return course;
+    }
+    
+    // 如果搜索词匹配测试项，只返回匹配的测试项
+    const filteredItems = course.items.filter(item => 
       item.name.toLowerCase().includes(searchLower) ||
       item.description.toLowerCase().includes(searchLower)
     );
-  });
+    
+    if (filteredItems.length > 0) {
+      return {
+        ...course,
+        items: filteredItems
+      };
+    }
+    
+    return null;
+  }).filter(Boolean) as Course[];
 
   // 计算分页后的数据
   const paginatedCourses = filteredCourses.slice(
@@ -240,7 +258,7 @@ const handleViewCourseScores = async (courseId: string) => {
               </Typography>
               
               <TextField
-                label="搜索课程ID、名称或测试/实验名称"
+                label="搜索课程名称、测试名称或描述"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
