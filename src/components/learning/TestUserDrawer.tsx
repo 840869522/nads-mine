@@ -774,13 +774,21 @@ const handleAddSelectedUsers = () => {
   </Avatar>
   <ListItemText
     primary={<Typography sx={{ color: getTextColor() }}>{user.name}</Typography>}
-    secondary={
+        secondary={
       <>
-        <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
+        <Typography 
+          component="span" 
+          variant="body2" 
+          sx={{ color: getSecondaryTextColor(), display: 'block' }}
+        >
           用户名: {user.username}
         </Typography>
         {!isExperiment && (
-          <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
+          <Typography 
+            component="span" 
+            variant="body2" 
+            sx={{ color: getSecondaryTextColor(), display: 'block' }}
+          >
             试卷: {paper?.paperName || user.c_paper_id}
           </Typography>
         )}

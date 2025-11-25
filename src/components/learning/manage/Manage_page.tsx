@@ -132,7 +132,6 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
         try {
             const response = await customFetch(`/back/api/study/test/index?test_id=${testId}`);
             if (!response.ok) {
-                console.error('获取实例列表失败');
                 return;
             }
 
@@ -308,7 +307,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                         返回测试列表
                     </Button>
                     <Typography variant="h4" component="h1" fontWeight="bold">
-                        场景管理 {testId ? `(测试ID: ${testId})` : ''}
+                        场景管理 
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -374,7 +373,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     </TableCell>
                     <TableCell align="right">
                     {/* 查看实例详情按钮 */}
-                    <Tooltip title={hasInstance ? "查看实例详情" : "该场景尚未启动"}>
+                    <Tooltip title={hasInstance ? "查看实例详情" : "该测试尚未启动"}>
                         <span>
                         <IconButton
                             color="primary"
@@ -388,7 +387,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                     </Tooltip>
                     {/* 查看拓扑按钮 - 只有在有实例的情况下才能使用 */}
                     {isTopologyEnabled && (
-                        <Tooltip title={hasAnyInst ? "查看拓扑" : "该场景尚未启动，无法查看拓扑"}>
+                        <Tooltip title={hasAnyInst ? "查看拓扑" : "该测试尚未启动，无法查看拓扑"}>
                             <span>
                             <IconButton
                                 color="secondary"
@@ -402,7 +401,7 @@ const ScenarioManagementPage: React.FC<ScenarioManagementPageProps> = ({ testId,
                         </Tooltip>
                     )}
                     {/* 启动测试按钮 - 如果已有实例则禁用 */}
-                    <Tooltip title={hasInstance ? "该场景已有运行中的实例" : "启动测试"}>
+                    <Tooltip title={hasInstance ? "该测试已有运行中的实例" : "启动测试"}>
                         <span>
                         <IconButton
                             color="success"

@@ -933,7 +933,7 @@ const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
         </Alert>
       </Snackbar>
 
-      <Dialog
+            <Dialog
         open={confirmDialog.open}
         onClose={handleCancelEnterTest}
         maxWidth="sm"
@@ -941,21 +941,37 @@ const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
       >
         <DialogTitle>确认进入测试</DialogTitle>
         <DialogContent>
-          <DialogContentText>
+          <DialogContentText component="div"> {/* 关键修改：改为 div */}
             {confirmDialog.test && confirmDialog.test.c_test_type === '实验' ? (
               <>
-                <Typography color="warning.main" sx={{ mb: 1, fontWeight: 'bold' }}>
+                <Typography 
+                  component="span"
+                  color="warning.main" 
+                  sx={{ 
+                    mb: 1, 
+                    fontWeight: 'bold',
+                    display: 'block' // 确保换行显示
+                  }}
+                >
                   请注意测试截至时间，超时提交不计成绩。
                 </Typography>
-                <Typography>
+                <Typography component="span" sx={{ display: 'block' }}>
                   您即将进入实验测试：<strong>{confirmDialog.test.test_name}</strong>
                 </Typography>
-                <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                <Typography 
+                  component="span"
+                  variant="body2" 
+                  sx={{ 
+                    mt: 1, 
+                    color: 'text.secondary',
+                    display: 'block'
+                  }}
+                >
                   测试结束时间：{moment(confirmDialog.test.test_end).format('YYYY-MM-DD HH:mm')}
                 </Typography>
               </>
             ) : (
-              <Typography>
+              <Typography component="span" sx={{ display: 'block' }}>
                 您即将进入测试：<strong>{confirmDialog.test?.test_name}</strong>
               </Typography>
             )}
@@ -981,7 +997,7 @@ const renderTestTable = (tests: Test[], isPracticalTestTable = false) => {
           {errorDialog.title}
         </DialogTitle>
         <DialogContent>
-          <DialogContentText>
+          <DialogContentText component="div">
             {errorDialog.details.split('\n').map((line, index) => (
               <div key={index} style={{ marginBottom: '8px' }}>{line}</div>
             ))}

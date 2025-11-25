@@ -541,23 +541,13 @@ const handleViewCourseScores = async (courseId: string) => {
                       </Table>
                     </TableContainer>
                   </Box>
-                ))}
-                
-                {/* 无数据提示 */}
-                {scoreData && (!scoreData.tests || scoreData.tests.length === 0) && (!scoreData.experiments || scoreData.experiments.length === 0) && (
-                  <Typography sx={{ color: isDarkMode ? '#aaa' : '#777', textAlign: 'center' }}>
-                    无成绩或提交历史
-                  </Typography>
-                )}
+                ))}           
               </>
             )}
 
             {/* 理论测试成绩显示 */}
             {scoreData?.category === '理论测试' && scoreData.scores && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
-                  理论测试: {scoreData.test_name}
-                </Typography>
                 <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
                   <Table>
                     <TableHead>
@@ -605,9 +595,6 @@ const handleViewCourseScores = async (courseId: string) => {
             {/* 实验成绩显示 */}
             {scoreData?.category === '实验' && scoreData.history && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ color: isDarkMode ? '#fff' : '#000', mb: 2 }}>
-                  实验: {scoreData.test_name}
-                </Typography>
                 <TableContainer component={Paper} sx={{ backgroundColor: getCardBgColor() }}>
                   <Table>
                     <TableHead>
@@ -652,14 +639,6 @@ const handleViewCourseScores = async (courseId: string) => {
                   </Table>
                 </TableContainer>
               </Box>
-            )}
-
-            {scoreData && 
-              ((scoreData.category === '理论测试' && (!scoreData.scores || scoreData.scores.length === 0)) ||
-               (scoreData.category === '实验' && (!scoreData.history || scoreData.history.length === 0))) && (
-              <Typography sx={{ color: isDarkMode ? '#aaa' : '#777', textAlign: 'center' }}>
-                无成绩或提交历史
-              </Typography>
             )}
           </DialogContent>
         </Dialog>
