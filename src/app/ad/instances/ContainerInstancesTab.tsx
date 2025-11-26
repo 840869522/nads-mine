@@ -17,9 +17,10 @@ import useSWR, { mutate as globalMutate } from "swr";
 
 import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
 
+// 定义扩展的接口
 interface RunningInstance extends OriginalRunningInstance {
     team_id: string | null;
-    can_operate: string | boolean;
+    can_operate: string | boolean; // 后端返回的 base64 权限包
 }
 
 import ConfirmActionDialog from '@/components/scenario/ConfirmActionDialog';
@@ -41,7 +42,7 @@ interface ContainerInstancesTabProps {
 
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
-    const { user, userTeamId } = useAuth();
+    const { user } = useAuth();
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -159,44 +160,37 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             },
         });
         setIsConfirmDialogOpen(true);
-    }, [fetchInstanceDetails, user]);
+    }, [fetchInstanceDetails]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
         setLogsModalId(instance.id);
     }, []);
 
+    // ★ 核心：权限解析函数，包含所有细粒度权限的默认值 ★
+    const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
+        const defaultPermissions = {
+            can_restart: false,
+            can_stop: false,
+            can_delete: false,
+            can_logs: false,
+            can_terminal: false, // 对应旧的 can_operate
+            can_submit_flag: false,
+            can_flag_history: false
+        };
 
-    const isPrivilegedUser = useCallback((currentUser: any): boolean => {
-        if (!currentUser) return false;
-
-        // 1. Admin 账号硬编码检查
-        const username = currentUser.user?.c_username || currentUser.c_username || currentUser.username;
-        if (username === 'admin') return true;
-
-        // 2. 定义拥有全权限的角色列表
-        // 这里加入了 'operations' (运维)
-        const privilegedRoles = ['admin', 'referee', 'administrator', 'operations'];
-
-        // 3. 获取用户角色列表
-        const roles = currentUser.role || currentUser.user?.roles || [];
-
-        // 4. 检查是否包含特权角色
-        if (Array.isArray(roles)) {
-            return roles.some(role => {
-                // 兼容角色可能是字符串，也可能是对象的情况
-                const roleName = typeof role === 'string' ? role : role.c_name;
-                return privilegedRoles.includes(roleName);
-            });
+        if (typeof b64 !== 'string' || b64.trim() === '') {
+            return { ...defaultPermissions };
         }
 
-        return false;
-    }, []);
-
-    const getUserTeamId = useCallback((currentUser: any): string | null => {
-        if (!currentUser) return null;
-        return currentUser.team_id || currentUser.user?.team_id || null;
-    }, []);
-
+        try {
+            const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+            const decodedJson = JSON.parse(atob(paddedB64));
+            return { ...defaultPermissions, ...decodedJson };
+        } catch (e) {
+            console.error("Failed to parse 'can_operate' field:", e);
+            return defaultPermissions;
+        }
+    };
 
     const columns: GridColDef[] = useMemo(() => [
         { field: 'name', headerName: '名称', flex: 1.5 },
@@ -214,7 +208,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         { field: 'ipAddress', headerName: 'IP', width: 160, hide: !showColumns.ipAddress },
         { field: 'id', headerName: '容器ID', flex: 1, hide: !showColumns.id, renderCell: (params) => <Tooltip title={params.value}><code>{params.value.substring(0,12)}...</code></Tooltip> },
         {
-            field: 'actions', headerName: '操作', sortable: false, width: 320,
+            field: 'actions', headerName: '操作', sortable: false, width: 360,
             renderCell: (params) => {
                 const instance = params.row as RunningInstance;
                 const isActionable = !['starting', 'stopping', 'deleting', 'restarting'].includes(instance.status);
@@ -223,103 +217,102 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
-                    const defaultPermissions = {
-                        can_operate: false,
-                        container_stop: false,
-                        container_delete: false,
-                        container_restart: false,
-                    };
-
-                    if (typeof b64 !== 'string' || b64.trim() === '') {
-                        return {
-                            ...defaultPermissions,
-                            can_operate: !!b64,
-                        };
-                    }
-
-                    try {
-                        const paddedB64 = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
-                        const decodedJson = JSON.parse(atob(paddedB64));
-                        return {
-                            ...defaultPermissions,
-                            ...decodedJson,
-                        };
-                    } catch (e) {
-                        console.error("Failed to parse 'can_operate' field:", e, "Original value:", b64);
-                        return defaultPermissions;
-                    }
-                };
-
-                const backendPermissions = safeJsonParse(instance.can_operate);
-                const isAdminOrPrivileged = isPrivilegedUser(user);
-
-                // ★★★ 特权用户强制获得所有操作权限 ★★★
-                const canOperateGeneral = isAdminOrPrivileged ? {
-                    can_operate: true,
-                    container_stop: true,
-                    container_delete: true,
-                    container_restart: true
-                } : backendPermissions;
-
-                const isOwnTeamTarget = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
-                const canSubmitFlag = isAdminOrPrivileged || !isOwnTeamTarget;
-
-                const isTeamMember = !!(userTeamId && instance.team_id && String(userTeamId) === String(instance.team_id));
-                const hasTerminalPermission = isAdminOrPrivileged || isTeamMember;
+                // ★ 获取后端计算好的所有权限 ★
+                const perms = safeJsonParse(instance.can_operate);
 
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Tooltip title={canOperateGeneral?.can_operate ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
+                        {/* 1. 启动/暂停 */}
+                        <Tooltip title={perms.can_start ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
-                                <IconButton onClick={() => handleStartInstance(instance)} size="small" disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !canOperateGeneral?.container_restart}>
-                                    {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={canOperateGeneral?.can_operate ? "success" : "disabled"} />}
-                                </IconButton>
-                            </Box>
-                        </Tooltip>
-                        <Tooltip title={canOperateGeneral?.container_stop ? "停止" : "无权限"}>
-                            <Box component="span">
-                                <IconButton onClick={() => handleStopInstance(instance)} size="small" disabled={!isActionable || isStopped || !canOperateGeneral?.container_stop}>
-                                    <StopIcon fontSize="small" color={!isStopped && canOperateGeneral?.container_stop ? 'error' : 'disabled'} />
-                                </IconButton>
-                            </Box>
-                        </Tooltip>
-                        <Tooltip title={canOperateGeneral?.container_delete ? "删除" : "无权限"}>
-                            <Box component="span">
-                                <IconButton onClick={() => handleDeleteInstance(instance)} size="small" disabled={!isActionable || !isStopped || !canOperateGeneral?.container_delete}>
-                                    <DeleteIcon fontSize="small" color={isStopped && canOperateGeneral?.container_delete ? 'error' : 'disabled'} />
+                                <IconButton
+                                    onClick={() => handleStartInstance(instance)}
+                                    size="small"
+                                    disabled={!isActionable || (!isRunning && !isPaused && !isStopped) || !perms.can_start}
+                                >
+                                    {isRunning ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" color={perms.can_start ? "success" : "disabled"} />}
                                 </IconButton>
                             </Box>
                         </Tooltip>
 
+                        {/* 2. 停止 */}
+                        <Tooltip title={perms.can_stop ? "停止" : "无权限"}>
+                            <Box component="span">
+                                <IconButton
+                                    onClick={() => handleStopInstance(instance)}
+                                    size="small"
+                                    disabled={!isActionable || isStopped || !perms.can_stop}
+                                >
+                                    <StopIcon fontSize="small" color={!isStopped && perms.can_stop ? 'error' : 'disabled'} />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
+
+                        {/* 3. 删除 */}
+                        <Tooltip title={perms.can_delete ? "删除" : "无权限"}>
+                            <Box component="span">
+                                <IconButton
+                                    onClick={() => handleDeleteInstance(instance)}
+                                    size="small"
+                                    disabled={!isActionable || !isStopped || !perms.can_delete}
+                                >
+                                    <DeleteIcon fontSize="small" color={isStopped && perms.can_delete ? 'error' : 'disabled'} />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
+
+                        {/* Flag 相关 (仅当容器是靶机时显示) */}
                         {isTarget && (
                             <>
-                                <Tooltip title={canSubmitFlag ? "提交Flag" : "不能对本队靶机提交Flag"}>
+                                {/* 4. 提交 Flag */}
+                                <Tooltip title={perms.can_submit_flag ? "提交Flag" : "无提交权限(本队靶机或未运行)"}>
                                     <Box component="span">
                                         <IconButton
                                             onClick={() => setFlagSubmissionModalId(instance.id)}
                                             size="small"
-                                            disabled={!isRunning || !canSubmitFlag}
+                                            disabled={!isRunning || !perms.can_submit_flag}
                                         >
-                                            <FlagIcon fontSize="small" color={isRunning && canSubmitFlag ? 'primary' : 'disabled'} />
+                                            <FlagIcon fontSize="small" color={isRunning && perms.can_submit_flag ? 'primary' : 'disabled'} />
                                         </IconButton>
                                     </Box>
                                 </Tooltip>
-                                <Tooltip title="Flag历史记录">
+
+                                {/* 5. Flag 历史 */}
+                                <Tooltip title={perms.can_flag_history ? "Flag历史" : "无查看权限"}>
                                     <Box component="span">
-                                        <IconButton onClick={() => setFlagHistoryModalOpen(true)} size="small">
-                                            <HistoryIcon fontSize="small" color="info" />
+                                        <IconButton
+                                            onClick={() => setFlagHistoryModalOpen(true)}
+                                            size="small"
+                                            disabled={!perms.can_flag_history}
+                                        >
+                                            <HistoryIcon fontSize="small" color={perms.can_flag_history ? 'info' : 'disabled'} />
                                         </IconButton>
                                     </Box>
                                 </Tooltip>
                             </>
                         )}
 
-                        <Tooltip title="日志"><Box component="span"><IconButton onClick={() => handleOpenLogs(instance)} size="small"><ArticleIcon fontSize="small" /></IconButton></Box></Tooltip>
-
-                        <Tooltip title={hasTerminalPermission ? "更多操作" : "您不属于此容器分配的队伍"}>
+                        {/* 6. 日志 */}
+                        <Tooltip title={perms.can_logs ? "日志" : "无权限"}>
                             <Box component="span">
-                                <IconButton onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })} size="small" disabled={!hasTerminalPermission}>
+                                <IconButton
+                                    onClick={() => handleOpenLogs(instance)}
+                                    size="small"
+                                    disabled={!perms.can_logs}
+                                >
+                                    <ArticleIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                        </Tooltip>
+
+                        {/* 7. 更多操作 (终端) */}
+                        <Tooltip title={perms.can_terminal ? "更多操作" : "无权限"}>
+                            <Box component="span">
+                                <IconButton
+                                    onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })}
+                                    size="small"
+                                    disabled={!perms.can_terminal}
+                                >
                                     <MoreVertIcon fontSize="small" />
                                 </IconButton>
                             </Box>
@@ -328,7 +321,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, user, userTeamId, isPrivilegedUser, getUserTeamId]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;

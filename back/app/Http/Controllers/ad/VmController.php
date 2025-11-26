@@ -12,10 +12,10 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Str;
 use App\Utils\JWTControll;
 use Illuminate\Support\Facades\Cache;
+use App\Utils\GlobalResponse;
 
 class VmController extends Controller
 {
-
     private CommandLineService $cliService;
 
     private const VALID_IMAGE_EXTENSIONS = [
@@ -27,16 +27,24 @@ class VmController extends Controller
         $this->cliService = $cliService;
     }
 
-private function checkUserBanForVm($username, $vmId)
+    private function getTokenData(Request $request)
+    {
+        $auth = $request->header("Authorization", null);
+        if (!$auth) return null;
+        try {
+            $jwtRes = JWTControll::decodeJWT($auth);
+            return $jwtRes["err"] == null ? $jwtRes["data"] : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function checkUserBanForVm($username, $vmId)
     {
         try {
-            // 1. 通过 VM ID 找到它属于哪个场景实例
-            // 注意：这里假设传入的是数据库主键 ID (integer)
-            // 如果传入的是 UUID 字符串 (c_vm_name)，请根据实际情况调整查询条件
             $vmInstance = DB::table('c_scene_vm_instances')->where('c_vm_id', $vmId)->first();
 
             if (!$vmInstance || !$vmInstance->c_scene_instances_id) {
-                // 尝试按名称查（兼容性处理）
                 if (!$vmInstance) {
                      $vmInstance = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
                 }
@@ -45,7 +53,6 @@ private function checkUserBanForVm($username, $vmId)
                 }
             }
 
-            // 2. 通过场景实例 ID 找到对应的演练配置
             $adConfigId = DB::table('c_ad_configs')
                 ->where('c_scene_instance_id', $vmInstance->c_scene_instances_id)
                 ->value('c_id');
@@ -54,7 +61,6 @@ private function checkUserBanForVm($username, $vmId)
                 return false;
             }
 
-            // 3. 检查禁赛表
             $isBanned = DB::table('c_ad_user_bans')
                 ->where('c_ad_config_id', $adConfigId)
                 ->where('c_user_id', $username)
@@ -80,120 +86,135 @@ private function checkUserBanForVm($username, $vmId)
 
     /**
      * 获取指定场景实例下的所有虚拟机列表，并为每台虚拟机动态计算当前用户的操作权限。
-     *
-     * @param string $instance_id 场景实例的UUID
-     * @param \Illuminate\Http\Request $request Laravel的请求对象，由框架自动注入
-     * @return \Illuminate\Http\JsonResponse
      */
-    public function listVmsBySceneInstance(string $instance_id, \Illuminate\Http\Request $request)
+    public function listVmsBySceneInstance(string $instance_id, Request $request)
     {
-        $vm_stop = 0;
-        $vm_restart = 0;
-        $vm_shutdown = 0;
-        $vm_delete = 0;
-
-        // --- 步骤 1: 从底层虚拟化系统获取所有虚拟机的“物理”状态 ---
         try {
-            $auth = $request->header("Authorization",null);
-            $jwtRes =  JWTControll::decodeJWT($auth);
+            // 1. 解析 JWT
+            $auth = $request->header("Authorization", null);
+            $jwtRes = JWTControll::decodeJWT($auth);
             if ($jwtRes["err"] != null) {
-                response()->json([
+                return response()->json([
                   "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
                   "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
-                ])->send();
-                exit();
+                ], 401);
             }
-            $permissions = Cache::get($jwtRes["data"]["permission"]);
-            $permissions = array_map(function ($item){
-               return $item->c_id;
-            },$permissions);
-            if(in_array("vm_stop", $permissions)){
-                $vm_stop = 1;
-            }
-            if(in_array("vm_restart", $permissions)){
-                $vm_restart = 1;
-            }
-            if(in_array("vm_shutdown", $permissions)){
-                $vm_shutdown = 1;
-            }
-            if(in_array("vm_delete", $permissions)){
-                $vm_delete = 1;
-            }
-            // 这个方法（例如通过 `virsh list --all`）获取宿主机上 所有虚拟机的原始列表
+            $tokenData = $jwtRes["data"];
+
+            // 2. 获取权限点 (Permission IDs)
+            $permissions = Cache::get($tokenData["permission"]) ?? [];
+            $permissionIds = array_map(fn($item) => $item->c_id, $permissions);
+
+            // 3. ★ 判定特权模式 (双轨制核心) ★
+            $isPrivilegedMode = in_array('container_manage_global', $permissionIds) || ($tokenData['id'] === 'admin');
+
+            // 4. 预计算功能权限
+            $hasPerm = [
+                'stop'     => in_array("vm_stop", $permissionIds),
+                'start'    => in_array("vm_start", $permissionIds),
+                'restart'  => in_array("vm_restart", $permissionIds),
+                'delete'   => in_array("vm_delete", $permissionIds),
+                'console'  => in_array("vm_console", $permissionIds),
+                'snapshot' => in_array("vm_snapshot", $permissionIds),
+                'flag_sub' => in_array("flag_submit", $permissionIds),
+                'flag_his' => in_array("flag_history", $permissionIds),
+            ];
+
+            // 5. 获取物理 VM 列表
             $allVmsFromHypervisor = $this->fetchVmInstances();
             if (!is_array($allVmsFromHypervisor)) {
-                Log::error('fetchVmInstances did not return an array for instance ' . $instance_id);
+                Log::error('fetchVmInstances failed');
                 return response()->json([]);
             }
-        } catch (\Throwable $e) {
-            Log::error('Failed to fetch VM instances from hypervisor for instance ' . $instance_id . ': ' . $e->getMessage());
-            return response()->json(['error' => '无法从虚拟化平台获取虚拟机列表: ' . $e->getMessage()], 500);
-        }
 
-        // --- 步骤 2: 从数据库获取属于该场景实例的虚拟机的“逻辑”信息 ---
-        try {
-            // 查询数据库，只获取与当前场景实例ID匹配的虚拟机记录
-            // 使用 keyBy('c_vm_name') 可以极大地提高后续数据合并的效率
+            // 6. 获取数据库 VM 记录
             $vmDetailsFromDb = SceneVmInstance::where('c_scene_instances_id', $instance_id)
                 ->get()->keyBy('c_vm_name');
-        } catch (\Throwable $e) {
-            Log::error('Database query for scene VMs failed for instance ' . $instance_id . ': ' . $e->getMessage());
-            return response()->json(['error' => '数据库查询失败: ' . $e->getMessage()], 500);
-        }
 
-        // --- 步骤 3: 合并物理和逻辑数据，并为每台虚拟机计算操作权限 ---
-        $resultVms = [];
+            $resultVms = [];
 
-        // 您添加的调试日志：检查由认证中间件注入的用户信息是否存在
-        // 如果前端请求正确，这里应该能打印出用户信息；如果请求错误，这里会打印 null。
-        $auth = $request->header("Authorization",null);
-        $jwtRes =  JWTControll::decodeJWT($auth);
-        $tokenData = $jwtRes["data"];
-        // 遍历所有物理虚拟机
-        foreach ($allVmsFromHypervisor as $vm) {
-            // 检查这台物理虚拟机是否在我们从数据库中查出的“属于此场景”的列表里
-            if (
-                isset(
-                    $vmDetailsFromDb[$vm['name']]
-                )
-            ) {
+            // 7. 遍历并计算权限
+            foreach ($allVmsFromHypervisor as $vm) {
+                if (isset($vmDetailsFromDb[$vm['name']])) {
+                    $dbInfo = $vmDetailsFromDb[$vm['name']];
 
-                // 如果是，说明它属于当前场景，我们开始处理它
-                $dbInfo = $vmDetailsFromDb[$vm['name']];
+                    // 填充基础信息
+                    $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
+                    $vm['scene_name'] = null;
+                    $vm['ip'] = $dbInfo->c_ip;
+                    $vm['is_target'] = !empty($dbInfo->c_flag);
+                    $vm['team_id'] = $dbInfo->c_team_id;
 
-                // 合并数据库中的信息（IP, 是否为靶机等）到结果中
-                $vm['scene_instance_id'] = $dbInfo->c_scene_instances_id;
-                $vm['scene_name'] = null; // 可根据需要进行扩展
-                $vm['ip'] = $dbInfo->c_ip;
-                $vm['is_target'] = !empty($dbInfo->c_flag);
+                    // ★★★ 权限融合逻辑 ★★★
+                    $finalPerms = [];
 
-                // ★★★ 新增代码 ★★★
-                // 将数据库中的 c_team_id 添加到 API 响应中
-                // 我们使用 team_id 作为 JSON 键名，保持简洁
-                $vm['team_id'] = $dbInfo->c_team_id;
+                    if ($isPrivilegedMode) {
+                        // === 线路一：特权通道 ===
+                        $finalPerms = [
+                            "vm_stop"         => $hasPerm['stop'],
+                            "vm_start"        => $hasPerm['start'],
+                            "vm_restart"      => $hasPerm['restart'],
+                            "vm_delete"       => $hasPerm['delete'],
+                            "vm_console"      => $hasPerm['console'],
+                            "vm_snapshot"     => $hasPerm['snapshot'],
+                            "can_submit_flag" => $hasPerm['flag_sub'],
+                            "can_flag_history"=> $hasPerm['flag_his'],
+                            "can_operate"     => true, // 兼容旧字段
+                        ];
+                    } else {
+                        // === 线路二：学员通道 ===
 
-                // ★ 关键：调用权限检查函数来动态生成 can_operate 字段 ★
-                // 这个函数内部会自己从 Request 中获取用户信息，所以我们不需要传递参数。
-                // 它的返回值 (true/false) 将决定前端按钮是否可操作。
-		        $can_operate = $dbInfo->canBeOperatedByUser((object)["token_data"=>$tokenData]);
-                $permissions = [
-                    "vm_stop"     => $vm_stop && $can_operate,
-                    "vm_restart"  => $vm_restart && $can_operate,
-                    "vm_shutdown" => $vm_shutdown && $can_operate,
-                    "vm_delete"   => $vm_delete && $can_operate,
-                    "can_operate"    => $can_operate,
-                ];
-                $permissionsJson = json_encode($permissions);
-                $encodedPermissions = base64_encode($permissionsJson);
-                $vm["can_operate"] =$encodedPermissions;
-                Log::info($vm);
-                // 将处理完毕的虚拟机信息添加到最终结果中
-                $resultVms[] = $vm;
+                        $isOwnerAndActive = false;
+                        if (method_exists($dbInfo, 'canBeOperatedByUser')) {
+                            $isOwnerAndActive = $dbInfo->canBeOperatedByUser((object)["token_data" => $tokenData]);
+                        } else {
+                            // 兜底逻辑：手动检查归属和禁赛
+                            $userTeamId = $tokenData['team_id'] ?? null;
+                            $isOwner = ($userTeamId && $dbInfo->c_team_id == $userTeamId);
+                            $isBanned = $this->checkUserBanForVm($tokenData['id'], $dbInfo->c_vm_id);
+                            $isOwnerAndActive = $isOwner && !$isBanned;
+                        }
+
+                        $finalPerms = [
+                            "vm_stop"         => $hasPerm['stop'] && $isOwnerAndActive,
+                            "vm_start"        => $hasPerm['start'] && $isOwnerAndActive,
+                            "vm_restart"      => $hasPerm['restart'] && $isOwnerAndActive,
+                            "vm_delete"       => $hasPerm['delete'] && $isOwnerAndActive,
+                            "vm_console"      => $hasPerm['console'] && $isOwnerAndActive,
+                            "vm_snapshot"     => $hasPerm['snapshot'] && $isOwnerAndActive,
+
+                            // Flag 逻辑反转：只能交别人的
+                            "can_submit_flag" => $hasPerm['flag_sub'] && !$isOwnerAndActive,
+                            "can_flag_history"=> $hasPerm['flag_his'] && !$isOwnerAndActive,
+                            "can_operate"     => $isOwnerAndActive,
+                        ];
+                    }
+
+                    // ★★★ 关键调试日志：打印计算好的权限包 ★★★
+                    // 这行日志会显示在 Laravel 的 storage/logs/laravel.log 中
+                    Log::info("VM [{$vm['name']}] 权限计算结果 (User: {$tokenData['id']}, Staff: " . ($isPrivilegedMode ? 'Yes' : 'No') . "):", $finalPerms);
+
+                    // 强制转为 JSON 字符串
+                    $jsonString = json_encode($finalPerms);
+                    if ($jsonString === false) {
+                        Log::error("JSON Encode 失败: " . json_last_error_msg());
+                        // 兜底值
+                        $jsonString = json_encode(['can_operate' => false]);
+                    }
+
+                    // Base64 编码
+                    $vm["can_operate"] = base64_encode($jsonString);
+
+                    $resultVms[] = $vm;
+                }
             }
-        }
 
-        // --- 步骤 4: 将最终结果以 JSON 格式返回给前端 ---
-        return response()->json($resultVms);
+            return response()->json($resultVms);
+
+        } catch (\Throwable $e) {
+            Log::error('listVmsBySceneInstance error: ' . $e->getMessage());
+            return response()->json(['error' => '内部错误'], 500);
+        }
     }
 
     /**
@@ -661,104 +682,41 @@ private function checkUserBanForVm($username, $vmId)
     {
         $method = strtolower($request->query('method', 'ssh'));
         $vmQueryName = $request->query('vm_name', $vmName);
-        $auth = $request->header("Authorization", null);
-        $jwtRes = JWTControll::decodeJWT($auth);
 
-        if ($jwtRes["err"] != null) {
-            return response()->json(['error' => 'Invalid token'], 401);
-        }
-        $username = $jwtRes["data"]["id"] ?? null;
-        if (empty($username)) {
-            return response()->json(['error' => 'Unable to identify user'], 401);
-        }
-    // ★★★ 新增：禁赛检查 ★★★
-            try {
-                $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmQueryName)->first();
-                if ($vmRecord) {
-                    if ($this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
-                        return response()->json([
-                            'code' => 403,
-                            'error' => 'User is banned',
-                            'message' => '您已被禁赛，无法连接此虚拟机！'
-                        ], 403);
-                    }
-                }
-            } catch (\Exception $e) {
-                Log::warning("Guac 获取前的禁赛检查出错: " . $e->getMessage());
-            }
-            // ★★★ 结束新增 ★★★
+        $tokenData = $this->getTokenData($request);
+        if (!$tokenData) return response()->json(['error' => 'Invalid token'], 401);
+        $username = $tokenData['id'];
 
-        // Access control: privileged roles bypass; others must be team members and not banned in this drill
-        $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+        // 1. 检查特权模式
+        $permissions = Cache::get($tokenData["permission"]) ?? [];
+        $permissionIds = array_map(fn($item) => $item->c_id, $permissions);
+        $isPrivileged = in_array('container_manage_global', $permissionIds) || ($username === 'admin');
+
+        if ($isPrivileged) {
+            goto fetch_guac_params;
+        }
+
+        // 2. 学员模式检查
         try {
-            $roles = DB::table('c_users_roles')
-                ->where('c_user_id', $username)
-                ->pluck('c_role_id')
-                ->map(fn ($role) => strtolower((string) $role));
-        } catch (\Throwable $e) {
-            Log::error('Failed to fetch user roles for VM guac authority: ' . $e->getMessage());
-            return response()->json(['error' => 'Database query failed'], 500);
-        }
+            $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmQueryName)->first();
+            if (!$vmRecord) return response()->json(['error' => 'VM not found'], 404);
 
-        if (!$roles->contains(fn ($r) => in_array($r, $privilegedRoles, true))) {
-            try {
-                $vmRecord = DB::table('c_scene_vm_instances')
-                    ->where('c_vm_name', $vmQueryName)
-                    ->select('c_team_id', 'c_scene_instances_id')
-                    ->first();
-            } catch (\Throwable $e) {
-                Log::error('Failed to fetch VM record for guac authority: ' . $e->getMessage());
-                return response()->json(['error' => 'Database query failed'], 500);
+            // A. 禁赛检查
+            if ($this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
+                return response()->json(['error' => 'User is banned', 'message' => '您已被禁赛'], 403);
             }
 
-            $teamId = $vmRecord->c_team_id ?? null;
-            $normalizedTeamId = $teamId !== null ? trim((string) $teamId) : '';
-
-            if ($vmRecord && $normalizedTeamId !== '') {
-                try {
-                    $isMember = DB::table('c_teams_users')
-                        ->where('team_id', $normalizedTeamId)
-                        ->where('user_id', $username)
-                        ->exists();
-                } catch (\Throwable $e) {
-                    Log::error('Failed to verify team membership for VM guac authority: ' . $e->getMessage());
-                    return response()->json(['error' => 'Database query failed'], 500);
-                }
-
-                if (!$isMember) {
-                    return response()->json([
-                        'error' => 'Unauthorized to access this VM',
-                        'message' => 'User is not in the VM team',
-                    ], 403);
-                }
-
-                try {
-                    $adConfigId = DB::table('c_ad_configs')
-                        ->where('c_scene_instance_id', $vmRecord->c_scene_instances_id)
-                        ->value('c_id');
-                } catch (\Throwable $e) {
-                    Log::error('Failed to fetch ad_config for VM guac authority: ' . $e->getMessage());
-                    $adConfigId = null;
-                }
-
-                if ($adConfigId) {
-                    $isBannedInAd = DB::table('c_ad_user_bans')
-                        ->where('c_ad_config_id', $adConfigId)
-                        ->where('c_user_id', $username)
-                        ->where(function ($q) {
-                            $q->whereNull('c_expires_at')->orWhere('c_expires_at', '>', now());
-                        })
-                        ->exists();
-                    if ($isBannedInAd) {
-                        return response()->json([
-                            'error' => 'User is banned',
-                            'message' => 'This account is banned in the current drill; console access denied',
-                        ], 403);
-                    }
-                }
+            // B. 队伍检查
+            $userTeamId = $tokenData['team_id'] ?? null;
+            if (!$userTeamId || $userTeamId != $vmRecord->c_team_id) {
+                return response()->json(['error' => 'Unauthorized', 'message' => '这不是你的虚拟机'], 403);
             }
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Server error'], 500);
         }
 
+        fetch_guac_params:
         try {
             $xml = $this->runVirsh('dumpxml', $vmName);
             $vncPort = $this->parseVncPort($xml) ?? 5900;
@@ -798,7 +756,8 @@ private function checkUserBanForVm($username, $vmId)
             'vnc_port' => $vncPort,
         ], 200);
     }
-// GET /vms/{vm_id}
+
+    // GET /vms/{vm_id}
     public function getVmInfo($vmId)
     {
         try {
@@ -894,25 +853,35 @@ private function checkUserBanForVm($username, $vmId)
     // POST /vms/{vm_id}/actions/{action}
     public function manageVmLifecycle($vmId, $action)
     {
-    // ★★★ 新增：禁赛检查 ★★★
-            $request = request();
-            $auth = $request->header("Authorization", null);
-            if ($auth) {
+        $request = request();
+        $tokenData = $this->getTokenData($request);
+
+        if ($tokenData) {
+            // 1. 特权检查
+            $permissions = Cache::get($tokenData["permission"]) ?? [];
+            $permissionIds = array_map(fn($item) => $item->c_id, $permissions);
+            $isPrivileged = in_array('container_manage_global', $permissionIds) || ($tokenData['id'] === 'admin');
+
+            if (!$isPrivileged) {
+                // 2. 学员检查 (禁赛 + 归属)
                 try {
-                    $jwtRes = JWTControll::decodeJWT($auth);
-                    $username = $jwtRes["data"]["id"] ?? null;
-                    if ($username) {
-                        $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
-                        if (!$vmRecord) {
-                             $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
+                    $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmId)->first();
+                    if ($vmRecord) {
+                        // 归属检查
+                        $userTeamId = $tokenData['team_id'] ?? null;
+                        if (!$userTeamId || $userTeamId != $vmRecord->c_team_id) {
+                            return response()->json(['message' => '无权操作他人的虚拟机'], 403);
                         }
-                        if ($vmRecord && $this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
-                             return response()->json(['message' => '您已被禁赛，无法操作此虚拟机！'], 403);
+                        // 禁赛检查
+                        if ($this->checkUserBanForVm($tokenData['id'], $vmRecord->c_vm_id)) {
+                            return response()->json(['message' => '您已被禁赛，无法操作此虚拟机！'], 403);
                         }
                     }
                 } catch (\Exception $e) {}
             }
-            // ★★★ 结束新增 ★★★
+        }
+
+        // ... (后续的 runVirsh 操作保持不变) ...
         $map = [
             'start' => 'start',
             'pause' => 'suspend',
