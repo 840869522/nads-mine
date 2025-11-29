@@ -349,7 +349,7 @@ class AdController extends Controller
                 $adConfigOnFail->c_status = 'failed';
                 $adConfigOnFail->save();
             }
-            return response()->json(['message' => '创建场景物理资源时发生错误：' . $e->getMessage()], 500);
+            return response()->json(['message' => '场景启动失败'], 500);
         }
     }
 
