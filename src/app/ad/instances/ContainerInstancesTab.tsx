@@ -163,13 +163,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         setIsConfirmDialogOpen(true);
     }, [fetchInstanceDetails]);
 
-    const handleOpenLogs = React.useCallback((vm: VmInstance) => {
+    const handleOpenLogs = useCallback((instance: RunningInstance) => {
         const base =
             typeof window !== 'undefined'
                 ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
         const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
         const id = uuidv4();
-        const title = `${vm.scene_instance_id || ''}_${vm.name}`.toLowerCase();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
         const params = encodeURIComponent(JSON.stringify({
             dataViewSpec: { id, title, allowNoIndex: true },
             columns: ["_source"],
