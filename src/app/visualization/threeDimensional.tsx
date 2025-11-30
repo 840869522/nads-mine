@@ -4,6 +4,7 @@ import {CSS2DObject, CSS2DRenderer, GLTFLoader, OrbitControls} from "three-stdli
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { AdData } from "./page";
+import { is } from "zod/v4/locales";
 
 function createSpaceship(
     scene: THREE.Scene,
@@ -117,6 +118,238 @@ function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.
     }
 
     animate();
+}
+
+/**
+ * 发射失败的射线，并在终点实体上进行快速的颜色闪烁反馈 (已修复材质共享问题)。
+ */
+function shootFailureRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Mesh) {
+    const start = new THREE.Vector3();
+    const end = new THREE.Vector3();
+
+    startNode.getWorldPosition(start);
+    endNode.getWorldPosition(end);
+
+    const steps = 100;
+    const arcHeight = 5;
+    const duration = 1500;
+    
+    const mid = start.clone().lerp(end, 0.5);
+    mid.y += arcHeight;
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+
+    // --- 轨迹效果: 创建扭曲数据结 Mesh (顶点颜色) ---
+    const projectileGeometry = new THREE.TorusKnotGeometry(0.05, 0.015, 64, 8, 3, 4);
+    const count = projectileGeometry.attributes.position.count;
+    const colors = new Float32Array(count * 3);
+    const color = new THREE.Color();
+    
+    // 轨迹核心色: 霓虹洋红 (非纯色渐变)
+    const centerColor = new THREE.Color(0xFF00FF); 
+    const edgeColor = new THREE.Color(0xAA3300);   
+
+    for (let i = 0; i < count; i++) {
+        const distance = projectileGeometry.attributes.position.getX(i) ** 2 + 
+                         projectileGeometry.attributes.position.getY(i) ** 2 + 
+                         projectileGeometry.attributes.position.getZ(i) ** 2;
+        const t = Math.min(distance / (0.05 * 0.05), 1); 
+        
+        color.copy(centerColor).lerp(edgeColor, t);
+        
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+    }
+
+    projectileGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const projectileMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true, 
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending
+    });
+    const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+    scene.add(projectile);
+
+    const startTime = performance.now();
+    
+    // --- 终点反馈初始化 ---
+    const originalSharedMaterial = endNode.material as THREE.Material; 
+    endNode.material = originalSharedMaterial.clone(); 
+    const targetMaterial = endNode.material as THREE.MeshBasicMaterial; 
+    
+    const originalColor = targetMaterial.color.clone();
+    // 💥 关键修正: 终点闪烁颜色回归标准红色 
+    const failureFeedbackColor = new THREE.Color(0xff0000); 
+    
+    const blinkInterval = 80;
+    const feedbackDuration = 1500; 
+    let feedbackStartTime: number | null = null;
+    
+    function animate(currentTime: number) {
+        const elapsed = currentTime - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        
+        if (t < 1) {
+            const position = curve.getPointAt(t);
+            projectile.position.copy(position);
+
+            projectile.rotation.x += 0.1;
+            projectile.rotation.y += 0.05;
+            projectile.rotation.z += 0.02;
+            
+            if (t + 0.01 < 1) {
+                const nextPosition = curve.getPointAt(t + 0.01);
+                projectile.lookAt(nextPosition);
+            }
+            
+            requestAnimationFrame(animate);
+        } else {
+            scene.remove(projectile);
+            projectileGeometry.dispose();
+            projectileMaterial.dispose();
+            
+            if (feedbackStartTime === null) {
+                feedbackStartTime = currentTime;
+            }
+            
+            const feedbackElapsed = currentTime - feedbackStartTime;
+            const feedbackT = Math.min(feedbackElapsed / feedbackDuration, 1);
+
+            if (feedbackT < 1) {
+                const isBright = Math.floor(feedbackElapsed / blinkInterval) % 2 === 0;
+                targetMaterial.color.copy(isBright ? failureFeedbackColor : originalColor);
+
+                requestAnimationFrame(animate);
+            } else {
+                targetMaterial.color.copy(originalColor); 
+                
+                const clonedMaterialToDispose = endNode.material;
+                endNode.material = originalSharedMaterial; 
+                (clonedMaterialToDispose as THREE.Material).dispose(); 
+
+                return; 
+            }
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Mesh) {
+    const start = new THREE.Vector3();
+    const end = new THREE.Vector3();
+
+    startNode.getWorldPosition(start);
+    endNode.getWorldPosition(end);
+
+    const steps = 100;
+    const arcHeight = 5;
+    const duration = 1800; 
+    
+    const mid = start.clone().lerp(end, 0.5);
+    mid.y += arcHeight;
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+
+    // --- 轨迹效果: 创建扭曲数据结 Mesh (顶点颜色) ---
+    const projectileGeometry = new THREE.TorusKnotGeometry(0.05, 0.015, 64, 8, 2, 3); 
+    const count = projectileGeometry.attributes.position.count;
+    const colors = new Float32Array(count * 3);
+    const color = new THREE.Color();
+    
+    // 轨迹核心色: 电光青/湖蓝 (非纯色渐变)
+    const centerColor = new THREE.Color(0x00FFBB); 
+    const edgeColor = new THREE.Color(0x0077FF);   
+
+    for (let i = 0; i < count; i++) {
+        const distance = projectileGeometry.attributes.position.getX(i) ** 2 + 
+                         projectileGeometry.attributes.position.getY(i) ** 2 + 
+                         projectileGeometry.attributes.position.getZ(i) ** 2;
+        const t = Math.min(distance / (0.05 * 0.05), 1); 
+        
+        color.copy(centerColor).lerp(edgeColor, t);
+        
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+    }
+
+    projectileGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const projectileMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true, 
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending
+    });
+    const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+    scene.add(projectile);
+
+    const startTime = performance.now();
+    
+    // --- 终点反馈初始化 ---
+    const originalSharedMaterial = endNode.material as THREE.Material; 
+    endNode.material = originalSharedMaterial.clone(); 
+    const targetMaterial = endNode.material as THREE.MeshBasicMaterial; 
+    
+    const originalColor = targetMaterial.color.clone();
+    // 💥 关键修正: 终点闪烁颜色回归标准绿色 
+    const successFeedbackColor = new THREE.Color(0x00ff00);
+    
+    const feedbackDuration = 1500;
+    let feedbackStartTime: number | null = null;
+    
+    function animate(currentTime: number) {
+        const elapsed = currentTime - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        
+        if (t < 1) {
+            const position = curve.getPointAt(t);
+            projectile.position.copy(position);
+
+            projectile.rotation.x += 0.05;
+            projectile.rotation.y += 0.02;
+            
+            if (t + 0.01 < 1) {
+                const nextPosition = curve.getPointAt(t + 0.01);
+                projectile.lookAt(nextPosition);
+            }
+            
+            requestAnimationFrame(animate);
+        } else {
+            scene.remove(projectile);
+            projectileGeometry.dispose();
+            projectileMaterial.dispose();
+            
+            if (feedbackStartTime === null) {
+                feedbackStartTime = currentTime;
+            }
+            
+            const feedbackElapsed = currentTime - feedbackStartTime;
+            const feedbackT = Math.min(feedbackElapsed / feedbackDuration, 1);
+
+            if (feedbackT < 0.5) {
+                const transitionT = feedbackT * 2;
+                targetMaterial.color.lerpColors(originalColor, successFeedbackColor, transitionT);
+            } else if (feedbackT < 1) {
+                const transitionT = (feedbackT - 0.5) * 2;
+                targetMaterial.color.lerpColors(successFeedbackColor, originalColor, transitionT);
+            } else {
+                targetMaterial.color.copy(originalColor); 
+                
+                const clonedMaterialToDispose = endNode.material;
+                endNode.material = originalSharedMaterial; 
+                (clonedMaterialToDispose as THREE.Material).dispose(); 
+
+                return; 
+            }
+            
+            requestAnimationFrame(animate); 
+        }
+    }
+
+    requestAnimationFrame(animate);
 }
 
 function shootBalls(scene: THREE.Scene, startNode: THREE.Object3D, firstRingRadius: number) {
@@ -284,6 +517,7 @@ interface VMItem {
     name: string;
     ip: string;
     teamName: string;
+    userId: string;
 }
 
 interface VMResult {
@@ -784,9 +1018,9 @@ export default function ThreeDimensional(adData: AdData){
 
 
         // 存储蓝色节点最上方的球体 (使用你要求的 'ip' 字段)
-        const blueNodes: { object: THREE.Mesh; ip: string }[] = [];
+        const blueNodes: { object: THREE.Mesh; ip: string; userId: string; name: string }[] = [];
         // 存储红色节点最上方的球体 (使用你要求的 'ip' 字段)
-        const redNodes: { object: THREE.Mesh; ip: string }[] = [];
+        const redNodes: { object: THREE.Mesh; ip: string; userId: string; name: string }[] = [];
 
 
         async function fetchData() {
@@ -834,6 +1068,8 @@ export default function ThreeDimensional(adData: AdData){
                 for (let i = 0; i < result.trueTargetList.length; i++) {
                     const ip: string = result.trueTargetList[i].ip;
                     const teamName: string = result.trueTargetList[i].teamName;
+                    const userId: string = result.trueTargetList[i].userId;
+                    const name: string = result.trueTargetList[i].name;
                     const segmentIndex: number = indicesArray[i]; // 对应 indicesArray 中前 i 个索引
     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
@@ -858,7 +1094,9 @@ export default function ThreeDimensional(adData: AdData){
 
                     blueNodes.push({
                         object: topMesh,
-                        ip: ip 
+                        ip: ip ,
+                        userId: userId,
+                        name: name,
                     });
 
                     // 放置节点并标记已占据
@@ -877,7 +1115,9 @@ export default function ThreeDimensional(adData: AdData){
 
                 for (let i = 0; i < result.falseTargetList.length; i++) {
                     const ip: string = result.falseTargetList[i].ip;
-                    const teamName: string = result.trueTargetList[i].teamName;
+                    const teamName: string = result.falseTargetList[i].teamName;
+                    const userId: string = result.falseTargetList[i].userId;
+                    const name: string = result.falseTargetList[i].name;
                     const segmentIndex: number = indicesArray[i + redStartOffset]; // 使用偏移后的索引
                     
                     const info = allNodePositions.get(segmentIndex)!; // 使用 ! 假设索引存在
@@ -902,7 +1142,9 @@ export default function ThreeDimensional(adData: AdData){
 
                     redNodes.push({
                         object: topMesh,
-                        ip: ip 
+                        ip: ip,
+                        userId: userId,
+                        name: name,
                     });
 
                     // 放置节点并标记已占据
@@ -972,8 +1214,8 @@ export default function ThreeDimensional(adData: AdData){
                     shootRay(scene, blue1.object, blue2.object);
                 }
 
-                // 下次间隔：5~10 秒
-                const nextDelay = (5 + Math.random() * 5) * 1000;
+                // 下次间隔：3~10 秒
+                const nextDelay = (3 + Math.random() * 5) * 1000;
                 setTimeout(shootLoop, nextDelay);
             }
         }, (5 + Math.random() * 1) * 1000);
@@ -1018,6 +1260,7 @@ export default function ThreeDimensional(adData: AdData){
         // 每 5 秒执行一次 fetchLogs
         let lastRedLogLength = 0;
         let lastBlueLogLength = 0;
+        let isFirst = true;
 
         const fetchAndUpdateLogs = async () => {
             try {
@@ -1028,6 +1271,22 @@ export default function ThreeDimensional(adData: AdData){
                         ...prev,
                         logInfo: logs
                     }));
+                    
+                    if(isFirst){
+                        isFirst = false;
+                        lastBlueLogLength = logs.length;
+                        return;
+                    }
+                    for(let k = lastBlueLogLength; k < logs.length; k++){
+                        const log = logs[k];
+                        const userObject = (id: string) =>blueNodes.find(n => n.userId === log.userName)?.object;
+                        const nameObject = (name: string) =>blueNodes.find(n => n.name === log.name)?.object;
+                        if(log.correct === 1){
+                            shootFailureRay(scene, userObject(log.userName)!, nameObject(log.name)!);
+                        }else{
+                            shootSuccessRay(scene, userObject(log.userName)!, nameObject(log.name)!);
+                        }
+                    }
                     lastBlueLogLength = logs.length;
                 }
 
@@ -1081,7 +1340,6 @@ export default function ThreeDimensional(adData: AdData){
             console.log(redSpaceships.length);
             setTimeout(function shootLoop() {
                 if(redSpaceships.length > 1){
-                    debugger
                     const index1 = Math.floor(Math.random() * redSpaceships.length);
                     const blue1 = redSpaceships[index1];
                     let index2;
