@@ -33,6 +33,7 @@ import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
 import { toast } from 'react-toastify';
+import {v4 as uuidv4} from "uuid";
 
 const API_BASE = "/back";
 
@@ -169,7 +170,20 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     }, [fetchInstanceDetails]);
 
     const handleOpenLogs = useCallback((instance: RunningInstance) => {
-        setLogsModalId(instance.id);
+        const base =
+            typeof window !== 'undefined'
+                ? `${window.location.protocol}//${window.location.hostname}:25601` : process.env.NEXT_PUBLIC_KIBANA_BASE_URL;
+        const version = process.env.NEXT_PUBLIC_KIBANA_VERSION || '1453';
+        const id = uuidv4();
+        const title = `${instance.scene_instance_id || ''}_${instance.name}`.toLowerCase();
+        const params = encodeURIComponent(JSON.stringify({
+            dataViewSpec: { id, title, allowNoIndex: true },
+            columns: ["_source"],
+            query: { language: "kuery", query: "" },
+            filters: []
+        }));
+        const url = `${base}/app/r?l=DISCOVER_APP_LOCATOR&v=${version}&p=${params}`;
+        window.open(url, '_blank');
     }, []);
 
     // ★ 核心：权限解析函数，包含所有细粒度权限的默认值 ★
