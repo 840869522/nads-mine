@@ -118,7 +118,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `启动实例: ${instance.name}`,
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                const action = instance.status === 'paused' ? 'unpause' : 'start';
+                // 运行中应该调用 pause，暂停中调用 unpause，其余状态调用 start
+                const action =
+                    instance.status === 'paused'
+                        ? 'unpause'
+                        : instance.status === 'running'
+                            ? 'pause'
+                            : 'start';
                 await customFetch(`${API_BASE}/api/containers/${instance.id}?action=${action}`, { method: 'POST' });
                 fetchInstanceDetails();
             },

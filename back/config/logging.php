@@ -50,7 +50,7 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single'],
+            'channels' => ['daily', "test_project"],
             'ignore_exceptions' => false,
         ],
 
@@ -59,7 +59,12 @@ return [
             'path' => env('LOG_PATH',storage_path('logs/laravel.log')),
             'level' => env('LOG_LEVEL', 'debug'),
         ],
-
+        "test_project" =>[
+            "driver" => "daily",
+            "path" =>storage_path("logs/laravel.log"),
+            "level" => env("LOG_LEVEL", "debug"),
+            'days' => env('LOG_DAYS', 14),
+        ],
         'daily' => [
             'driver' => 'daily',
             'path' => env('LOG_PATH',storage_path('logs/laravel.log')),
