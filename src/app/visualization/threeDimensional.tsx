@@ -1,61 +1,9 @@
 import {useEffect, useRef, useState} from "react";
 import * as THREE from "three";
-import {CSS2DObject, CSS2DRenderer, GLTFLoader, OrbitControls} from "three-stdlib";
+import {CSS2DObject, CSS2DRenderer, OrbitControls} from "three-stdlib";
 import { BattlefieldInfo, LogInfo, TeamInfo } from "./team";
 import FictionTeam from "./fictionTeam";
 import { AdData } from "./page";
-import { is } from "zod/v4/locales";
-
-function createSpaceship(
-    scene: THREE.Scene,
-    rings: THREE.Group,
-    modelPath: string,
-    scale: number = 6,
-    idx: number = 0
-): Promise<THREE.Object3D> {
-    return new Promise((resolve) => {
-        const loader = new GLTFLoader();
-        loader.load(modelPath, (gltf) => {
-            const spaceship = gltf.scene;
-            spaceship.scale.set(scale, scale, scale);
-
-            // 随机选择一个圆环
-            const ringIndex = Math.floor(Math.random() * rings.children.length);
-            const ring = rings.children[ringIndex];
-            
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            const positions = ring.geometry.attributes.position.array;
-            const segments = positions.length / 3;
-
-            // 随机选择圆环上的一个顶点
-            let vertexIndex: number;
-
-            if (idx === 1) {
-                // 取前半段 [0, Math.floor(segments / 2))
-                vertexIndex = Math.floor(Math.random() * Math.floor(segments / 2));
-            } else {
-                // 取后半段 [Math.floor(segments / 2), segments)
-                vertexIndex = Math.floor(Math.random() * Math.ceil(segments / 2)) + Math.floor(segments / 2);
-            }
-
-            const x = positions[vertexIndex * 3];
-            const y = positions[vertexIndex * 3 + 1];
-            const z = positions[vertexIndex * 3 + 2];
-
-            spaceship.position.set(x, z, y);
-
-            // 朝向圆心
-            spaceship.lookAt(0, 0, 0);
-
-            // 将飞船添加到场景中
-            scene.add(spaceship);
-
-            // 返回飞船对象
-            resolve(spaceship);
-        });
-    });
-}
 
 function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Object3D) {
     const start = new THREE.Vector3();
@@ -120,9 +68,28 @@ function shootRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.
     animate();
 }
 
-/**
- * 发射失败的射线，并在终点实体上进行快速的颜色闪烁反馈 (已修复材质共享问题)。
- */
+// --- 辅助函数：动态生成发光纹理 ---
+function createGlowTexture() {
+    const canvas = document.createElement('canvas');
+    const size = 64;
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) return new THREE.Texture();
+
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 220, 1)'); 
+    gradient.addColorStop(0.3, 'rgba(255, 180, 50, 0.8)'); 
+    gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
 function shootFailureRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Mesh) {
     const start = new THREE.Vector3();
     const end = new THREE.Vector3();
@@ -130,7 +97,6 @@ function shootFailureRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
     startNode.getWorldPosition(start);
     endNode.getWorldPosition(end);
 
-    const steps = 100;
     const arcHeight = 5;
     const duration = 1500;
     
@@ -138,55 +104,142 @@ function shootFailureRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
     mid.y += arcHeight;
     const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
 
-    // --- 轨迹效果: 创建扭曲数据结 Mesh (顶点颜色) ---
+    // --- 1. 投射物 ---
     const projectileGeometry = new THREE.TorusKnotGeometry(0.05, 0.015, 64, 8, 3, 4);
-    const count = projectileGeometry.attributes.position.count;
-    const colors = new Float32Array(count * 3);
-    const color = new THREE.Color();
-    
-    // 轨迹核心色: 霓虹洋红 (非纯色渐变)
-    const centerColor = new THREE.Color(0xFF00FF); 
-    const edgeColor = new THREE.Color(0xAA3300);   
-
-    for (let i = 0; i < count; i++) {
-        const distance = projectileGeometry.attributes.position.getX(i) ** 2 + 
-                         projectileGeometry.attributes.position.getY(i) ** 2 + 
-                         projectileGeometry.attributes.position.getZ(i) ** 2;
-        const t = Math.min(distance / (0.05 * 0.05), 1); 
-        
-        color.copy(centerColor).lerp(edgeColor, t);
-        
-        colors[i * 3] = color.r;
-        colors[i * 3 + 1] = color.g;
-        colors[i * 3 + 2] = color.b;
-    }
-
-    projectileGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const projectileMaterial = new THREE.MeshBasicMaterial({
-        vertexColors: true, 
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending
-    });
-    const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+    const pMat = new THREE.MeshBasicMaterial({ color: 0xffddaa });
+    const projectile = new THREE.Mesh(projectileGeometry, pMat);
     scene.add(projectile);
 
+    // --- ✨ 光晕 (大小调整) ---
+    const glowTexture = createGlowTexture();
+    const glowMaterial = new THREE.SpriteMaterial({ 
+        map: glowTexture, 
+        color: 0xffffff,
+        transparent: true, 
+        blending: THREE.AdditiveBlending,
+        opacity: 1.0,
+        depthWrite: false
+    });
+    const glowSprite = new THREE.Sprite(glowMaterial);
+    // ✨ 修改：从 2.5 减小到 1.5
+    glowSprite.scale.set(1.5, 1.5, 1.5); 
+    scene.add(glowSprite);
+
+    // --- 拖尾效果设置 ---
+    const trailLength = 40;
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(trailLength * 3);
+    const trailColors = new Float32Array(trailLength * 3);
+    
+    const baseColor = new THREE.Color(0xffaa00);
+    for (let i = 0; i < trailLength; i++) {
+        trailPositions[i * 3] = start.x;
+        trailPositions[i * 3 + 1] = start.y;
+        trailPositions[i * 3 + 2] = start.z;
+
+        trailColors[i * 3] = baseColor.r;
+        trailColors[i * 3 + 1] = baseColor.g;
+        trailColors[i * 3 + 2] = baseColor.b;
+    }
+    
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+    
+    const trailMaterial = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    
+    const trail = new THREE.Line(trailGeometry, trailMaterial);
+    scene.add(trail);
+    
     const startTime = performance.now();
     
-    // --- 终点反馈初始化 ---
-    const originalSharedMaterial = endNode.material as THREE.Material; 
-    endNode.material = originalSharedMaterial.clone(); 
-    const targetMaterial = endNode.material as THREE.MeshBasicMaterial; 
+    // --- 🔥 粒子系统状态 ---
+    let particles: THREE.LineSegments | null = null;
+    let particleVelocities: Float32Array | null = null; 
+    let particleTypes: Float32Array | null = null; 
+    let particlePhases: Float32Array | null = null; 
     
-    const originalColor = targetMaterial.color.clone();
-    // 💥 关键修正: 终点闪烁颜色回归标准红色 
-    const failureFeedbackColor = new THREE.Color(0xff0000); 
-    
-    const blinkInterval = 80;
-    const feedbackDuration = 1500; 
+    let explosionTriggered = false;
     let feedbackStartTime: number | null = null;
-    
+    const feedbackDuration = 2000; 
+
+    // 🎨 颜色配置
+    const colWhite = new THREE.Color(0xffffff); 
+    const colYellow = new THREE.Color(0xffcc00); 
+    const colRed = new THREE.Color(0xff2200);     
+    const trailHeadColor = new THREE.Color(0xffdd88); 
+    const trailTailColor = new THREE.Color(0xff4400); 
+
+    const createEnergyExplosion = () => {
+        const particleCount = 7000; 
+        
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 2 * 3); 
+        const colors = new Float32Array(particleCount * 2 * 3);
+        const velocities = new Float32Array(particleCount * 3);
+        const types = new Float32Array(particleCount);
+        const phases = new Float32Array(particleCount);
+
+        const color = new THREE.Color();
+
+        for (let i = 0; i < particleCount; i++) {
+            const x = 0, y = 0, z = 0;
+            
+            positions[i * 6] = x;     positions[i * 6 + 1] = y;     positions[i * 6 + 2] = z;
+            positions[i * 6 + 3] = x; positions[i * 6 + 4] = y; positions[i * 6 + 5] = z;
+
+            const direction = new THREE.Vector3(
+                Math.random() - 0.5, 
+                Math.random() - 0.5, 
+                Math.random() - 0.5
+            ).normalize();
+
+            const isFlowingLine = Math.random() < 0.03; 
+            types[i] = isFlowingLine ? 1 : 0;
+            phases[i] = Math.random() * Math.PI * 2; 
+
+            let speed;
+            if (isFlowingLine) {
+                speed = 1.5 + Math.random() * 1.5; 
+            } else {
+                speed = 0.5 + Math.random() * 3.5;
+            }
+
+            velocities[i * 3]     = direction.x * speed;
+            velocities[i * 3 + 1] = direction.y * speed;
+            velocities[i * 3 + 2] = direction.z * speed;
+
+            color.setHex(0xffffff);
+            colors[i * 6] = color.r; colors[i * 6 + 1] = color.g; colors[i * 6 + 2] = color.b;
+            colors[i * 6 + 3] = color.r; colors[i * 6 + 4] = color.g; colors[i * 6 + 5] = color.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        particleVelocities = velocities;
+        particleTypes = types;
+        particlePhases = phases;
+
+        const material = new THREE.LineBasicMaterial({
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 1,
+            depthWrite: false, 
+        });
+
+        particles = new THREE.LineSegments(geometry, material);
+        particles.position.copy(end);
+        particles.scale.set(1, 1, 1); 
+        particles.frustumCulled = false; 
+        scene.add(particles);
+    };
+
     function animate(currentTime: number) {
         const elapsed = currentTime - startTime;
         const t = Math.min(elapsed / duration, 1);
@@ -194,47 +247,178 @@ function shootFailureRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
         if (t < 1) {
             const position = curve.getPointAt(t);
             projectile.position.copy(position);
+            projectile.lookAt(curve.getPointAt(Math.min(t + 0.01, 1)));
+            
+            // 更新光晕位置
+            glowSprite.position.copy(position);
 
-            projectile.rotation.x += 0.1;
-            projectile.rotation.y += 0.05;
-            projectile.rotation.z += 0.02;
+            // 更新拖尾
+            const trailPosArr = trail.geometry.attributes.position.array as Float32Array;
+            const trailColArr = trail.geometry.attributes.color.array as Float32Array;
             
-            if (t + 0.01 < 1) {
-                const nextPosition = curve.getPointAt(t + 0.01);
-                projectile.lookAt(nextPosition);
+            for (let i = trailLength - 1; i > 0; i--) {
+                trailPosArr[i * 3]     = trailPosArr[(i - 1) * 3];
+                trailPosArr[i * 3 + 1] = trailPosArr[(i - 1) * 3 + 1];
+                trailPosArr[i * 3 + 2] = trailPosArr[(i - 1) * 3 + 2];
             }
+            trailPosArr[0] = position.x;
+            trailPosArr[1] = position.y;
+            trailPosArr[2] = position.z;
             
+            const flowSpeed = currentTime * 0.008; 
+            const waveFrequency = 0.3;
+            const tempColor = new THREE.Color();
+
+            for (let i = 0; i < trailLength; i++) {
+                const ratio = i / (trailLength - 1); 
+                const baseMix = trailHeadColor.clone().lerp(trailTailColor, ratio);
+                const wave = Math.sin(i * waveFrequency - flowSpeed);
+                const brightness = 0.8 + wave * 0.4;
+                const tailFade = 1.0 - Math.pow(ratio, 2); 
+
+                tempColor.copy(baseMix).multiplyScalar(brightness * tailFade);
+                
+                trailColArr[i * 3]     = Math.min(tempColor.r, 1.0);
+                trailColArr[i * 3 + 1] = Math.min(tempColor.g, 1.0);
+                trailColArr[i * 3 + 2] = Math.min(tempColor.b, 1.0);
+            }
+
+            trail.geometry.attributes.position.needsUpdate = true;
+            trail.geometry.attributes.color.needsUpdate = true;
+
             requestAnimationFrame(animate);
         } else {
-            scene.remove(projectile);
-            projectileGeometry.dispose();
-            projectileMaterial.dispose();
-            
-            if (feedbackStartTime === null) {
-                feedbackStartTime = currentTime;
+            if (!explosionTriggered) {
+                scene.remove(projectile);
+                projectileGeometry.dispose();
+                pMat.dispose();
+
+                // 清除光晕
+                scene.remove(glowSprite);
+                glowSprite.material.map?.dispose();
+                glowSprite.material.dispose();
+
+                scene.remove(trail);
+                trailGeometry.dispose();
+                trailMaterial.dispose();
+
+                createEnergyExplosion(); 
+                explosionTriggered = true;
             }
             
+            if (feedbackStartTime === null) feedbackStartTime = currentTime;
             const feedbackElapsed = currentTime - feedbackStartTime;
             const feedbackT = Math.min(feedbackElapsed / feedbackDuration, 1);
 
             if (feedbackT < 1) {
-                const isBright = Math.floor(feedbackElapsed / blinkInterval) % 2 === 0;
-                targetMaterial.color.copy(isBright ? failureFeedbackColor : originalColor);
+                if (particles && particleVelocities && particleTypes && particlePhases) {
+                    const positions = particles.geometry.attributes.position.array as Float32Array;
+                    const colors = particles.geometry.attributes.color.array as Float32Array;
+                    
+                    const time = currentTime * 0.005; 
 
+                    for (let i = 0; i < particleVelocities.length / 3; i++) {
+                        let vx = particleVelocities[i * 3];
+                        let vy = particleVelocities[i * 3 + 1];
+                        let vz = particleVelocities[i * 3 + 2];
+
+                        let px = positions[i * 6];
+                        let py = positions[i * 6 + 1];
+                        let pz = positions[i * 6 + 2];
+
+                        const type = particleTypes[i];
+                        const phase = particlePhases[i];
+
+                        if (type === 1) {
+                            const noiseStrength = 0.08; 
+                            vx += Math.cos(py * 3.0 + time + phase) * noiseStrength;
+                            vy += Math.sin(pz * 3.0 + time + phase) * noiseStrength; 
+                            vz += Math.sin(px * 3.0 + time + phase) * noiseStrength;
+                            vx *= 0.94; vy *= 0.94; vz *= 0.94;
+                            const distSq = px*px + py*py + pz*pz;
+                            if (distSq > 2.0) { vx *= 0.6; vy *= 0.6; vz *= 0.6; }
+                        } else {
+                            vx *= 0.94; vy *= 0.94; vz *= 0.94;
+                        }
+
+                        particleVelocities[i * 3] = vx;
+                        particleVelocities[i * 3 + 1] = vy;
+                        particleVelocities[i * 3 + 2] = vz;
+
+                        px += vx * 0.016; 
+                        py += vy * 0.016;
+                        pz += vz * 0.016;
+
+                        positions[i * 6] = px;
+                        positions[i * 6 + 1] = py;
+                        positions[i * 6 + 2] = pz;
+
+                        let trailFactor = 0.1;
+                        if (type === 1) trailFactor = 0.2; 
+
+                        positions[i * 6 + 3] = px - vx * trailFactor;
+                        positions[i * 6 + 4] = py - vy * trailFactor;
+                        positions[i * 6 + 5] = pz - vz * trailFactor;
+
+                        const colorTmp = new THREE.Color();
+                        const coolDown = feedbackT; 
+
+                        if (type === 1) {
+                            if (coolDown < 0.3) colorTmp.copy(colWhite).lerp(colYellow, coolDown * 3.0);
+                            else colorTmp.copy(colYellow).lerp(colRed, (coolDown - 0.3) * 1.5);
+                        } else {
+                            if (coolDown < 0.1) colorTmp.copy(colWhite);
+                            else {
+                                const mixRatio = (coolDown - 0.1) / 0.9;
+                                colorTmp.copy(colYellow).lerp(colRed, mixRatio);
+                            }
+                        }
+
+                        colors[i * 6] = colorTmp.r; colors[i * 6 + 1] = colorTmp.g; colors[i * 6 + 2] = colorTmp.b;
+                        colors[i * 6 + 3] = colorTmp.r; colors[i * 6 + 4] = colorTmp.g; colors[i * 6 + 5] = colorTmp.b;
+                    }
+
+                    particles.geometry.attributes.position.needsUpdate = true;
+                    particles.geometry.attributes.color.needsUpdate = true;
+
+                    if (feedbackT > 0.5) {
+                        const alpha = 1 - (feedbackT - 0.5) * 2.0; 
+                        (particles.material as THREE.LineBasicMaterial).opacity = Math.max(0, alpha);
+                    }
+                }
                 requestAnimationFrame(animate);
             } else {
-                targetMaterial.color.copy(originalColor); 
-                
-                const clonedMaterialToDispose = endNode.material;
-                endNode.material = originalSharedMaterial; 
-                (clonedMaterialToDispose as THREE.Material).dispose(); 
-
-                return; 
+                if (particles) {
+                    scene.remove(particles);
+                    particles.geometry.dispose();
+                    (particles.material as THREE.Material).dispose();
+                }
             }
         }
     }
-
     requestAnimationFrame(animate);
+}
+
+// --- 辅助函数：用于生成光晕纹理 ---
+function createSuccessGlowTexture() {
+    const canvas = document.createElement('canvas');
+    const size = 64;
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) return new THREE.Texture();
+
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');   // 核心亮白
+    gradient.addColorStop(0.3, 'rgba(0, 255, 220, 0.8)'); // 中间青色
+    gradient.addColorStop(1, 'rgba(0, 120, 255, 0)');     // 边缘透明蓝色
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
 }
 
 function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode: THREE.Mesh) {
@@ -252,13 +436,11 @@ function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
     mid.y += arcHeight;
     const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
 
-    // --- 轨迹效果: 创建扭曲数据结 Mesh (顶点颜色) ---
+    // --- 轨迹实体 ---
     const projectileGeometry = new THREE.TorusKnotGeometry(0.05, 0.015, 64, 8, 2, 3); 
     const count = projectileGeometry.attributes.position.count;
     const colors = new Float32Array(count * 3);
     const color = new THREE.Color();
-    
-    // 轨迹核心色: 电光青/湖蓝 (非纯色渐变)
     const centerColor = new THREE.Color(0x00FFBB); 
     const edgeColor = new THREE.Color(0x0077FF);   
 
@@ -267,24 +449,62 @@ function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
                          projectileGeometry.attributes.position.getY(i) ** 2 + 
                          projectileGeometry.attributes.position.getZ(i) ** 2;
         const t = Math.min(distance / (0.05 * 0.05), 1); 
-        
         color.copy(centerColor).lerp(edgeColor, t);
-        
-        colors[i * 3] = color.r;
-        colors[i * 3 + 1] = color.g;
-        colors[i * 3 + 2] = color.b;
+        colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
     }
-
     projectileGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
     const projectileMaterial = new THREE.MeshBasicMaterial({
-        vertexColors: true, 
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending
+        vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending
     });
     const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
     scene.add(projectile);
+
+    // ===================== ✨ 视觉效果区域 =====================
+
+    // --- 1. 光晕效果 ---
+    const glowTexture = createSuccessGlowTexture();
+    const glowMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: 0xffffff, 
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        opacity: 1.2 
+    });
+    const glowSprite = new THREE.Sprite(glowMaterial);
+    // ✨ 修改：从 2.5 调整为 1.5，更加精致
+    glowSprite.scale.set(1.5, 1.5, 1.5); 
+    glowSprite.position.copy(start);
+    scene.add(glowSprite);
+
+    // --- 2. 拖尾效果 ---
+    const trailLength = 60; 
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(trailLength * 3);
+    const trailColors = new Float32Array(trailLength * 3);
+
+    for (let i = 0; i < trailLength; i++) {
+        trailPositions[i * 3] = start.x;
+        trailPositions[i * 3 + 1] = start.y;
+        trailPositions[i * 3 + 2] = start.z;
+    }
+
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+
+    const trailMaterial = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const trail = new THREE.Line(trailGeometry, trailMaterial);
+    scene.add(trail);
+
+    const trailHeadColor = new THREE.Color(0x00FFFF);
+    const trailTailColor = new THREE.Color(0x0000FF);
+    // ==========================================================
 
     const startTime = performance.now();
     
@@ -292,14 +512,39 @@ function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
     const originalSharedMaterial = endNode.material as THREE.Material; 
     endNode.material = originalSharedMaterial.clone(); 
     const targetMaterial = endNode.material as THREE.MeshBasicMaterial; 
-    
     const originalColor = targetMaterial.color.clone();
-    // 💥 关键修正: 终点闪烁颜色回归标准绿色 
     const successFeedbackColor = new THREE.Color(0x00ff00);
-    
     const feedbackDuration = 1500;
     let feedbackStartTime: number | null = null;
-    
+
+    // --- 能量盾效果状态 ---
+    const particles: { mesh: THREE.Mesh; velocity: THREE.Vector3 }[] = [];
+    let shieldMesh: THREE.Mesh | null = null;
+    let explosionTriggered = false;
+
+    const createShieldEffect = () => {
+        // ... (保持原有的护盾逻辑)
+        const shieldGeo = new THREE.SphereGeometry(1.2, 16, 16); 
+        const shieldMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending
+        });
+        shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+        shieldMesh.position.copy(end);
+        scene.add(shieldMesh);
+
+        const particleGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08); 
+        const particleMat = new THREE.MeshBasicMaterial({
+            color: 0xccffcc, transparent: true, blending: THREE.AdditiveBlending
+        });
+        for(let i=0; i<8; i++) { 
+            const mesh = new THREE.Mesh(particleGeo, particleMat);
+            mesh.position.set(end.x + (Math.random() - 0.5) * 0.8, end.y + (Math.random() - 0.5) * 0.8, end.z + (Math.random() - 0.5) * 0.8);
+            const velocity = new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02);
+            scene.add(mesh);
+            particles.push({ mesh, velocity });
+        }
+    };
+
     function animate(currentTime: number) {
         const elapsed = currentTime - startTime;
         const t = Math.min(elapsed / duration, 1);
@@ -307,48 +552,97 @@ function shootSuccessRay(scene: THREE.Scene, startNode: THREE.Object3D, endNode:
         if (t < 1) {
             const position = curve.getPointAt(t);
             projectile.position.copy(position);
+            
+            // --- 更新视觉效果 ---
+            // 1. 光晕
+            glowSprite.position.copy(position);
 
-            projectile.rotation.x += 0.05;
-            projectile.rotation.y += 0.02;
+            // 2. 拖尾
+            const trailPosArr = trail.geometry.attributes.position.array as Float32Array;
+            const trailColArr = trail.geometry.attributes.color.array as Float32Array;
             
-            if (t + 0.01 < 1) {
-                const nextPosition = curve.getPointAt(t + 0.01);
-                projectile.lookAt(nextPosition);
+            for (let i = trailLength - 1; i > 0; i--) {
+                trailPosArr[i * 3]     = trailPosArr[(i - 1) * 3];
+                trailPosArr[i * 3 + 1] = trailPosArr[(i - 1) * 3 + 1];
+                trailPosArr[i * 3 + 2] = trailPosArr[(i - 1) * 3 + 2];
             }
+            trailPosArr[0] = position.x;
+            trailPosArr[1] = position.y;
+            trailPosArr[2] = position.z;
             
+            const tempColor = new THREE.Color();
+            for (let i = 0; i < trailLength; i++) {
+                const ratio = i / (trailLength - 1); 
+                tempColor.copy(trailHeadColor).lerp(trailTailColor, ratio);
+                const fade = 1.0 - Math.pow(ratio, 1.5); 
+
+                trailColArr[i * 3]     = tempColor.r * fade;
+                trailColArr[i * 3 + 1] = tempColor.g * fade;
+                trailColArr[i * 3 + 2] = tempColor.b * fade;
+            }
+            trail.geometry.attributes.position.needsUpdate = true;
+            trail.geometry.attributes.color.needsUpdate = true;
+            // ------------------
+
+            projectile.rotation.x += 0.05; projectile.rotation.y += 0.02;
+            if (t + 0.01 < 1) projectile.lookAt(curve.getPointAt(t + 0.01));
             requestAnimationFrame(animate);
         } else {
-            scene.remove(projectile);
-            projectileGeometry.dispose();
-            projectileMaterial.dispose();
-            
-            if (feedbackStartTime === null) {
-                feedbackStartTime = currentTime;
+            if (!explosionTriggered) {
+                scene.remove(projectile);
+                projectileGeometry.dispose();
+                projectileMaterial.dispose();
+
+                // --- 清理视觉效果 ---
+                scene.remove(glowSprite);
+                glowTexture.dispose();
+                glowMaterial.dispose();
+
+                scene.remove(trail);
+                trailGeometry.dispose();
+                trailMaterial.dispose();
+                // ------------------
+
+                createShieldEffect();
+                explosionTriggered = true;
             }
             
+            if (feedbackStartTime === null) feedbackStartTime = currentTime;
             const feedbackElapsed = currentTime - feedbackStartTime;
             const feedbackT = Math.min(feedbackElapsed / feedbackDuration, 1);
 
-            if (feedbackT < 0.5) {
-                const transitionT = feedbackT * 2;
-                targetMaterial.color.lerpColors(originalColor, successFeedbackColor, transitionT);
-            } else if (feedbackT < 1) {
-                const transitionT = (feedbackT - 0.5) * 2;
-                targetMaterial.color.lerpColors(successFeedbackColor, originalColor, transitionT);
+            if (feedbackT < 1) {
+                if (feedbackT < 0.5) {
+                    const transitionT = feedbackT * 2;
+                    targetMaterial.color.lerpColors(originalColor, successFeedbackColor, transitionT);
+                } else {
+                    const transitionT = (feedbackT - 0.5) * 2;
+                    targetMaterial.color.lerpColors(successFeedbackColor, originalColor, transitionT);
+                }
+                if (shieldMesh) {
+                    const pulse = 1 + Math.sin(feedbackT * Math.PI) * 0.1; 
+                    shieldMesh.scale.set(pulse, pulse, pulse);
+                    shieldMesh.rotation.y += 0.01; 
+                    (shieldMesh.material as THREE.Material).opacity = 0.3 * (1 - feedbackT);
+                }
+                particles.forEach(p => {
+                    p.mesh.position.add(p.velocity); 
+                    p.mesh.rotation.x += 0.05;
+                    (p.mesh.material as THREE.Material).opacity = 1 - feedbackT; 
+                });
+                requestAnimationFrame(animate);
             } else {
+                if (shieldMesh) { scene.remove(shieldMesh); shieldMesh.geometry.dispose(); (shieldMesh.material as THREE.Material).dispose(); }
+                particles.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); (p.mesh.material as THREE.Material).dispose(); });
+
                 targetMaterial.color.copy(originalColor); 
-                
                 const clonedMaterialToDispose = endNode.material;
                 endNode.material = originalSharedMaterial; 
                 (clonedMaterialToDispose as THREE.Material).dispose(); 
-
                 return; 
             }
-            
-            requestAnimationFrame(animate); 
         }
     }
-
     requestAnimationFrame(animate);
 }
 
