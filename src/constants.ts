@@ -328,7 +328,12 @@ export const SPECIAL_IMAGES = [
   'routertar2:v1',
   'router:v1.1',
   'frr-ubuntu20:latest',
-
+  'px4-mitm-f:latest',
+  'ntop/ntopng:latest',
+  'px4-temp1:latest',
+  'px4-temp2:latest',
+  'px4-temp3:latest',
+  'px4-temp4:latest',
 
   // 可以在这里添加更多特殊镜像
 ] as const;
