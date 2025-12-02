@@ -16,7 +16,7 @@ class CommandLineService
     /**
      * 针对需要 ntopng 参数启动的镜像白名单（仅比较镜像名，不含 registry 前缀）。
      */
-    private const NTOPNG_IMAGE_NAMES = ['px4-temp1', 'px4-temp2'];
+    private const NTOPNG_IMAGE_NAMES = ['px4-temp1', 'px4-temp2', 'px4-temp4'];
 
     /**
      * Build environment variables for VM creation scripts based on provided options.
@@ -1242,8 +1242,18 @@ XML;
         $command[] = 'net.ipv4.ip_forward=1';
 
         $command[] = $imageName;
-        $command[] = 'ntopng';
-        $command[] = '/etc/ntopng/ntopng.conf';
+
+        // px4-temp4 镜像自带入口，不再显式追加 ntopng 命令与配置
+        $normalized = strtolower(trim($imageName));
+        $slashPos = strrpos($normalized, '/');
+        if ($slashPos !== false) {
+            $normalized = substr($normalized, $slashPos + 1);
+        }
+        [$imageBase, $imageTag] = array_pad(explode(':', $normalized, 2), 2, '');
+        if ($imageBase !== 'px4-temp4' && $imageTag !== 'px4-temp4') {
+            $command[] = 'ntopng';
+            $command[] = '/etc/ntopng/ntopng.conf';
+        }
 
         Log::info('Executing Docker command (ntopng): ' . implode(' ', $command));
 
