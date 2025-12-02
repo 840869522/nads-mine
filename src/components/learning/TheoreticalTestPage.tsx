@@ -637,7 +637,11 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
             }}>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <Typography variant="body1" sx={{ display: 'flex', mb: 1.5 }}>
+                  <Typography 
+                    component="div"  // 改为渲染为 div
+                    variant="body1" 
+                    sx={{ display: 'flex', mb: 1.5 }}
+                  >
                     <Box component="span" sx={{ minWidth: 80, fontWeight: 600 }}>类型:</Box> 
                     <Chip 
                       label={test.c_type} 

@@ -309,7 +309,7 @@ const handleEndDateChange = (date: moment.Moment | null) => {
       }
     }
   }
-  
+
     // 实验类型验证场景配置
     if (formData.c_test_type === '实验') {
       if (!formData.c_scene_config_id || formData.c_scene_config_id <= 0) {
@@ -811,8 +811,8 @@ const handleEndDateChange = (date: moment.Moment | null) => {
                     }}
                   />
                 )}
-                renderOption={(props, option) => (
-                  <li {...props} style={{ padding: '12px 16px' }}>
+                renderOption={({ key, ...restProps }, option) => (
+                  <li key={key} {...restProps} style={{ padding: '12px 16px' }}>
                     <div style={{ width: '100%' }}>
                       <div style={{ 
                         fontSize: '1.1rem', 
