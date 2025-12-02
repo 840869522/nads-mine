@@ -457,7 +457,10 @@ export default function Battlefield (adData: AdData) {
                             newLogs.push({
                                 logId: id,
                                 logTime: new Date().toLocaleTimeString(),
-                                logContent: `无人机向${direction}移动了${Math.abs(dx)}m`
+                                logContent: `无人机向${direction}移动了${Math.abs(dx)}m`,
+                                name: "无人机",
+                                userName: "无人机",
+                                correct: 1
                             });
                             isMove = true;
                         }
@@ -466,7 +469,10 @@ export default function Battlefield (adData: AdData) {
                             newLogs.push({
                                 logId: id+1,
                                 logTime: new Date().toLocaleTimeString(),
-                                logContent: `无人机向${direction}移动了${Math.abs(dy)}m`
+                                logContent: `无人机向${direction}移动了${Math.abs(dy)}m`,
+                                name: "无人机",
+                                userName: "无人机",
+                                correct: 1
                             });
                             isMove = true;
                         }
@@ -475,7 +481,10 @@ export default function Battlefield (adData: AdData) {
                             newLogs.push({
                                 logId: id+2,
                                 logTime: new Date().toLocaleTimeString(),
-                                logContent: `无人机向${direction}移动了${Math.abs(dz)}m`
+                                logContent: `无人机向${direction}移动了${Math.abs(dz)}m`,
+                                name: "无人机",
+                                userName: "无人机",
+                                correct: 1
                             });
                             isMove = true;
                         }

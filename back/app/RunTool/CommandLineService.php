@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Log;
 class CommandLineService
 {
     /**
+     * 针对需要 ntopng 参数启动的镜像白名单（仅比较镜像名，不含 registry 前缀）。
+     */
+    private const NTOPNG_IMAGE_NAMES = ['px4-temp1', 'px4-temp2', 'px4-temp4'];
+
+    /**
      * Build environment variables for VM creation scripts based on provided options.
      */
     private function buildVmProcessEnv(array $options): array
@@ -133,6 +138,26 @@ class CommandLineService
         }
         [$name, $tag] = array_pad(explode(':', $normalized, 2), 2, '');
         return $name === 'suricata' && $tag === 'v2';
+    }
+
+    /**
+     * 判断镜像是否需要按 ntopng 方式启动（忽略 registry/repo 前缀）。
+     */
+    public function isNtopngImage(?string $image): bool
+    {
+        if ($image === null) {
+            return false;
+        }
+        $normalized = strtolower(trim($image));
+        if ($normalized === '') {
+            return false;
+        }
+        $pos = strrpos($normalized, '/');
+        if ($pos !== false) {
+            $normalized = substr($normalized, $pos + 1);
+        }
+        [$name] = array_pad(explode(':', $normalized, 2), 2, '');
+        return in_array($name, self::NTOPNG_IMAGE_NAMES, true) || str_starts_with($name, 'ntop');
     }
 
     /**
@@ -1084,6 +1109,10 @@ XML;
     {
         $imageName = $options['image'] ?? '';
         $isSuricataV2 = $this->isSuricataV2Image($imageName);
+        $isNtopngImage = $this->isNtopngImage($imageName);
+        if ($isNtopngImage) {
+            return $this->createNtopngContainer($options);
+        }
 
         // 1. 构建 docker run 命令数组
         $command = ['sudo', 'docker', 'run', '-itd', '--privileged', '--cap-add=NET_RAW']; // -d 后台运行, --privileged 给予更高权限，方便后续网络操作
@@ -1172,6 +1201,108 @@ XML;
              throw new \Exception('无法从 docker run 命令的输出中获取有效的容器ID。');
         }
         return $containerId;
+    }
+
+    /**
+     * 针对 ntopng 类镜像的专用启动方式。
+     */
+    private function createNtopngContainer(array $options): string
+    {
+        $imageName = $options['image'] ?? '';
+        if (empty($imageName)) {
+            throw new \Exception('镜像名称不能为空。');
+        }
+
+        $command = ['sudo', 'docker', 'run', '-d'];
+
+        if (!empty($options['name'])) {
+            $command[] = '--name';
+            $command[] = $options['name'];
+        }
+
+        foreach ($options['env'] ?? [] as $env) {
+            $command[] = '-e';
+            $command[] = "{$env['key']}={$env['value']}";
+        }
+
+        if (!empty($options['scene_instance_id']) && !empty($options['name'])) {
+            $command[] = '-e';
+            $command[] = "SCENE_ID={$options['scene_instance_id']}_{$options['name']}";
+        }
+
+        foreach ($options['ports'] ?? [] as $port) {
+            $command[] = '-p';
+            $command[] = "{$port['hostPort']}:{$port['containerPort']}";
+        }
+
+        // 按需求添加能力与 sysctl，可回退去掉能力
+        $command[] = '--cap-add=NET_ADMIN';
+        $command[] = '--cap-add=NET_RAW';
+        $command[] = '--sysctl';
+        $command[] = 'net.ipv4.ip_forward=1';
+
+        $command[] = $imageName;
+
+        // px4-temp4 镜像自带入口，不再显式追加 ntopng 命令与配置
+        $normalized = strtolower(trim($imageName));
+        $slashPos = strrpos($normalized, '/');
+        if ($slashPos !== false) {
+            $normalized = substr($normalized, $slashPos + 1);
+        }
+        [$imageBase, $imageTag] = array_pad(explode(':', $normalized, 2), 2, '');
+        if ($imageBase !== 'px4-temp4' && $imageTag !== 'px4-temp4') {
+            $command[] = 'ntopng';
+            $command[] = '/etc/ntopng/ntopng.conf';
+        }
+
+        Log::info('Executing Docker command (ntopng): ' . implode(' ', $command));
+
+        $process = new Process($command);
+        $process->run();
+        if (!$process->isSuccessful()) {
+            $fallbackCommand = $this->removeCapAddOptions($command, ['NET_ADMIN', 'NET_RAW']);
+            Log::warning('Ntopng image failed to start with NET_ADMIN/NET_RAW, retrying without those caps.', [
+                'image' => $imageName,
+                'error' => $process->getErrorOutput() ?: $process->getOutput(),
+                'fallback_command' => implode(' ', $fallbackCommand),
+            ]);
+            $process = new Process($fallbackCommand);
+            $process->run();
+        }
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        $containerId = trim($process->getOutput());
+        if (empty($containerId)) {
+            throw new \Exception('无法从 docker run 命令的输出中获取有效的容器ID。');
+        }
+        return $containerId;
+    }
+
+    /**
+     * 从 docker run 命令参数中过滤指定的 --cap-add 选项。
+     */
+    private function removeCapAddOptions(array $command, array $capsToRemove): array
+    {
+        if (empty($capsToRemove)) {
+            return $command;
+        }
+        $capsToRemove = array_map('strtoupper', $capsToRemove);
+
+        $filtered = [];
+        foreach ($command as $arg) {
+            if (!is_string($arg) || !str_starts_with($arg, '--cap-add=')) {
+                $filtered[] = $arg;
+                continue;
+            }
+            $cap = strtoupper(substr($arg, strlen('--cap-add=')));
+            if (!in_array($cap, $capsToRemove, true)) {
+                $filtered[] = $arg;
+            }
+        }
+        return $filtered;
     }
 
     /**

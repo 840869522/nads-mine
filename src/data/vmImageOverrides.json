@@ -378,5 +378,8 @@
   },
   "Report_v1.1.qcow2": {
     "osType": "kali"
+  },
+  "uav-dev.qcow2": {
+    "osType": "ubuntu"
   }
 }

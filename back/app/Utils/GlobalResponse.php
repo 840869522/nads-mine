@@ -28,17 +28,17 @@
         /**
          * 全局响应信息
          */
-        public const HTTP_STATUS_ERROR_MES  = "FAILED";
-        public const HTTP_STATUS_OK_MES  = "SUCCESS";
+        public const HTTP_STATUS_ERROR_MES  = "失败";
+        public const HTTP_STATUS_OK_MES  = "成功";
 
         public static string $HTTP_TOKEN_ERROR_MES  = "token失效，请重新登录";
         public static string $HTTP_USER_NOT_RIGHT_MES  = "你没有相关操作的权限";
         public static string $HTTP_REQUEST_ERROR_MES  = "请求参数出错";
-        public static string $DATABASE_ERROR_MES  = "something happened error";
+        public static string $DATABASE_ERROR_MES  = "数据库操作出错";
         public static string $USER_LOGIN_SUCCESS_MES  = self::HTTP_STATUS_OK_MES;
         public static string $USER_LOGIN_IS_DEL_MES  = "账户被限制，请联系系统管理员";
         public static string $USER_LOGIN_FAILED_MES  = self::HTTP_STATUS_ERROR_MES;
-        public static string $HTTP_ROUTER_NOT_FOUND_MES  = "NOT FOUND";
+        public static string $HTTP_ROUTER_NOT_FOUND_MES  = "请求地址错误";
         public static string $HTTP_PERMISSION_NOT_FOUND = "权限未被添加";
     }
 ?>

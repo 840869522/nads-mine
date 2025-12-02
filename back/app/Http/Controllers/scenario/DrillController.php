@@ -559,7 +559,7 @@ class DrillController extends Controller
             }
             $errorMessage = $e->getMessage();
             Log::error("启动场景时发生严重错误: " . $errorMessage, ['trace' => $e->getTraceAsString()]);
-            return response()->json(['message' => '启动场景时发生错误：' . $errorMessage], 500);
+            return response()->json(['message' => '场景启动失败'], 500);
         }
     }
 

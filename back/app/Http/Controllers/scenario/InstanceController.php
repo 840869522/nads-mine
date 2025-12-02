@@ -70,11 +70,7 @@ class InstanceController extends Controller
     public function show(SceneInstance $instance, Request $request)
         {
             try {
-                // --- START: 权限计算逻辑 (与 VmController 类似) ---
-                $container_stop = 0;
-                $container_restart = 0;
-                $container_delete = 0;
-
+                // 1. 解析 JWT 获取当前用户信息
                 $auth = $request->header("Authorization", null);
                 $jwtRes = JWTControll::decodeJWT($auth);
                 if ($jwtRes["err"] != null) {
@@ -82,26 +78,50 @@ class InstanceController extends Controller
                 }
                 $tokenData = $jwtRes["data"];
 
+                // 2. 获取用户拥有的所有权限点 (Permission IDs)
                 $permissions = Cache::get($tokenData["permission"]) ?? [];
                 $permissionIds = array_map(fn($item) => $item->c_id, $permissions);
 
-                // 假设权限ID为 'container_stop', 'container_restart', 'container_delete'
-                if (in_array("container_stop", $permissionIds)) $container_stop = 1;
-                if (in_array("container_restart", $permissionIds)) $container_restart = 1;
-                if (in_array("container_delete", $permissionIds)) $container_delete = 1;
-                // --- END: 权限计算逻辑 ---
+                // 3. ★ 关键判定：是否开启特权模式 (Privileged Mode) ★
+                // 逻辑：如果用户拥有 'container_manage_global' 权限，或者 ID 是 admin，则进入特权通道。
+                // 建议在数据库 c_permissions 表里加上 'container_manage_global' 这条记录，并分配给运维/裁判角色。
+                $isPrivilegedMode = in_array('container_manage_global', $permissionIds) || ($tokenData['id'] === 'admin');
+
+                // 4. 预计算原子功能权限 (手里有哪些牌)
+                // 无论走哪条通道，首先你得有这个技能，才能讨论能不能用。
+                $hasPerm = [
+                    'start'    => in_array("container_start", $permissionIds) || in_array("container_restart", $permissionIds),
+                    'stop'     => in_array("container_stop", $permissionIds),
+                    'delete'   => in_array("container_delete", $permissionIds),
+                    'logs'     => in_array("container_logs", $permissionIds),
+                    'terminal' => in_array("container_terminal", $permissionIds), // 或 can_operate
+                    'flag_sub' => in_array("flag_submit", $permissionIds),
+                    'flag_his' => in_array("flag_history", $permissionIds),
+                ];
+
+                // 如果没有定义细粒度的 'container_terminal' 权限，默认只要是特权模式或者主人就能进
+                // 这里为了严谨，假设没有专门定义，暂且默认为 true，你可以根据需求改成 false 强迫配置
+                if (!in_array("container_terminal", array_column($permissions, 'c_id'))) {
+                     $hasPerm['terminal'] = true;
+                }
 
                 $instance->load('containers', 'sceneConfig');
                 $runningInstances = [];
+
                 foreach ($instance->containers as $containerInstance) {
                     $containerId = $containerInstance->c_container_id;
                     try {
+                        // --- Docker API 数据获取 (保持不变) ---
                         $details = $this->docker->containerInspect($containerId);
                         $stats = $this->docker->containerStats($containerId);
+
+                        // CPU 计算
                         $cpuDelta = ($stats->cpu_stats->cpu_usage->total_usage ?? 0) - ($stats->precpu_stats->cpu_usage->total_usage ?? 0);
                         $sysDelta = ($stats->cpu_stats->system_cpu_usage ?? 0) - ($stats->precpu_stats->system_cpu_usage ?? 0);
                         $cpus = $stats->cpu_stats->online_cpus ?? (is_array($stats->cpu_stats->cpu_usage->percpu_usage ?? null) ? count($stats->cpu_stats->cpu_usage->percpu_usage) : 1);
                         $cpuPercent = $sysDelta > 0 ? ($cpuDelta / $sysDelta) * $cpus * 100 : 0;
+
+                        // 内存计算
                         $memUsage = $stats->memory_stats->usage ?? 0;
                         $memLimit = $stats->memory_stats->limit ?? 0;
 
@@ -112,25 +132,62 @@ class InstanceController extends Controller
                             }
                         }
 
-                        // ★★★ START: 权限合并与编码 ★★★
-                        // 调用模型进行对象级权限判断
-                        $can_operate_object_level = $containerInstance->canBeOperatedByUser((object)["token_data" => $tokenData]);
+                        // 5. ★★★ 核心：双轨制权限计算 ★★★
 
-                        // 合并全局和对象级权限
-                        $permissionsPayload = [
-                            "container_stop"     => $container_stop && $can_operate_object_level,
-                            "container_restart"  => $container_restart && $can_operate_object_level,
-                            "container_delete"   => $container_delete && $can_operate_object_level,
-                            "can_operate"        => $can_operate_object_level, // 通用操作权限 (例如进入终端)
-                        ];
-                        // ★★★ END: 权限合并与编码 ★★★
+                        $finalPerms = [];
 
+                        if ($isPrivilegedMode) {
+                            // ==========================================
+                            // 🛤️ 线路一：特权工作人员通道 (Staff Lane)
+                            // ==========================================
+                            // 逻辑特点：无视数据归属 (Ownership)，无视禁赛 (Ban)。
+
+                            $finalPerms = [
+                                "can_start"        => $hasPerm['start'],
+                                "can_stop"         => $hasPerm['stop'],
+                                "can_delete"       => $hasPerm['delete'],
+                                "can_logs"         => $hasPerm['logs'],
+                                "can_terminal"     => $hasPerm['terminal'],
+
+                                // 特权人员可以无视归属提交 Flag (通常用于测试)
+                                // 只要拥有 flag_submit 权限即可
+                                "can_submit_flag"  => $hasPerm['flag_sub'],
+                                "can_flag_history" => $hasPerm['flag_his'],
+                            ];
+
+                        } else {
+                            // ==========================================
+                            // 🛤️ 线路二：普通学员通道 (Student Lane)
+                            // ==========================================
+                            // 逻辑特点：严格的数据隔离。必须是自己的，且没被禁赛。
+
+                            // 检查：1. 用户 team_id == 容器 team_id; 2. 用户未禁赛
+                            $isOwnerAndActive = $containerInstance->canBeOperatedByUser((object)["token_data" => $tokenData]);
+
+                            $finalPerms = [
+                                // 管理类：必须是自己的 && 没禁赛
+                                "can_start"        => $hasPerm['start'] && $isOwnerAndActive,
+                                "can_stop"         => $hasPerm['stop'] && $isOwnerAndActive,
+                                "can_delete"       => $hasPerm['delete'] && $isOwnerAndActive,
+
+                                // 信息类：只能看自己的日志和终端
+                                "can_logs"         => $hasPerm['logs'] && $isOwnerAndActive,
+                                "can_terminal"     => $hasPerm['terminal'] && $isOwnerAndActive,
+
+                                // 攻击类：Flag 提交逻辑反转
+                                // 必须是【别人的】容器 (Target) 且拥有提交权限
+                                "can_submit_flag"  => $hasPerm['flag_sub'] && !$isOwnerAndActive,
+                                "can_flag_history" => $hasPerm['flag_his'] && !$isOwnerAndActive,
+                            ];
+                        }
+
+                        // 6. 组装最终数据
                         $runningInstances[] = [
                             'id' => $details->getId(),
                             'name' => ltrim($details->getName() ?? '', '/'),
                             'type' => 'container',
                             'ipAddress' => $containerInstance->c_ip,
-                            'team_id' => $containerInstance->c_team_id, // ★ 添加 team_id
+                            'team_id' => $containerInstance->c_team_id,
                             'scene_instance_id' => $containerInstance->c_scene_instances_id,
                             'scene_name' => $instance->sceneConfig->c_name ?? null,
                             'status' => $this->mapStatus($details->getState()->getStatus()),
@@ -141,7 +198,12 @@ class InstanceController extends Controller
                             'uptime' => $details->getState()->getStartedAt(),
                             'createdAt' => $details->getCreated(),
                             'is_target' => !empty($containerInstance->c_flag),
-                            'can_operate' => base64_encode(json_encode($permissionsPayload)), // ★ 添加编码后的权限对象
+
+                            // ★ 关键：将计算好的 7 个权限打包 Base64 编码后返回给前端
+                            // 注意：为了兼容旧的前端代码逻辑（虽然我们马上要改前端），can_operate 字段本身也作为一个 bool 存在
+                            'can_operate' => base64_encode(json_encode(array_merge($finalPerms, [
+                                'can_operate' => $finalPerms['can_terminal'] // 兼容旧的 can_operate 语义
+                            ]))),
                         ];
                     } catch (\Exception $e) {
                         Log::warning("无法 inspect 容器 {$containerId}: " . $e->getMessage());

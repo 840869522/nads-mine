@@ -19,13 +19,15 @@ class VisualizationController extends Controller{
     private function getInstances(string $instance_id){
         $this->vms = DB::table('c_scene_vm_instances as svi')
                 ->leftJoin('c_teams as t', 'svi.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->leftJoin('c_teams_users as tu', 't.c_id', '=', 'tu.team_id')
                 ->where('svi.c_scene_instances_id', $instance_id)
-                ->select('svi.c_vm_name as name', 'svi.c_ip as ip', 'svi.c_flag', 't.c_name as teamName')   // 返回对象数组
+                ->select('svi.c_vm_name as name', 'svi.c_ip as ip', 'svi.c_flag', 't.c_name as teamName', 'tu.user_id as userId')   // 返回对象数组
                 ->get();
         $this->containers = DB::table('c_scene_container_instances as sci')
                 ->leftJoin('c_teams as t', 'sci.c_team_id', '=', 't.c_id') // 关联唯一标识
+                ->leftJoin('c_teams_users as tu', 't.c_id', '=', 'tu.team_id')
                 ->where('sci.c_scene_instances_id', $instance_id)
-                ->select('sci.c_container_name as name', 'sci.c_ip as ip', 'sci.c_flag', 't.c_name as teamName')   // 返回对象数组
+                ->select('sci.c_container_name as name', 'sci.c_ip as ip', 'sci.c_flag', 't.c_name as teamName', 'tu.user_id as userId')   // 返回对象数组
                 ->get();
 
         $this->trueTargetList = collect();
@@ -37,6 +39,7 @@ class VisualizationController extends Controller{
                 'name' => $vm->name,
                 'ip'   => $ip,
                 'teamName' => $vm->teamName,
+                'userId' => $vm->userId, 
             ];
 
             if (!empty($vm->c_flag)) {
@@ -52,6 +55,7 @@ class VisualizationController extends Controller{
                 'name' => $container->name,
                 'ip'   => $ip,
                 'teamName' => $container->teamName,
+                'userId' => $container->userId,
             ];
 
             if (!empty($container->c_flag)) {
@@ -186,6 +190,9 @@ class VisualizationController extends Controller{
                 'logId' => $f->c_submission_id,
                 'logTime' => $f->c_submitted_at,
                 'logContent' => $logMessage,
+                'name' => $f->name,
+                'userName' => $f->c_username,
+                'correct' => $f->c_is_correct,
             ];
             $logList[] = $item;
         }

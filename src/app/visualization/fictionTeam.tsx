@@ -190,9 +190,20 @@ export default function FictionTeam(team:BattlefieldInfo) {
             // setTeamList(redTeamInfos);
             fetchTeamMembers(team.sceneId).then(users => {
                 for(let i = 0; i < users.length; ++i){
+                    // 1. 获取当前用户
+                    const user = users[i];
+                    
+                    // 2. 提取需要赋值的变量（根据你的代码，id和name目前都取自 userId）
+                    const currentId = user.userId; 
+
+                    // 3. 关键修改：检查是否为 null (或者 undefined)
+                    // 如果 teamId 或 teamName 任意一个是 null，则跳过本次循环
+                    if (currentId === null) {
+                        continue;
+                    }
                     let item: TeamInfo = {
-                        teamId: users[i].userId,
-                        teamName: users[i].userId,
+                        teamId: currentId,
+                        teamName: currentId,
                         teamScore: getRandomDivisibleBy5() / 5
                     }
                     teams.push(item);
@@ -207,9 +218,21 @@ export default function FictionTeam(team:BattlefieldInfo) {
             // setTeamList(blueTeamInfos);
             fetchTeams(team.sceneId).then(teamList => {
                 for(let j = 0; j < teamList.length; ++j){
+                    // 1. 获取当前用户
+                    const t = teamList[j];
+                    
+                    // 2. 提取需要赋值的变量（根据你的代码，id和name目前都取自 userId）
+                    const currentId = t.teamId;
+                    const currentName = t.teamName; 
+
+                    // 3. 关键修改：检查是否为 null (或者 undefined)
+                    // 如果 teamId 或 teamName 任意一个是 null，则跳过本次循环
+                    if (currentId === null || currentName === null) {
+                        continue;
+                    }
                     let item: TeamInfo = {
-                        teamId: teamList[j].teamId.toString(),
-                        teamName: teamList[j].teamName,
+                        teamId: currentId.toString(),
+                        teamName: currentName,
                         teamScore: getRandomDivisibleBy5()
                     }
                     teams.push(item);

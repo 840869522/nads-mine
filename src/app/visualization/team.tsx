@@ -12,6 +12,9 @@ export type LogInfo ={
     logId: number;
     logTime: string;
     logContent: string;
+    name: string;
+    userName: string;
+    correct: number;
 }
 
 export type BattlefieldInfo = {
