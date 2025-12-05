@@ -71,7 +71,8 @@ export const APP_PERMISSIONS: AppPermission[] = [
       { label: "容器镜像管理", key: 'support_images_manage' }, // Moved here and renamed
       { label: "容器实例管理", key: 'support_instances_manage' }, // Moved here and renamed
       { label: "虚拟机镜像管理", key: 'support_scenario_images_manage' },
-      { label: "虚拟机实例管理", key: 'support_scenario_instances_manage' }
+      { label: "虚拟机实例管理", key: 'support_scenario_instances_manage' },
+      { label: "系统资源详情", key: 'support_system_resources' }
     ]
   }
 ];
