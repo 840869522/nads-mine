@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   Container,
-  Grid,
   LinearProgress,
   Stack,
   Table,
@@ -287,40 +286,44 @@ const SystemResourcesPage: React.FC = () => {
           <Typography variant="body1" color="text.secondary">查看服务器资源占用与虚拟化实例总体情况</Typography>
         </Box>
 
-        <Grid container spacing={2} columns={12}>
-          <Grid item xs={12} md={4}>
-            <ResourceCard
-              title="CPU"
-              icon={<MonitorHeartIcon color="primary" />}
-              value={cpuUsage !== undefined ? `${cpuUsage.toFixed(1)}%` : '--'}
-              percent={cpuUsage}
-              helperText={resources?.cpu ? `${resources.cpu.cores} 核` : ''}
-              loading={loadingResources}
-              chart={<MetricSparkline data={cpuHistory} color="#1976d2" />}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <ResourceCard
-              title="内存"
-              icon={<MemoryIcon color="primary" />}
-              value={memoryUsage ? `${formatBytes(memoryUsage.used)} / ${formatBytes(memoryUsage.total)}` : '--'}
-              percent={memoryUsage?.usedPercent}
-              helperText={memoryUsage ? `剩余 ${formatBytes(memoryUsage.free)}` : ''}
-              loading={loadingResources}
-              chart={<MetricSparkline data={memoryHistory} color="#9c27b0" />}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <ResourceCard
-              title="磁盘"
-              icon={<StorageIcon color="primary" />}
-              value={diskTotals ? `${formatBytes(diskTotals.usedKB * 1024)} / ${formatBytes(diskTotals.sizeKB * 1024)}` : '--'}
-              percent={diskTotals?.usedPercent}
-              helperText={diskTotals ? `共 ${resources?.disks?.length ?? 0} 个挂载` : '等待加载磁盘信息'}
-              loading={loadingResources}
-            />
-          </Grid>
-        </Grid>
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 2,
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(3, minmax(0, 1fr))'
+            }
+          }}
+        >
+          <ResourceCard
+            title="CPU"
+            icon={<MonitorHeartIcon color="primary" />}
+            value={cpuUsage !== undefined ? `${cpuUsage.toFixed(1)}%` : '--'}
+            percent={cpuUsage}
+            helperText={resources?.cpu ? `${resources.cpu.cores} 核` : ''}
+            loading={loadingResources}
+            chart={<MetricSparkline data={cpuHistory} color="#1976d2" />}
+          />
+          <ResourceCard
+            title="内存"
+            icon={<MemoryIcon color="primary" />}
+            value={memoryUsage ? `${formatBytes(memoryUsage.used)} / ${formatBytes(memoryUsage.total)}` : '--'}
+            percent={memoryUsage?.usedPercent}
+            helperText={memoryUsage ? `剩余 ${formatBytes(memoryUsage.free)}` : ''}
+            loading={loadingResources}
+            chart={<MetricSparkline data={memoryHistory} color="#9c27b0" />}
+          />
+          <ResourceCard
+            title="磁盘"
+            icon={<StorageIcon color="primary" />}
+            value={diskTotals ? `${formatBytes(diskTotals.usedKB * 1024)} / ${formatBytes(diskTotals.sizeKB * 1024)}` : '--'}
+            percent={diskTotals?.usedPercent}
+            helperText={diskTotals ? `共 ${resources?.disks?.length ?? 0} 个挂载` : '等待加载磁盘信息'}
+            loading={loadingResources}
+          />
+        </Box>
 
         <Divider />
 
