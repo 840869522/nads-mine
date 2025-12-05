@@ -254,6 +254,9 @@ const SystemResourcesPage: React.FC = () => {
     : (vmData as any)?.data ?? [];
 
   const primaryDisk = resources?.disks?.[0];
+  const cpuUsage = resources?.cpu?.usagePercent;
+  const cpuLoadAverage = resources?.cpu?.loadAverage ?? [];
+  const memoryUsage = resources?.memory;
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -268,9 +271,9 @@ const SystemResourcesPage: React.FC = () => {
             <ResourceCard
               title="CPU"
               icon={<MonitorHeartIcon color="primary" />}
-              value={resources ? `${resources.cpu.usagePercent.toFixed(1)}%` : '--'}
-              percent={resources?.cpu?.usagePercent}
-              helperText={resources ? `${resources.cpu.cores} 核 | 1/5/15 分钟负载 ${resources.cpu.loadAverage.map(v => v.toFixed(2)).join(' / ')}` : ''}
+              value={cpuUsage !== undefined ? `${cpuUsage.toFixed(1)}%` : '--'}
+              percent={cpuUsage}
+              helperText={resources?.cpu ? `${resources.cpu.cores} 核 | 1/5/15 分钟负载 ${cpuLoadAverage.map(v => v?.toFixed?.(2) ?? '--').join(' / ')}` : ''}
               loading={loadingResources}
             />
           </Grid>
@@ -278,9 +281,9 @@ const SystemResourcesPage: React.FC = () => {
             <ResourceCard
               title="内存"
               icon={<MemoryIcon color="primary" />}
-              value={resources ? `${formatBytes(resources.memory.used)} / ${formatBytes(resources.memory.total)}` : '--'}
-              percent={resources?.memory?.usedPercent}
-              helperText={resources ? `剩余 ${formatBytes(resources.memory.free)}` : ''}
+              value={memoryUsage ? `${formatBytes(memoryUsage.used)} / ${formatBytes(memoryUsage.total)}` : '--'}
+              percent={memoryUsage?.usedPercent}
+              helperText={memoryUsage ? `剩余 ${formatBytes(memoryUsage.free)}` : ''}
               loading={loadingResources}
             />
           </Grid>
