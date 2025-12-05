@@ -39,7 +39,6 @@ interface SystemResources {
   cpu: {
     cores: number;
     usagePercent: number;
-    loadAverage: number[];
   };
   memory: {
     total: number;
@@ -55,7 +54,7 @@ interface VmInstance {
   name: string;
   hostNode: string;
   pool: string;
-  state: "running" | "paused" | "shutoff";
+  state: "running" | "paused" | "shutoff" | "shut off";
   vcpu: number;
   vmem: number;
   ip?: string;
@@ -85,6 +84,7 @@ const statusColor = (status: string) => {
     case 'paused':
       return 'warning';
     case 'shutoff':
+    case 'shut off':
     case 'stopped':
       return 'default';
     default:
@@ -98,9 +98,44 @@ const statusIcon = (status: string) => {
       return <CheckCircleIcon fontSize="small" color="success" />;
     case 'paused':
       return <PauseCircleIcon fontSize="small" color="warning" />;
+    case 'shutoff':
+    case 'shut off':
+    case 'stopped':
+      return <PauseCircleIcon fontSize="small" color="action" />;
     default:
       return <ErrorIcon fontSize="small" color="error" />;
   }
+};
+
+const MetricSparkline = ({ data, color = '#1976d2' }: { data: number[]; color?: string }) => {
+  const width = 160;
+  const height = 48;
+
+  if (!data.length) {
+    return <Skeleton variant="rectangular" height={height} />;
+  }
+
+  const maxValue = Math.max(100, ...data);
+  const points = data
+    .map((value, index) => {
+      const x = (index / Math.max(data.length - 1, 1)) * width;
+      const y = height - (value / maxValue) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={points}
+      />
+    </svg>
+  );
 };
 
 const ResourceCard = ({
@@ -109,7 +144,8 @@ const ResourceCard = ({
   percent,
   value,
   helperText,
-  loading
+  loading,
+  chart
 }: {
   title: string;
   icon: React.ReactNode;
@@ -117,6 +153,7 @@ const ResourceCard = ({
   value: string;
   helperText?: string;
   loading?: boolean;
+  chart?: React.ReactNode;
 }) => (
   <Card sx={{ height: '100%' }}>
     <CardContent>
@@ -128,13 +165,14 @@ const ResourceCard = ({
         {loading ? <Skeleton width={140} /> : value}
       </Typography>
       {percent !== undefined && (
-        <Box>
+        <Box sx={{ mb: 1 }}>
           <LinearProgress variant="determinate" value={percent} sx={{ height: 10, borderRadius: 1 }} />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {percent.toFixed(1)}%
           </Typography>
         </Box>
       )}
+      {chart && <Box sx={{ mt: 1 }}>{chart}</Box>}
       {helperText && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {loading ? <Skeleton width={200} /> : helperText}
@@ -190,50 +228,6 @@ const DiskTable = ({ disks, loading }: { disks?: DiskUsage[]; loading?: boolean 
   </Paper>
 );
 
-const InstanceBlock = ({
-  title,
-  icon,
-  items,
-  typeKey
-}: {
-  title: string;
-  icon: React.ReactNode;
-  items: { id: string; name: string; status: string; extra?: string }[];
-  typeKey: 'vm' | 'container';
-}) => {
-  const running = items.filter(item => item.status === 'running').length;
-  return (
-    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
-      <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-        {icon}
-        <Typography variant="h6">{title}</Typography>
-        <Chip label={`运行中 ${running}/${items.length}`} color="primary" size="small" sx={{ ml: 'auto' }} />
-      </Stack>
-      {items.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">暂无数据</Typography>
-      ) : (
-        <Stack spacing={1.5}>
-          {items.slice(0, 6).map(item => (
-            <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {statusIcon(item.status)}
-                <Box>
-                  <Typography variant="subtitle2">{item.name}</Typography>
-                  {item.extra && <Typography variant="caption" color="text.secondary">{item.extra}</Typography>}
-                </Box>
-              </Box>
-              <Chip label={item.status} color={statusColor(item.status) as any} size="small" />
-            </Box>
-          ))}
-          {items.length > 6 && (
-            <Typography variant="caption" color="text.secondary">... 共 {items.length} 个{typeKey === 'vm' ? '虚拟机' : '容器'}</Typography>
-          )}
-        </Stack>
-      )}
-    </Paper>
-  );
-};
-
 const SystemResourcesPage: React.FC = () => {
   const { data: resources, isLoading: loadingResources } = useSWR<SystemResources>('/api/system/resources', fetcher, {
     refreshInterval: 10_000,
@@ -255,8 +249,52 @@ const SystemResourcesPage: React.FC = () => {
 
   const primaryDisk = resources?.disks?.[0];
   const cpuUsage = resources?.cpu?.usagePercent;
-  const cpuLoadAverage = resources?.cpu?.loadAverage ?? [];
   const memoryUsage = resources?.memory;
+
+  const [cpuHistory, setCpuHistory] = React.useState<number[]>([]);
+  const [memoryHistory, setMemoryHistory] = React.useState<number[]>([]);
+
+  React.useEffect(() => {
+    if (cpuUsage !== undefined) {
+      setCpuHistory(prev => [...prev.slice(-29), cpuUsage]);
+    }
+  }, [cpuUsage]);
+
+  React.useEffect(() => {
+    if (memoryUsage?.usedPercent !== undefined) {
+      setMemoryHistory(prev => [...prev.slice(-29), memoryUsage.usedPercent]);
+    }
+  }, [memoryUsage?.usedPercent]);
+
+  const instanceRows = React.useMemo(() => {
+    const containerRows = containers.map(container => ({
+      id: container.id,
+      name: container.name,
+      type: '容器',
+      status: container.status,
+      ip: container.ipAddress ?? '',
+      cpu: container.cpuUsage ?? '',
+      memory: container.memoryUsage ?? '',
+      disk: container.diskUsage ?? '',
+      scene: container.scene_name ?? '',
+      location: container.nodeId ?? ''
+    }));
+
+    const vmRows = vms.map(vm => ({
+      id: vm.id,
+      name: vm.name,
+      type: '虚拟机',
+      status: vm.state,
+      ip: vm.ip ?? '',
+      cpu: vm.vcpu ? `${vm.vcpu} vCPU` : '',
+      memory: vm.vmem ? `${vm.vmem} MB` : '',
+      disk: vm.uptime ?? '',
+      scene: vm.scene_name ?? '',
+      location: [vm.hostNode, vm.pool].filter(Boolean).join(' / ')
+    }));
+
+    return [...containerRows, ...vmRows];
+  }, [containers, vms]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -273,8 +311,9 @@ const SystemResourcesPage: React.FC = () => {
               icon={<MonitorHeartIcon color="primary" />}
               value={cpuUsage !== undefined ? `${cpuUsage.toFixed(1)}%` : '--'}
               percent={cpuUsage}
-              helperText={resources?.cpu ? `${resources.cpu.cores} 核 | 1/5/15 分钟负载 ${cpuLoadAverage.map(v => v?.toFixed?.(2) ?? '--').join(' / ')}` : ''}
+              helperText={resources?.cpu ? `${resources.cpu.cores} 核` : ''}
               loading={loadingResources}
+              chart={<MetricSparkline data={cpuHistory} color="#1976d2" />}
             />
           </Grid>
           <Grid item xs={12} md={4}>
@@ -285,6 +324,7 @@ const SystemResourcesPage: React.FC = () => {
               percent={memoryUsage?.usedPercent}
               helperText={memoryUsage ? `剩余 ${formatBytes(memoryUsage.free)}` : ''}
               loading={loadingResources}
+              chart={<MetricSparkline data={memoryHistory} color="#9c27b0" />}
             />
           </Grid>
           <Grid item xs={12} md={4}>
@@ -305,34 +345,57 @@ const SystemResourcesPage: React.FC = () => {
 
         <Box>
           <Typography variant="h5" fontWeight={600} gutterBottom>虚拟化与容器实例概览</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <InstanceBlock
-                title="虚拟机实例"
-                icon={<DnsIcon color="primary" />}
-                items={vms.map(vm => ({
-                  id: vm.id,
-                  name: vm.name,
-                  status: vm.state,
-                  extra: vm.ip ? `IP: ${vm.ip}` : undefined
-                }))}
-                typeKey="vm"
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <InstanceBlock
-                title="容器实例"
-                icon={<RouterIcon color="primary" />}
-                items={containers.map(c => ({
-                  id: c.id,
-                  name: c.name,
-                  status: c.status,
-                  extra: c.ipAddress ? `IP: ${c.ipAddress}` : undefined
-                }))}
-                typeKey="container"
-              />
-            </Grid>
-          </Grid>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+              <DnsIcon color="primary" />
+              <RouterIcon color="primary" />
+              <Typography variant="h6">实例列表</Typography>
+              <Chip label={`总计 ${instanceRows.length}`} size="small" sx={{ ml: 'auto' }} />
+            </Stack>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>类型</TableCell>
+                  <TableCell>名称</TableCell>
+                  <TableCell>状态</TableCell>
+                  <TableCell>IP</TableCell>
+                  <TableCell>CPU</TableCell>
+                  <TableCell>内存</TableCell>
+                  <TableCell>磁盘 / 运行时长</TableCell>
+                  <TableCell>场景</TableCell>
+                  <TableCell>节点 / 资源池</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {instanceRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">
+                      <Typography variant="body2" color="text.secondary">暂无实例</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  instanceRows.map(row => (
+                    <TableRow key={`${row.type}-${row.id}`}>
+                      <TableCell>{row.type}</TableCell>
+                      <TableCell>{row.name}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          {statusIcon(row.status)}
+                          <Chip label={row.status} color={statusColor(row.status) as any} size="small" />
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{row.ip || '-'}</TableCell>
+                      <TableCell>{row.cpu || '-'}</TableCell>
+                      <TableCell>{row.memory || '-'}</TableCell>
+                      <TableCell>{row.disk || '-'}</TableCell>
+                      <TableCell>{row.scene || '-'}</TableCell>
+                      <TableCell>{row.location || '-'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Paper>
         </Box>
       </Stack>
     </Container>

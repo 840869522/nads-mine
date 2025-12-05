@@ -34,8 +34,7 @@ export const getCpuUsage = async (sampleMs: number = 200) => {
 
   return {
     cores: os.cpus().length,
-    usagePercent: Math.min(100, Math.max(0, Number(usage.toFixed(2)))),
-    loadAverage: os.loadavg()
+    usagePercent: Math.min(100, Math.max(0, Number(usage.toFixed(2))))
   };
 };
 
@@ -65,7 +64,7 @@ export type DiskUsage = {
 
 export const getDiskUsage = async (): Promise<DiskUsage[]> => {
   try {
-    const { stdout } = await execAsync('df -Pk --output=source,fstype,size,used,avail,pcent,target');
+    const { stdout } = await execAsync('df -kPT 2>/dev/null');
     const lines = stdout.trim().split('\n').slice(1);
 
     return lines
@@ -96,7 +95,7 @@ export const getSystemResources = async () => {
     cpu = await getCpuUsage();
   } catch (error) {
     console.error('Failed to read CPU usage', error);
-    cpu = { cores: os.cpus().length, usagePercent: 0, loadAverage: [] };
+    cpu = { cores: os.cpus().length, usagePercent: 0 };
   }
 
   let memory;
