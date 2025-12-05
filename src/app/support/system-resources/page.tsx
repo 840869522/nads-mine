@@ -19,7 +19,6 @@ import {
   Chip,
   Divider,
   Paper,
-  Tooltip,
   Skeleton,
 } from '@mui/material';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -61,6 +60,12 @@ interface VmInstance {
   scene_instance_id?: string;
   scene_name?: string;
   uptime?: string;
+}
+
+interface VmDetailResponse {
+  vram?: {
+    total_mb?: number;
+  };
 }
 
 const fetcher = (url: string) => customFetch(url).then(res => res.json());
@@ -182,52 +187,6 @@ const ResourceCard = ({
   </Card>
 );
 
-const DiskTable = ({ disks, loading }: { disks?: DiskUsage[]; loading?: boolean }) => (
-  <Paper variant="outlined" sx={{ p: 2 }}>
-    <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-      <StorageIcon color="primary" />
-      <Typography variant="h6">磁盘占用情况</Typography>
-    </Stack>
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>挂载点</TableCell>
-          <TableCell>文件系统</TableCell>
-          <TableCell>类型</TableCell>
-          <TableCell align="right">容量</TableCell>
-          <TableCell align="right">已用</TableCell>
-          <TableCell align="right">可用</TableCell>
-          <TableCell align="right">占用率</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {loading && (
-          <TableRow>
-            <TableCell colSpan={7}>
-              <LinearProgress />
-            </TableCell>
-          </TableRow>
-        )}
-        {!loading && disks?.map((disk) => (
-          <TableRow key={`${disk.filesystem}-${disk.mountpoint}`}>
-            <TableCell>{disk.mountpoint}</TableCell>
-            <TableCell>{disk.filesystem}</TableCell>
-            <TableCell>{disk.type || '未知'}</TableCell>
-            <TableCell align="right">{formatBytes(disk.sizeKB * 1024)}</TableCell>
-            <TableCell align="right">{formatBytes(disk.usedKB * 1024)}</TableCell>
-            <TableCell align="right">{formatBytes(disk.availKB * 1024)}</TableCell>
-            <TableCell align="right">
-              <Tooltip title={`${disk.usedPercent}%`}>
-                <LinearProgress variant="determinate" value={disk.usedPercent} sx={{ height: 8, borderRadius: 1 }} />
-              </Tooltip>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </Paper>
-);
-
 const SystemResourcesPage: React.FC = () => {
   const { data: resources, isLoading: loadingResources } = useSWR<SystemResources>('/api/system/resources', fetcher, {
     refreshInterval: 10_000,
@@ -247,7 +206,33 @@ const SystemResourcesPage: React.FC = () => {
     ? vmData
     : (vmData as any)?.data ?? [];
 
-  const primaryDisk = resources?.disks?.[0];
+  const { data: vmDetails } = useSWR<Record<string, VmDetailResponse> | null>(
+    vms.length ? ['vm-details', vms.map(vm => vm.id).join(',')] : null,
+    async () => {
+      const entries = await Promise.all(
+        vms.map(async vm => {
+          try {
+            const detail = await fetcher(`/back/api/vms/${vm.id}`);
+            return [vm.id, detail as VmDetailResponse];
+          } catch (error) {
+            console.error('Failed to fetch vm detail', vm.id, error);
+            return [vm.id, null];
+          }
+        })
+      );
+
+      return Object.fromEntries(entries);
+    },
+    { refreshInterval: 20_000 }
+  );
+
+  const diskTotals = React.useMemo(() => {
+    if (!resources?.disks?.length) return undefined;
+    const sizeKB = resources.disks.reduce((acc, disk) => acc + (disk.sizeKB || 0), 0);
+    const usedKB = resources.disks.reduce((acc, disk) => acc + (disk.usedKB || 0), 0);
+    const usedPercent = sizeKB > 0 ? (usedKB / sizeKB) * 100 : 0;
+    return { sizeKB, usedKB, usedPercent };
+  }, [resources?.disks]);
   const cpuUsage = resources?.cpu?.usagePercent;
   const memoryUsage = resources?.memory;
 
@@ -275,9 +260,8 @@ const SystemResourcesPage: React.FC = () => {
       ip: container.ipAddress ?? '',
       cpu: container.cpuUsage ?? '',
       memory: container.memoryUsage ?? '',
-      disk: container.diskUsage ?? '',
-      scene: container.scene_name ?? '',
-      location: container.nodeId ?? ''
+      disk: container.uptime ?? '',
+      scene: container.scene_name ?? ''
     }));
 
     const vmRows = vms.map(vm => ({
@@ -287,24 +271,23 @@ const SystemResourcesPage: React.FC = () => {
       status: vm.state,
       ip: vm.ip ?? '',
       cpu: vm.vcpu ? `${vm.vcpu} vCPU` : '',
-      memory: vm.vmem ? `${vm.vmem} MB` : '',
+      memory: vmDetails?.[vm.id]?.vram?.total_mb ? `${vmDetails[vm.id].vram!.total_mb} MB` : vm.vmem ? `${vm.vmem} MB` : '',
       disk: vm.uptime ?? '',
-      scene: vm.scene_name ?? '',
-      location: [vm.hostNode, vm.pool].filter(Boolean).join(' / ')
+      scene: vm.scene_name ?? ''
     }));
 
     return [...containerRows, ...vmRows];
-  }, [containers, vms]);
+  }, [containers, vms, vmDetails]);
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       <Stack spacing={2}>
         <Box>
           <Typography variant="h4" fontWeight={700}>系统资源详情</Typography>
           <Typography variant="body1" color="text.secondary">查看服务器资源占用与虚拟化实例总体情况</Typography>
         </Box>
 
-        <Grid container spacing={2}>
+        <Grid container spacing={2} columns={12}>
           <Grid item xs={12} md={4}>
             <ResourceCard
               title="CPU"
@@ -331,15 +314,13 @@ const SystemResourcesPage: React.FC = () => {
             <ResourceCard
               title="磁盘"
               icon={<StorageIcon color="primary" />}
-              value={primaryDisk ? `${formatBytes(primaryDisk.usedKB * 1024)} / ${formatBytes(primaryDisk.sizeKB * 1024)}` : '--'}
-              percent={primaryDisk?.usedPercent}
-              helperText={primaryDisk ? `挂载点 ${primaryDisk.mountpoint}` : '等待加载磁盘信息'}
+              value={diskTotals ? `${formatBytes(diskTotals.usedKB * 1024)} / ${formatBytes(diskTotals.sizeKB * 1024)}` : '--'}
+              percent={diskTotals?.usedPercent}
+              helperText={diskTotals ? `共 ${resources?.disks?.length ?? 0} 个挂载` : '等待加载磁盘信息'}
               loading={loadingResources}
             />
           </Grid>
         </Grid>
-
-        <DiskTable disks={resources?.disks} loading={loadingResources} />
 
         <Divider />
 
@@ -361,15 +342,14 @@ const SystemResourcesPage: React.FC = () => {
                   <TableCell>IP</TableCell>
                   <TableCell>CPU</TableCell>
                   <TableCell>内存</TableCell>
-                  <TableCell>磁盘 / 运行时长</TableCell>
+                  <TableCell>运行时长 / 磁盘</TableCell>
                   <TableCell>场景</TableCell>
-                  <TableCell>节点 / 资源池</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {instanceRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body2" color="text.secondary">暂无实例</Typography>
                     </TableCell>
                   </TableRow>
@@ -389,7 +369,6 @@ const SystemResourcesPage: React.FC = () => {
                       <TableCell>{row.memory || '-'}</TableCell>
                       <TableCell>{row.disk || '-'}</TableCell>
                       <TableCell>{row.scene || '-'}</TableCell>
-                      <TableCell>{row.location || '-'}</TableCell>
                     </TableRow>
                   ))
                 )}
