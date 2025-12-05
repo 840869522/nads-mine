@@ -64,33 +64,50 @@ export type DiskUsage = {
 };
 
 export const getDiskUsage = async (): Promise<DiskUsage[]> => {
-  const { stdout } = await execAsync('df -Pk --output=source,fstype,size,used,avail,pcent,target');
-  const lines = stdout.trim().split('\n').slice(1);
+  try {
+    const { stdout } = await execAsync('df -Pk --output=source,fstype,size,used,avail,pcent,target');
+    const lines = stdout.trim().split('\n').slice(1);
 
-  return lines
-    .map(line => line.trim().split(/\s+/))
-    .filter(parts => parts.length >= 7)
-    .map(parts => {
-      const [filesystem, type, size, used, avail, pcent, ...mount] = parts;
-      const mountpoint = mount.join(' ');
-      return {
-        filesystem,
-        type,
-        sizeKB: Number(size),
-        usedKB: Number(used),
-        availKB: Number(avail),
-        usedPercent: Number((pcent || '0').replace('%', '')),
-        mountpoint
-      };
-    });
+    return lines
+      .map(line => line.trim().split(/\s+/))
+      .filter(parts => parts.length >= 7)
+      .map(parts => {
+        const [filesystem, type, size, used, avail, pcent, ...mount] = parts;
+        const mountpoint = mount.join(' ');
+        return {
+          filesystem,
+          type,
+          sizeKB: Number(size),
+          usedKB: Number(used),
+          availKB: Number(avail),
+          usedPercent: Number((pcent || '0').replace('%', '')),
+          mountpoint
+        };
+      });
+  } catch (error) {
+    console.error('Failed to read disk usage', error);
+    return [];
+  }
 };
 
 export const getSystemResources = async () => {
-  const [cpu, memory, disks] = await Promise.all([
-    getCpuUsage(),
-    Promise.resolve(getMemoryUsage()),
-    getDiskUsage()
-  ]);
+  let cpu;
+  try {
+    cpu = await getCpuUsage();
+  } catch (error) {
+    console.error('Failed to read CPU usage', error);
+    cpu = { cores: os.cpus().length, usagePercent: 0, loadAverage: [] };
+  }
+
+  let memory;
+  try {
+    memory = getMemoryUsage();
+  } catch (error) {
+    console.error('Failed to read memory usage', error);
+    memory = { total: 0, free: 0, used: 0, usedPercent: 0 };
+  }
+
+  const disks = await getDiskUsage();
 
   return { cpu, memory, disks };
 };
