@@ -23,6 +23,7 @@ class SceneInstance extends Model
         'c_username',
         'c_status',
         'c_scene_config',
+        'c_hostname',
     ];
 
     // 最小修改：确保 JSON 可写入/读取
@@ -37,7 +38,33 @@ class SceneInstance extends Model
             if (empty($model->{$model->getKeyName()})) {
                 $model->{$model->getKeyName()} = Str::uuid()->toString();
             }
+
+            if (empty($model->c_hostname)) {
+                $model->c_hostname = self::resolveHostname();
+            }
         });
+    }
+
+    /**
+     * 限制查询只返回当前主机或指定主机的场景实例。
+     */
+    public function scopeForHostname($query, ?string $hostname = null)
+    {
+        $hostname = $hostname ?? self::resolveHostname();
+        return $query->where('c_hostname', $hostname);
+    }
+
+    /**
+     * 解析当前主机名（包含兜底逻辑）。
+     */
+    public static function resolveHostname(): string
+    {
+        $hostname = gethostname();
+        if (!$hostname) {
+            $hostname = php_uname('n');
+        }
+
+        return $hostname ?: 'unknown-host';
     }
 
     /**

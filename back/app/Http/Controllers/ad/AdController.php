@@ -139,7 +139,8 @@ class AdController extends Controller
                 'c_config_id' => $scenario->c_config_id,
                 'c_username' => $userName,
                 'c_status' => 'CREATING',
-                'c_scene_config' => $topologyJson,
+                'c_scene_config' => $topologyJson, // 使用从请求中传递过来的拓扑数据
+                'c_hostname' => SceneInstance::resolveHostname(),
             ]);
 
             $adConfig = AdConfig::find($adConfigId);

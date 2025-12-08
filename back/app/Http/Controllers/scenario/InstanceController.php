@@ -47,7 +47,11 @@ class InstanceController extends Controller
     public function index()
     {
         try {
-            $instances = SceneInstance::with('sceneConfig')->latest('c_runtime')->get();
+            $hostname = SceneInstance::resolveHostname();
+            $instances = SceneInstance::with('sceneConfig')
+                ->forHostname($hostname)
+                ->latest('c_runtime')
+                ->get();
             $data = $instances->map(function ($instance) {
                 return [
                     'instance_id'   => $instance->c_scene_instances_id,
