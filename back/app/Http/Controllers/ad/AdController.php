@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\scenario\InstanceController;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class AdController extends Controller
 {
@@ -85,6 +87,12 @@ class AdController extends Controller
      */
     public function startDrill(Request $request, SceneConfig $scenario): JsonResponse
     {
+        // --- 系统资源检查 ---
+        $resourceCheckResponse = $this->checkSystemResources();
+        if ($resourceCheckResponse !== null) {
+            return $resourceCheckResponse;
+        }
+
         // --- 验证输入 ---
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:50',
@@ -117,6 +125,19 @@ class AdController extends Controller
 
         // --- 解析拓扑 ---
         $parsedTopology = TopologyParser::parse($topologyJson);
+
+        // --- 队伍成员冲突校验 ---
+        $teamValidation = $this->validateTeamAssignments(
+            $parsedTopology['containers'] ?? [],
+            $parsedTopology['vms'] ?? []
+        );
+        if ($teamValidation['has_conflict']) {
+            return response()->json([
+                'message' => '启动失败：存在队伍成员冲突。',
+                'conflicts' => $teamValidation['conflicts'],
+            ], 422);
+        }
+
         $nodesById = collect($topologyJson['nodes'])->keyBy('id');
         $connections = &$parsedTopology['connections'];
         $vmsParsed = collect($parsedTopology['vms'])->keyBy('id');
@@ -376,5 +397,123 @@ class AdController extends Controller
             if (empty($connection['source']['ip'])) { $connection['source']['ip'] = $getNextIp(); }
             if (empty($connection['target']['ip'])) { $connection['target']['ip'] = $getNextIp(); }
         }
+    }
+
+    /**
+     * 检查系统CPU和内存资源是否在可接受的范围内。
+     *
+     * @return \Illuminate\Http\JsonResponse|null 如果资源超限则返回JSON响应，否则返回null。
+     */
+    private function checkSystemResources()
+    {
+        try {
+            // 检查内存使用率
+            $memCommand = "free | grep Mem | awk '{print $3/$2 * 100.0}'";
+            $processMem = Process::fromShellCommandline($memCommand);
+            $processMem->run();
+            if (!$processMem->isSuccessful()) {
+                throw new ProcessFailedException($processMem);
+            }
+            $memoryUsage = round((float) $processMem->getOutput(), 2);
+
+            if ($memoryUsage > 85) {
+                Log::warning("启动场景失败：内存使用率过高 ({$memoryUsage}%)");
+                return response()->json(['message' => "启动失败：系统内存使用率 ({$memoryUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503); // 503 Service Unavailable
+            }
+
+            // 检查CPU使用率
+            $cpuCommand = "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'";
+            $processCpu = Process::fromShellCommandline($cpuCommand);
+            $processCpu->run();
+            if (!$processCpu->isSuccessful()) {
+                throw new ProcessFailedException($processCpu);
+            }
+            $cpuUsage = round((float) $processCpu->getOutput(), 2);
+
+            if ($cpuUsage > 85) {
+                Log::warning("启动场景失败：CPU使用率过高 ({$cpuUsage}%)");
+                return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503);
+            }
+
+            Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);
+            return null; //一切正常
+
+        } catch (\Exception $e) {
+            Log::error("检查系统资源时发生错误: " . $e->getMessage());
+            // 如果检查过程出错，为安全起见，阻止场景启动
+            return response()->json(['message' => '检查系统资源时发生错误，无法启动场景。'], 500);
+        }
+    }
+
+    /**
+     * 验证拓扑中的队伍成员是否存在冲突。
+     *
+     * @param array $containers Parsed container definitions including teamId.
+     * @param array $vms Parsed VM definitions including teamId.
+     * @return array{has_conflict: bool, conflicts?: array}
+     */
+    private function validateTeamAssignments(array $containers, array $vms): array
+    {
+        $teamIds = collect($containers)
+            ->merge($vms)
+            ->pluck('teamId')
+            ->filter(function ($teamId) {
+                return $teamId !== null && trim((string) $teamId) !== '';
+            })
+            ->map(fn($id) => trim((string) $id))
+            ->unique()
+            ->values();
+
+        if ($teamIds->isEmpty()) {
+            return ['has_conflict' => false];
+        }
+
+        $members = DB::table('c_teams_users')
+            ->whereIn('team_id', $teamIds)
+            ->get(['team_id', 'user_id']);
+
+        $userTeams = [];
+        foreach ($members as $member) {
+            $teamId = trim((string) $member->team_id);
+            $userId = trim((string) $member->user_id);
+            if ($teamId === '' || $userId === '') {
+                continue;
+            }
+            $userTeams[$userId][$teamId] = true;
+        }
+
+        $conflicts = [];
+        foreach ($userTeams as $userId => $teams) {
+            if (count($teams) > 1) {
+                $conflicts[$userId] = array_keys($teams);
+            }
+        }
+
+        if (empty($conflicts)) {
+            return ['has_conflict' => false];
+        }
+
+        $flatTeamIds = collect($conflicts)->flatten()->unique()->values();
+        $teamNames = DB::table('c_teams')
+            ->whereIn('c_id', $flatTeamIds)
+            ->pluck('c_name', 'c_id');
+
+        $conflictDetails = [];
+        foreach ($conflicts as $userId => $teamList) {
+            $conflictDetails[] = [
+                'user' => $userId,
+                'teams' => array_map(function ($teamId) use ($teamNames) {
+                    return [
+                        'id' => $teamId,
+                        'name' => $teamNames[$teamId] ?? null,
+                    ];
+                }, $teamList),
+            ];
+        }
+
+        return [
+            'has_conflict' => true,
+            'conflicts' => $conflictDetails,
+        ];
     }
 }
