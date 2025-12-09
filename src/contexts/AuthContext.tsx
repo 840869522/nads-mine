@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { apiClient, apiClientWithToken } from '@/utils/axios';
-import { deleteCookie, setCookie } from '@/utils/cookie';
+import { deleteCookie, setCookie, getCookie } from '@/utils/cookie';
 
 // ★ 1. 更新类型定义：为 user 对象添加 team_id 属性
 interface UserAuthData {
@@ -28,10 +28,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<UserAuthData | null>(null);
 
     useEffect(() => {
-        // Load any existing session from localStorage
+        const hydrateFromToken = async () => {
+            try {
+                const res = await apiClientWithToken.get("/back/api/support/user/me");
+                const data = res.data;
+                if (data?.code === 200 && data?.data) {
+                    const hydrated: UserAuthData = {
+                        user: data.data.user,
+                        role: data.data.role,
+                        permission: data.data.permissions,
+                        team_id: data.data.team_id ?? null,
+                    };
+                    setUser(hydrated);
+                    localStorage.setItem('droneSimUser', JSON.stringify(hydrated));
+                }
+            } catch {
+                // ignore errors
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const tokenFromQuery = params.get('token');
+            if (tokenFromQuery && !getCookie('_auth')) {
+                setCookie('_auth', tokenFromQuery, {});
+            }
+        }
+
         const storedUser = localStorage.getItem('droneSimUser');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
+        }
+
+        if (getCookie('_auth')) {
+            hydrateFromToken();
         }
     }, []);
 

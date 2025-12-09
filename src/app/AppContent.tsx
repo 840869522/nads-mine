@@ -7,7 +7,7 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import { useAuth } from '@/hooks/useAuth';
 import { GetUserRole, USER_ROLES_CONFIG } from '@/constants';
 import { UserRole } from '@/types';
-import { getCookie } from '@/utils/cookie';
+import { getCookie, setCookie } from '@/utils/cookie';
 import { AffixedFabWrapper } from '@/components/layout/AffixedFab';
 import ChatPage from "@/components/chat/page";
 import { userPermissionContext } from '@/contexts/PermissionAndMenuContext';
@@ -97,6 +97,18 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   };
 
 
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setCookie('_auth', token, { path: '/', expires: 7 });
+      params.delete('token');
+      const newSearch = params.toString();
+      const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
 
   useEffect(() => {
     const permissionsData = user?.permission || [];

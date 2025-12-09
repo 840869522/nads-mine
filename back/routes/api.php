@@ -30,6 +30,8 @@ use App\Http\Controllers\Experiment\ExperimentResourceController;
 use App\Http\Controllers\Course\CoursePermissionController;
 use App\Http\Controllers\FlagSubmission\FlagSubmissionController;
 use App\Http\Controllers\Test1\TestControllerNew;
+use App\Http\Controllers\Support\FallbackTargetController;
+use App\Http\Controllers\Users\UserController as SupportUserController;
 use App\Http\Controllers\ad\VmController as AdVmController;
 use App\Http\Controllers\visualization\VisualizationController;
 
@@ -81,6 +83,7 @@ Route::prefix("support")->group(function () {
         Route::post("/2excel", [UserController::class, "convert2Excel"]);
         Route::post("batch_add", [UserController::class , "batchImportUsers"]);
         Route::post("/logout", [UserController::class, "logout"]);
+        Route::get("/me", [SupportUserController::class, "currentUser"]);
     });
 
     Route::prefix("role")->group(function () {
@@ -103,6 +106,13 @@ Route::prefix("support")->group(function () {
         Route::post('/update', [PermissionController::class, 'updatePermission']);
         Route::post("batch_add", [PermissionController::class, "batchImportPermissions"]);
         Route::post('/delete', [PermissionController::class, 'deletePermission']);
+    });
+
+    Route::prefix('fallback-targets')->group(function () {
+        Route::get('/', [FallbackTargetController::class, 'index']);
+        Route::post('/', [FallbackTargetController::class, 'store']);
+        Route::put('/{target}', [FallbackTargetController::class, 'update']);
+        Route::delete('/{target}', [FallbackTargetController::class, 'destroy']);
     });
 });
 

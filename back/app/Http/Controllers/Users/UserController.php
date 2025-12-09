@@ -14,6 +14,58 @@
     use Ramsey\Uuid\Uuid;
 
     class UserController extends Controller{
+        public function currentUser(Request $req) {
+            $auth = $req->header("Authorization", null);
+            $jwtRes =  JWTControll::decodeJWT($auth);
+
+            if ($jwtRes["err"] != null) {
+                return response()->json([
+                    "code"=> GlobalResponse::$HTTP_TOKEN_ERROR_CODE,
+                    "message"=>GlobalResponse::$HTTP_TOKEN_ERROR_MES
+                ]);
+            }
+
+            // login 时 payload 使用 "id" 存用户名，兼容其他字段
+            $username = $jwtRes["data"]["username"] ?? $jwtRes["data"]["c_username"] ?? $jwtRes["data"]["id"] ?? null;
+            if (!$username) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_REQUEST_ERROR_CODE,
+                    "message" => "无效的 token: 未包含用户名"
+                ]);
+            }
+
+            $userRes = UserModel::getUserByName($username);
+            if ($userRes["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE || !$userRes["data"]) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => "用户不存在或查询失败"
+                ]);
+            }
+
+            $permissionRes = UserModel::getUserPrimissions($username);
+            $roleRes = RoleModel::getUserRole($username);
+
+            if ($permissionRes["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE || $roleRes["code"] != GlobalResponse::$DATABASE_SUCCESS_CODE) {
+                return response()->json([
+                    "code" => GlobalResponse::$HTTP_DATABASE_ERROR_CODE,
+                    "message" => GlobalResponse::$DATABASE_ERROR_MES
+                ]);
+            }
+
+            $permissions = array_map(fn($item) => $item->c_id, $permissionRes['data']);
+            $roles = array_map(fn($item) => $item->c_id, $roleRes['data']);
+
+            return response()->json([
+                "code" => GlobalResponse::$HTTP_STATUS_OK_CODE,
+                "message" => GlobalResponse::HTTP_STATUS_OK_MES,
+                "data" => [
+                    "user" => $userRes["data"],
+                    "role" => $roles,
+                    "permissions" => $permissions,
+                    "team_id" => $jwtRes["data"]["team_id"] ?? null,
+                ]
+            ]);
+        }
         public function getAllUser(Request $req){
                 // 使用 input 方法获取参数，如果不存在则使用默认值
                 // input() 既可以读取 GET 的 Query Param，也可以读取 POST 的 JSON Body

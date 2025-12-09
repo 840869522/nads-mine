@@ -6,6 +6,13 @@ export const APP_NAME = "网络安全实验平台";
 
 
 export const BACK_IP_PORT = "http://localhost:8000";
+export const SCENARIO_FALLBACK_TARGETS = [
+  {
+    name: "备用节点1",
+    host: "10.12.0.101",
+    port: "13000",
+  },
+];
 
 export const APP_PERMISSIONS_CATEGORY = {
   "support": "基础支撑分系统",

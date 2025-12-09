@@ -18,6 +18,7 @@ import {
     FlashOn as QuickCreateIcon, // <-- 新增快速创建图标
     Download as ExportIcon // <-- 新增导出图标
 } from '@mui/icons-material';
+import LaunchIcon from '@mui/icons-material/Launch';
 import Link from 'next/link'; // <-- 新增导入
 import ScenarioCreateDialog from './ScenarioCreateDialog';
 import ScenarioEditDialog from './ScenarioEditDialog';
@@ -26,6 +27,8 @@ import ScenarioQuickCreateDialog from './ScenarioQuickCreateDialog';
 import {TopologyData} from "@/types.ts";
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
+import { getCookie } from '@/utils/cookie';
+import { SCENARIO_FALLBACK_TARGETS } from '@/constants';
 
 
 // 定义场景的数据结构
@@ -36,6 +39,12 @@ export interface Scenario {
     uploadDate: string;
     nodeCount: number;
     topology_json: TopologyData;
+}
+
+interface FallbackTarget {
+    name: string;
+    host: string;
+    port: string;
 }
 
 
@@ -57,6 +66,7 @@ const ScenarioManagementPage: React.FC = () => {
     const [permissionScenario, setPermissionScenario] = useState<Scenario | null>(null);
     const [startingScenarioId, setStartingScenarioId] = useState<string | null>(null); // 1. 新增状态
     const [exportingScenarioId, setExportingScenarioId] = useState<string | null>(null); // 新增导出状态
+    const [fallbackTargets, setFallbackTargets] = useState<FallbackTarget[]>(SCENARIO_FALLBACK_TARGETS);
     
     // 导出功能启用状态 - 可以通过硬编码控制
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -100,6 +110,31 @@ const ScenarioManagementPage: React.FC = () => {
         fetchScenarios();
     }, [fetchScenarios]);
 
+    const loadFallbackTargets = useCallback(async () => {
+        try {
+            const response = await customFetch('/back/api/support/fallback-targets');
+            if (!response.ok) return;
+            const payload = await response.json();
+            const list = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+            const normalized = list
+                .map((item: any) => ({
+                    name: item.name ?? item.c_name ?? '',
+                    host: item.host ?? item.c_host ?? '',
+                    port: String(item.port ?? item.c_port ?? '')
+                }))
+                .filter((item: FallbackTarget) => item.host && item.port);
+            if (normalized.length) {
+                setFallbackTargets(normalized);
+            }
+        } catch (error) {
+            console.warn('加载备用节点失败', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadFallbackTargets();
+    }, [loadFallbackTargets]);
+
     // 更新 handleSaveSuccess 以便它可以同时处理创建和编辑成功后的逻辑
     const handleSaveSuccess = () => {
         setCreateDialogOpen(false); // 关闭创建弹窗
@@ -110,6 +145,47 @@ const ScenarioManagementPage: React.FC = () => {
     };
     const handleRefresh = () => {
         fetchScenarios();
+    };
+
+    const chooseFallbackTarget = () => {
+        const candidates = fallbackTargets.length ? fallbackTargets : SCENARIO_FALLBACK_TARGETS;
+        if (candidates.length === 1) return candidates[0];
+
+        const optionsText = candidates
+            .map((item, idx) => `${idx + 1}. ${item.name || `${item.host}:${item.port}`}`)
+            .join('\n');
+        const input = window.prompt(`选择要跳转的目标:\n${optionsText}\n请输入序号`, '1');
+        const index = input ? parseInt(input, 10) - 1 : 0;
+        return candidates[index] || candidates[0];
+    };
+
+    const buildTargetUrlWithToken = (target = chooseFallbackTarget()) => {
+        const token = getCookie('_auth');
+        const url = new URL(window.location.href);
+        url.hostname = target.host;
+        url.port = target.port;
+        if (token) {
+            url.searchParams.set('token', token);
+        }
+        return url.toString();
+    };
+
+    const promptJumpToOtherHost = (reason?: string) => {
+        const target = chooseFallbackTarget();
+        const targetUrl = buildTargetUrlWithToken(target);
+        const messagePrefix = reason ? `${reason}\n\n` : '';
+        const confirmed = window.confirm(
+            `${messagePrefix}检测到资源不足，是否跳转到 ${target.host}:${target.port} 继续？`
+        );
+        if (confirmed) {
+            window.location.href = targetUrl;
+        }
+    };
+
+    const handleSimulateJump = () => {
+        const target = chooseFallbackTarget();
+        const targetUrl = buildTargetUrlWithToken(target);
+        window.location.href = targetUrl;
     };
 
     // 2. 新增处理删除相关的函数
@@ -175,13 +251,30 @@ const ScenarioManagementPage: React.FC = () => {
                 body: JSON.stringify({ username: username }),
             });
 
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || '启动失败');
+            let result: any = null;
+            try {
+                result = await response.json();
+            } catch (_parseError) {
+                // ignore parse errors and fall back to generic messaging
             }
 
-            alert(result.message);
+            if (!response.ok) {
+                const message = result?.message || '启动失败';
+                setError(message);
+
+                const isResourceLimited =
+                    response.status === 503 &&
+                    (message.includes('启动失败：系统内存使用率') || message.includes('启动失败：系统CPU使用率'));
+
+                if (isResourceLimited) {
+                    promptJumpToOtherHost(message);
+                } else {
+                    alert(`启动失败: ${message}`);
+                }
+                return;
+            }
+
+            alert(result?.message || '启动成功');
             fetchScenarios(); // 4. 成功后刷新数据
 
         } catch (err: any) {
@@ -280,6 +373,13 @@ const ScenarioManagementPage: React.FC = () => {
                 </Typography>
                 {/* 将两个按钮放在一个flex容器中，用gap设置间距 */}
                 <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<LaunchIcon />}
+                        onClick={handleSimulateJump}
+                    >
+                        模拟跳转
+                    </Button>
                     <Button
                         variant="outlined"
                         startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
