@@ -20,7 +20,7 @@ interface ScenarioCreateDialogProps {
     onSaveSuccess: () => void;
 }
 
-const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClose}) => {
+const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClose, onSaveSuccess }) => {
 
     const [_instances, setInstances] = useState<RunningInstance[]>([]);
 
@@ -89,9 +89,9 @@ const ScenarioCreateDialog: React.FC<ScenarioCreateDialogProps> = ({ open, onClo
                 <TopologyEditor
                     onAddNode={handleAddNode}
                     onDeleteNode={handleDeleteNode}
-                    onUpdateNode={handleUpdateNode} onSaveSuccess={function (): void {
-                    throw new Error('Function not implemented.');
-                }}                />
+                    onUpdateNode={handleUpdateNode}
+                    onSaveSuccess={onSaveSuccess}
+                />
             </DialogContent>
         </Dialog>
     );

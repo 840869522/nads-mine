@@ -106,7 +106,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
     onDeleteNode,
     onUpdateNode,
     initialData,
-    // onSaveSuccess,
+    onSaveSuccess,
     scenarioId,
     sceneInstanceId
 }) => {
@@ -648,7 +648,7 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
 
             // 4. 操作成功后，关闭弹窗并调用父组件的回调函数
             setIsSaveModalOpen(false);
-            // onSaveSuccess();
+            onSaveSuccess?.();
 
         } catch (error: any) {
             console.error('保存场景时出错:', error);
@@ -794,20 +794,14 @@ const TopologyEditor: React.FC<TopologyEditorProps> = ({
             />
             {/* 仅在模板保存模式下渲染保存弹窗；实例模式不使用弹窗 */}
             {!sceneInstanceId && (
-                <>
-                    <SaveScenarioModal
-                        open={isSaveModalOpen}
-                        onClose={() => setIsSaveModalOpen(false)}
-                        onSave={handleConfirmSave} isSaving={false}            />
-                    <SaveScenarioModal
-                        open={isSaveModalOpen}
-                        onClose={() => setIsSaveModalOpen(false)}
-                        onSave={handleConfirmSave}
-                        initialName={initialData?.name}
-                        initialDescription={initialData?.description}
-                        isSaving={isSaving}
-                    />
-                </>
+                <SaveScenarioModal
+                    open={isSaveModalOpen}
+                    onClose={() => setIsSaveModalOpen(false)}
+                    onSave={handleConfirmSave}
+                    initialName={initialData?.name}
+                    initialDescription={initialData?.description}
+                    isSaving={isSaving}
+                />
             )}
             {/* 全局等待遮罩，防操作过多 */}
             <Backdrop open={isSaving} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, color: '#fff' }}>
