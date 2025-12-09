@@ -209,15 +209,15 @@ const GlobalStyles = () => (
       overflow-x: hidden;
     }
     /* Custom scrollbar for cyberpunk look */
-    ::-webkit-scrollbar {
+    .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
-    ::-webkit-scrollbar-track {
-      background: ${COLORS.panel}; 
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0f172a; 
     }
-    ::-webkit-scrollbar-thumb {
-      background: ${COLORS.cyan}; 
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #06b6d4; 
       border-radius: 3px;
     }
     .bg-grid-pattern {
