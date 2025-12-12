@@ -338,6 +338,7 @@ export const SPECIAL_IMAGES = [
   'frr-ubuntu20:latest',
   'px4-mitm-f:latest',
   'ntop/ntopng:latest',
+  'web:latest',
   'px4-temp1:latest',
   'px4-temp2:latest',
   'px4-temp3:latest',
