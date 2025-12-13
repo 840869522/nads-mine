@@ -43,6 +43,8 @@ interface VirtualMachineEditModalProps {
   isEditable?: boolean;
 }
 
+const chineseCharPattern = /[\u4e00-\u9fa5]/;
+
 const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpen, onClose, node, onSave, isEditable = true }) => {
   // --- 状态管理 ---
   const [label, setLabel] = useState('');
@@ -153,6 +155,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
   const validate = (): boolean => {
     const newErrors: { [key: string]: string } = {};
     if (!label.trim()) newErrors.label = '节点名称不能为空';
+    else if (node?.type === 'virtual_machine' && chineseCharPattern.test(label)) newErrors.label = '节点名称不能包含中文字符';
     if (!baseImage) newErrors.baseImage = '必须选择一个基础镜像';
     if (memory && isNaN(Number(memory))) newErrors.memory = '内存大小必须是数字';
     if (cpu && isNaN(Number(cpu))) newErrors.cpu = 'CPU核心数必须是数字';
@@ -212,7 +215,18 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
             <TextField
               label="节点名称 (标签)"
               value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setLabel(value);
+                setErrors(prev => ({
+                  ...prev,
+                  label: !value.trim()
+                    ? '节点名称不能为空'
+                    : node?.type === 'virtual_machine' && chineseCharPattern.test(value)
+                      ? '节点名称不能包含中文字符'
+                      : undefined,
+                }));
+              }}
               required
               fullWidth
               error={!!_errors.label}
