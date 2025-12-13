@@ -71,6 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
     if (currentPath.startsWith('/drill')) initialOpenMenus["安全实验分系统"] = true; // Updated key
     if (
       currentPath.startsWith('/admin') ||
+      currentPath.startsWith('/support/system-resources') ||
       currentPath.startsWith('/scenario/images') ||
       currentPath.startsWith('/scenario/instances') ||
       currentPath.startsWith('/scenario/vm-images') ||
