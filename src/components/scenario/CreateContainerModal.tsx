@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {customFetch} from "@/utils/fetch.ts";
 
 const API_BASE = '/back/api';
+const chineseCharPattern = /[\u4e00-\u9fa5]/;
 
 interface CreateContainerModalProps {
   open: boolean;
@@ -41,6 +42,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
   const [volumes, setVolumes] = useState<{ hostPath: string; containerPath: string }[]>([]);
   const [envs, setEnvs] = useState<{ key: string; value: string }[]>([]);
   const [cmd, setCmd] = useState('');
+  const [errors, setErrors] = useState<{ name?: string }>({});
 
   useEffect(() => {
     if (!open) return;
@@ -61,6 +63,7 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
     setVolumes([]);
     setEnvs([]);
     setCmd('');
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -88,6 +91,13 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
 
   const handleSubmit = async () => {
     if (!user || !image) return;
+
+    const newErrors: { name?: string } = {};
+    if (name && chineseCharPattern.test(name)) {
+      newErrors.name = '容器名称不能包含中文字符';
+    }
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
     await customFetch(`${API_BASE}/containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,7 +133,18 @@ export default function CreateContainerModal({ open, onClose, onCreated, fixedIm
               renderInput={(params) => <TextField {...params} label="镜像" />}
             />
           )}
-          <TextField label="容器名称" value={name} onChange={e => setName(e.target.value)} fullWidth />
+          <TextField
+            label="容器名称"
+            value={name}
+            onChange={e => {
+              const value = e.target.value;
+              setName(value);
+              setErrors(prev => ({ ...prev, name: chineseCharPattern.test(value) ? '容器名称不能包含中文字符' : undefined }));
+            }}
+            fullWidth
+            error={!!errors.name}
+            helperText={errors.name}
+          />
           <Box>
             <Typography variant="subtitle2" gutterBottom>端口映射</Typography>
             {ports.map((p, idx) => (

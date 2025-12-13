@@ -38,6 +38,7 @@ interface TeamOption {
 
 const COMPUTE_RESOURCE_TYPES = ['容器'];
 const BRIDGE_TYPES = ['NAT网桥'];
+const chineseCharPattern = /[\u4e00-\u9fa5]/;
 
 interface NodeEditModalProps {
   isOpen: boolean;
@@ -161,8 +162,14 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
   }, [teams, selectedTeamId, legacyTeamLabel]);
 
   const validate = (): boolean => {
-    // 您可以根据需要添加对 iptables 规则的验证
-    return true;
+    const newErrors: { [key: string]: string } = {};
+
+    if (node?.type === 'container' && chineseCharPattern.test(label)) {
+      newErrors.label = '节点名称不能包含中文字符';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
   
   // --- 端口映射处理函数 (保持不变) ---
@@ -252,7 +259,23 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
         <DialogTitle>编辑节点: {node?.label}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <TextField label="节点名称 (标签)" value={label} onChange={(e) => setLabel(e.target.value)} required fullWidth disabled={disabled} />
+            <TextField
+              label="节点名称 (标签)"
+              value={label}
+              onChange={(e) => {
+                const value = e.target.value;
+                setLabel(value);
+                setErrors(prev => ({
+                  ...prev,
+                  label: node?.type === 'container' && chineseCharPattern.test(value) ? '节点名称不能包含中文字符' : undefined,
+                }));
+              }}
+              required
+              fullWidth
+              disabled={disabled}
+              error={!!_errors.label}
+              helperText={_errors.label}
+            />
             <TextField label="设备类型/名称" value={deviceName} fullWidth disabled />
             <FormControl fullWidth size="small" disabled={disabled}>
               <InputLabel>队伍分配</InputLabel>

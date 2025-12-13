@@ -14,6 +14,8 @@ import {
 import Autocomplete from '@mui/material/Autocomplete';
 import {customFetch} from "@/utils/fetch.ts";
 
+const chineseCharPattern = /[\u4e00-\u9fa5]/;
+
 interface VmImage {
   name: string;
   path: string;
@@ -34,6 +36,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
     ip: "",
     is_target: false
   });
+  const [errors, setErrors] = useState<{ vm_name?: string }>({});
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +58,7 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
       ip: "",
       is_target: false
     });
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -63,6 +67,13 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
   };
 
   const handleSubmit = async () => {
+    const newErrors: { vm_name?: string } = {};
+    if (form.vm_name && chineseCharPattern.test(form.vm_name)) {
+      newErrors.vm_name = "实例名称不能包含中文字符";
+    }
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
     await customFetch("/back/api/vms/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -91,7 +102,14 @@ export default function CreateVmModal({ open, onClose, onCreated, fixedImage }: 
             />
           )}
           <TextField label="实例名称" value={form.vm_name}
-            onChange={e => setForm(f => ({ ...f, vm_name: e.target.value }))} fullWidth />
+            onChange={e => {
+              const value = e.target.value;
+              setForm(f => ({ ...f, vm_name: value }));
+              setErrors(prev => ({ ...prev, vm_name: chineseCharPattern.test(value) ? "实例名称不能包含中文字符" : undefined }));
+            }}
+            error={!!errors.vm_name}
+            helperText={errors.vm_name}
+            fullWidth />
           <TextField label="IP 地址" value={form.ip}
             onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} fullWidth />
           <FormControlLabel
