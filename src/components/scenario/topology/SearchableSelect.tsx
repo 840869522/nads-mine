@@ -33,6 +33,7 @@ interface SearchableSelectProps {
   helperText?: string;
   placeholder?: string;
   disabled?: boolean;
+  maxWidth?: number | string;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -44,7 +45,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   error = false,
   helperText,
   placeholder = "搜索...",
-  disabled = false
+  disabled = false,
+  maxWidth = 520
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -98,7 +100,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   return (
-    <FormControl fullWidth required={required} error={error} disabled={disabled}>
+    <FormControl
+      fullWidth
+      required={required}
+      error={error}
+      disabled={disabled}
+      sx={{ maxWidth }}
+    >
       <InputLabel id={`${label}-label`}>{label}</InputLabel>
       <Select
         labelId={`${label}-label`}
@@ -108,6 +116,18 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         onOpen={handleOpen}
         onClose={handleClose}
         displayEmpty
+        MenuProps={{
+          PaperProps: {
+            sx: {
+              width: maxWidth,
+              maxWidth,
+              maxHeight: '60vh'
+            }
+          },
+          MenuListProps: {
+            sx: { maxHeight: '60vh' }
+          }
+        }}
         renderValue={() => (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {displayValue && (

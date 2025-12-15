@@ -268,6 +268,7 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               label="基础镜像"
               value={baseImage}
               onChange={setBaseImage}
+              maxWidth={520}
               options={images.map(img => ({
                 id: img.id || img.name,
                 name: img.name,

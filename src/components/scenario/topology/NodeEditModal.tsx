@@ -305,6 +305,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                     value={dockerImage}
                     onChange={setDockerImage}
                     disabled={disabled}
+                    maxWidth={520}
                     options={images.map(img => ({
                       id: img.id,
                       name: img.name,
