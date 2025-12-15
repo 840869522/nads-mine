@@ -174,7 +174,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     </Typography>
                   )}
                   {option.version && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', wordBreak: 'break-all' }}
+                    >
                       ID: {option.id}
                     </Typography>
                   )}
