@@ -172,7 +172,7 @@ const Header = () => {
          <div className="h-full w-3/4 md:w-1/2 bg-gradient-to-b from-[#3b82f6]/10 to-transparent transform -skew-x-12 absolute z-0 border-x border-[#3b82f6]/20"></div>
          
          <h1 className="text-lg md:text-2xl lg:text-3xl font-black tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-b from-white to-[#06b6d4] z-10 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)] text-center">
-            系统资源监控管理
+            网络安全实验平台
          </h1>
       </div>
 
