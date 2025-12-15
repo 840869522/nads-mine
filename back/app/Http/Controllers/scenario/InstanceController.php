@@ -26,6 +26,7 @@ use App\Models\ad\Team;
 use App\Models\ad\AdConfig;
 use App\Models\ad\TeamUsers;
 use App\Models\ad\Referee;
+use App\Models\Support\FallbackTarget;
 
 class InstanceController extends Controller
 {
@@ -47,12 +48,21 @@ class InstanceController extends Controller
     public function index()
     {
         try {
-            $hostname = SceneInstance::resolveHostname();
+            // 返回所有主机的实例；前端按 hostname 做跳转/限制
+            $currentHost = SceneInstance::resolveHostname();
             $instances = SceneInstance::with('sceneConfig')
-                ->forHostname($hostname)
                 ->latest('c_runtime')
                 ->get();
-            $data = $instances->map(function ($instance) {
+            $data = $instances->map(function ($instance) use ($currentHost) {
+                // 根据主机名从 c_servers 映射出 IP（若存在）
+                $targetHost = $instance->c_hostname;
+                $mapped = FallbackTarget::where('name', $targetHost)
+                    ->orWhere('host', $targetHost)
+                    ->first();
+                if ($mapped) {
+                    $targetHost = $mapped->host;
+                }
+
                 return [
                     'instance_id'   => $instance->c_scene_instances_id,
                     'scenario_name' => $instance->sceneConfig->c_name ?? '未知场景',
@@ -62,6 +72,9 @@ class InstanceController extends Controller
                     'status'        => $instance->c_status,
                     // 新增：直接返回场景实例保存的场景配置 JSON
                     'c_scene_config'=> $instance->c_scene_config,
+                    'hostname'      => $instance->c_hostname,
+                    'current_hostname' => $currentHost,
+                    'target_host'  => $targetHost,
                 ];
             });
             return response()->json($data);

@@ -22,6 +22,8 @@ import IptablesDialog from './IptablesDialog';
 import InstanceDetailsDialog from './InstanceDetailsDialog';
 import InstanceTopologyDialog from './InstanceTopologyDialog';
 import { customFetch } from '@/utils/fetch';
+import { getCookie } from '@/utils/cookie';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ScenarioInstance {
     instance_id: string;
@@ -31,6 +33,9 @@ interface ScenarioInstance {
     runtime: string;
     status: 'CREATING' | 'RUNNING' | 'FAILED' | 'STOPPED';
     c_scene_config?: any;
+    hostname?: string;
+    current_hostname?: string;
+    target_host?: string;
 }
 
 type Order = 'asc' | 'desc';
@@ -44,6 +49,7 @@ const statusColors: Record<ScenarioInstance['status'], 'success' | 'warning' | '
 };
 
 const ScenarioInstanceManagementPage: React.FC = () => {
+    const { user } = useAuth();
     const [instances, setInstances] = useState<ScenarioInstance[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -179,6 +185,17 @@ const ScenarioInstanceManagementPage: React.FC = () => {
     }, [instances, searchText, order, orderBy]);
 
     const paginatedInstances = filteredAndSortedInstances.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    const currentHostname = paginatedInstances[0]?.current_hostname || instances[0]?.current_hostname || (typeof window !== 'undefined' ? window.location.hostname : '');
+    const buildJumpUrl = (host: string) => {
+        if (typeof window === 'undefined') return '';
+        const url = new URL(window.location.href);
+        url.hostname = host;
+        const token = getCookie('_auth');
+        const username = (user?.user as any)?.c_username || (user as any)?.c_username || '';
+        if (token) url.searchParams.set('token', token);
+        if (username) url.searchParams.set('username', username);
+        return url.toString();
+    };
 
     return (
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
@@ -234,6 +251,7 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                         启动用户
                                     </TableSortLabel>
                                 </TableCell>
+                                <TableCell>所在主机</TableCell>
                                 <TableCell>
                                     <TableSortLabel active={orderBy === 'runtime'} direction={orderBy === 'runtime' ? order : 'asc'} onClick={() => handleRequestSort('runtime')}>
                                         创建时间
@@ -249,9 +267,9 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             {isLoading && instances.length === 0 ? (
-                                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}><CircularProgress /><Typography sx={{ mt: 2 }}>正在加载实例列表...</Typography></TableCell></TableRow>
                             ) : paginatedInstances.length === 0 ? (
-                                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5 }}><Typography color="text.secondary">没有找到任何场景实例。</Typography></TableCell></TableRow>
                             ) : (
                                 paginatedInstances.map((instance) => (
                                     <TableRow key={instance.instance_id} hover>
@@ -274,36 +292,52 @@ const ScenarioInstanceManagementPage: React.FC = () => {
                                             </Tooltip>
                                         </TableCell>
                                         <TableCell>{instance.username}</TableCell>
+                                        <TableCell>{instance.hostname || '未知'}</TableCell>
                                         <TableCell>{new Date(instance.runtime).toLocaleString()}</TableCell>
                                         <TableCell>
                                             <Chip label={instance.status} color={statusColors[instance.status]} size="small" />
                                         </TableCell>
                                         <TableCell align="right">
-                                            {instance.status !== 'STOPPED' && (
-                                                <Tooltip title="查看详情">
-                                                    <IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}>
+                                            {instance.hostname && instance.hostname !== currentHostname && (
+                                                <Tooltip title={`当前主机：${currentHostname || '未知'}，实例所在：${instance.hostname}，点击跳转`}>
+                                                    <IconButton
+                                                        color="info"
+                                                        size="small"
+                                                        onClick={() => window.location.href = buildJumpUrl((instance.target_host || instance.hostname)!)}
+                                                    >
                                                         <ViewIcon />
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
-                                            {isTopologyEnabled && (
-                                                <Tooltip title="查看拓扑">
-                                                    <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
-                                                        <TopologyIcon />
-                                                    </IconButton>
-                                                </Tooltip>
+                                            {instance.hostname === currentHostname && (
+                                                <>
+                                                    {instance.status !== 'STOPPED' && (
+                                                        <Tooltip title="查看详情">
+                                                            <IconButton color="primary" size="small" onClick={() => handleViewDetails(instance)}>
+                                                                <ViewIcon />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                    {isTopologyEnabled && (
+                                                        <Tooltip title="查看拓扑">
+                                                            <IconButton color="secondary" size="small" onClick={() => handleViewTopology(instance)}>
+                                                                <TopologyIcon />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                    {/* 修改：停止按钮 */}
+                                                    <Tooltip title="停止场景">
+                                                        <IconButton color="warning" size="small" onClick={() => handleStopInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
+                                                            <StopIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="删除场景">
+                                                        <IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}>
+                                                            <DeleteIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </>
                                             )}
-                                            {/* 修改：停止按钮 */}
-                                            <Tooltip title="停止场景">
-                                                <IconButton color="warning" size="small" onClick={() => handleStopInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading || instance.status === 'STOPPED'}>
-                                                    <StopIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="删除场景">
-                                                <IconButton color="error" size="small" onClick={() => handleDeleteInstance(instance.instance_id, instance.scenario_name)} disabled={isLoading}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Tooltip>
                                         </TableCell>
                                     </TableRow>
                                 ))

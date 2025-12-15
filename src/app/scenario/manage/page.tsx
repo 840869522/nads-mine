@@ -51,6 +51,8 @@ interface FallbackTarget {
 type Order = 'asc' | 'desc';
 type SortableKeys = keyof Pick<Scenario, 'name' | 'description' | 'uploadDate' | 'nodeCount'>;
 
+const SHOW_SIMULATE_JUMP = false;
+
 const ScenarioManagementPage: React.FC = () => {
     const { user } = useAuth();
     const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -371,15 +373,17 @@ const ScenarioManagementPage: React.FC = () => {
                 <Typography variant="h4" component="h1" fontWeight="bold">
                     场景管理
                 </Typography>
-                {/* 将两个按钮放在一个flex容器中，用gap设置间距 */}
+                {/* 将按钮放在一个flex容器中，用gap设置间距 */}
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<LaunchIcon />}
-                        onClick={handleSimulateJump}
-                    >
-                        模拟跳转
-                    </Button>
+                    {SHOW_SIMULATE_JUMP && (
+                        <Button
+                            variant="outlined"
+                            startIcon={<LaunchIcon />}
+                            onClick={handleSimulateJump}
+                        >
+                            模拟跳转
+                        </Button>
+                    )}
                     <Button
                         variant="outlined"
                         startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
