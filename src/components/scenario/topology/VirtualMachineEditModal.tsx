@@ -27,6 +27,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 interface VMImage {
   id: string;
   name: string;
+  description?: string;
   // 根据实际API返回结果调整
 }
 
@@ -90,13 +91,22 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
         : [];
       setEnvs(parsedEnvs);
 
-      // 获取虚拟机镜像列表
-      customFetch("/back/api/vms/images")
-        .then(res => res.json())
-        .then(data => {
-            if (Array.isArray(data)) {
-               setImages(data);
-            }
+      // 获取虚拟机镜像列表并合并描述
+      Promise.all([
+        customFetch("/back/api/vms/images").then(res => res.json()).catch(() => []),
+        fetch("/api/vm-image-overrides").then(res => res.json()).catch(() => ({})),
+      ])
+        .then(([imgs, overrides]) => {
+          const merged = Array.isArray(imgs)
+            ? imgs.map((img: VMImage) => {
+              const override = overrides?.[img.name];
+              return {
+                ...img,
+                description: override?.description ?? img.description,
+              };
+            })
+            : [];
+          setImages(merged);
         })
         .catch(err => console.error("获取虚拟机镜像列表失败:", err));
 
@@ -261,7 +271,8 @@ const VirtualMachineEditModal: React.FC<VirtualMachineEditModalProps> = ({ isOpe
               options={images.map(img => ({
                 id: img.id || img.name,
                 name: img.name,
-                displayName: img.name
+                displayName: img.name,
+                description: img.description ?? ''
               }))}
               required
               placeholder=""
