@@ -15,11 +15,19 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import IconButton from '@mui/material/IconButton';
 
+interface SearchableSelectOption {
+  id: string;
+  name: string;
+  version?: string;
+  displayName?: string;
+  description?: string;
+}
+
 interface SearchableSelectProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ id: string; name: string; version?: string; displayName?: string }>;
+  options: SearchableSelectOption[];
   required?: boolean;
   error?: boolean;
   helperText?: string;
@@ -48,9 +56,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const term = searchTerm.toLowerCase();
     return options.filter(option => {
       const displayName = option.displayName || `${option.name}:${option.version || 'latest'}`;
+      const description = option.description?.toLowerCase() || '';
       return displayName.toLowerCase().includes(term) || 
              option.name.toLowerCase().includes(term) ||
-             (option.version && option.version.toLowerCase().includes(term));
+             (option.version && option.version.toLowerCase().includes(term)) ||
+             (description && description.includes(term));
     });
   }, [options, searchTerm]);
 
@@ -158,8 +168,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   <Typography variant="body2" component="div">
                     {optionDisplayName}
                   </Typography>
+                  {option.description !== undefined && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                      描述: {option.description?.trim() ? option.description : '无描述'}
+                    </Typography>
+                  )}
                   {option.version && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                       ID: {option.id}
                     </Typography>
                   )}

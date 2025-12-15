@@ -29,6 +29,7 @@ interface ManagedImage {
   id: string;
   name: string;
   version: string;
+  description?: string;
 }
 
 interface TeamOption {
@@ -308,6 +309,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ isOpen, onClose, node, on
                       id: img.id,
                       name: img.name,
                       version: img.version,
+                      description: img.description ?? '',
                       displayName: `${img.name}:${img.version}`
                     }))}
                     required
