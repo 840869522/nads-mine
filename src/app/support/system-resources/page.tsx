@@ -28,10 +28,13 @@ import {
   Warning, Terminal, Security, 
   Hub, CheckCircle, ViewModule,
   PauseCircle, StopCircle, Loop,
-  RemoveCircle, Delete,Error as MuiError
+  RemoveCircle, Delete,Error as MuiError,
+  SvgIconComponent
 } from '@mui/icons-material';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface SystemResources {
   cpu: {
@@ -68,123 +71,6 @@ interface VmDetailResponse {
 }
 
 const fetcher = (url: string) => customFetch(url).then(res => res.json());
-
-const formatBytes = (bytes: number) => {
-  if (!bytes && bytes !== 0) return '未知';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(1)} ${units[index]}`;
-};
-
-const statusColor = (status: string) => {
-  switch (status) {
-    case 'running':
-      return 'success';
-    case 'paused':
-      return 'warning';
-    case 'shutoff':
-    case 'shut off':
-    case 'stopped':
-      return 'default';
-    default:
-      return 'error';
-  }
-};
-
-const statusIcon = (status: string) => {
-  switch (status) {
-    case 'running':
-      return <CheckCircleIcon fontSize="small" color="success" />;
-    case 'paused':
-      return <PauseCircleIcon fontSize="small" color="warning" />;
-    case 'shutoff':
-    case 'shut off':
-    case 'stopped':
-      return <PauseCircleIcon fontSize="small" color="action" />;
-    default:
-      return <ErrorIcon fontSize="small" color="error" />;
-  }
-};
-
-const MetricSparkline = ({ data, color = '#1976d2' }: { data: number[]; color?: string }) => {
-  const width = 160;
-  const height = 48;
-
-  if (!data.length) {
-    return <Skeleton variant="rectangular" height={height} />;
-  }
-
-  const maxValue = Math.max(100, ...data);
-  const points = data
-    .map((value, index) => {
-      const x = (index / Math.max(data.length - 1, 1)) * width;
-      const y = height - (value / maxValue) * height;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
-  return (
-    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        points={points}
-      />
-    </svg>
-  );
-};
-
-const ResourceCard = ({
-  title,
-  icon,
-  percent,
-  value,
-  helperText,
-  loading,
-  chart
-}: {
-  title: string;
-  icon: React.ReactNode;
-  percent?: number;
-  value: string;
-  helperText?: string;
-  loading?: boolean;
-  chart?: React.ReactNode;
-}) => (
-  <Card sx={{ height: '100%' }}>
-    <CardContent>
-      <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-        {icon}
-        <Typography variant="subtitle1">{title}</Typography>
-      </Stack>
-      <Typography variant="h4" component="div" sx={{ fontWeight: 600, mb: 1 }}>
-        {loading ? <Skeleton width={140} /> : value}
-      </Typography>
-      {percent !== undefined && (
-        <Box sx={{ mb: 1 }}>
-          <LinearProgress variant="determinate" value={percent} sx={{ height: 10, borderRadius: 1 }} />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {percent.toFixed(1)}%
-          </Typography>
-        </Box>
-      )}
-      {chart && <Box sx={{ mt: 1 }}>{chart}</Box>}
-      {helperText && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {loading ? <Skeleton width={200} /> : helperText}
-        </Typography>
-      )}
-    </CardContent>
-  </Card>
-);
 
 const COLORS = {
   dark: '#020617',    // bg-cyber-dark
@@ -227,19 +113,6 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-const standaloneTheme = createTheme({
-  components: {
-    // 关键：禁用 MUI 试图去覆盖背景色和文字颜色的默认行为
-    MuiCssBaseline: {
-      styleOverrides: {
-        body: {
-          color: 'inherit', // 强制继承你自己写的颜色，而不是主题色
-          backgroundColor: 'inherit',
-        }
-      }
-    }
-  }
-});
 
 const CyberPanel = ({ 
   title, 
@@ -474,7 +347,26 @@ const ThreeScene = () => {
   );
 };
 
-const CenterHub = () => {
+const POSITIONS = [
+  "top-[15%] left-[20%]",
+  "top-[15%] right-[20%]",
+  "bottom-[20%] right-[20%]",
+  "bottom-[20%] left-[20%]"
+];
+
+const CenterHub = ({ features }: { features: any[] }) => {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (features?.length) {
+      features.forEach((f) => router.prefetch(f.path));
+    }
+  }, [router, features]);
+
+  const handleJump = (path: string) => {
+    router.push(path);
+  };
+
   return (
     <div className="w-full h-full relative flex items-center justify-center">
       {/* Background 3D Scene */}
@@ -484,27 +376,38 @@ const CenterHub = () => {
 
       {/* Floating Identifiers Overlay */}
       <div className="relative z-10 w-full h-full pointer-events-none">
-          {[
-            { icon: Security, label: "网络攻防", pos: "top-[15%] left-[20%]" },
-            { icon: Dns, label: "虚拟机", pos: "top-[15%] right-[20%]" },
-            { icon: ViewModule, label: "容器", pos: "bottom-[20%] right-[20%]" },
-            { icon: Hub, label: "资源管理", pos: "bottom-[20%] left-[20%]" },
-          ].map((item, idx) => (
-            <div key={idx} className={`absolute ${item.pos} pointer-events-auto`}>
+          {features.map((item, idx) => {
+            if (idx >= POSITIONS.length) return null;
+            return (
+              <div 
+                key={idx} 
+                // 这里只替换了位置变量 item.pos -> POSITIONS[idx]，其余保留
+                className={`absolute ${POSITIONS[idx]} pointer-events-auto`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleJump(item.path);
+                }}
+              >
+                 {/* --- 下面是您提供的代码，除了把数据换成变量，一个符号都没改 --- */}
                  <div className="group flex items-center gap-3 cursor-pointer hover:scale-110 transition-transform duration-300">
                     <div className="relative">
                         <div className="w-12 h-12 rounded-full bg-[#020617]/40 border border-[#06b6d4]/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] backdrop-blur-md z-10 relative group-hover:bg-[#06b6d4]/20 group-hover:border-[#06b6d4] transition-colors">
-                           <item.icon className="text-[#06b6d4] w-6 h-6 group-hover:text-white transition-colors" />
+                           {/* 渲染动态 Icon */}
+                           {item.icon && <item.icon className="text-[#06b6d4] w-6 h-6 group-hover:text-white transition-colors" />}
                         </div>
                         {/* Rotating ring effect */}
                         <div className="absolute inset-0 rounded-full border-t border-[#06b6d4]/80 w-full h-full animate-spin duration-[3s]"></div>
                     </div>
+                    {/* 文字样式完全保留：tracking-widest uppercase border-l-2 等 */}
                     <span className="text-sm font-bold text-[#06b6d4] tracking-widest uppercase bg-black/20 px-2 py-1 rounded border-l-2 border-[#06b6d4] backdrop-blur-sm group-hover:text-white group-hover:bg-[#06b6d4]/10 transition-colors">
-                        {item.label}
+                        {item.name}
                     </span>
                  </div>
-            </div>
-          ))}
+                 {/* --- 结束 --- */}
+              </div>
+            );
+          })}
       </div>
     </div>
   );
@@ -761,7 +664,21 @@ const getVmStateColor = (state: VmInstance['state']) => {
     }
 }
 
-const SystemResourcesPage: React.FC = () => {
+// 1. 定义单个 Feature 的数据结构
+interface FeatureItem {
+  name: string;
+  description: string;
+  path: string;
+  icon: React.ElementType; // 如果知道确切类型可以是 React.ElementType
+  color: string;
+}
+
+// 2. 定义组件的 Props 接口
+interface SystemResourcesPageProps {
+  features: FeatureItem[]; // 这是一个数组
+}
+
+const SystemResourcesPage: React.FC<SystemResourcesPageProps> = ({ features }) => {
   const { data: resources, isLoading: loadingResources } = useSWR<SystemResources>('/api/system/resources', fetcher, {
     refreshInterval: 1000,
   });
@@ -1069,7 +986,7 @@ const vmRows = React.useMemo(() => {
              <CyberPanel className="h-full relative overflow-hidden !bg-opacity-20 !border-[#06b6d4]/50">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.15)_0%,transparent_70%)] pointer-events-none"></div>
                 {/* 3D Component */}
-                <CenterHub />
+                <CenterHub features={features} />
             </CyberPanel>
         </div>
 
