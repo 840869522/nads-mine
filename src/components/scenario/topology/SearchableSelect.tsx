@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -9,7 +9,8 @@ import {
   Box,
   InputAdornment,
   Chip,
-  Typography
+  Typography,
+  ListSubheader
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -50,6 +51,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // 过滤选项
   const filteredOptions = useMemo(() => {
@@ -80,6 +82,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setSearchTerm(event.target.value);
   };
 
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // Prevent MUI MenuList from handling type-to-select and arrow navigation,
+    // which steals focus from the search input (especially with Latin letters).
+    if (event.key === 'Escape' || event.key === 'Tab') return;
+    event.stopPropagation();
+  };
+
   const handleClearSearch = () => {
     setSearchTerm('');
   };
@@ -99,6 +108,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setSearchTerm('');
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+  }, [isOpen]);
+
   return (
     <FormControl
       fullWidth
@@ -117,6 +133,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         onClose={handleClose}
         displayEmpty
         MenuProps={{
+          autoFocus: false,
+          disableAutoFocusItem: true,
           PaperProps: {
             sx: {
               width: maxWidth,
@@ -147,13 +165,28 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         )}
       >
         {/* 搜索框 */}
-        <Box sx={{ p: 1, borderBottom: '1px solid #e0e0e0' }}>
+        <ListSubheader
+          disableGutters
+          sx={{
+            px: 1,
+            py: 1,
+            lineHeight: 'normal',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            zIndex: 2
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <TextField
             fullWidth
             size="small"
             placeholder={placeholder}
             value={searchTerm}
             onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            inputRef={searchInputRef}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -170,7 +203,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
             }}
             onClick={(e) => e.stopPropagation()}
           />
-        </Box>
+        </ListSubheader>
 
         {/* 选项列表 */}
         {filteredOptions.length > 0 ? (
