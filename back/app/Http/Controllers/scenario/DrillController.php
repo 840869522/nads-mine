@@ -170,7 +170,9 @@ class DrillController extends Controller
                     'host_logical_cores' => $hostLogicalCores,
                     'vcpu_allocation_ratio' => $vcpuAllocationRatio,
                 ]);
-                return response()->json(['message' => '虚拟机占用核数过多，无法启动'], 422);
+                return response()->json([
+                    'message' => "虚拟机占用核数过多，无法启动（已分配 vCPU: {$assignedVcpuTotal}）",
+                ], 422);
             }
 
             Log::info("系统资源检查通过", [
