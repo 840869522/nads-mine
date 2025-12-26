@@ -129,7 +129,57 @@ class DrillController extends Controller
                 return response()->json(['message' => "启动失败：系统CPU使用率 ({$cpuUsage}%) 超过 85% 的阈值。请联系管理员清理"], 503);
             }
 
-            Log::info("系统资源检查通过", ['cpu_usage' => $cpuUsage, 'memory_usage' => $memoryUsage]);
+            // 检查虚拟机 vCPU 占用情况（已分配 vCPU 总数 / 逻辑核数）
+            $processHostCores = new Process(['nproc', '--all']);
+            $processHostCores->setTimeout(10);
+            $processHostCores->run();
+            if (!$processHostCores->isSuccessful()) {
+                throw new ProcessFailedException($processHostCores);
+            }
+            $hostLogicalCores = (int) trim($processHostCores->getOutput());
+            if ($hostLogicalCores <= 0) {
+                throw new \RuntimeException("无法获取有效的逻辑核数 (nproc 输出: {$processHostCores->getOutput()})");
+            }
+
+            $processVcpu = new Process(['sudo', 'virsh', 'domstats', '--vcpu', '--list-active', '--raw']);
+            $processVcpu->setTimeout(20);
+            $processVcpu->run();
+            if (!$processVcpu->isSuccessful()) {
+                throw new ProcessFailedException($processVcpu);
+            }
+
+            $assignedVcpuTotal = 0;
+            $vcpuStatsOutput = trim($processVcpu->getOutput());
+            if ($vcpuStatsOutput !== '') {
+                foreach (preg_split('/\r?\n/', $vcpuStatsOutput) as $line) {
+                    $trimmed = trim($line);
+                    if ($trimmed === '' || !str_contains($trimmed, '=')) {
+                        continue;
+                    }
+                    [$key, $value] = array_map('trim', explode('=', $trimmed, 2));
+                    if ($key === 'vcpu.current') {
+                        $assignedVcpuTotal += (int) $value;
+                    }
+                }
+            }
+
+            $vcpuAllocationRatio = round(($assignedVcpuTotal / $hostLogicalCores) * 100, 2);
+            if ($vcpuAllocationRatio > 85) {
+                Log::warning('启动场景失败：已分配 vCPU 占用率过高', [
+                    'assigned_vcpu_total' => $assignedVcpuTotal,
+                    'host_logical_cores' => $hostLogicalCores,
+                    'vcpu_allocation_ratio' => $vcpuAllocationRatio,
+                ]);
+                return response()->json(['message' => '虚拟机占用核数过多，无法启动'], 422);
+            }
+
+            Log::info("系统资源检查通过", [
+                'cpu_usage' => $cpuUsage,
+                'memory_usage' => $memoryUsage,
+                'assigned_vcpu_total' => $assignedVcpuTotal,
+                'host_logical_cores' => $hostLogicalCores,
+                'vcpu_allocation_ratio' => $vcpuAllocationRatio,
+            ]);
             return null; //一切正常
 
         } catch (\Exception $e) {
