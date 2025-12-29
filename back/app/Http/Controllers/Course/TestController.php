@@ -112,10 +112,7 @@ class TestController extends Controller
                 $QuestionsOptionsMod = new QuestionsOptionsModel();
                 $verify_answer = 0;
                 foreach($content as $k=>$v){
-                    $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key']);
-                    if(!$verify_options_only){
-                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                    }
+                  
                     if($type==1){
                         if($v['option']==$c_answer){
                             $verify_answer=1;
@@ -141,7 +138,7 @@ class TestController extends Controller
             $mod = new QuestionsModel();
             $verify = $mod->verify_c_id_only($c_id);
             if(!$verify){
-                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"ID已存在");
             }
 
             $res = $mod->create_question_info($c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
@@ -318,10 +315,7 @@ class TestController extends Controller
                     $verify_answer = 0;
                     foreach($content as $k=>$v){
 
-                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key'],$c_id);
-                        if(!$verify_options_only){
-                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                        }
+                      
                         if($type==1){
                             if($v['option']==$c_answer){
                                 $verify_answer=1;
@@ -397,10 +391,7 @@ class TestController extends Controller
                     $verify_answer = 0;
 
                     foreach($v['options'] as $k1=>$v1){
-                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['id'],$v1['c_id']);
-                        if(!$verify_options_only){
-                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                        }
+                       
                         if($v['type']==1){
                             if($v1['c_content']==$v['answer']){
                                 $verify_answer=1;
@@ -429,7 +420,7 @@ class TestController extends Controller
                 $verify = $mod->verify_c_id_only($v['id']);
                 if(!$verify){
                     Log::info($v);
-                    return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+                    return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"ID已存在");
                 }
             }
 
@@ -526,6 +517,64 @@ class TestController extends Controller
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+        /**
+     * Notes: 根据题型获取试题标签接口
+     * User: zhangnan
+     * DateTime: 2025/12/29
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function get_tags_by_type(Request $request)
+    {
+        try {
+            // 验证请求参数
+            $validatedData = $request->validate([
+                'type' => 'required|integer|in:1,2,3,4'
+            ], [
+                'type.required' => '题型不能为空',
+                'type.integer' => '题型类型错误',
+                'type.in' => '题型参数错误（1:单选题, 2:多选题, 3:判断题, 4:主观题）'
+            ]);
+            
+            $type = $validatedData['type'];
+            
+            $mod = new QuestionsModel();
+            
+            // 获取该题型下的所有不重复标签
+            $tags = $mod
+                ->where('c_type', $type)
+                ->whereNotNull('c_tag')
+                ->where('c_tag', '!=', '')
+                ->select('c_tag')
+                ->distinct()
+                ->orderBy('c_tag')
+                ->get()
+                ->pluck('c_tag')
+                ->toArray();
+            
+            // 如果没有标签，返回空数组
+            if (empty($tags)) {
+                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '暂无标签', [
+                    'type' => $type,
+                    'tags' => [],
+                    'count' => 0
+                ]);
+            }
+            
+            // 返回标签数据
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '获取标签成功', [
+                'type' => $type,
+                'tags' => $tags,
+                'count' => count($tags)
+            ]);
+            
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+        } catch (\Exception $e) {
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '服务器错误: ' . $e->getMessage());
         }
     }
 

@@ -288,6 +288,7 @@ Route::prefix('study')->group(function () {
         Route::post('/question_list', [TestController::class, 'question_list']);
         Route::post('/question_info', [TestController::class, 'question_info']);
         Route::get('/getCourses', [TestController::class, 'getCourses']);
+        Route::get('/get_tags_by_type', [TestController::class, 'get_tags_by_type']);
         Route::post('/test_add', [TestController::class, 'test_add']);
         Route::post('/test_update', [TestController::class, 'test_update']);
         Route::post('/test_del', [TestController::class, 'test_del']);

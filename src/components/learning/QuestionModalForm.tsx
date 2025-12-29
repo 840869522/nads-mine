@@ -17,16 +17,24 @@ import {
     useTheme,
     FormHelperText,
     IconButton,
+    Autocomplete,
+    CircularProgress,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DynamicOptionInputs from "@/components/input/DynamicOptionInputs";
 import { String2Array } from "@/utils/string";
+import { apiClientWithToken } from "@/utils/axios";
 
 export type SelectOption = {
     c_id: string,
     c_question_id?: string,
     c_content: string
+}
+
+export type CourseItem = {
+    c_course_id: string,
+    c_course_name: string
 }
 
 export type QuestionDisplayItem = {
@@ -86,7 +94,54 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         options: [''],
     });
 
+    // 课程相关状态
+    const [courses, setCourses] = useState<CourseItem[]>([]);
+    const [courseLoading, setCourseLoading] = useState<boolean>(false);
+    const [courseSearch, setCourseSearch] = useState<string>("");
+    const [courseOpen, setCourseOpen] = useState<boolean>(false);
+
     const isNew = !initialQuestion;
+
+    // 获取课程列表
+    const fetchCourses = async (search?: string) => {
+        setCourseLoading(true);
+        try {
+            // 调用你的后端API获取课程列表
+            // 注意：这里假设你的API支持搜索参数，如果不支持可以去掉search参数
+            const response = await apiClientWithToken.get('/back/api/study/test/getCourses', {
+                params: search ? { search } : {}
+            });
+            
+            if (response.data.code === 200) {
+                setCourses(response.data.data || []);
+            } else {
+                setCourses([]);
+            }
+        } catch (error) {
+            console.error("获取课程列表失败:", error);
+            setCourses([]);
+        } finally {
+            setCourseLoading(false);
+        }
+    };
+
+    // 当下拉框打开时获取课程列表
+    useEffect(() => {
+        if (courseOpen && courses.length === 0) {
+            fetchCourses();
+        }
+    }, [courseOpen]);
+
+    // 搜索课程
+    useEffect(() => {
+        if (courseSearch.trim()) {
+            const timer = setTimeout(() => {
+                fetchCourses(courseSearch);
+            }, 500);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [courseSearch]);
 
     useEffect(() => {
         if (open) {
@@ -94,7 +149,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 setFormData({
                     id: initialQuestion?.c_id,
                     question: initialQuestion?.c_question,
-                    answer: initialQuestion?.c_type === 4 ? "*" :initialQuestion?.c_answer || "",
+                    answer: initialQuestion?.c_type === 4 ? "*" : initialQuestion?.c_answer || "",
                     type: parseInt(initialQuestion?.c_type || '1'),
                     tags: String2Array(initialQuestion?.c_tag),
                     courseName: initialQuestion?.c_course_id,
@@ -113,6 +168,9 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 })
             }
             setErrors({});
+            
+            // 重置时清空课程搜索
+            setCourseSearch("");
         }
     }, [initialQuestion, open]);
 
@@ -128,6 +186,26 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     const handleInputChange = (field: keyof QuestionFormData, value: string) => {
         setFormData({ ...formData, [field]: value });
         setErrors({ ...errors, [field]: '' });
+    };
+
+    // 处理课程选择
+    const handleCourseChange = (event: React.SyntheticEvent, value: string | CourseItem | null) => {
+        if (value && typeof value === 'object') {
+            // 选择的是CourseItem对象
+            setFormData({ ...formData, courseName: value.c_course_id });
+        } else if (typeof value === 'string') {
+            // 输入的是字符串，可能是课程ID或名称
+            setFormData({ ...formData, courseName: value });
+        } else {
+            // 清空选择
+            setFormData({ ...formData, courseName: "" });
+        }
+        setErrors({ ...errors, courseName: '' });
+    };
+
+    // 处理课程输入变化（用于搜索）
+    const handleCourseInputChange = (event: React.SyntheticEvent, value: string) => {
+        setCourseSearch(value);
     };
 
     // 标签变化处理
@@ -223,6 +301,19 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         }
     };
 
+    // 获取当前选中的课程显示值
+    const getSelectedCourseDisplay = () => {
+        if (!formData.courseName) return null;
+        
+        const selectedCourse = courses.find(course => course.c_course_id === formData.courseName);
+        if (selectedCourse) {
+            return selectedCourse;
+        }
+        
+        // 如果没有找到匹配的课程，返回一个占位对象或null
+        return null;
+    };
+
     return (
         <Dialog
             open={open}
@@ -264,7 +355,6 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                         sx={{ mb: 2 }}
                     />
 
-
                     {/* 类型选择 */}
                     <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
                         <InputLabel id="type-select-label">题型</InputLabel>
@@ -283,7 +373,6 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                         </Select>
                         {errors.type && <FormHelperText error>{errors.type}</FormHelperText>}
                     </FormControl>
-
 
                     {/* 选项输入（仅在单选/多选时显示） */}
                     {[1, 2].includes(formData.type) && (
@@ -316,7 +405,6 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                             />
                         )
                     }
-
 
                     {/* 标签管理 */}
                     <Box mb={2}>
@@ -358,18 +446,58 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                         </Box>
                     </Box>
 
-                    {/* 课程名 */}
-                    <TextField
-                        fullWidth
-                        label="课程名"
-                        value={formData.courseName}
-                        onChange={(e) => handleInputChange('courseName', e.target.value)}
-                        error={!!errors.courseName}
-                        helperText={errors.courseName}
-                        variant="outlined"
-                        size="small"
-                        sx={{ mb: 2 }}
-                    />
+                    {/* 课程名 - 修改为可搜索的下拉框 */}
+                    <FormControl fullWidth error={!!errors.courseName} sx={{ mb: 2 }}>
+                        <Autocomplete
+                            id="course-select"
+                            open={courseOpen}
+                            onOpen={() => setCourseOpen(true)}
+                            onClose={() => setCourseOpen(false)}
+                            value={getSelectedCourseDisplay()}
+                            onChange={handleCourseChange}
+                            onInputChange={handleCourseInputChange}
+                            options={courses}
+                            getOptionLabel={(option) => {
+                                if (typeof option === 'string') {
+                                    return option;
+                                }
+                                return `${option.c_course_id} - ${option.c_course_name}`;
+                            }}
+                            isOptionEqualToValue={(option, value) => {
+                                return option.c_course_id === value.c_course_id;
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="选择课程"
+                                    variant="outlined"
+                                    size="small"
+                                    error={!!errors.courseName}
+                                    helperText={errors.courseName}
+                                    InputProps={{
+                                        ...params.InputProps,
+                                        endAdornment: (
+                                            <>
+                                                {courseLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {params.InputProps.endAdornment}
+                                            </>
+                                        ),
+                                    }}
+                                />
+                            )}
+                            renderOption={(props, option) => (
+                                <li {...props} key={option.c_course_id}>
+                                    {option.c_course_id} - {option.c_course_name}
+                                </li>
+                            )}
+                            noOptionsText={courseLoading ? "正在加载..." : "暂无课程"}
+                            loading={courseLoading}
+                            loadingText="正在加载课程..."
+                            freeSolo={false} // 不允许自由输入
+                            disableClearable={false}
+                            blurOnSelect
+                        />
+                    </FormControl>
                 </Box>
             </DialogContent>
             <DialogActions>

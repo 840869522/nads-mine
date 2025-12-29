@@ -4,8 +4,8 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Box, Card, CardContent, Typography, Chip,
-  CircularProgress, IconButton, Grid, FormControl,
-  useTheme, MenuItem, Select, Alert
+  CircularProgress, IconButton, FormControl,
+  useTheme, MenuItem, Select, Alert, Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -75,6 +75,10 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
   const [isPaperListModalOpen, setIsPaperListModalOpen] = useState(false);
   const [loadingPaperDetails, setLoadingPaperDetails] = useState(false);
 
+  // 新增状态：标签相关
+  const [availableTags, setAvailableTags] = useState<Record<number, string[]>>({});
+  const [loadingTags, setLoadingTags] = useState(false);
+
   const questionTypeMap: Record<number, QuestionType> = {
     1: '单选题',
     2: '多选题',
@@ -94,6 +98,39 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
       fetchRules();
     }
   }, [testId]);
+
+  // 新增函数：根据题型获取标签
+  const fetchTagsByType = async (type: number) => {
+    if (availableTags[type]) return availableTags[type];
+    
+    setLoadingTags(true);
+    try {
+      const response = await apiClientWithToken.get('/back/api/study/test/get_tags_by_type', {
+        params: { type }
+      });
+      
+      if (response.data?.code === 200) {
+        const tags = response.data.data.tags || [];
+        setAvailableTags(prev => ({ ...prev, [type]: tags }));
+        return tags;
+      }
+      return [];
+    } catch (error) {
+      console.error('获取标签失败:', error);
+      return [];
+    } finally {
+      setLoadingTags(false);
+    }
+  };
+
+  // 预加载标签数据
+  useEffect(() => {
+    if (isModalOpen && editingRule) {
+      // 预加载所有编辑项中涉及的题型标签
+      const uniqueTypes = [...new Set(editingRule.items.map(item => item.type))];
+      uniqueTypes.forEach(type => fetchTagsByType(type));
+    }
+  }, [isModalOpen, editingRule]);
 
   const fetchRules = async () => {
     setLoading(true);
@@ -405,6 +442,11 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
       delete newErrors[field];
       setFormErrors(newErrors);
     }
+
+    // 当题型变化时，自动加载对应的标签
+    if (field === 'type') {
+      fetchTagsByType(Number(value));
+    }
   };
 
   const handleRuleItemChange = (index: number, field: string, value: string | number) => {
@@ -427,6 +469,11 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
     const newErrors = { ...formErrors };
     delete newErrors[`item_${index}_${field}`];
     setFormErrors(newErrors);
+
+    // 当题型变化时，自动加载对应的标签
+    if (field === 'type') {
+      fetchTagsByType(Number(value));
+    }
   };
 
   const getBgColor = () => isDarkMode ? '#121212' : '#f5f5f5';
@@ -806,167 +853,212 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
                 <CircularProgress />
               </Box>
             ) : editingRule ? (
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    label="测试ID"
-                    value={editingRule.testId}
-                    fullWidth
-                    variant="outlined"
-                    sx={{ marginTop: 2 }}
-                    InputLabelProps={{ style: { color: isDarkMode ? '#bbb' : '#666' } }}
-                    InputProps={{
-                      style: { color: isDarkMode ? '#fff' : '#000' },
-                      readOnly: true
-                    }}
-                    helperText="测试ID不可修改"
-                  />
-                </Grid>
+              <Box>
+                <TextField
+                  label="测试ID"
+                  value={editingRule.testId}
+                  fullWidth
+                  variant="outlined"
+                  sx={{ marginTop: 2, marginBottom: 3 }}
+                  InputLabelProps={{ style: { color: isDarkMode ? '#bbb' : '#666' } }}
+                  InputProps={{
+                    style: { color: isDarkMode ? '#fff' : '#000' },
+                    readOnly: true
+                  }}
+                  helperText="测试ID不可修改"
+                />
 
-                <Grid item xs={12}>
-                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    规则项列表 (共 {editingRule.items.length} 项)
+                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  规则项列表 (共 {editingRule.items.length} 项)
+                </Typography>
+
+                {/* 使用 Flexbox 替换 Grid */}
+                <Box sx={{ mb: 1 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 1,
+                    mb: 1,
+                    px: 1
+                  }}>
+                    <Box sx={{ flex: '0 0 15%', fontWeight: 'bold' }}>题型</Box>
+                    <Box sx={{ flex: '0 0 55%', fontWeight: 'bold' }}>标签</Box>
+                    <Box sx={{ flex: '0 0 10%', fontWeight: 'bold' }}>题数</Box>
+                    <Box sx={{ flex: '0 0 10%', fontWeight: 'bold' }}>每题分数</Box>
+                    <Box sx={{ flex: '0 0 10%', fontWeight: 'bold' }}>操作</Box>
+                  </Box>
+                </Box>
+
+                {editingRule.items.map((item, index) => (
+                  <Box 
+                    key={index} 
+                    sx={{ 
+                      display: 'flex', 
+                      gap: 0.5,
+                      alignItems: 'center',
+                      mb: 1,
+                      p: 1,
+                      borderRadius: 1,
+                      backgroundColor: isDarkMode ? '#252525' : '#f5f5f5'
+                    }}
+                  >
+                    <Box sx={{ flex: '0 0 15%' }}>
+                      <FormControl fullWidth>
+                        <Select
+                          value={item.type}
+                          onChange={(e) => handleRuleItemChange(index, 'type', e.target.value)}
+                          sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
+                        >
+                          <MenuItem value={1}>单选题</MenuItem>
+                          <MenuItem value={2}>多选题</MenuItem>
+                          <MenuItem value={3}>判断题</MenuItem>
+                          <MenuItem value={4}>主观题</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 55%' }}>
+                      <FormControl fullWidth>
+                        <Autocomplete
+                          freeSolo
+                          options={availableTags[item.type] || []}
+                          value={item.tag}
+                          onChange={(_, newValue) => handleRuleItemChange(index, 'tag', newValue || '')}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="标签"
+                              error={!!formErrors[`item_${index}_tag`]}
+                              helperText={formErrors[`item_${index}_tag`]}
+                              onChange={(e) => handleRuleItemChange(index, 'tag', e.target.value)}
+                            />
+                          )}
+                          loading={loadingTags}
+                          loadingText="加载中..."
+                        />
+                      </FormControl>
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%' }}>
+                      <TextField
+                        type="number"
+                        value={item.count}
+                        onChange={(e) => handleRuleItemChange(index, 'count', e.target.value)}
+                        label="题数"
+                        error={!!formErrors[`item_${index}_count`]}
+                        helperText={formErrors[`item_${index}_count`]}
+                        fullWidth
+                      />
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%' }}>
+                      <TextField
+                        type="number"
+                        value={item.score}
+                        onChange={(e) => handleRuleItemChange(index, 'score', e.target.value)}
+                        label="每题分数"
+                        error={!!formErrors[`item_${index}_score`]}
+                        helperText={formErrors[`item_${index}_score`]}
+                        fullWidth
+                      />
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%', textAlign: 'center' }}>
+                      <IconButton
+                        onClick={() => handleRemoveRuleItem(index)}
+                        sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))}
+
+                <Box sx={{ mt: 3, pt: 2, borderTop: `1px dashed ${isDarkMode ? '#444' : '#ccc'}` }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                    添加新规则项
                   </Typography>
 
-                  <Grid container spacing={2} sx={{ mb: 1 }}>
-                    <Grid item xs={2}>题型</Grid>
-                    <Grid item xs={4}>标签</Grid>
-                    <Grid item xs={2}>题数</Grid>
-                    <Grid item xs={2}>每题分数</Grid>
-                    <Grid item xs={2}>操作</Grid>
-                  </Grid>
-
-                  {editingRule.items.map((item, index) => (
-                    <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 1, p: 1, borderRadius: 1, backgroundColor: isDarkMode ? '#252525' : '#f5f5f5' }}>
-                      <Grid item xs={2}>
-                        <FormControl fullWidth>
-                          <Select
-                            value={item.type}
-                            onChange={(e) => handleRuleItemChange(index, 'type', e.target.value)}
-                            sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
-                          >
-                            <MenuItem value={1}>单选题</MenuItem>
-                            <MenuItem value={2}>多选题</MenuItem>
-                            <MenuItem value={3}>判断题</MenuItem>
-                            <MenuItem value={4}>主观题</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-
-                      <Grid item xs={4}>
-                        <TextField
-                          value={item.tag}
-                          onChange={(e) => handleRuleItemChange(index, 'tag', e.target.value.trim())}
-                          label="标签"
-                          error={!!formErrors[`item_${index}_tag`]}
-                          helperText={formErrors[`item_${index}_tag`]}
-                          fullWidth
-                        />
-                      </Grid>
-
-                      <Grid item xs={2}>
-                        <TextField
-                          type="number"
-                          value={item.count}
-                          onChange={(e) => handleRuleItemChange(index, 'count', e.target.value)}
-                          label="题数"
-                          error={!!formErrors[`item_${index}_count`]}
-                          helperText={formErrors[`item__{index}_count`]}
-                          fullWidth
-                        />
-                      </Grid>
-
-                      <Grid item xs={2}>
-                        <TextField
-                          type="number"
-                          value={item.score}
-                          onChange={(e) => handleRuleItemChange(index, 'score', e.target.value)}
-                          label="每题分数"
-                          error={!!formErrors[`item_${index}_score`]}
-                          helperText={formErrors[`item_${index}_score`]}
-                          fullWidth
-                        />
-                      </Grid>
-
-                      <Grid item xs={2}>
-                        <IconButton
-                          onClick={() => handleRemoveRuleItem(index)}
-                          sx={{ color: isDarkMode ? '#f48fb1' : '#d32f2f' }}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 0.5,
+                    alignItems: 'center'
+                  }}>
+                    <Box sx={{ flex: '0 0 15%' }}>
+                      <FormControl fullWidth>
+                        <Select
+                          value={newRuleItem.type}
+                          onChange={(e) => handleNewRuleItemChange('type', e.target.value)}
+                          sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
                         >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Grid>
-                    </Grid>
-                  ))}
+                          <MenuItem value={1}>单选题</MenuItem>
+                          <MenuItem value={2}>多选题</MenuItem>
+                          <MenuItem value={3}>判断题</MenuItem>
+                          <MenuItem value={4}>主观题</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
 
-                  <Box sx={{ mt: 3, pt: 2, borderTop: `1px dashed ${isDarkMode ? '#444' : '#ccc'}` }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2 }}>添加新规则项</Typography>
-
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={2}>
-                        <FormControl fullWidth>
-                          <Select
-                            value={newRuleItem.type}
-                            onChange={(e) => handleNewRuleItemChange('type', e.target.value)}
-                            sx={{ backgroundColor: isDarkMode ? '#333' : '#fff' }}
-                          >
-                            <MenuItem value={1}>单选题</MenuItem>
-                            <MenuItem value={2}>多选题</MenuItem>
-                            <MenuItem value={3}>判断题</MenuItem>
-                            <MenuItem value={4}>主观题</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-
-                      <Grid item xs={4}>
-                        <TextField
-                          label="标签"
+                    <Box sx={{ flex: '0 0 55%' }}>
+                      <FormControl fullWidth>
+                        <Autocomplete
+                          freeSolo
+                          options={availableTags[newRuleItem.type] || []}
                           value={newRuleItem.tag}
-                          onChange={(e) => handleNewRuleItemChange('tag', e.target.value)}
-                          fullWidth
-                          size="small"
-                          error={!!formErrors.tag}
-                          helperText={formErrors.tag}
+                          onChange={(_, newValue) => handleNewRuleItemChange('tag', newValue || '')}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="标签"
+                              size="small"
+                              error={!!formErrors.tag}
+                              helperText={formErrors.tag}
+                            />
+                          )}
+                          loading={loadingTags}
+                          loadingText="加载中..."
                         />
-                      </Grid>
-                      <Grid item xs={2}>
-                        <TextField
-                          label="题数"
-                          type="number"
-                          value={newRuleItem.count}
-                          onChange={(e) => handleNewRuleItemChange('count', parseInt(e.target.value) || 0)}
-                          fullWidth
-                          size="small"
-                          inputProps={{ min: 0 }}
-                          error={!!formErrors.count}
-                          helperText={formErrors.count}
-                        />
-                      </Grid>
-                      <Grid item xs={2}>
-                        <TextField
-                          label="每题分数"
-                          type="number"
-                          value={newRuleItem.score}
-                          onChange={(e) => handleNewRuleItemChange('score', parseInt(e.target.value) || 0)}
-                          fullWidth
-                          size="small"
-                          inputProps={{ min: 0 }}
-                          error={!!formErrors.score}
-                          helperText={formErrors.score}
-                        />
-                      </Grid>
-                      <Grid item xs={2}>
-                        <IconButton
-                          onClick={handleAddRuleItem}
-                          sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
-                        >
-                          <AddIcon />
-                        </IconButton>
-                      </Grid>
-                    </Grid>
+                      </FormControl>
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%' }}>
+                      <TextField
+                        label="题数"
+                        type="number"
+                        value={newRuleItem.count}
+                        onChange={(e) => handleNewRuleItemChange('count', parseInt(e.target.value) || 0)}
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0 }}
+                        error={!!formErrors.count}
+                        helperText={formErrors.count}
+                      />
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%' }}>
+                      <TextField
+                        label="每题分数"
+                        type="number"
+                        value={newRuleItem.score}
+                        onChange={(e) => handleNewRuleItemChange('score', parseInt(e.target.value) || 0)}
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0 }}
+                        error={!!formErrors.score}
+                        helperText={formErrors.score}
+                      />
+                    </Box>
+
+                    <Box sx={{ flex: '0 0 10%', textAlign: 'center' }}>
+                      <IconButton
+                        onClick={handleAddRuleItem}
+                        sx={{ color: isDarkMode ? '#90caf9' : '#1976d2' }}
+                      >
+                        <AddIcon />
+                      </IconButton>
+                    </Box>
                   </Box>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
             ) : (
               <Typography align="center" sx={{ py: 4 }}>
                 未加载规则数据
@@ -1115,14 +1207,14 @@ const PaperManagementSystem: React.FC<PaperManagementSystemProps> = ({ testId })
                   <Typography variant="h6" gutterBottom>
                     试卷信息
                   </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', gap: 4 }}>
+                    <Box>
                       <Typography><strong>总题数:</strong> {generatedPaper.questionCount}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
+                    </Box>
+                    <Box>
                       <Typography><strong>总分:</strong> {generatedPaper.totalScore}</Typography>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
                 </Box>
 
                 <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
