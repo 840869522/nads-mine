@@ -58,7 +58,7 @@ use Illuminate\Support\Facades\Storage;
 class TestController extends Controller
 {
 
-    /**
+            /**
      * Notes:增加题库接口
      * User: zhangnan
      * DateTime: 2025/7/10 16:20
@@ -104,15 +104,62 @@ class TestController extends Controller
                 $validated_msg['content.required']='单选、多选选项不能为空';
                 $validated_msg['content.array']='单选、多选选项格式错误';
                 $validated_msg['content.*.key.required']='选项key不能为空';
-                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.key.max']='选项key超限';
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // ============ 添加手动重复性检查 ============
+            if(in_array($type,[1,2]) && is_array($content)){
+                $seenKeys = [];
+                $seenOptions = [];
+                $duplicateKeys = [];
+                $duplicateOptions = [];
+                
+                foreach($content as $index => $item){
+                    // 检查key重复
+                    if(isset($item['key'])){
+                        if(in_array($item['key'], $seenKeys)){
+                            $duplicateKeys[] = $item['key'];
+                        } else {
+                            $seenKeys[] = $item['key'];
+                        }
+                    }
+                    
+                    // 检查option重复
+                    if(isset($item['option'])){
+                        if(in_array($item['option'], $seenOptions)){
+                            $duplicateOptions[] = $item['option'];
+                        } else {
+                            $seenOptions[] = $item['option'];
+                        }
+                    }
+                }
+                
+                // 构建错误消息
+                $errors = [];
+                if(!empty($duplicateKeys)){
+                    $uniqueDuplicates = array_unique($duplicateKeys);
+                    $errors[] = '选项key重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                if(!empty($duplicateOptions)){
+                    $uniqueDuplicates = array_unique($duplicateOptions);
+                    $errors[] = '选项内容重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                
+                if(!empty($errors)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, implode('; ', $errors));
+                }
+            }
+            // ============ 手动重复性检查结束 ============
+            
             if(in_array($type,[1,2])){
                 $QuestionsOptionsMod = new QuestionsOptionsModel();
                 $verify_answer = 0;
+                $dx_cnt = 0;
+                $dx_zong_cnt = 0;
+                
                 foreach($content as $k=>$v){
-                  
                     if($type==1){
                         if($v['option']==$c_answer){
                             $verify_answer=1;
@@ -126,7 +173,7 @@ class TestController extends Controller
                     }
                 }
                 if($type==2){
-                    if($dx_zong_cnt==$dx_cnt){
+                    if($dx_cnt > 0 && $dx_zong_cnt == $dx_cnt){
                         $verify_answer=1;
                     }
                 }
@@ -148,7 +195,23 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+            // 修复catch部分，避免重复错误
+            $validator = $e->validator;
+            $errorMessages = [];
+            
+            // 使用字段分组的方式避免重复
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                // 只取第一个错误消息，避免重复
+                if (!empty($messages)) {
+                    $errorMessages[] = $messages[0];
+                }
+            }
+            
+            // 去重
+            $uniqueErrors = array_unique($errorMessages);
+            $fullErrorMessage = implode('; ', $uniqueErrors);
+            
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $fullErrorMessage);
         }
     }
 
@@ -301,21 +364,65 @@ class TestController extends Controller
                 $validated_msg['content.required']='单选、多选选项不能为空';
                 $validated_msg['content.array']='单选、多选选项格式错误';
                 $validated_msg['content.*.key.required']='选项key不能为空';
-                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.key.max']='选项key超限';
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // ============ 添加手动重复性检查 ============
+            if(in_array($type,[1,2]) && is_array($content)){
+                $seenKeys = [];
+                $seenOptions = [];
+                $duplicateKeys = [];
+                $duplicateOptions = [];
+                
+                foreach($content as $index => $item){
+                    // 检查key重复
+                    if(isset($item['key'])){
+                        if(in_array($item['key'], $seenKeys)){
+                            $duplicateKeys[] = $item['key'];
+                        } else {
+                            $seenKeys[] = $item['key'];
+                        }
+                    }
+                    
+                    // 检查option重复
+                    if(isset($item['option'])){
+                        if(in_array($item['option'], $seenOptions)){
+                            $duplicateOptions[] = $item['option'];
+                        } else {
+                            $seenOptions[] = $item['option'];
+                        }
+                    }
+                }
+                
+                // 构建错误消息
+                $errors = [];
+                if(!empty($duplicateKeys)){
+                    $uniqueDuplicates = array_unique($duplicateKeys);
+                    $errors[] = '选项key重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                if(!empty($duplicateOptions)){
+                    $uniqueDuplicates = array_unique($duplicateOptions);
+                    $errors[] = '选项内容重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                
+                if(!empty($errors)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, implode('; ', $errors));
+                }
+            }
+            // ============ 手动重复性检查结束 ============
+            
             $dx_cnt = 0;
             $dx_zong_cnt = 0;
             if(in_array($type,[1,2])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
-                }else{
+                } else {
                     $QuestionsOptionsMod = new QuestionsOptionsModel();
                     $verify_answer = 0;
+                    
                     foreach($content as $k=>$v){
-
-                      
                         if($type==1){
                             if($v['option']==$c_answer){
                                 $verify_answer=1;
@@ -329,7 +436,7 @@ class TestController extends Controller
                         }
                     }
                     if($type==2){
-                        if($dx_zong_cnt==$dx_cnt){
+                        if($dx_cnt > 0 && $dx_zong_cnt == $dx_cnt){
                             $verify_answer=1;
                         }
                     }
@@ -338,6 +445,7 @@ class TestController extends Controller
                     }
                 }
             }
+            
             $mod = new QuestionsModel();
             $info = $mod->get_question_info_by_c_id($c_id);
             $res = $mod->update_question_info($info,$c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
@@ -347,7 +455,23 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+            // 修复catch部分，避免重复错误
+            $validator = $e->validator;
+            $errorMessages = [];
+            
+            // 使用字段分组的方式避免重复
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                // 只取第一个错误消息，避免重复
+                if (!empty($messages)) {
+                    $errorMessages[] = $messages[0];
+                }
+            }
+            
+            // 去重
+            $uniqueErrors = array_unique($errorMessages);
+            $fullErrorMessage = implode('; ', $uniqueErrors);
+            
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $fullErrorMessage);
         }
     }
 

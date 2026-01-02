@@ -61,40 +61,40 @@ class QuestionsOptionsModel extends Model{
     }
 
 
-    /**
-     * Notes:修改选项
-     * User: zhangnan
-     * DateTime: 2025/7/10 16:45
-     * @param $c_question_id
-     * @param $content
-     * @return bool
-     */
-    public function update_question_options_info($c_question_id="",$content = [])
-    {
-        $del = $this->del_question_options_info($c_question_id);
-        if(!$del){
-            return false;
-        }
+       public function update_question_options_info($c_question_id="",$content = [])
+{
+    // 开启事务
+    DB::beginTransaction();
+    
+    try {
+        // 1. 删除原有选项
+        $del = $this->where('c_question_id', $c_question_id)->delete();
+        
+        // 2. 添加新选项
         foreach($content as $k=>$v){
             $mod = new QuestionsOptionsModel();
-            $mod->c_id=$v['key'];
-            $mod->c_question_id = $c_question_id;
-            $mod->c_content = $v['option'];
-            try{
-                $res = $mod->save();
-                if(!$res){
-                    return false;
-                }
-            }catch(\Exception $e){
-                DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','question_options_log');
+            
+            // 联合主键的两个字段都要赋值
+            $mod->c_id = $v['key'];           // 选项key（A/B/C/D）
+            $mod->c_question_id = $c_question_id; // 题目ID
+            $mod->c_content = $v['option'];   // 选项内容
+            
+            $res = $mod->save();
+            if(!$res){
+                DB::rollback();
                 return false;
             }
-
         }
+        
+        DB::commit();
         return true;
+        
+    } catch(\Exception $e){
+        DB::rollback();
+        DLOG("[{$e->getLine()}]{$e->getMessage()}",'error','question_options_log');
+        return false;
     }
-
-
+}
     /**
      * Notes:通过题目id删除选项
      * User: zhangnan

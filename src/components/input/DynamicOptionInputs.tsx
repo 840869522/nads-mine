@@ -89,7 +89,7 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
     // };
 
     return (
-        <Stack spacing={2} >
+        <Stack spacing={2}>
             {options.map((item, index) => (
                 <Box key={index}>
                     <Grid container spacing={2} columns={16} alignItems="center">
@@ -97,7 +97,8 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
                             <TextField
                                 fullWidth
                                 label={`选项 ${index + 1}`}
-                                value={item.c_id}
+                                // 确保 value 永远不会是 undefined
+                                value={item.c_id || ''}
                                 onChange={(e) =>
                                     handleInputChange(index, 'c_id', e.target.value)
                                 }
@@ -111,7 +112,8 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
                             <TextField
                                 fullWidth
                                 label={`描述 ${index + 1}`}
-                                value={item.c_content}
+                                // 确保 value 永远不会是 undefined
+                                value={item.c_content || ''}
                                 onChange={(e) =>
                                     handleInputChange(index, 'c_content', e.target.value)
                                 }
@@ -144,8 +146,7 @@ const DynamicOptionInputs: React.FC<DynamicOptionInputsProps> = ({
             </Button>
         </Stack>
     );
-};
-
+ };
 
 export default DynamicOptionInputs;
 
