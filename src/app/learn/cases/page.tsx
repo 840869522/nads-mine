@@ -164,12 +164,6 @@ const CourseCasesPage: React.FC = () => {
                 ? `请求过于频繁，请稍后重试（${error.response?.headers['retry-after'] || 60}秒）`
                 : error.response?.data?.message || error.message || '加载数据失败';
         setErrorMessage(message);
-        console.error('Error fetching data:', {
-          message,
-          status: error.response?.status,
-          data: error.response?.data,
-          url: error.config?.url,
-        });
       } finally {
         setIsLoading(false);
       }
@@ -207,9 +201,7 @@ const CourseCasesPage: React.FC = () => {
           c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
           isExperimentResource: false,
         }));
-      } else {
-        console.warn(`获取课程资源失败: ${resourcesData.message || '未知错误'}`);
-      }
+      } 
 
       // 获取实验资源
       const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/experiments`, {
@@ -234,10 +226,7 @@ const CourseCasesPage: React.FC = () => {
           })),
           created_at: exp.created_at || new Date().toISOString(),
         }));
-      } else {
-        console.warn(`获取实验失败: ${experimentsData.message || '未知错误'}`);
-      }
-
+      } 
       // 直接更新 selectedCaseForResources
       setSelectedCaseForResources({
         ...courseCase,
@@ -256,12 +245,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '获取资源或实验失败';
       setErrorMessage(message);
-      console.error('Error fetching resources or experiments:', {
-        message,
-        status: error.response?.status,
-        data: error.response?.data,
-        url: error.config?.url,
-      });
     } finally {
       setIsLoading(false);
     }
@@ -296,7 +279,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '获取类别失败';
       setErrorMessage(message);
-      console.error('Error fetching categories:', error);
     } finally {
       setIsLoading(false);
     }
@@ -418,140 +400,274 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '保存实验失败';
       setErrorMessage(message);
-      console.error('Error saving experiment:', error.response?.status, error.response?.data, error.config?.url);
     }
     handleCloseExperimentModal();
   };
 
 
   const handleSaveCourseCase = async (savedCase: CourseCase) => {
-  setIsSavingCourse(true); // 开始保存，设置加载状态
+  setIsSavingCourse(true);
   
   try {
     const { c_course_id, c_course_name, c_description, c_category_id, c_status, resources } = savedCase;
-    const courseData = {
-      c_course_id,
-      c_course_name,
-      c_description,
-      c_category_id,
-      c_status,
-    };
-
+    
     const token = getCookie('_auth');
     if (!token) {
       throw new Error('未登录，请先登录');
     }
 
-    let courseId = c_course_id;
+
+    let finalCourseId = c_course_id;
     let operationType = editingCase ? '更新' : '创建';
     
-    // 保存课程基本信息
+    // 1. 保存课程基本信息
     if (editingCase) {
-      const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
-        headers: { Authorization: `${token}` },
-      });
-      const data = response.data;
-      if (data.code !== 200) {
-        throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
-      }
-      setCourseCases(prev =>
-        prev.map(course =>
-          course.c_course_id === c_course_id ? { ...course, ...courseData, c_status } : course
-        )
+      
+      const updateResponse = await apiClientWithToken.put(
+        `/back/api/study/courses/${c_course_id}`, 
+        {
+          c_course_name,
+          c_description,
+          c_category_id,
+          c_status,
+        }, 
+        {
+          headers: { Authorization: `${token}` },
+        }
       );
-    } else {
-      const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
-        headers: { Authorization: `${token}` },
-      });
-      const data = response.data;
-      if (data.code !== 201) {
-        throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
+      
+      const updateData = updateResponse.data;
+      
+      if (updateData.code !== 200) {
+        throw new Error(`更新课程失败: ${updateData.message || '未知错误'}`);
       }
-      courseId = data.data.c_course_id;
+      
+      // 关键：更新后尝试获取新的课程ID
+      // 方法1：从响应数据中获取
+      if (updateData.data?.c_course_id) {
+        finalCourseId = updateData.data.c_course_id;
+      } 
+      // 方法2：如果响应中没有，重新查询课程列表
+      else {
+        
+        // 根据课程名称重新查询课程ID
+        const searchResponse = await apiClientWithToken.get(
+          `/back/api/study/courses`,
+          {
+            headers: { Authorization: `${token}` },
+            params: {
+              keyword: c_course_name,
+              page: 1,
+              pageSize: 10
+            }
+          }
+        );
+        
+        const searchData = searchResponse.data;      
+        if (searchData.code === 200 && searchData.data?.courses?.length > 0) {
+          // 找到匹配的课程
+          const matchingCourse = searchData.data.courses.find(
+            (course: any) => course.c_course_name === c_course_name
+          );
+          
+          if (matchingCourse) {
+            finalCourseId = matchingCourse.c_course_id;
+          } else {
+          }
+        }
+      }
+      
+      // 更新本地状态（使用新ID）
+      if (finalCourseId !== c_course_id) {
+        
+        // 从列表中移除旧的，添加新的
+        setCourseCases(prev => {
+          const filtered = prev.filter(course => course.c_course_id !== c_course_id);
+          return [...filtered, {
+            c_course_id: finalCourseId,
+            c_course_name,
+            c_description,
+            c_category_id,
+            c_category_name: savedCase.c_category_name || '',
+            c_status,
+            resources: [],
+            experiments: [],
+            created_at: new Date().toISOString(),
+            highlightedTitle: c_course_name,
+            highlightedDescription: c_description || ''
+          }];
+        });
+      } else {
+        // ID未改变，正常更新
+        setCourseCases(prev =>
+          prev.map(course =>
+            course.c_course_id === c_course_id ? { 
+              ...course, 
+              c_course_name, 
+              c_description, 
+              c_category_id, 
+              c_status 
+            } : course
+          )
+        );
+      }
+    } else {
+      // 创建课程的逻辑
+      
+      const createResponse = await apiClientWithToken.post(
+        `/back/api/study/courses`, 
+        {
+          c_course_name,
+          c_description,
+          c_category_id,
+          c_status,
+        }, 
+        {
+          headers: { Authorization: `${token}` },
+        }
+      );
+      
+      const createData = createResponse.data;
+      
+      if (createData.code !== 201) {
+        throw new Error(`创建课程失败: ${createData.message || '未知错误'}`);
+      }
+      
+      if (!createData.data || !createData.data.c_course_id) {
+        throw new Error('创建课程成功但未返回有效的课程ID');
+      }
+      
+      finalCourseId = createData.data.c_course_id;
       operationType = '创建';
     }
 
-    // 2. 处理资源上传并统计结果
+    // 2. 验证课程是否存在
+    
+    try {
+      const verifyResponse = await apiClientWithToken.get(
+        `/back/api/study/courses/${finalCourseId}`,
+        {
+          headers: { Authorization: `${token}` },
+        }
+      );
+      
+      const verifyData = verifyResponse.data;
+      
+      if (verifyData.code !== 200) {
+        throw new Error(`课程验证失败: ${verifyData.message || '未知错误'}`);
+      }
+    } catch (verifyError: any) {
+      
+      // 如果是404，说明课程确实不存在
+      if (verifyError.response?.status === 404) {
+        throw new Error(`课程ID ${finalCourseId} 不存在，无法上传资源`);
+      }
+    }
+
+    // 3. 处理资源上传（使用最终确定的课程ID）
+    const newResources = resources.filter(resource => resource.fileObject);
+    const existingResources = resources.filter(resource => !resource.fileObject);
+
     let successCount = 0;
     let failCount = 0;
     let failMessages: string[] = [];
 
-    if (resources.length > 0) {
-      const uploadPromises = resources.map(async (resource) => {
-        if (resource.fileObject) {
-          try {
-            const formData = new FormData();
-            formData.append('c_course_id', courseId);
-            formData.append('file', resource.fileObject);
-            
-            const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
+    if (newResources.length > 0) {
+      
+      for (let i = 0; i < newResources.length; i++) {
+        const resource = newResources[i];
+        
+        try {
+          
+          const formData = new FormData();
+          formData.append('c_course_id', finalCourseId);
+          formData.append('file', resource.fileObject!);
+          
+          const response = await apiClientWithToken.post(
+            `/back/api/study/courses/${finalCourseId}/resources/upload`,
+            formData,
+            {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 Authorization: `${token}`,
               },
-            });
-            
-            const data = response.data;
-            if (data.code === 201) {
-              successCount++;
-              return { success: true, resourceName: resource.c_resource_name };
-            } else {
-              failCount++;
-              failMessages.push(`${resource.c_resource_name}: ${data.message || '上传失败'}`);
-              return { success: false, resourceName: resource.c_resource_name, error: data.message };
             }
-          } catch (error: any) {
+          );
+          
+          const data = response.data;
+          
+          if (data.code === 201) {
+            successCount++;
+          } else {
             failCount++;
-            const errorMsg = error.response?.data?.message || error.message || '上传失败';
-            failMessages.push(`${resource.c_resource_name}: ${errorMsg}`);
-            return { success: false, resourceName: resource.c_resource_name, error: errorMsg };
+            const errorMsg = `新增资源"${resource.c_resource_name}": ${data.message || '上传失败'}`;
+            failMessages.push(errorMsg);
           }
+        } catch (error: any) {
+          failCount++;
+          const errorMsg = error.response?.data?.message || error.message || '上传失败';
+          const detailedError = `新增资源"${resource.c_resource_name}": ${errorMsg}`;
+          failMessages.push(detailedError);
+          
         }
-        return { success: true, resourceName: resource.c_resource_name, skipped: true };
-      });
-
-      await Promise.all(uploadPromises);
-    }
-
-    // 3. 构建成功提示消息
-    let successMessage = `${operationType}课程成功！`;
-    
-    if (resources.length > 0) {
-      if (successCount > 0 && failCount === 0) {
-        successMessage += ` ${successCount}个资源全部上传成功。`;
-      } else if (successCount > 0 && failCount > 0) {
-        successMessage += ` ${successCount}个资源上传成功，${failCount}个资源上传失败。`;
-        successMessage += ` 失败详情: ${failMessages.join('; ')}`;
-      } else if (failCount > 0) {
-        successMessage += ` 所有资源上传失败。`;
-      } else {
-        successMessage += ` 无新资源需要上传。`;
+        
+        // 资源间添加延迟
+        if (i < newResources.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
     }
 
-    // 4. 显示绿色成功提示并立即关闭模态框
+    // 4. 构建提示信息
+    let successMessage = `${operationType}课程成功！`;
+    
+    
+    if (newResources.length > 0) {
+      if (successCount > 0 && failCount === 0) {
+        successMessage += ` ${successCount}个新增资源全部上传成功。`;
+      } else if (successCount > 0 && failCount > 0) {
+        successMessage += ` ${successCount}个新增资源上传成功，${failCount}个新增资源上传失败。`;
+        if (failMessages.length > 0) {
+          successMessage += ` 失败详情: ${failMessages.join('; ')}`;
+        }
+      } else if (failCount > 0) {
+        successMessage += ` 新增资源上传失败。`;
+        if (failMessages.length > 0) {
+          successMessage += ` 失败详情: ${failMessages.join('; ')}`;
+        }
+      }
+    } else {
+      if (editingCase) {
+        successMessage += ` 没有需要上传的新增资源。`;
+      } else {
+        successMessage += ` 未添加任何资源。`;
+      }
+    }
+
+  if (editingCase && existingResources.length > 0) {
+    successMessage += ` ${existingResources.length}个已有资源保持不变。`;
+  }
+
+    // 5. 显示结果
     setAlertSeverity('success');
     setErrorMessage(successMessage);
     
-    // 5. 立即关闭模态框
+    
     handleCloseFormModal();
     
-    // 6. 延迟刷新课程列表
+    // 刷新课程列表
     setTimeout(async () => {
       await handleRefreshCourses();
-    }, 100);
+    }, 1000);
 
   } catch (error: any) {
-    // 7. 错误处理 - 显示红色错误提示
-    const message = error.response?.data?.message || error.message || '保存课程案例失败';
-    setAlertSeverity('error');
-    setErrorMessage(`操作失败: ${message}`);
-    console.error('Error saving course case:', error.response?.status, error.response?.data, error.config?.url);
     
-    // 错误时也立即关闭模态框
+    setAlertSeverity('error');
+    setErrorMessage(`${editingCase ? '更新' : '创建'}课程失败: ${error.message}`);
+    
     handleCloseFormModal();
   } finally {
-    setIsSavingCourse(false); // 保存完成，无论成功失败都清除加载状态
+    setIsSavingCourse(false);
   }
 };
 
@@ -577,7 +693,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '刷新类别失败';
       setErrorMessage(message);
-      console.error('Error refreshing categories:', error);
     } finally {
       setIsLoading(false);
     }
@@ -623,7 +738,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '刷新课程失败';
       setErrorMessage(message);
-      console.error('Error refreshing courses:', error);
     } finally {
       setIsLoading(false);
     }
@@ -675,7 +789,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '刷新实验失败';
       setErrorMessage(message);
-      console.error('Error refreshing experiments:', error);
     } finally {
       setIsLoading(false);
     }
@@ -738,7 +851,6 @@ const CourseCasesPage: React.FC = () => {
       // 显示红色错误提示
       setAlertSeverity('error');
       setErrorMessage(message);
-      console.error('Error saving category:', error.response?.status, error.response?.data, error.config?.url);
     }
     handleCloseCategoryModal();
   };
@@ -765,7 +877,6 @@ const CourseCasesPage: React.FC = () => {
       } catch (error: any) {
         const message = error.response?.data?.message || error.message || '删除类别失败';
         setErrorMessage(message);
-        console.error('Error deleting category:', error.response?.status, error.response?.data, error.config?.url);
       }
     }
     setCategoryToDelete(null);
@@ -806,7 +917,6 @@ const CourseCasesPage: React.FC = () => {
       } catch (error: any) {
         const message = error.response?.data?.message || error.message || '删除课程案例失败';
         setErrorMessage(message);
-        console.error('Error deleting course case:', error.response?.status, error.response?.data, error.config?.url);
       }
     }
     setCaseToDelete(null);
@@ -853,7 +963,6 @@ const CourseCasesPage: React.FC = () => {
       } catch (error: any) {
         const message = error.response?.data?.message || error.message || '删除实验失败';
         setErrorMessage(message);
-        console.error('Error deleting experiment:', error.response?.status, error.response?.data, error.config?.url);
       }
     }
     setExperimentToDelete(null);
@@ -936,7 +1045,6 @@ const CourseCasesPage: React.FC = () => {
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '删除资源失败';
       setErrorMessage(message);
-      console.error('Error deleting resource:', error.response?.status, error.response?.data, error.config?.url);
     }
   };
 
