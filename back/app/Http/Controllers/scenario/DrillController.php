@@ -171,7 +171,7 @@ class DrillController extends Controller
                     'vcpu_allocation_ratio' => $vcpuAllocationRatio,
                 ]);
                 return response()->json([
-                    'message' => "虚拟机占用核数过多，无法启动（已分配 vCPU: {$assignedVcpuTotal}）",
+                    'message' => "虚拟机占用核数过多，无法启动（已分配 CPU: {$assignedVcpuTotal}）",
                 ], 422);
             }
 

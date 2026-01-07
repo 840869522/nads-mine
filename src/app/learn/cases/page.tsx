@@ -1161,9 +1161,9 @@ const CourseCasesPage: React.FC = () => {
                     <Tab label="实验资源" />
                   </Tabs>
                   {tabValue === 0 && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle1">课程资源</Typography>
-                        {selectedCaseForResources?.resources?.length ? (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="subtitle1">课程资源</Typography>
+                          {selectedCaseForResources?.resources?.length ? (
                             <Table>
                               <TableHead>
                                 <TableRow>
@@ -1175,24 +1175,41 @@ const CourseCasesPage: React.FC = () => {
                               </TableHead>
                               <TableBody>
                                 {selectedCaseForResources.resources.map(resource => (
-                                    <TableRow key={resource.c_resource_id}>
-                                      <TableCell>{resource.c_resource_name}</TableCell>
-                                      <TableCell>{resource.c_type}</TableCell>
-                                      <TableCell>{resource.c_size}</TableCell>
-                                      <TableCell>
-                                        <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                          <VisibilityIcon />
-                                        </IconButton>
-                                      </TableCell>
-                                    </TableRow>
+                                  <TableRow key={resource.c_resource_id}>
+                                    <TableCell>{resource.c_resource_name}</TableCell>
+                                    <TableCell>{resource.c_type}</TableCell>
+                                    <TableCell>{resource.c_size}</TableCell>
+                                    <TableCell>
+                                      <IconButton 
+                                        onClick={() => handleOpenResourceViewer(resource)} 
+                                        title="查看"
+                                        size="small"
+                                      >
+                                        <VisibilityIcon fontSize="small" />
+                                      </IconButton>
+                                      {/* 添加的删除按钮 - 带简单确认提示 */}
+                                      <IconButton
+                                        onClick={() => {
+                                          if (window.confirm(`确定要删除资源 "${resource.c_resource_name}" 吗？`)) {
+                                            handleDeleteResource(resource, false);
+                                          }
+                                        }}
+                                        title="删除"
+                                        size="small"
+                                        sx={{ ml: 1, color: 'error.main' }}
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </TableCell>
+                                  </TableRow>
                                 ))}
                               </TableBody>
                             </Table>
-                        ) : (
+                          ) : (
                             <Typography>无课程资源</Typography>
-                        )}
-                      </Box>
-                  )}
+                          )}
+                        </Box>
+                      )}
                   {tabValue === 1 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="subtitle1">实验资源</Typography>

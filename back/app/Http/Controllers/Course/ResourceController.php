@@ -191,7 +191,7 @@ class ResourceController extends Controller
     }
 
     // 未修改：保持原样
-    public function destroy(Request $request, $id)
+    public function destroy($courseId, $id)
     {
         $modelRes = ResourceModel::deleteResource($id);
         return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 404);

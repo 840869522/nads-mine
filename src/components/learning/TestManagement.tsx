@@ -818,7 +818,7 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
       (isExperiment ? '实验创建成功' : '测试创建成功') : 
       (isExperiment ? '实验更新成功' : '测试更新成功');
 
-    // 处理实验资源上传（仅对实验测试）
+    // 在 handleSaveTest 函数中修改
     if (isExperiment && files && files.length > 0) {
       // 获取实验ID
       const experimentId = isNew ? response.data.data?.c_experiment_id : testData.c_id;
@@ -828,31 +828,75 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
       }
 
       const formData = new FormData();
+      
+      // 检查文件大小并限制
+      const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+      const oversizedFiles: string[] = []; // 显式指定类型
+      
       files.forEach((file, index) => {
-        formData.append(`files[${index}]`, file);
-      });
-      formData.append('course_id', testData.c_course_id);
-
-      try {
-
-        const uploadResponse = await apiClientWithToken.post(
-          `/back/api/study/experiments/${experimentId}/resources/upload-multiple`,
-          formData,
-          {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }
-        );
-
-        if (uploadResponse.data.code === 200 || uploadResponse.data.code === 201) {
-          message += `，资源批量上传成功，共上传 ${files.length} 个文件`;
+        // 检查文件大小
+        if (file.size > MAX_FILE_SIZE) {
+          oversizedFiles.push(file.name);
         } else {
-          showSnackbar(`资源上传失败: ${uploadResponse.data.message || '未知错误'}`, 'warning');
+          formData.append(`files[${index}]`, file);
         }
-      } catch (error: any) {
-        const errorMsg = error.response?.data?.message || error.message || '批量上传实验资源失败';
-        showSnackbar(`资源上传失败: ${errorMsg}`, 'error');
+      });
+      
+      // 如果有文件超过大小限制，提示用户
+      if (oversizedFiles.length > 0) {
+        showSnackbar(
+          `以下文件超过500MB限制，未上传成功：${oversizedFiles.join(', ')}。请压缩文件或分批上传。`,
+          'warning'
+        );
       }
-    } else if (isExperiment) {
+      
+      // 如果没有文件可以上传
+      if (Array.from(formData.entries()).length === 0) {
+        showSnackbar('所有文件都超过大小限制，没有文件被上传', 'warning');
+      } else {
+        formData.append('course_id', testData.c_course_id);
+
+        try {
+          // 为文件上传设置更长超时时间
+          const uploadResponse = await apiClientWithToken.post(
+            `/back/api/study/experiments/${experimentId}/resources/upload-multiple`,
+            formData,
+            {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: 100000 
+            }
+          );
+
+          if (uploadResponse.data.code === 200 || uploadResponse.data.code === 201) {
+            const successCount = uploadResponse.data.data?.count || 
+                              (files.length - oversizedFiles.length);
+            message += `，${successCount}个资源上传成功`;
+          } else {
+            showSnackbar(`资源上传失败: ${uploadResponse.data.message || '上传服务异常'}`, 'error');
+          }
+        } catch (error: any) {
+          // 友好的错误信息提示
+          let errorMsg = '资源上传失败';
+          
+          // 判断错误类型
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            errorMsg = `上传超时（10分钟），文件过大或网络不稳定`;
+          } else if (error.message?.includes('Network Error')) {
+            errorMsg = '网络连接失败，请检查网络后重试';
+          } else if (error.response?.status === 413) {
+            errorMsg = '服务器限制：文件过大（超过500MB），请联系管理员调整服务器配置';
+          } else if (error.response?.status === 504) {
+            errorMsg = '网关超时，服务器处理时间过长';
+          } else if (error.response?.data?.message) {
+            errorMsg = error.response.data.message;
+          } else if (error.message) {
+            errorMsg = error.message;
+          }
+          
+          showSnackbar(`资源上传失败: ${errorMsg}`, 'error');
+        }
+      }
+}else if (isExperiment) {
     }
 
     // 显示最终提示

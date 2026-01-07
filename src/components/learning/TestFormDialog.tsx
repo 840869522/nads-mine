@@ -51,6 +51,7 @@ interface UploadedFile {
   id: string;
   name: string;
   size: string;
+  rawSize: number;
   type: string;
   file: File;
 }
@@ -73,6 +74,8 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
   // 专门用于前端展示和处理的Moment对象
   const [startDate, setStartDate] = useState<moment.Moment | null>(null);
   const [endDate, setEndDate] = useState<moment.Moment | null>(null);
+
+  const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB
 
   // 表单数据，日期存储为字符串
   const [formData, setFormData] = useState<TestData>({
@@ -177,20 +180,63 @@ const TestFormDialog: React.FC<TestFormDialogProps> = ({ open, onClose, onSave, 
     setError(null);
   };
 
-  // 处理文件批量上传
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
     
-    const newFiles = Array.from(files).map(file => ({
+    const MAX_FILE_SIZE = 200 * 1024 * 1024; // 单个文件200MB
+    const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 总大小200MB
+    
+    // 计算已上传文件的总大小
+    const currentTotalSize = uploadedFiles.reduce((total, file) => total + file.file.size, 0);
+    
+    const validFiles: File[] = [];
+    const oversizedFiles: File[] = [];
+    let totalNewSize = 0;
+    
+    // 检查每个文件大小
+    Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        oversizedFiles.push(file);
+      } else {
+        validFiles.push(file);
+        totalNewSize += file.size;
+      }
+    });
+    
+    // 检查总大小是否超过限制
+    if (currentTotalSize + totalNewSize > MAX_TOTAL_SIZE) {
+      alert(`上传总大小超过200MB限制！\n当前已选择：${formatBytes(currentTotalSize)}\n本次上传：${formatBytes(totalNewSize)}\n请减少文件数量或压缩文件大小。`);
+      event.target.value = '';
+      return;
+    }
+    
+    // 如果有超大文件，提示用户
+    if (oversizedFiles.length > 0) {
+      const oversizedNames = oversizedFiles.map(f => f.name).join(', ');
+      alert(`以下文件超过200MB限制，将不会被上传：\n${oversizedNames}\n\n请压缩文件或联系管理员调整服务器限制。`);
+    }
+    
+    // 只添加有效文件
+    const newFiles = validFiles.map(file => ({
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       file,
       name: file.name,
-      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      rawSize: file.size
     }));
     
     setUploadedFiles(prev => [...prev, ...newFiles]);
     event.target.value = ''; // 重置文件输入
+  };
+
+  // 添加辅助函数来格式化字节大小
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   // 处理文件删除
@@ -905,61 +951,160 @@ const handleEndDateChange = (date: moment.Moment | null) => {
               </Box>
 
           {/* 资源上传 - 仅在实验类型显示 */}
-          {formData.c_test_type === '实验' && (
-            <Box sx={{ width: '100%' }}>
-              <InputLabel sx={{ 
-                color: theme.palette.text.secondary,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                mb: 1,
-                pl: 1
-              }}>
-                实验资源（可选）
-              </InputLabel>
-              <Box sx={{ 
-                border: `2px dashed ${theme.palette.divider}`,
-                borderRadius: '8px',
-                p: 2,
-                textAlign: 'center'
-              }}>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<CloudUploadIcon />}
-                  disabled={submitting}
-                >
-                  选择文件上传
-                  <input
-                    type="file"
-                    hidden
-                    multiple
-                    onChange={handleFileUpload}
-                  />
-                </Button>
-                
-                {uploadedFiles.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      已选择文件:
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {uploadedFiles.map((file) => (
-                        <Chip
-                          key={file.id}
-                          label={`${file.name} (${file.size})`}
-                          onDelete={() => handleFileDelete(file.id)}
-                          variant="outlined"
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
+      {formData.c_test_type === '实验' && (
+        <Box sx={{ width: '100%' }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            mb: 1 
+          }}>
+            <InputLabel sx={{ 
+              color: theme.palette.text.secondary,
+              fontSize: '1.1rem',
+              fontWeight: 500,
+              pl: 1
+            }}>
+              实验资源（可选）
+            </InputLabel>
+            <Typography variant="body2" color="text.secondary">
+              最大上传总量：200MB
+            </Typography>
+          </Box>
+          
+          <Box sx={{ 
+            border: `2px dashed ${theme.palette.divider}`,
+            borderRadius: '8px',
+            p: 2,
+            textAlign: 'center'
+          }}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<CloudUploadIcon />}
+              disabled={submitting}
+              sx={{ mb: 1 }}
+            >
+              选择文件上传
+              <input
+                type="file"
+                hidden
+                multiple
+                onChange={handleFileUpload}
+              />
+            </Button>
+            
+            {/* 显示当前总大小信息 */}
+          {uploadedFiles.length > 0 && (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              mb: 1,
+              p: 1,
+              backgroundColor: theme.palette.mode === 'dark' 
+                ? theme.palette.grey[800] 
+                : theme.palette.grey[50],
+              borderRadius: '4px'
+            }}>
+              <Typography 
+                variant="body2" 
+                color={
+                  uploadedFiles.reduce((total, file) => total + file.file.size, 0) > 200 * 1024 * 1024 
+                    ? 'error' 
+                    : 'primary'
+                }
+              >
+                <strong>已选择 {uploadedFiles.length} 个文件</strong>
+              </Typography>
+              <Typography 
+                variant="body2" 
+                color={
+                  uploadedFiles.reduce((total, file) => total + file.file.size, 0) > 200 * 1024 * 1024 
+                    ? 'error' 
+                    : 'primary'
+                }
+              >
+                总大小: {(uploadedFiles.reduce((total, file) => total + file.file.size, 0) / (1024 * 1024)).toFixed(2)} MB
+              </Typography>
             </Box>
           )}
+            
+            {/* 显示剩余空间警告 */}
+            {uploadedFiles.length > 0 && (
+              <Typography 
+                variant="caption" 
+                color={
+                  uploadedFiles.reduce((total, file) => total + file.file.size, 0) > 200 * 1024 * 1024 
+                    ? 'error' 
+                    : 'text.secondary'
+                }
+                sx={{ display: 'block', mb: 1 }}
+              >
+                剩余可用空间: {formatBytes(Math.max(0, 200 * 1024 * 1024 - uploadedFiles.reduce((total, file) => total + file.file.size, 0)))}
+                {uploadedFiles.reduce((total, file) => total + file.file.size, 0) > 200 * 1024 * 1024 && 
+                  ' (已超出限制，请删除部分文件)'}
+              </Typography>
+            )}
+            
+            {/* 显示已选择文件列表 */}
+            {uploadedFiles.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                  文件列表:
+                </Typography>
+                <Box sx={{ 
+                  maxHeight: '150px', 
+                  overflowY: 'auto',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '4px',
+                  p: 1,
+                  backgroundColor: theme.palette.background.paper
+                }}>
+                  {uploadedFiles.map((file) => (
+                    <Box 
+                      key={file.id}
+                      sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        p: 0.5,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        '&:last-child': { borderBottom: 'none' }
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {file.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                        {file.size}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleFileDelete(file.id)}
+                        color="error"
+                        disabled={submitting}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+            
+            {/* 空状态提示 */}
+            {uploadedFiles.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                支持上传 pdf，jpg，jpeg，png，doc，pptx，docx，mp4，avi 格式文件，单个文件最大200MB，总大小不超过200MB
+              </Typography>
+            )}
+          </Box>
         </Box>
+      )}
+      </Box>
       </DialogContent>
-      
+
       <DialogActions sx={{ 
         px: 4,
         py: 1.5,
@@ -993,8 +1138,8 @@ const handleEndDateChange = (date: moment.Moment | null) => {
           {submitting ? '保存中...' : '保存测试'}
         </Button>
       </DialogActions>
-    </Dialog>
-  );
-};
+      </Dialog>
+      );
+      };
 
 export default TestFormDialog;
