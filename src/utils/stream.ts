@@ -113,7 +113,7 @@ export const streamPostRequest = async (
                 try {
                     const decodedContent = base64ToUTF8(dataContent);
                     // const formattedContent = formatMarkdownContent(decodedContent, previousChunk);
-                    onMessage(decodedContent);
+		    onMessage(decodedContent);
                 } catch (decodeError) {
                     console.warn('Base64 解码失败，使用原始数据:', decodeError);
                     onMessage(dataContent);
