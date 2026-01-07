@@ -98,6 +98,8 @@ const CourseCasesPage: React.FC = () => {
   const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
   const [isCategoryManagementOpen, setIsCategoryManagementOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [alertSeverity, setAlertSeverity] = useState<'error' | 'success' | 'info'>('error');
+  const [isSavingCourse, setIsSavingCourse] = useState(false);
 
   useEffect(() => {
     const debouncedFetchData = debounce(async () => {
@@ -347,6 +349,7 @@ const CourseCasesPage: React.FC = () => {
   };
 
   const handlePermissionSaveSuccess = () => {
+    setAlertSeverity('success'); 
     setErrorMessage('权限保存成功');
     setTimeout(() => setErrorMessage(''), 3000);
   };
@@ -420,76 +423,137 @@ const CourseCasesPage: React.FC = () => {
     handleCloseExperimentModal();
   };
 
+
   const handleSaveCourseCase = async (savedCase: CourseCase) => {
-    try {
-      const { c_course_id, c_course_name, c_description, c_category_id, c_status, resources } = savedCase;
-      const courseData = {
-        c_course_id,
-        c_course_name,
-        c_description,
-        c_category_id,
-        c_status,
-      };
+  setIsSavingCourse(true); // 开始保存，设置加载状态
+  
+  try {
+    const { c_course_id, c_course_name, c_description, c_category_id, c_status, resources } = savedCase;
+    const courseData = {
+      c_course_id,
+      c_course_name,
+      c_description,
+      c_category_id,
+      c_status,
+    };
 
-      const token = getCookie('_auth');
-      if (!token) {
-        throw new Error('未登录，请先登录');
+    const token = getCookie('_auth');
+    if (!token) {
+      throw new Error('未登录，请先登录');
+    }
+
+    let courseId = c_course_id;
+    let operationType = editingCase ? '更新' : '创建';
+    
+    // 保存课程基本信息
+    if (editingCase) {
+      const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
+        headers: { Authorization: `${token}` },
+      });
+      const data = response.data;
+      if (data.code !== 200) {
+        throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
       }
-
-      let courseId = c_course_id;
-      if (editingCase) {
-        const response = await apiClientWithToken.put(`/back/api/study/courses/${c_course_id}`, courseData, {
-          headers: { Authorization: `${token}` },
-        });
-        const data = response.data;
-        if (data.code !== 200) {
-          throw new Error(`更新课程失败: ${data.message || '未知错误'}`);
-        }
-        setCourseCases(prev =>
-            prev.map(course =>
-                course.c_course_id === c_course_id ? { ...course, ...courseData, c_status } : course
-            )
-        );
-      } else {
-        const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
-          headers: { Authorization: `${token}` },
-        });
-        const data = response.data;
-        if (data.code !== 201) {
-          throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
-        }
-        courseId = data.data.c_course_id;
+      setCourseCases(prev =>
+        prev.map(course =>
+          course.c_course_id === c_course_id ? { ...course, ...courseData, c_status } : course
+        )
+      );
+    } else {
+      const response = await apiClientWithToken.post(`/back/api/study/courses`, courseData, {
+        headers: { Authorization: `${token}` },
+      });
+      const data = response.data;
+      if (data.code !== 201) {
+        throw new Error(`创建课程失败: ${data.message || '未知错误'}`);
       }
+      courseId = data.data.c_course_id;
+      operationType = '创建';
+    }
 
-      if (resources.length > 0) {
-        for (const resource of resources) {
-          if (resource.fileObject) {
+    // 2. 处理资源上传并统计结果
+    let successCount = 0;
+    let failCount = 0;
+    let failMessages: string[] = [];
+
+    if (resources.length > 0) {
+      const uploadPromises = resources.map(async (resource) => {
+        if (resource.fileObject) {
+          try {
             const formData = new FormData();
             formData.append('c_course_id', courseId);
             formData.append('file', resource.fileObject);
+            
             const response = await apiClientWithToken.post(`/back/api/study/courses/${courseId}/resources/upload`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
                 Authorization: `${token}`,
               },
             });
+            
             const data = response.data;
-            if (data.code !== 201) {
-              console.warn('Failed to upload resource:', data.message);
+            if (data.code === 201) {
+              successCount++;
+              return { success: true, resourceName: resource.c_resource_name };
+            } else {
+              failCount++;
+              failMessages.push(`${resource.c_resource_name}: ${data.message || '上传失败'}`);
+              return { success: false, resourceName: resource.c_resource_name, error: data.message };
             }
+          } catch (error: any) {
+            failCount++;
+            const errorMsg = error.response?.data?.message || error.message || '上传失败';
+            failMessages.push(`${resource.c_resource_name}: ${errorMsg}`);
+            return { success: false, resourceName: resource.c_resource_name, error: errorMsg };
           }
         }
-      }
+        return { success: true, resourceName: resource.c_resource_name, skipped: true };
+      });
 
-      // 刷新课程列表
-      await handleRefreshCourses();
-    } catch (error: any) {
-      const message = error.response?.data?.message || error.message || '保存课程案例失败';
-      setErrorMessage(message);
-      console.error('Error saving course case:', error.response?.status, error.response?.data, error.config?.url);
+      await Promise.all(uploadPromises);
     }
+
+    // 3. 构建成功提示消息
+    let successMessage = `${operationType}课程成功！`;
+    
+    if (resources.length > 0) {
+      if (successCount > 0 && failCount === 0) {
+        successMessage += ` ${successCount}个资源全部上传成功。`;
+      } else if (successCount > 0 && failCount > 0) {
+        successMessage += ` ${successCount}个资源上传成功，${failCount}个资源上传失败。`;
+        successMessage += ` 失败详情: ${failMessages.join('; ')}`;
+      } else if (failCount > 0) {
+        successMessage += ` 所有资源上传失败。`;
+      } else {
+        successMessage += ` 无新资源需要上传。`;
+      }
+    }
+
+    // 4. 显示绿色成功提示并立即关闭模态框
+    setAlertSeverity('success');
+    setErrorMessage(successMessage);
+    
+    // 5. 立即关闭模态框
     handleCloseFormModal();
-  };
+    
+    // 6. 延迟刷新课程列表
+    setTimeout(async () => {
+      await handleRefreshCourses();
+    }, 100);
+
+  } catch (error: any) {
+    // 7. 错误处理 - 显示红色错误提示
+    const message = error.response?.data?.message || error.message || '保存课程案例失败';
+    setAlertSeverity('error');
+    setErrorMessage(`操作失败: ${message}`);
+    console.error('Error saving course case:', error.response?.status, error.response?.data, error.config?.url);
+    
+    // 错误时也立即关闭模态框
+    handleCloseFormModal();
+  } finally {
+    setIsSavingCourse(false); // 保存完成，无论成功失败都清除加载状态
+  }
+};
 
   const handleRefreshCategories = async () => {
     try {
@@ -630,6 +694,8 @@ const CourseCasesPage: React.FC = () => {
         throw new Error('类别名称不能超过50个字符');
       }
 
+      let successMessage = '';
+      
       if (category.c_category_id) {
         const response = await apiClientWithToken.put(`/back/api/study/categories/${category.c_category_id}`, {
           c_category_name: category.c_category_name,
@@ -639,6 +705,7 @@ const CourseCasesPage: React.FC = () => {
         const data = response.data;
         if (data.code === 200) {
           setCategories(prev => prev.map(cat => (cat.c_category_id === category.c_category_id ? category : cat)));
+          successMessage = '更新类别成功';
         } else {
           throw new Error(`更新类别失败: ${data.message || '未知错误'}`);
         }
@@ -651,12 +718,25 @@ const CourseCasesPage: React.FC = () => {
         const data = response.data;
         if (data.code === 201) {
           setCategories(prev => [...prev, { c_category_id: data.data.c_category_id, c_category_name: category.c_category_name }]);
+          successMessage = '添加类别成功';
         } else {
           throw new Error(`创建类别失败: ${data.message || '未知错误'}`);
         }
       }
+      
+      // 显示绿色成功提示
+      setAlertSeverity('success');
+      setErrorMessage(successMessage);
+      
+      // 3秒后自动清除提示
+      setTimeout(() => {
+        setErrorMessage('');
+      }, 3000);
+      
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || '保存类别失败';
+      // 显示红色错误提示
+      setAlertSeverity('error');
       setErrorMessage(message);
       console.error('Error saving category:', error.response?.status, error.response?.data, error.config?.url);
     }
@@ -955,11 +1035,15 @@ const CourseCasesPage: React.FC = () => {
 
   return (
       <PageWrapper>
-        {errorMessage && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage('')}>
+                {errorMessage && (
+            <Alert 
+              severity={alertSeverity}  // 修改这里
+              sx={{ mb: 2 }} 
+              onClose={() => setErrorMessage('')}
+            >
               {errorMessage}
             </Alert>
-        )}
+          )}
         <Box
             sx={{
               display: 'flex',
@@ -1151,115 +1235,59 @@ const CourseCasesPage: React.FC = () => {
           </DialogTitle>
           <DialogContent>
             {isLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                  <CircularProgress />
-                </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+                <CircularProgress />
+              </Box>
             ) : (
-                <>
-                  <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
-                    <Tab label="课程资源" />
-                    <Tab label="实验资源" />
-                  </Tabs>
-                  {tabValue === 0 && (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="subtitle1">课程资源</Typography>
-                          {selectedCaseForResources?.resources?.length ? (
-                            <Table>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>资源名称</TableCell>
-                                  <TableCell>类型</TableCell>
-                                  <TableCell>大小</TableCell>
-                                  <TableCell>操作</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {selectedCaseForResources.resources.map(resource => (
-                                  <TableRow key={resource.c_resource_id}>
-                                    <TableCell>{resource.c_resource_name}</TableCell>
-                                    <TableCell>{resource.c_type}</TableCell>
-                                    <TableCell>{resource.c_size}</TableCell>
-                                    <TableCell>
-                                      <IconButton 
-                                        onClick={() => handleOpenResourceViewer(resource)} 
-                                        title="查看"
-                                        size="small"
-                                      >
-                                        <VisibilityIcon fontSize="small" />
-                                      </IconButton>
-                                      {/* 添加的删除按钮 - 带简单确认提示 */}
-                                      <IconButton
-                                        onClick={() => {
-                                          if (window.confirm(`确定要删除资源 "${resource.c_resource_name}" 吗？`)) {
-                                            handleDeleteResource(resource, false);
-                                          }
-                                        }}
-                                        title="删除"
-                                        size="small"
-                                        sx={{ ml: 1, color: 'error.main' }}
-                                      >
-                                        <DeleteIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          ) : (
-                            <Typography>无课程资源</Typography>
-                          )}
-                        </Box>
-                      )}
-                  {tabValue === 1 && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle1">实验资源</Typography>
-                        {selectedCaseForResources?.experiments?.some(exp => exp.resources?.length > 0) ? (
-                            <Table>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>实验名称</TableCell>
-                                  <TableCell>资源名称</TableCell>
-                                  <TableCell>类型</TableCell>
-                                  <TableCell>大小</TableCell>
-                                  <TableCell>操作</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {(selectedCaseForResources?.experiments || [])
-                                    .filter((exp: Experiment) => exp.resources?.length > 0)
-                                    .flatMap((exp: Experiment) =>
-                                        exp.resources.map((resource: CourseCaseResource) => ({
-                                          experiment: exp,
-                                          resource,
-                                        }))
-                                    )
-                                    .map(({ experiment, resource }: { experiment: Experiment; resource: CourseCaseResource }, index: number) => (
-                                        <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
-                                          <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
-                                          <TableCell>{resource.c_resource_name}</TableCell>
-                                          <TableCell>{resource.c_type}</TableCell>
-                                          <TableCell>{resource.c_size}</TableCell>
-                                          <TableCell>
-                                            <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                              <VisibilityIcon />
-                                            </IconButton>
-                                            <IconButton
-                                                onClick={() => handleDeleteResource(resource, true, experiment.c_experiment_id)}
-                                                title="删除"
-                                            >
-                                              <DeleteIcon />
-                                            </IconButton>
-                                          </TableCell>
-                                        </TableRow>
-                                    ))}
-                              </TableBody>
-                            </Table>
-                        ) : (
-                            <Typography>无实验资源</Typography>
-                        )}
-                      </Box>
+              <>
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>课程资源</Typography>
+                  {selectedCaseForResources?.resources?.length ? (
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>资源名称</TableCell>
+                          <TableCell>类型</TableCell>
+                          <TableCell>大小</TableCell>
+                          <TableCell>操作</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedCaseForResources.resources.map(resource => (
+                          <TableRow key={resource.c_resource_id}>
+                            <TableCell>{resource.c_resource_name}</TableCell>
+                            <TableCell>{resource.c_type}</TableCell>
+                            <TableCell>{resource.c_size}</TableCell>
+                            <TableCell>
+                              <IconButton 
+                                onClick={() => handleOpenResourceViewer(resource)} 
+                                title="查看"
+                                size="small"
+                              >
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => {
+                                  if (window.confirm(`确定要删除资源 "${resource.c_resource_name}" 吗？`)) {
+                                    handleDeleteResource(resource, false);
+                                  }
+                                }}
+                                title="删除"
+                                size="small"
+                                sx={{ ml: 1, color: 'error.main' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <Typography color="text.secondary">暂无课程资源</Typography>
                   )}
-                </>
+                </Box>
+              </>
             )}
           </DialogContent>
           <DialogActions>
@@ -1327,6 +1355,7 @@ const CourseCasesPage: React.FC = () => {
             onSave={handleSaveCourseCase}
             courseCase={editingCase}
             categories={categories}
+            isSaving={isSavingCourse}
         />
         <CategoryFormModal
             open={isCategoryModalOpen}

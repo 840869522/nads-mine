@@ -18,7 +18,8 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Stack
+  Stack,
+  CircularProgress, 
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -37,6 +38,7 @@ interface CourseCaseFormModalProps {
   onSave: (courseCase: CourseCase) => void;
   courseCase: CourseCase | null;
   categories: Category[];
+  isSaving?: boolean;
 }
 
 const getResourceFormat = (fileName: string): CourseCaseResourceFormat => {
@@ -60,7 +62,7 @@ const getResourceIcon = (format: CourseCaseResourceFormat) => {
   }
 };
 
-const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose, onSave, courseCase, categories }) => {
+const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose, onSave, courseCase, categories,isSaving = false }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [c_course_name, setCourseName] = useState('');
@@ -303,10 +305,24 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
             </Box>
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={onClose}>取消</Button>
-          <Button type="submit" variant="contained" disabled={categories.length === 0 && !c_category_id}>
-            {courseCase ? '保存更改' : '确认添加'}
+      <DialogActions sx={{ p: 2 }}>
+          <Button 
+            onClick={onClose} 
+            color="inherit"
+            disabled={isSaving} // 保存时禁用取消按钮
+          >
+            取消
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained" 
+            color="primary"
+            disabled={isSaving || !c_course_name.trim() || !c_category_id} // 修改这里：使用 c_course_name 和 c_category_id
+            startIcon={isSaving ? <CircularProgress size={20} /> : null} // 添加加载图标
+          >
+            {isSaving 
+              ? (courseCase ? '更新中...' : '添加中...') 
+              : (courseCase ? '保存更改' : '确认添加')}
           </Button>
         </DialogActions>
       </Dialog>
