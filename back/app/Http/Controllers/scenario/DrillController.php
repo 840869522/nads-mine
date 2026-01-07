@@ -164,7 +164,7 @@ class DrillController extends Controller
             }
 
             $vcpuAllocationRatio = round(($assignedVcpuTotal / $hostLogicalCores) * 100, 2);
-            if ($vcpuAllocationRatio > 85) {
+            if ($vcpuAllocationRatio > 70) {
                 Log::warning('启动场景失败：已分配 vCPU 占用率过高', [
                     'assigned_vcpu_total' => $assignedVcpuTotal,
                     'host_logical_cores' => $hostLogicalCores,
