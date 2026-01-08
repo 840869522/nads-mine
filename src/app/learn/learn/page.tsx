@@ -18,8 +18,6 @@ import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import IconButton from '@mui/material/IconButton';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import Pagination from '@mui/material/Pagination';
@@ -76,7 +74,6 @@ const CourseLearningPage: React.FC = () => {
     const [errorMessage, setErrorMessage] = useState<string>('');
     const [totalCases, setTotalCases] = useState<number>(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [tabValue, setTabValue] = useState(0);
     const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
     const [experimentStatuses, setExperimentStatuses] = useState<{ [key: string]: InstanceStatus }>({});
@@ -250,92 +247,62 @@ const CourseLearningPage: React.FC = () => {
         return () => debouncedFetchData.cancel();
     }, [currentPage, itemsPerPage, searchKeyword, filterCategoryId]);
 
-    const handleOpenResourcesDialog = async (courseCase: CourseCase, tabIndex: number = 0) => {
-        setIsResourcesDialogOpen(true);
-        setTabValue(tabIndex);
-        setErrorMessage('');
+    const handleOpenResourcesDialog = async (courseCase: CourseCase) => {  // 移除 tabIndex 参数
+    setIsResourcesDialogOpen(true);
+    setErrorMessage('');  // 移除 setTabValue(tabIndex);
 
-        try {
-            const token = getCookie('_auth');
-            if (!token) {
-                throw new Error('未登录，请先登录');
-            }
-
-            // 获取课程资源
-            const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/resources`, {
-                headers: { Authorization: `${token}` },
-                params: { page: 1, pageSize: 10 },
-            });
-            const resourcesData = resourcesResponse.data;
-            let resources: CourseCaseResource[] = [];
-            if (resourcesData.code === 200) {
-                resources = (resourcesData.data.resources || []).map((res: any) => ({
-                    c_resource_id: res.c_resource_id,
-                    c_resource_name: res.c_resource_name,
-                    c_type: getFileType(res.c_type),
-                    c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
-                    c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                    isExperimentResource: false,
-                }));
-            } else {
-                console.warn(`获取课程 ${courseCase.c_course_id} 的资源失败: ${resourcesData.message || '无资源'}`);
-            }
-
-            // 获取实验资源
-            const experimentsResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/experiments`, {
-                headers: { Authorization: `${token}` },
-            });
-            const experimentsData = experimentsResponse.data;
-            let experiments: Experiment[] = [];
-            if (experimentsData.code === 200) {
-                experiments = (experimentsData.data.experiments || []).map((exp: any) => ({
-                    c_experiment_id: exp.c_experiment_id,
-                    c_experiment_name: exp.c_experiment_name,
-                    c_description: exp.c_description || '',
-                    c_config_id: exp.c_config_id,
-                    c_scene_config_id: exp.c_config_id,
-                    c_name: exp.c_name || '',
-                    resources: (exp.resources || []).map((res: any) => ({
-                        c_resource_id: res.c_resource_id,
-                        c_resource_name: res.c_resource_name,
-                        c_type: getFileType(res.c_type),
-                        c_resource_path: `/back/api/study/experiment-resources/${res.c_resource_id}`,
-                        c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
-                        isExperimentResource: true,
-                    })),
-                    created_at: exp.created_at || new Date().toISOString(),
-                    status: experimentStatuses[exp.c_experiment_id] || 'stopped',
-                }));
-            } else {
-                console.warn(`获取课程 ${courseCase.c_course_id} 的实验失败: ${experimentsData.message || '无实验'}`);
-            }
-
-            // 更新 selectedCaseForResources
-            setSelectedCaseForResources({
-                ...courseCase,
-                resources,
-                experiments,
-            });
-
-            // 更新 courseCases 以保持状态一致
-            setCourseCases(prev =>
-                prev.map(course =>
-                    course.c_course_id === courseCase.c_course_id
-                        ? { ...course, resources, experiments }
-                        : course
-                )
-            );
-        } catch (error: any) {
-            const message = error.response?.data?.message || error.message || '获取资源或实验失败';
-            setErrorMessage(message);
-            console.error('Error fetching resources or experiments:', {
-                message,
-                status: error.response?.status,
-                data: error.response?.data,
-                url: error.config?.url,
-            });
+    try {
+        const token = getCookie('_auth');
+        if (!token) {
+            throw new Error('未登录，请先登录');
         }
-    };
+
+        // 获取课程资源
+        const resourcesResponse = await apiClientWithToken.get(`/back/api/study/courses/${courseCase.c_course_id}/resources`, {
+            headers: { Authorization: `${token}` },
+            params: { page: 1, pageSize: 10 },
+        });
+        const resourcesData = resourcesResponse.data;
+        let resources: CourseCaseResource[] = [];
+        if (resourcesData.code === 200) {
+            resources = (resourcesData.data.resources || []).map((res: any) => ({
+                c_resource_id: res.c_resource_id,
+                c_resource_name: res.c_resource_name,
+                c_type: getFileType(res.c_type),
+                c_resource_path: `/back/api/study/resources/${res.c_resource_id}`,
+                c_size: res.c_size ? `${(res.c_size / (1024 * 1024)).toFixed(2)} MB` : '未知',
+                isExperimentResource: false,
+            }));
+        } else {
+            console.warn(`获取课程 ${courseCase.c_course_id} 的资源失败: ${resourcesData.message || '无资源'}`);
+        }
+
+        // 更新 selectedCaseForResources
+        setSelectedCaseForResources({
+            ...courseCase,
+            resources,
+            experiments: [], // 不再需要实验数据
+        });
+
+        // 更新 courseCases 以保持状态一致
+        setCourseCases(prev =>
+            prev.map(course =>
+                course.c_course_id === courseCase.c_course_id
+                    ? { ...course, resources, experiments: [] } // 清空实验数据
+                    : course
+            )
+        );
+    } catch (error: any) {
+        const message = error.response?.data?.message || error.message || '获取资源失败';
+        setErrorMessage(message);
+        console.error('Error fetching resources:', {
+            message,
+            status: error.response?.status,
+            data: error.response?.data,
+            url: error.config?.url,
+        });
+    }
+};
 
     const handleOpenPermissionDialog = (course: CourseCase) => {
         setSelectedCourse(course);
@@ -389,9 +356,6 @@ const CourseLearningPage: React.FC = () => {
         setCurrentPage(1);
     }, 500);
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-        setTabValue(newValue);
-    };
 
     const getPageNumbers = () => {
         const totalPages = Math.ceil(totalCases / itemsPerPage);
@@ -560,95 +524,46 @@ const CourseLearningPage: React.FC = () => {
                 />
             </Box>
             <Dialog open={isResourcesDialogOpen} onClose={handleCloseResourcesDialog} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {selectedCaseForResources?.c_course_name} 的资源
-                </DialogTitle>
-                <DialogContent>
-                    <Tabs value={tabValue} onChange={handleTabChange} aria-label="资源和实验标签">
-                        <Tab label="课程资源" />
-                        <Tab label="实验资源" />
-                    </Tabs>
-                    {tabValue === 0 && (
-                        <Box sx={{ mt: 2 }}>
-                            <Typography variant="subtitle1">课程资源</Typography>
-                            {selectedCaseForResources?.resources.length ? (
-                                <Table>
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>资源名称</TableCell>
-                                            <TableCell>类型</TableCell>
-                                            <TableCell>大小</TableCell>
-                                            <TableCell>操作</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {selectedCaseForResources.resources.map(resource => (
-                                            <TableRow key={resource.c_resource_id}>
-                                                <TableCell>{resource.c_resource_name}</TableCell>
-                                                <TableCell>{resource.c_type}</TableCell>
-                                                <TableCell>{resource.c_size}</TableCell>
-                                                <TableCell>
-                                                    <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                                        <VisibilityIcon />
-                                                    </IconButton>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            ) : (
-                                <Typography>无课程资源</Typography>
-                            )}
-                        </Box>
-                    )}
-                    {tabValue === 1 && (
-                        <Box sx={{ mt: 2 }}>
-                            <Typography variant="subtitle1">实验资源</Typography>
-                            {selectedCaseForResources?.experiments?.some(exp => exp.resources.length > 0) ? (
-                                <Table>
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>实验名称</TableCell>
-                                            <TableCell>资源名称</TableCell>
-                                            <TableCell>类型</TableCell>
-                                            <TableCell>大小</TableCell>
-                                            <TableCell>操作</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {selectedCaseForResources?.experiments
-                                            .filter(exp => exp.resources.length > 0)
-                                            .flatMap(exp =>
-                                                exp.resources.map(resource => ({
-                                                    experiment: exp,
-                                                    resource,
-                                                }))
-                                            )
-                                            .map(({ experiment, resource }, index) => (
-                                                <TableRow key={`${experiment.c_experiment_id}-${resource.c_resource_id}-${index}`}>
-                                                    <TableCell>{experiment.c_experiment_name || '实验名称'}</TableCell>
-                                                    <TableCell>{resource.c_resource_name}</TableCell>
-                                                    <TableCell>{resource.c_type}</TableCell>
-                                                    <TableCell>{resource.c_size}</TableCell>
-                                                    <TableCell>
-                                                        <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
-                                                            <VisibilityIcon />
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                    </TableBody>
-                                </Table>
-                            ) : (
-                                <Typography>无实验资源</Typography>
-                            )}
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseResourcesDialog}>关闭</Button>
-                </DialogActions>
-            </Dialog>
+    <DialogTitle>
+        {selectedCaseForResources?.c_course_name} 的资源
+    </DialogTitle>
+    <DialogContent>
+        <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>课程资源</Typography>
+            {selectedCaseForResources?.resources.length ? (
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>资源名称</TableCell>
+                            <TableCell>类型</TableCell>
+                            <TableCell>大小</TableCell>
+                            <TableCell>操作</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {selectedCaseForResources.resources.map(resource => (
+                            <TableRow key={resource.c_resource_id}>
+                                <TableCell>{resource.c_resource_name}</TableCell>
+                                <TableCell>{resource.c_type}</TableCell>
+                                <TableCell>{resource.c_size}</TableCell>
+                                <TableCell>
+                                    <IconButton onClick={() => handleOpenResourceViewer(resource)} title="查看">
+                                        <VisibilityIcon />
+                                    </IconButton>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            ) : (
+                <Typography color="text.secondary">暂无课程资源</Typography>
+            )}
+        </Box>
+    </DialogContent>
+    <DialogActions>
+        <Button onClick={handleCloseResourcesDialog}>关闭</Button>
+    </DialogActions>
+</Dialog>
             <ResourceViewerModal
                 open={isResourceViewerOpen}
                 onClose={handleCloseResourceViewer}
