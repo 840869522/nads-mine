@@ -333,6 +333,7 @@ export const TRAFFIC_MIRRORING_IMAGES = {
 
 // 特殊镜像列表 - 这些镜像的容器可以连接任何节点
 export const SPECIAL_IMAGES = [
+  '*',
   'routertar2:v1',
   'router:v1.1',
   'frr-ubuntu20:latest',

@@ -5,7 +5,7 @@ import { SPECIAL_IMAGES } from '../../../constants';
 export const isSpecialImageContainer = (node?: TopologyNode): boolean => {
   if (!node || node.type !== 'container') return false;
   const image = node.config?.Image || '';
-  return SPECIAL_IMAGES.some(img => image.includes(img));
+  return SPECIAL_IMAGES.some(img => (img === '*' ? true : image.includes(img)));
 };
 
 // 判断两节点是否允许直连（至少一端为交换机，或特定镜像容器）
@@ -33,4 +33,3 @@ export const wouldViolateSingleSwitchRule = (
   const bHasEdge = isContainerOrVM(b) && edges.some(e => e.source === b.id || e.target === b.id);
   return !!(aHasEdge || bHasEdge);
 };
-

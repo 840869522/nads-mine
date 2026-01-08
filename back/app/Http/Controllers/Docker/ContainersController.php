@@ -8,6 +8,7 @@ use App\Services\DockerService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Utils\JWTControll; // 引入 JWT 工具
+use Illuminate\Support\Facades\Cache;
 
 class ContainersController extends Controller
 {
@@ -146,128 +147,137 @@ class ContainersController extends Controller
      * 检查当前用户是否有权访问容器终端，并执行禁赛检查。
      */
     public function terminalWithAuthority(string $containerId, Request $request)
-    {
-        try {
-            $record = DB::table('c_scene_container_instances')
-                ->where('c_container_id', $containerId)
-                ->select('c_team_id', 'c_scene_instances_id')
-                ->first();
-        } catch (\Throwable $e) {
-            Log::error('Failed to fetch container record for authority check: ' . $e->getMessage());
-            return response()->json([
-                'error' => '数据库查询失败',
-                'message' => '数据库查询失败',
-            ], 500);
-        }
-
-        if (!$record) {
-            return response()->json([
-                'error' => '未找到容器实例',
-                'message' => '未找到容器实例',
-            ], 404);
-        }
-
-        $teamId = $record->c_team_id ?? null;
-        $normalizedTeamId = $teamId !== null ? trim((string) $teamId) : '';
-
-        // 1. 解析用户名 (JWT)
-        $tokenData = $request->input('token_data');
-        $username = null;
-        if (is_array($tokenData) && isset($tokenData['id'])) {
-            $username = $tokenData['id'];
-        } elseif ($request->has('username')) {
-            $username = $request->input('username');
-        } else {
-            // 尝试从 header 解析 (兜底)
-            $authHeader = $request->header('Authorization');
-            if ($authHeader) {
-                try {
-                    $jwtResult = JWTControll::decodeJWT($authHeader);
-                    if ($jwtResult['err'] === null) {
-                        $username = $jwtResult['data']['id'] ?? null;
-                    }
-                } catch (\Exception $e) {}
+        {
+            // 0. 基础数据查询
+            try {
+                $record = DB::table('c_scene_container_instances')
+                    ->where('c_container_id', $containerId)
+                    ->select('c_team_id', 'c_scene_instances_id')
+                    ->first();
+            } catch (\Throwable $e) {
+                Log::error('Failed to fetch container record for authority check: ' . $e->getMessage());
+                return response()->json(['error' => '数据库查询失败', 'message' => '数据库查询失败'], 500);
             }
-        }
 
-        if (!$username) {
-            return response()->json([
-                'error' => '无法识别当前用户',
-                'message' => '用户信息缺失',
-            ], 401);
-        }
+            if (!$record) {
+                return response()->json(['error' => '未找到容器实例', 'message' => '未找到容器实例'], 404);
+            }
 
-        // 2. 角色特权检查 (Admin 等直接放行)
-        try {
-            $roles = DB::table('c_users_roles')
-                ->where('c_user_id', $username)
-                ->pluck('c_role_id')
-                ->map(fn ($role) => strtolower((string) $role))
-                ->toArray();
-        } catch (\Throwable $e) {
-            Log::error('Failed to fetch user roles: ' . $e->getMessage());
-            return response()->json(['error' => '查询失败'], 500);
-        }
+            $teamId = $record->c_team_id ?? null;
+            $normalizedTeamId = $teamId !== null ? trim((string) $teamId) : '';
 
-        $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
-        // 注意：即便是管理员，理论上也不应该受禁赛表限制，所以这里先放行
-        if (!empty(array_intersect($roles, $privilegedRoles))) {
-             return response()->json(['allowed' => true]);
-        }
+            // 1. 健壮的 Token 解析逻辑
+            $tokenData = $request->token_data; // 1. 优先尝试属性
+            if (empty($tokenData)) {
+                $tokenData = $request->input('token_data'); // 2. 尝试Input
+            }
 
-        // 3. 队伍归属检查 (普通用户必须属于该队伍)
-        if ($normalizedTeamId !== '') {
-             try {
-                $isMember = DB::table('c_teams_users')
-                    ->where('team_id', $normalizedTeamId)
-                    ->where('user_id', $username)
-                    ->exists();
-             } catch (\Throwable $e) {
+            $username = $tokenData['id'] ?? null;
+
+            // 3. 兜底 Header 解析
+            if (!$username) {
+                $authHeader = $request->header('Authorization');
+                if ($authHeader) {
+                    try {
+                        $jwtResult = JWTControll::decodeJWT($authHeader);
+                        if ($jwtResult['err'] === null) {
+                            $tokenData = $jwtResult['data'];
+                            $username = $tokenData['id'] ?? null;
+                        }
+                    } catch (\Exception $e) {}
+                }
+            }
+
+            if (!$username) {
+                return response()->json(['error' => '无法识别当前用户', 'message' => '用户信息缺失'], 401);
+            }
+
+            // 2. 获取权限列表 (Cache)
+            $permissions = [];
+            if (isset($tokenData['permission'])) {
+                $permissions = Cache::get($tokenData["permission"]) ?? [];
+            }
+            $permissionIds = array_map(fn($item) => is_object($item) ? $item->c_id : (is_array($item) ? ($item['c_id'] ?? '') : $item), $permissions);
+
+            // 3. 角色特权检查 (保留管理员通道)
+            try {
+                $roles = DB::table('c_users_roles')
+                    ->where('c_user_id', $username)
+                    ->pluck('c_role_id')
+                    ->map(fn ($role) => strtolower((string) $role))
+                    ->toArray();
+            } catch (\Throwable $e) {
                 return response()->json(['error' => '查询失败'], 500);
-             }
+            }
 
-             if (!$isMember) {
+            $privilegedRoles = ['admin', 'guidance', 'operations', 'referee'];
+            // 如果是特权角色，或者拥有全局管理权限，则放行
+            $isPrivileged = !empty(array_intersect($roles, $privilegedRoles)) || in_array('container_manage_global', $permissionIds);
+
+            if ($isPrivileged) {
+                 return response()->json(['allowed' => true]);
+            }
+
+            // ================= 安全补丁 =================
+            // 4. RBAC 功能权限检查
+            // 非特权用户，必须拥有 'container_terminal' 权限
+            if (!in_array('container_terminal', $permissionIds)) {
                 return response()->json([
                     'allowed' => false,
-                    'error' => '无权限',
-                    'message' => '用户不在该容器所属队伍中',
+                    'error' => 'Permission Denied',
+                    'message' => '您的角色权限不足，无法访问容器终端 (container_terminal)。',
                 ], 403);
-             }
-        }
-
-        // 4. ★★★ 禁赛检查 (核心修复) ★★★
-        $sceneInstanceId = $record->c_scene_instances_id ?? null;
-        if (!empty($sceneInstanceId)) {
-            try {
-                // 查找演练配置 (兼容单数/复数写法, 模糊匹配)
-                $adConfigId = DB::table('c_ad_configs')
-                    ->where('c_scene_instance_id', $sceneInstanceId)
-                    ->value('c_id');
-
-                if ($adConfigId) {
-                    // 直接查询是否存在记录，去掉过期时间判断，确保逻辑与 FlagSubmissionController 一致
-                    $isBanned = DB::table('c_ad_user_bans')
-                        ->where('c_ad_config_id', $adConfigId)
-                        ->where('c_user_id', $username)
-                        ->exists();
-
-                    if ($isBanned) {
-                        // ★★★ 拦截点 ★★★
-                        Log::info("拦截容器操作：用户 {$username} 已被禁赛", ['container_id' => $containerId]);
-                        return response()->json([
-                            'allowed' => false,
-                            'error' => '用户已被禁赛',
-                            'message' => '您已被禁赛，无法操作容器！',
-                        ], 403);
-                    }
-                }
-            } catch (\Throwable $e) {
-                Log::error('Ban check failed: ' . $e->getMessage());
             }
-        }
+            // ==========================================
 
-        return response()->json([
-            'allowed' => true,
-        ]);
-    }
+            // 5. 队伍归属检查
+            if ($normalizedTeamId !== '') {
+                 try {
+                    $isMember = DB::table('c_teams_users')
+                        ->where('team_id', $normalizedTeamId)
+                        ->where('user_id', $username)
+                        ->exists();
+                 } catch (\Throwable $e) {
+                    return response()->json(['error' => '查询失败'], 500);
+                 }
+
+                 if (!$isMember) {
+                    return response()->json([
+                        'allowed' => false,
+                        'error' => '无权限',
+                        'message' => '用户不在该容器所属队伍中，无法操作',
+                    ], 403);
+                 }
+            }
+
+            // 6. 禁赛检查
+            $sceneInstanceId = $record->c_scene_instances_id ?? null;
+            if (!empty($sceneInstanceId)) {
+                try {
+                    $adConfigId = DB::table('c_ad_configs')
+                        ->where('c_scene_instance_id', $sceneInstanceId)
+                        ->value('c_id');
+
+                    if ($adConfigId) {
+                        $isBanned = DB::table('c_ad_user_bans')
+                            ->where('c_ad_config_id', $adConfigId)
+                            ->where('c_user_id', $username)
+                            ->exists();
+
+                        if ($isBanned) {
+                            Log::info("拦截容器操作：用户 {$username} 已被禁赛", ['container_id' => $containerId]);
+                            return response()->json([
+                                'allowed' => false,
+                                'error' => '用户已被禁赛',
+                                'message' => '您已被禁赛，无法操作容器！',
+                            ], 403);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Ban check failed: ' . $e->getMessage());
+                }
+            }
+
+            return response()->json(['allowed' => true]);
+        }
 }
