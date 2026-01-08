@@ -679,83 +679,103 @@ class VmController extends Controller
 
     // GET /vms/{vm_name}/guac
     public function getGuacInfo($vmName, Request $request)
-    {
-        $method = strtolower($request->query('method', 'ssh'));
-        $vmQueryName = $request->query('vm_name', $vmName);
+        {
+            $method = strtolower($request->query('method', 'ssh'));
+            $vmQueryName = $request->query('vm_name', $vmName);
 
-        $tokenData = $this->getTokenData($request);
-        if (!$tokenData) return response()->json(['error' => 'Invalid token'], 401);
-        $username = $tokenData['id'];
+            $tokenData = $this->getTokenData($request);
+            if (!$tokenData) return response()->json(['error' => 'Invalid token'], 401);
+            $username = $tokenData['id'];
 
-        // 1. 检查特权模式
-        $permissions = Cache::get($tokenData["permission"]) ?? [];
-        $permissionIds = array_map(fn($item) => $item->c_id, $permissions);
-        $isPrivileged = in_array('container_manage_global', $permissionIds) || ($username === 'admin');
+            // 1. 获取权限列表 (防御性处理，若无权限缓存则为空数组)
+            $permissions = [];
+            if (isset($tokenData["permission"])) {
+                $permissions = Cache::get($tokenData["permission"]) ?? [];
+            }
+            // 兼容处理：权限可能是对象数组或ID数组
+            $permissionIds = array_map(fn($item) => is_object($item) ? $item->c_id : (is_array($item) ? ($item['c_id'] ?? '') : $item), $permissions);
 
-        if ($isPrivileged) {
-            goto fetch_guac_params;
-        }
+            // 2. 特权模式检查 (Admin 或 拥有全局管理权限)
+            // 如果满足此条件，使用 goto 跳过后续检查，确保管理员绝对不受影响
+            $isPrivileged = in_array('container_manage_global', $permissionIds) || ($username === 'admin');
 
-        // 2. 学员模式检查
-        try {
-            $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmQueryName)->first();
-            if (!$vmRecord) return response()->json(['error' => 'VM not found'], 404);
-
-            // A. 禁赛检查
-            if ($this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
-                return response()->json(['error' => 'User is banned', 'message' => '您已被禁赛'], 403);
+            if ($isPrivileged) {
+                goto fetch_guac_params;
             }
 
-            // B. 队伍检查
-            $userTeamId = $tokenData['team_id'] ?? null;
-            if (!$userTeamId || $userTeamId != $vmRecord->c_team_id) {
-                return response()->json(['error' => 'Unauthorized', 'message' => '这不是你的虚拟机'], 403);
+            // ================= 安全补丁开始 =================
+            // 3. RBAC 功能权限检查
+            // 仅针对非特权用户：如果权限列表中没有 'vm_console'，直接拒绝
+            // 这对应前端“虚拟机控制台访问”权限点
+            if (!in_array('vm_console', $permissionIds)) {
+                return response()->json([
+                    'error' => 'Permission Denied',
+                    'message' => '您的角色未被授权访问虚拟机控制台 (vm_console)。'
+                ], 403);
             }
+            // ================= 安全补丁结束 =================
 
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'Server error'], 500);
-        }
-
-        fetch_guac_params:
-        try {
-            $xml = $this->runVirsh('dumpxml', $vmName);
-            $vncPort = $this->parseVncPort($xml) ?? 5900;
-        } catch (\Throwable $e) {
-            Log::error("Failed to parse VNC port from virsh for VM: {$vmName}", ['error' => $e->getMessage()]);
-            $vncPort = 5900;
-        }
-
-        $ip = null;
-        if ($method === 'vnc') {
-            $ip = '127.0.0.1';
+            // 4. 学员模式检查 (归属检查 + 禁赛检查)
             try {
-                $disp = trim($this->runVirsh('vncdisplay', $vmName));
-                if (preg_match('/:([0-9]+)$/', $disp, $m)) {
-                    $vncPort = 5900 + (int)$m[1];
-                }
-            } catch (\Throwable $e) {
-                Log::warning("Could not get VNC display for VM: {$vmName}", ['error' => $e->getMessage()]);
-            }
-        } else {
-            try {
-                $record = DB::table('c_scene_vm_instances')
-                    ->where('c_vm_name', $vmQueryName)
-                    ->first();
-                if ($record && $record->c_ip) {
-                    $ip = explode('/', $record->c_ip)[0];
-                }
-            } catch (\Throwable $e) {
-                Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
-            }
-        }
+                $vmRecord = DB::table('c_scene_vm_instances')->where('c_vm_name', $vmQueryName)->first();
+                if (!$vmRecord) return response()->json(['error' => 'VM not found'], 404);
 
-        return response()->json([
-            'host' => $ip ?? 'invalid',
-            'ssh_port' => 22,
-            'rdp_port' => 3389,
-            'vnc_port' => $vncPort,
-        ], 200);
-    }
+                // A. 禁赛检查
+                if ($this->checkUserBanForVm($username, $vmRecord->c_vm_id)) {
+                    return response()->json(['error' => 'User is banned', 'message' => '您已被禁赛'], 403);
+                }
+
+                // B. 队伍检查
+                $userTeamId = $tokenData['team_id'] ?? null;
+                if (!$userTeamId || $userTeamId != $vmRecord->c_team_id) {
+                    return response()->json(['error' => 'Unauthorized', 'message' => '这不是你的虚拟机'], 403);
+                }
+
+            } catch (\Exception $e) {
+                // 保持原有错误处理逻辑
+                return response()->json(['error' => 'Server error'], 500);
+            }
+
+            fetch_guac_params:
+            try {
+                $xml = $this->runVirsh('dumpxml', $vmName);
+                $vncPort = $this->parseVncPort($xml) ?? 5900;
+            } catch (\Throwable $e) {
+                Log::error("Failed to parse VNC port from virsh for VM: {$vmName}", ['error' => $e->getMessage()]);
+                $vncPort = 5900;
+            }
+
+            $ip = null;
+            if ($method === 'vnc') {
+                $ip = '127.0.0.1';
+                try {
+                    $disp = trim($this->runVirsh('vncdisplay', $vmName));
+                    if (preg_match('/:([0-9]+)$/', $disp, $m)) {
+                        $vncPort = 5900 + (int)$m[1];
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("Could not get VNC display for VM: {$vmName}", ['error' => $e->getMessage()]);
+                }
+            } else {
+                try {
+                    $record = DB::table('c_scene_vm_instances')
+                        ->where('c_vm_name', $vmQueryName)
+                        ->first();
+                    if ($record && $record->c_ip) {
+                        $ip = explode('/', $record->c_ip)[0];
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Failed to fetch VM IP from DB: ' . $e->getMessage());
+                }
+            }
+
+            return response()->json([
+                'host' => $ip ?? 'invalid',
+                'ssh_port' => 22,
+                'rdp_port' => 3389,
+                'vnc_port' => $vncPort,
+            ], 200);
+        }
 
     // GET /vms/{vm_id}
     public function getVmInfo($vmId)
