@@ -89,10 +89,15 @@ const ViewQuestionModal: React.FC<ViewQestionModalProps> = ({
                         )
                     }
                 </Box>
-                <Typography sx={{fontWeight:"bold"}}>
-                    答案：
+               <Typography sx={{fontWeight:"bold"}}>
+    答案：
                     {
-                        initialData.c_type == 4 ? ("*"): initialData.c_answer
+                        initialData.c_type == 4 ? 
+                            (initialData.c_answer === "*" || !initialData.c_answer || initialData.c_answer.trim() === "" ? 
+                                "（简答题答案需要人工批阅）" : 
+                                initialData.c_answer
+                            ) : 
+                            initialData.c_answer
                     }
                 </Typography>
             </DialogContent>

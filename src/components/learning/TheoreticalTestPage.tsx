@@ -93,6 +93,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   const [errorDetails, setErrorDetails] = useState<{ code?: number | string; message?: string; input?: any } | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string>('');
   const [hasObjectiveQuestions, setHasObjectiveQuestions] = useState<boolean>(false);
+  const [objectiveTotalScore, setObjectiveTotalScore] = useState<number>(0);
 
   const getCardBgColor = () => isDarkMode ? '#121212' : '#ffffff';
   const getTextColor = () => isDarkMode ? '#f0f0f0' : '#212121';
@@ -146,7 +147,6 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         setError(null);
         setErrorDetails(null);
 
-
         const res: ApiResponse = await theoryTestApi.getExamPaper(
           test.test_id,
           currentUsername,
@@ -188,6 +188,17 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
           q.type === 'single' || q.type === 'multiple' || q.type === 'judgment'
         );
         setHasObjectiveQuestions(hasObjective);
+
+        // 计算客观题总分（单选题、多选题、判断题） - 在这里计算
+        const objectiveScoreTotal = formattedPaper.questions.reduce((total, question) => {
+          // 判断是否为客观题
+          if (question.type === 'single' || question.type === 'multiple' || question.type === 'judgment') {
+            return total + (question.score || 0);
+          }
+          return total;
+        }, 0);
+        
+        setObjectiveTotalScore(objectiveScoreTotal); // 在这里设置客观题总分
 
         formattedPaper.questions.forEach((question, index) => {
           if (!question.id || !question.type || !question.content || !question.score) {
@@ -445,27 +456,149 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isAnswerCorrect = (question: PaperQuestion) => {
-    if (!question.answer || !answers[question.id] || test.c_type !== '练习') return false;
-    const userAnswer = answers[question.id];
-    const correctAnswer = question.answer;
+ const isAnswerCorrect = (question: PaperQuestion) => {
+  if (!question.answer || !answers[question.id] || test.c_type !== '练习') return false;
+  const userAnswer = answers[question.id];
+  const correctAnswer = question.answer;
 
-    if (question.type === 'single' || question.type === 'judgment') {
-      return userAnswer === correctAnswer;
+  // 对于简答题，不进行对错判断
+  if (question.type === 'text') {
+    return false; // 简答题不显示对错标记
+  }
+
+  // 添加调试日志
+  console.log('答案比较调试:', {
+    questionId: question.id,
+    questionType: question.type,
+    userAnswer,
+    correctAnswer,
+    options: question.options
+  });
+
+  switch (question.type) {
+    case 'single':
+      // 单选题：增强比较逻辑
+      return isAnswerCorrectForSingle(userAnswer, correctAnswer, question.options);
+    
+    case 'judgment':
+      // 判断题逻辑保持不变
+      const normalizeAnswer = (ans: any): string => {
+        const str = ans.toString().toLowerCase().trim();
+        if (['true', '1', '正确', '是', 'yes', 't'].includes(str)) return '正确';
+        if (['false', '0', '错误', '否', 'no', 'f'].includes(str)) return '错误';
+        return ans.toString();
+      };
+      return normalizeAnswer(userAnswer) === normalizeAnswer(correctAnswer);
+    
+    case 'multiple':
+      // 多选题：增强比较逻辑
+      return isAnswerCorrectForMultiple(userAnswer, correctAnswer, question.options);
+    
+    case 'text':
+      return false; // 简答题不判断对错
+    
+    default:
+      return false;
+  }
+};
+
+// 新增：单选题正确性判断辅助函数
+const isAnswerCorrectForSingle = (
+  userAnswer: string | string[],
+  correctAnswer: string | string[],
+  options?: Array<{ optionId: string; content: string }>
+): boolean => {
+  const userStr = userAnswer.toString();
+  const correctStr = correctAnswer.toString();
+  
+  // 1. 直接比较
+  if (userStr === correctStr) {
+    return true;
+  }
+  
+  // 2. 如果用户答案是 optionId，正确答案是选项内容
+  if (options) {
+    // 查找用户选择的选项
+    const selectedOption = options.find(opt => opt.optionId === userStr);
+    if (selectedOption && selectedOption.content === correctStr) {
+      return true;
     }
-
-    if (question.type === 'multiple') {
-      const userArr = Array.isArray(userAnswer) ? userAnswer : userAnswer.toString().split(';').filter(Boolean);
-      const correctArr = Array.isArray(correctAnswer) ? correctAnswer : correctAnswer.toString().split(';').filter(Boolean);
-      
-      return (
-        userArr.length === correctArr.length &&
-        userArr.every(ans => correctArr.includes(ans))
-      );
+    
+    // 3. 如果用户答案是选项内容，正确答案是 optionId
+    const correctOption = options.find(opt => opt.optionId === correctStr);
+    if (correctOption && correctOption.content === userStr) {
+      return true;
     }
+    
+    // 4. 用户答案可能是选项内容，正确答案也可能是选项内容
+    const userOptionByContent = options.find(opt => opt.content === userStr);
+    const correctOptionByContent = options.find(opt => opt.content === correctStr);
+    if (userOptionByContent && correctOptionByContent && 
+        userOptionByContent.optionId === correctOptionByContent.optionId) {
+      return true;
+    }
+  }
+  
+  return false;
+};
 
+// 新增：多选题正确性判断辅助函数
+const isAnswerCorrectForMultiple = (
+  userAnswer: string | string[],
+  correctAnswer: string | string[],
+  options?: Array<{ optionId: string; content: string }>
+): boolean => {
+  // 标准化用户答案（转为 optionId 数组）
+  let userIds: string[] = [];
+  if (Array.isArray(userAnswer)) {
+    userIds = userAnswer;
+  } else {
+    userIds = userAnswer.toString().split(';').filter(Boolean);
+  }
+  
+  // 标准化正确答案（转为 optionId 数组）
+  let correctIds: string[] = [];
+  if (Array.isArray(correctAnswer)) {
+    // 如果正确答案是数组，可能是 optionId 或内容
+    correctIds = correctAnswer.map(item => item.toString());
+  } else {
+    // 如果正确答案是字符串，按分号分割
+    const answerParts = correctAnswer.toString().split(';').filter(Boolean);
+    
+    if (options) {
+      // 尝试将每个部分转为 optionId
+      answerParts.forEach(part => {
+        // 先检查是否是 optionId
+        if (options.some(opt => opt.optionId === part)) {
+          correctIds.push(part);
+        } 
+        // 如果不是 optionId，尝试通过内容查找 optionId
+        else {
+          const option = options.find(opt => opt.content === part);
+          if (option) {
+            correctIds.push(option.optionId);
+          } else {
+            // 无法转换，保留原值
+            correctIds.push(part);
+          }
+        }
+      });
+    } else {
+      correctIds = answerParts;
+    }
+  }
+  
+  // 现在比较两个 optionId 数组
+  if (userIds.length !== correctIds.length) {
     return false;
-  };
+  }
+  
+  // 排序后比较
+  const sortedUserIds = [...userIds].sort();
+  const sortedCorrectIds = [...correctIds].sort();
+  
+  return sortedUserIds.every((id, index) => id === sortedCorrectIds[index]);
+};
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -805,12 +938,14 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
               {objectiveScore}
             </Typography>
             <Typography variant="h6" sx={{ color: getSecondaryTextColor(), ml: 1 }}>
-              / {paperData.totalScore} 分
+              / {objectiveTotalScore} 分  {/* 改为客观题总分 */}
             </Typography>
           </Box>
-          
+
           <Typography variant="body2" color={getSecondaryTextColor()} sx={{ mb: 2 }}>
-            正确题数: {correctCount} / {paperData.questionCount} 题
+            正确题数: {correctCount} / {paperData?.questions?.filter(q => 
+              q.type === 'single' || q.type === 'multiple' || q.type === 'judgment'
+            ).length || 0} 题  {/* 显示客观题数量 */}
           </Typography>
         </Box>
       )}
@@ -825,7 +960,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
         }}>
           <Typography variant="body2" sx={{ color: getSecondaryTextColor() }}>
             {hasObjectiveQuestions 
-              ? '主观题将在人工批改后更新总分，可在测试列表查看最终成绩'
+              ? `客观题得分：${objectiveScore}/${objectiveTotalScore}分。主观题将在人工批改后更新总分，可在测试列表查看最终成绩`
               : '试卷已提交，所有题目将进行人工批改，可在测试列表查看最终成绩'}
           </Typography>
         </Box>
@@ -864,7 +999,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
   </Box>
 )}
 
-      {view === 'test' && paperData && (
+          {view === 'test' && paperData && (
         <Box sx={{ 
           minHeight: '100vh',
           color: getTextColor(),
@@ -912,7 +1047,7 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
               />
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-               {test.c_type === '考试' && timeLeft !== null && (
+              {test.c_type === '考试' && timeLeft !== null && (
                 <Box sx={{ 
                   display: 'flex', 
                   alignItems: 'center',
@@ -1082,8 +1217,8 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                         value={answers[paperData.questions[currentQuestionIndex].id] || ''}
                         onChange={(e) => handleAnswerChange(paperData.questions[currentQuestionIndex].id, e.target.value)}
                       >
-                        <FormControlLabel value="true" control={<Radio disabled={submitted} />} label="正确" />
-                        <FormControlLabel value="false" control={<Radio disabled={submitted} />} label="错误" />
+                        <FormControlLabel value="正确" control={<Radio disabled={submitted} />} label="正确" />
+                        <FormControlLabel value="错误" control={<Radio disabled={submitted} />} label="错误" />
                       </RadioGroup>
                     </FormControl>
                   )}
@@ -1103,41 +1238,213 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
                   )}
 
                   {test.c_type === '练习' && submitted && paperData.questions[currentQuestionIndex].answer && (
-                    <Box sx={{ mt: 3, p: 2, backgroundColor: isDarkMode ? '#2e2e2e' : '#f5f5f5', borderRadius: 1 }}>
-                      <Typography variant="body2" sx={{ color: getSecondaryTextColor(), mb: 1 }}>
-                        参考答案：
-                      </Typography>
-                      <Typography variant="body1" sx={{ color: isAnswerCorrect(paperData.questions[currentQuestionIndex]) ? getSuccessColor() : getErrorColor() }}>
-                        {Array.isArray(paperData.questions[currentQuestionIndex].answer)
-                          ? paperData.questions[currentQuestionIndex].answer.join('; ')
-                          : paperData.questions[currentQuestionIndex].answer}
-                      </Typography>
-                      {isAnswerCorrect(paperData.questions[currentQuestionIndex]) && (
-                        <CheckCircleIcon sx={{ color: getSuccessColor(), ml: 1, verticalAlign: 'middle' }} />
-                      )}
-                    </Box>
-                  )}
+                          <Box sx={{ 
+                            mt: 3, 
+                            p: 2, 
+                            borderRadius: 1,
+                            border: `1px solid ${
+                              paperData.questions[currentQuestionIndex].type === 'text' 
+                                ? (isDarkMode ? '#444' : '#e0e0e0')
+                                : isAnswerCorrect(paperData.questions[currentQuestionIndex]) 
+                                  ? getSuccessColor() 
+                                  : getErrorColor()
+                            }`,
+                            backgroundColor: paperData.questions[currentQuestionIndex].type === 'text'
+                              ? (isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)')
+                              : isAnswerCorrect(paperData.questions[currentQuestionIndex]) 
+                                ? (isDarkMode ? 'rgba(76, 175, 80, 0.08)' : 'rgba(76, 175, 80, 0.04)')
+                                : (isDarkMode ? 'rgba(239, 83, 80, 0.08)' : 'rgba(239, 83, 80, 0.04)')
+                          }}>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between',
+                              mb: 1 
+                            }}>
+                              <Typography variant="body2" sx={{ 
+                                color: getSecondaryTextColor(),
+                                fontWeight: 'medium'
+                              }}>
+                                参考答案：
+                              </Typography>
+                              
+                              {paperData.questions[currentQuestionIndex].type !== 'text' && (
+                                isAnswerCorrect(paperData.questions[currentQuestionIndex]) ? (
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2" sx={{ 
+                                      color: getSuccessColor(),
+                                      mr: 0.5
+                                    }}>
+                                      正确
+                                    </Typography>
+                                    <CheckCircleIcon sx={{ color: getSuccessColor(), fontSize: 16 }} />
+                                  </Box>
+                                ) : (
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2" sx={{ 
+                                      color: getErrorColor(),
+                                      mr: 0.5
+                                    }}>
+                                      错误
+                                    </Typography>
+                                    <ErrorIcon sx={{ color: getErrorColor(), fontSize: 16 }} />
+                                  </Box>
+                                )
+                              )}
+                              
+                              {paperData.questions[currentQuestionIndex].type === 'text' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography variant="body2" sx={{ 
+                                    color: getSecondaryTextColor(),
+                                    mr: 0.5,
+                                    fontSize: '0.8rem'
+                                  }}>
+                                    简答题
+                                  </Typography>
+                                  <HelpIcon sx={{ color: getSecondaryTextColor(), fontSize: 16 }} />
+                                </Box>
+                              )}
+                            </Box>
+                            
+                            {/* 显示参考答案 */}
+                            <Typography variant="body1" sx={{ 
+                              color: getTextColor(),
+                              fontWeight: 500,
+                              p: 1,
+                              borderRadius: 0.5,
+                              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
+                            }}>
+                              {(() => {
+                                const answer = paperData.questions[currentQuestionIndex].answer;
+                                const questionType = paperData.questions[currentQuestionIndex].type;
+                                
+                                if (questionType === 'single') {
+                                  const option = paperData.questions[currentQuestionIndex].options?.find(
+                                    opt => opt.optionId === answer
+                                  );
+                                  
+                                  if (option) {
+                                    return option.content;
+                                  } else {
+                                    const optionByContent = paperData.questions[currentQuestionIndex].options?.find(
+                                      opt => opt.content === answer
+                                    );
+                                    return optionByContent ? optionByContent.content : answer;
+                                  }
+                                  
+                                } else if (questionType === 'multiple') {
+                                  const answerArr = Array.isArray(answer) ? answer : answer.toString().split(';').filter(Boolean);
+                                  const options = paperData.questions[currentQuestionIndex].options || [];
+                                  
+                                  if (answerArr.length === 0) {
+                                    return '无参考答案';
+                                  }
+                                  
+                                  const selectedOptionsById = options.filter(opt => answerArr.includes(opt.optionId));
+                                  if (selectedOptionsById.length > 0) {
+                                    return selectedOptionsById.map(opt => opt.content).join('; ');
+                                  }
+                                  
+                                  const selectedOptionsByContent = options.filter(opt => answerArr.includes(opt.content));
+                                  if (selectedOptionsByContent.length > 0) {
+                                    return selectedOptionsByContent.map(opt => opt.content).join('; ');
+                                  }
+                                  
+                                  return Array.isArray(answer) ? answer.join('; ') : answer;
+                                  
+                                } else if (questionType === 'judgment') {
+                                  if (answer === 'true' || answer === '1' || answer === '正确' || answer === '是') {
+                                    return '正确';
+                                  } else if (answer === 'false' || answer === '0' || answer === '错误' || answer === '否') {
+                                    return '错误';
+                                  } else {
+                                    return answer;
+                                  }
+                                  
+                                } else if (questionType === 'text') {
+                                  return Array.isArray(answer) ? answer.join('; ') : (answer || '无参考答案');
+                                  
+                                } else {
+                                  return Array.isArray(answer) ? answer.join('; ') : answer;
+                                }
+                              })()}
+                            </Typography>
+                            
+                            {/* 显示用户答案 - 简答题总是显示，其他题型只在错误时显示 */}
+                            <Box sx={{ 
+                              mt: 2, 
+                              pt: 2, 
+                              borderTop: `1px dashed ${isDarkMode ? '#444' : '#e0e0e0'}` 
+                            }}>
+                              <Typography variant="body2" sx={{ 
+                                color: getSecondaryTextColor(),
+                                mb: 0.5,
+                                fontWeight: 'medium'
+                              }}>
+                                您的答案：
+                              </Typography>
+                              
+                              <Typography variant="body1" sx={{ 
+                                color: paperData.questions[currentQuestionIndex].type === 'text' 
+                                  ? getTextColor() 
+                                  : (isAnswerCorrect(paperData.questions[currentQuestionIndex]) ? getSuccessColor() : getErrorColor()),
+                                fontWeight: 500,
+                                p: 1,
+                                borderRadius: 0.5,
+                                backgroundColor: paperData.questions[currentQuestionIndex].type === 'text'
+                                  ? (isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)')
+                                  : (isAnswerCorrect(paperData.questions[currentQuestionIndex])
+                                    ? (isDarkMode ? 'rgba(76, 175, 80, 0.08)' : 'rgba(76, 175, 80, 0.04)')
+                                    : (isDarkMode ? 'rgba(239, 83, 80, 0.1)' : 'rgba(239, 83, 80, 0.05)'))
+                              }}>
+                                {(() => {
+                                  const userAnswer = answers[paperData.questions[currentQuestionIndex].id];
+                                  const questionType = paperData.questions[currentQuestionIndex].type;
+                                  
+                                  if (!userAnswer) return '未作答';
+                                  
+                                  if (questionType === 'single') {
+                                    const option = paperData.questions[currentQuestionIndex].options?.find(
+                                      opt => opt.optionId === userAnswer
+                                    );
+                                    return option ? option.content : userAnswer;
+                                  } else if (questionType === 'multiple') {
+                                    const userArr = Array.isArray(userAnswer) ? userAnswer : userAnswer.toString().split(';').filter(Boolean);
+                                    const options = paperData.questions[currentQuestionIndex].options || [];
+                                    const selectedOptions = options.filter(opt => userArr.includes(opt.optionId));
+                                    return selectedOptions.map(opt => opt.content).join('; ');
+                                  } else if (questionType === 'judgment') {
+                                    return userAnswer === 'true' ? '正确' : (userAnswer === 'false' ? '错误' : userAnswer);
+                                  } else {
+                                    return Array.isArray(userAnswer) ? userAnswer.join('; ') : userAnswer.toString();
+                                  }
+                                })()}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
+                  
+                  {/* 上下题按钮 */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                    <Button
+                      variant="outlined"
+                      disabled={currentQuestionIndex === 0}
+                      onClick={handlePrevQuestion}
+                      sx={{ color: getButtonColor(), borderColor: getButtonColor() }}
+                    >
+                      上一题
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      disabled={paperData && currentQuestionIndex === paperData.questions.length - 1}
+                      onClick={handleNextQuestion}
+                      sx={{ color: getButtonColor(), borderColor: getButtonColor() }}
+                    >
+                      下一题
+                    </Button>
+                  </Box>
                 </Paper>
               )}
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                <Button
-                  variant="outlined"
-                  disabled={currentQuestionIndex === 0}
-                  onClick={handlePrevQuestion}
-                  sx={{ color: getButtonColor(), borderColor: getButtonColor() }}
-                >
-                  上一题
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={paperData && currentQuestionIndex === paperData.questions.length - 1}
-                  onClick={handleNextQuestion}
-                  sx={{ color: getButtonColor(), borderColor: getButtonColor() }}
-                >
-                  下一题
-                </Button>
-              </Box>
             </Box>
           </Box>
         </Box>
@@ -1157,15 +1464,8 @@ const TheoreticalTestPage = ({ test, onBack, theoryTestApi, mapFrontendTypeToBac
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+ </Box> 
   );
 };
 
 export default TheoreticalTestPage;
-
-
-
-
-
-    
-    

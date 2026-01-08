@@ -95,7 +95,7 @@ class QuestionsOptionsModel extends Model{
         return false;
     }
 }
-    /**
+        /**
      * Notes:通过题目id删除选项
      * User: zhangnan
      * DateTime: 2025/7/10 16:44
@@ -104,12 +104,19 @@ class QuestionsOptionsModel extends Model{
      */
     public function del_question_options_info($c_question_id="")
     {
-        $mod = new QuestionsOptionsModel();
-        $res = $mod->where('c_question_id',$c_question_id)->delete();
-        if(!$res){
+        try {
+            $mod = new QuestionsOptionsModel();
+            $res = $mod->where('c_question_id', $c_question_id)->delete();
+            
+            // 删除成功或没有数据都返回 true
+            // $res 可能是整数（删除的行数）或布尔值
+            // 对于没有数据的情况，delete() 可能返回 0
+            return $res !== false;  // 只要不是 false 就返回 true
+            
+        } catch (\Exception $e) {
+            DLOG("[{$e->getLine()}]{$e->getMessage()}", 'error', 'question_log');
             return false;
         }
-        return true;
     }
 
 

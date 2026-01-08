@@ -34,6 +34,7 @@ import ConfirmActionDialog from "@/components/scenario/ConfirmActionDialog";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Download as DownloadIcon } from "@mui/icons-material";
+import LinearProgress from '@mui/material/LinearProgress';
 
 import { apiClientWithToken } from "@/utils/axios";
 import QuestionModalForm, { QuestionFormData, QuestionDisplayItem, SelectOption } from "@/components/learning/QuestionModalForm";
@@ -75,6 +76,9 @@ const QuestionPage: React.FC = () => {
   const [importLoading, setImportLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isSavingQuestion, setIsSavingQuestion] = useState<boolean>(false);
+  const [saveProgress, setSaveProgress] = useState<number>(0);
+  const [saveProgressMessage, setSaveProgressMessage] = useState<string>('');
 
 
 
@@ -182,30 +186,49 @@ const QuestionPage: React.FC = () => {
     setQuesionToEdit(null);
   }
 
-  const confirmDeleteQuestion = () => {
-    setIsConfirmDeleteOpen(false);
-    apiClientWithToken.post("/back/api/study/test/question_del", JSON.stringify({ id: questionToDelete?.c_id })).then(res => {
-      if (res.data.code === 200) {
-        toast.success(`删除题目 ${questionToDelete?.c_id} 成功`, {
-          autoClose: 3000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          position: "top-right"
-        });
-        setPage(1);
-        getQuestionData(1, rowsPerPage);
+  const confirmDeleteQuestion = async () => {
+  setIsConfirmDeleteOpen(false);
+  
+  if (!questionToDelete?.c_id) return;
+  
+  setIsProcessing(true); // 复用已有的 isProcessing 状态
+  
+  try {
+    const response = await apiClientWithToken.post("/back/api/study/test/question_del", JSON.stringify({ id: questionToDelete.c_id }));
+    
+    if (response.data.code === 200) {
+      toast.success(`删除题目 ${questionToDelete.c_id} 成功`, {
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        position: "top-right"
+      });
+      
+      setPage(1);
+      
+      if (searchTerm.data.trim() && searchTerm.flag) {
+        await getQuestionDataByName(1, rowsPerPage, searchTerm.data);
       } else {
-        toast.error(`删除题目 ${questionToDelete?.c_id} 失败`, {
-          autoClose: 3000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          position: "top-right"
-        });
+        await getQuestionData(1, rowsPerPage);
       }
+      
+    } else {
+      throw new Error(response.data.message || '删除失败');
+    }
+    
+  } catch (error: any) {
+    toast.error(`删除题目 ${questionToDelete.c_id} 失败: ${error.message}`, {
+      autoClose: 3000,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      position: "top-right"
     });
-  };
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage + 1);
@@ -420,70 +443,117 @@ const QuestionPage: React.FC = () => {
    * 功能实现结束
    */
 
-  const handelSaveQuestion = (data: QuestionFormData, isNew: boolean) => {
-    var requestData = {
+  const handelSaveQuestion = async (data: QuestionFormData, isNew: boolean) => {
+  setIsSavingQuestion(true);
+  setSaveProgress(10);
+  setSaveProgressMessage('正在准备保存数据...');
+  
+  try {
+    // 修复：简答题的答案应该使用实际的答案内容，而不是硬编码的"*"
+    const requestData = {
       id: data.id,
       question: data.question,
       course_id: data.courseName,
-      answer: data.type === 4 ? "*" : data.answer,
+      answer: data.answer, // 直接使用表单中的答案，无论什么题型
       type: parseInt(data.type),
       tag: Array2String(data.tags),
       content: data.options,
     };
+
+    setSaveProgress(30);
+    setSaveProgressMessage('正在连接服务器...');
+
+    let apiUrl = "";
+    let successMessage = "";
+    let operationType = isNew ? "添加" : "修改";
+
     if (isNew) {
-      apiClientWithToken.post("/back/api/study/test/question_add", JSON.stringify(requestData)).then(res => {
-        if (res.data.code === 200) {
-          setQuestionsCount(prev => prev + 1)
-          toast.success(`添加题目 ${requestData.id} ${res.data.message}`, {
-            autoClose: 3000,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            position: "top-right"
-          });
-        } else {
-          toast.error(`添加题目 ${requestData.id} ${res.data.message}`, {
-            autoClose: 3000,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            position: "top-right"
-          });
-        }
-      });
+      apiUrl = "/back/api/study/test/question_add";
+      successMessage = `添加题目 ${requestData.id}`;
     } else {
-      apiClientWithToken.post("/back/api/study/test/question_up", JSON.stringify(requestData)).then(res => {
-        if (res.data.code === 200) {
-          const newQuestion = questions.map(item => item.c_id === data.id ? {
-            c_id: requestData.id,
-            c_question: requestData.question,
-            c_type: requestData.type as number,
-            c_course_id: requestData.course_id,
-            c_tag: requestData.tag,
-            c_answer: requestData.answer,
-            c_create_at: new Date().toLocaleDateString(),
-            connect: requestData.content
-          } : item);
-          setQuestions(newQuestion);
-          toast.success(`修改题目 ${requestData.id} ${res.data.message}`, {
-            autoClose: 3000,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            position: "top-right"
-          });
-        } else {
-          toast.error(`修改题目 ${requestData.id} ${res.data.message}`, {
-            autoClose: 3000,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            position: "top-right"
-          });
-        }
-      })
+      apiUrl = "/back/api/study/test/question_up";
+      successMessage = `修改题目 ${requestData.id}`;
     }
+
+
+    setSaveProgress(50);
+    setSaveProgressMessage(`正在${operationType}题目数据...`);
+
+    const response = await apiClientWithToken.post(apiUrl, JSON.stringify(requestData));
+    
+    setSaveProgress(80);
+    setSaveProgressMessage(`正在处理服务器响应...`);
+
+    const res = response.data;
+    
+    if (res.code === 200) {
+      setSaveProgress(100);
+      setSaveProgressMessage(`${operationType}题目成功！`);
+      
+      if (isNew) {
+        setQuestionsCount(prev => prev + 1);
+        toast.success(`${successMessage} ${res.message}`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
+      } else {
+        const newQuestion = questions.map(item => item.c_id === data.id ? {
+          c_id: requestData.id,
+          c_question: requestData.question,
+          c_type: requestData.type as number,
+          c_course_id: requestData.course_id,
+          c_tag: requestData.tag,
+          c_answer: requestData.answer,
+          c_create_at: new Date().toLocaleDateString(),
+          connect: requestData.content
+        } : item);
+        setQuestions(newQuestion);
+        toast.success(`${successMessage} ${res.message}`, {
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          position: "top-right"
+        });
+      }
+
+      // 延迟关闭进度条和模态框
+      setTimeout(() => {
+        setIsSavingQuestion(false);
+        setSaveProgress(0);
+        setSaveProgressMessage('');
+        setIsQuestionModalOpen(false); // 先关闭模态框
+        
+        // 然后刷新数据
+        if (searchTerm.data.trim() && searchTerm.flag) {
+          getQuestionDataByName(page, rowsPerPage, searchTerm.data);
+        } else {
+          getQuestionData(page, rowsPerPage);
+        }
+      }, 1000);
+      
+    } else {
+      throw new Error(res.message || `${operationType}题目失败`);
+    }
+
+  } catch (error: any) {
+    setIsSavingQuestion(false);
+    setSaveProgress(0);
+    setSaveProgressMessage('');
+    
+    const operationType = isNew ? "添加" : "修改";
+    toast.error(`${operationType}题目失败: ${error.message}`, {
+      autoClose: 3000,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      position: "top-right"
+    });
   }
+};
 
   const filteredAndSortedQuestions = useMemo(() => {
     let processedpermissions = [...questions].sort((a, b) => {
@@ -503,7 +573,56 @@ const QuestionPage: React.FC = () => {
   };
 
   return (
-    <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
+  <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 } }}>
+    {/* 进度条遮罩层 */}
+    {(isSavingQuestion || importLoading) && (
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+        }}
+      >
+        <Box
+          sx={{
+            backgroundColor: 'white',
+            padding: 3,
+            borderRadius: 2,
+            minWidth: 300,
+            textAlign: 'center',
+          }}
+        >
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {isSavingQuestion ? '保存题目中...' : '导入题目中...'}
+          </Typography>
+          
+          <Box sx={{ width: '100%', mb: 2 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={isSavingQuestion ? saveProgress : undefined} 
+              sx={{ height: 10, borderRadius: 5 }}
+            />
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary">
+            {isSavingQuestion ? saveProgressMessage : '正在处理文件，请勿关闭窗口...'}
+          </Typography>
+          
+          {isSavingQuestion && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              {saveProgress}% 完成
+            </Typography>
+          )}
+        </Box>
+      </Box>
+    )}
       <Typography variant="h4" component={'h1'} gutterBottom>
         题库管理
       </Typography>
@@ -689,12 +808,17 @@ const QuestionPage: React.FC = () => {
 
       {/* 编辑试题modal */}
 
-      <QuestionModalForm
-        open={isQuestionsModalOpen}
-        onSave={handelSaveQuestion}
-        onClose={() => setIsQuestionModalOpen(false)}
-        initialQuestion={questionToEdit}
-      />
+     <QuestionModalForm
+    open={isQuestionsModalOpen}
+    onSave={handelSaveQuestion}
+    onClose={() => {
+        if (!isSavingQuestion) { // 只在非保存状态下允许关闭
+            setIsQuestionModalOpen(false);
+        }
+    }}
+    initialQuestion={questionToEdit}
+    isSaving={isSavingQuestion} // 传递保存状态
+/>
 
       <Dialog
         open={isProcessing}
@@ -731,6 +855,7 @@ const QuestionPage: React.FC = () => {
           title="确认删除题目"
           message={`您确定要删除试题 "${questionToDelete?.c_id}" 吗？此操作无法撤销。`}
           onConfirm={confirmDeleteQuestion}
+          isProcessing={isProcessing} // 添加这个prop
         />
       )}
     </Paper >

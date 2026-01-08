@@ -63,6 +63,7 @@ export type QuestionModalProps = {
     onClose: () => void;
     onSave: (data: QuestionFormData, isNew: boolean) => void;
     initialQuestion: QuestionDisplayItem | null;
+    isSaving?: boolean; 
 };
 
 const QuestionModalForm: React.FC<QuestionModalProps> = ({
@@ -70,6 +71,7 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
     onClose,
     onSave,
     initialQuestion,
+    isSaving = false,
 }) => {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
@@ -182,6 +184,12 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         { value: 4, label: '主观题' },
     ];
 
+    // 判断题选项
+    const trueFalseOptions = [
+        { value: '正确', label: '正确' },
+        { value: '错误', label: '错误' },
+    ];
+
     // 输入变化处理
     const handleInputChange = (field: keyof QuestionFormData, value: string) => {
         setFormData({ ...formData, [field]: value });
@@ -291,13 +299,19 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
 
     // 提交表单
     const handleSubmit = () => {
+        if (isSaving) return; // 防止重复提交
+        
         if (validateForm()) {
-            formData.options = formData.options.map(opt => {
-                const newOpt = { key: opt.c_id, option: opt.c_content }
-                return newOpt;
-            })
-            onSave(formData, isNew);
-            onClose();
+            const processedData = {
+                ...formData,
+                options: formData.options.map(opt => ({
+                    key: opt.c_id,
+                    option: opt.c_content
+                }))
+            };
+            
+            // 注意：这里不再调用 onClose()，让父组件控制模态框关闭
+            onSave(processedData, isNew);
         }
     };
 
@@ -312,6 +326,97 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
         
         // 如果没有找到匹配的课程，返回一个占位对象或null
         return null;
+    };
+
+    // 渲染答案字段
+    const renderAnswerField = () => {
+        switch (formData.type) {
+             case 1: // 单选题
+                return (
+                    <TextField
+                        fullWidth
+                        label="答案"
+                        value={formData.answer}
+                        onChange={(e) => handleInputChange('answer', e.target.value)}
+                        error={!!errors.answer}
+                        helperText={errors.answer || "请输入描述中的内容"}
+                        multiline
+                        rows={2}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mb: 2 }}
+                    />
+                );
+            case 2: // 多选题
+                return (
+                    <TextField
+                        fullWidth
+                        label="答案"
+                        value={formData.answer}
+                        onChange={(e) => handleInputChange('answer', e.target.value)}
+                        error={!!errors.answer}
+                        helperText={errors.answer || "请输入描述中的内容，多个答案请用英文输入法下分号隔开，如1;2"}
+                        multiline
+                        rows={2}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mb: 2 }}
+                    />
+                );
+            
+            case 3: // 判断题
+                return (
+                    <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
+                        <InputLabel id="true-false-select-label">答案</InputLabel>
+                        <Select
+                            labelId="true-false-select-label"
+                            value={formData.answer}
+                            onChange={(e) => handleInputChange('answer', e.target.value)}
+                            label="答案"
+                            error={!!errors.answer}
+                        >
+                            {trueFalseOptions.map((opt) => (
+                                <MenuItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        {errors.answer && <FormHelperText error>{errors.answer}</FormHelperText>}
+                    </FormControl>
+                );
+            
+            case 4: // 主观题
+                return (
+                    <TextField
+                        fullWidth
+                        label="答案"
+                        value={formData.answer}
+                        onChange={(e) => handleInputChange('answer', e.target.value)}
+                        error={!!errors.answer}
+                        helperText="主观题答案，如无标准答案可填写*"
+                        multiline
+                        rows={3}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mb: 2 }}
+                    />
+                );
+            
+            default: // 单选题和其他类型
+                return (
+                    <TextField
+                        fullWidth
+                        label="答案"
+                        value={formData.answer}
+                        onChange={(e) => handleInputChange('answer', e.target.value)}
+                        error={!!errors.answer}
+                        helperText={errors.answer}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mb: 2 }}
+                    />
+                );
+        }
     };
 
     return (
@@ -387,24 +492,8 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                         </Box>
                     )}
 
-                    {/* 答案 */}
-                    {
-                        !['essay'].includes(formData.type) && (
-                            <TextField
-                                fullWidth
-                                label="答案"
-                                value={formData.answer}
-                                onChange={(e) => handleInputChange('answer', e.target.value)}
-                                error={!!errors.answer}
-                                helperText={errors.answer}
-                                multiline
-                                rows={2}
-                                variant="outlined"
-                                size="small"
-                                sx={{ mb: 2 }}
-                            />
-                        )
-                    }
+                    {/* 答案 - 根据题型显示不同的输入方式 */}
+                    {renderAnswerField()}
 
                     {/* 标签管理 */}
                     <Box mb={2}>
@@ -501,11 +590,20 @@ const QuestionModalForm: React.FC<QuestionModalProps> = ({
                 </Box>
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose} color="secondary">
+                <Button 
+                    onClick={onClose} 
+                    color="secondary"
+                    disabled={isSaving} // 添加禁用状态
+                >
                     取消
                 </Button>
-                <Button onClick={handleSubmit} variant="contained" color="primary">
-                    {isNew ? '添加' : '保存'}
+                <Button 
+                    onClick={handleSubmit} 
+                    variant="contained" 
+                    color="primary"
+                    disabled={isSaving} // 添加禁用状态
+                >
+                    {isSaving ? '保存中...' : (isNew ? '添加' : '保存')} 
                 </Button>
             </DialogActions>
         </Dialog>
