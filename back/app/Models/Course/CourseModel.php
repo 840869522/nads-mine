@@ -147,6 +147,11 @@ class CourseModel
                 ->pluck('c_course_id')
                 ->toArray();
 
+            // 确保 $existingCourses 是数组
+            if (!is_array($existingCourses)) {
+                $existingCourses = [];
+            }
+            
             $sequenceNumbers = array_map(function ($courseId) {
                 return (int) substr($courseId, -3);
             }, $existingCourses);
@@ -251,6 +256,12 @@ class CourseModel
                     ->where('c_category_id', $data['c_category_id'])
                     ->pluck('c_course_id')
                     ->toArray();
+                    
+                // 确保 $existingCourses 是数组
+                if (!is_array($existingCourses)) {
+                    $existingCourses = [];
+                }
+                
                 $sequenceNumbers = array_map(function ($courseId) {
                     return (int) substr($courseId, -3);
                 }, $existingCourses);

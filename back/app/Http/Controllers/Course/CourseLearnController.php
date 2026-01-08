@@ -6,6 +6,8 @@ use App\Models\Course\CourseLearnModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use App\Utils\JWTControll;
+use Illuminate\Support\Facades\Cache;
 
 class CourseLearnController extends Controller
 {
@@ -31,7 +33,32 @@ class CourseLearnController extends Controller
             $keyword = $request->query('keyword');
             $category_id = $request->query('c_category_id');
 
-            $modelRes = CourseLearnModel::getAllCourses($page, $pageSize, $keyword, $category_id);
+            // 获取当前用户信息
+            $authHeader = $request->header("Authorization");
+            $username = null;
+            $userRoles = [];
+            
+            if ($authHeader) {
+                $jwtResult = JWTControll::decodeJWT($authHeader);
+                if ($jwtResult["err"] === null && isset($jwtResult["data"]["id"])) {
+                    $username = $jwtResult["data"]["id"];
+                    $userRoles = $jwtResult["data"]["role"] ?? [];
+                    
+                    // 如果有权限缓存，也获取权限信息
+                    if (isset($jwtResult["data"]["permission"])) {
+                        $cachedData = Cache::get($jwtResult["data"]["permission"]);
+                        if ($cachedData) {
+                            $userPermissions = array_map(function($item) {
+                                if (is_object($item)) return (string)$item->c_id;
+                                if (is_array($item)) return (string)($item['c_id'] ?? '');
+                                return is_string($item) ? $item : '';
+                            }, $cachedData);
+                        }
+                    }
+                }
+            }
+
+            $modelRes = CourseLearnModel::getAllCourses($page, $pageSize, $keyword, $category_id, $username, $userRoles);
             return response()->json($modelRes, $modelRes['code'] == 200 ? 200 : 500);
         } catch (\Exception $e) {
             Log::error('[CONTROLLER] CourseLearnController::index: ' . $e->getMessage(), [

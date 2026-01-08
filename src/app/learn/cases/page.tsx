@@ -34,6 +34,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import Pagination from '@mui/material/Pagination';
 import SecurityIcon from '@mui/icons-material/Security';
+import LinearProgress from '@mui/material/LinearProgress';
 
 import { CourseCase, CourseCaseResource, Category, Experiment, CourseCaseResourceFormat } from '@/types';
 import CourseCaseFormModal from '@/components/coursecases/CourseCaseFormModal';
@@ -100,6 +101,9 @@ const CourseCasesPage: React.FC = () => {
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [alertSeverity, setAlertSeverity] = useState<'error' | 'success' | 'info'>('error');
   const [isSavingCourse, setIsSavingCourse] = useState(false);
+  const [isDeletingCourse, setIsDeletingCourse] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
 
   useEffect(() => {
     const debouncedFetchData = debounce(async () => {
@@ -407,6 +411,8 @@ const CourseCasesPage: React.FC = () => {
 
   const handleSaveCourseCase = async (savedCase: CourseCase) => {
   setIsSavingCourse(true);
+  setProgress(0);
+  setProgressMessage('开始保存课程...');
   
   try {
     const { c_course_id, c_course_name, c_description, c_category_id, c_status, resources } = savedCase;
@@ -416,12 +422,17 @@ const CourseCasesPage: React.FC = () => {
       throw new Error('未登录，请先登录');
     }
 
-
     let finalCourseId = c_course_id;
     let operationType = editingCase ? '更新' : '创建';
     
     // 1. 保存课程基本信息
+    setProgress(10);
+    setProgressMessage('正在保存课程基本信息...');
+    
     if (editingCase) {
+      // 更新逻辑
+      setProgress(30);
+      setProgressMessage('课程基本信息已更新...');
       
       const updateResponse = await apiClientWithToken.put(
         `/back/api/study/courses/${c_course_id}`, 
@@ -439,17 +450,33 @@ const CourseCasesPage: React.FC = () => {
       const updateData = updateResponse.data;
       
       if (updateData.code !== 200) {
-        throw new Error(`更新课程失败: ${updateData.message || '未知错误'}`);
+        let errorMessage = `更新课程失败: ${updateData.message || '未知错误'}`;
+        if (updateData.errors) {
+          if (updateData.errors.c_course_name && 
+              updateData.errors.c_course_name.some((msg: string) => msg.toLowerCase().includes('unique') || msg.includes('已存在'))) {
+            errorMessage = '更新课程失败: 课程名称不能重复';
+          } else {
+            const allErrors = Object.entries(updateData.errors)
+              .map(([field, messages]) => {
+                let fieldName = field;
+                if (field === 'c_course_name') fieldName = '课程名称';
+                else if (field === 'c_category_id') fieldName = '课程分类';
+                else if (field === 'c_description') fieldName = '课程描述';
+                else if (field === 'c_status') fieldName = '课程状态';
+                
+                return `${fieldName}: ${(messages as string[]).join(', ')}`;
+              })
+              .join('; ');
+            errorMessage = `更新课程失败: ${allErrors}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       // 关键：更新后尝试获取新的课程ID
-      // 方法1：从响应数据中获取
       if (updateData.data?.c_course_id) {
         finalCourseId = updateData.data.c_course_id;
-      } 
-      // 方法2：如果响应中没有，重新查询课程列表
-      else {
-        
+      } else {
         // 根据课程名称重新查询课程ID
         const searchResponse = await apiClientWithToken.get(
           `/back/api/study/courses`,
@@ -465,21 +492,18 @@ const CourseCasesPage: React.FC = () => {
         
         const searchData = searchResponse.data;      
         if (searchData.code === 200 && searchData.data?.courses?.length > 0) {
-          // 找到匹配的课程
           const matchingCourse = searchData.data.courses.find(
             (course: any) => course.c_course_name === c_course_name
           );
           
           if (matchingCourse) {
             finalCourseId = matchingCourse.c_course_id;
-          } else {
           }
         }
       }
       
       // 更新本地状态（使用新ID）
       if (finalCourseId !== c_course_id) {
-        
         // 从列表中移除旧的，添加新的
         setCourseCases(prev => {
           const filtered = prev.filter(course => course.c_course_id !== c_course_id);
@@ -513,6 +537,8 @@ const CourseCasesPage: React.FC = () => {
       }
     } else {
       // 创建课程的逻辑
+      setProgress(30);
+      setProgressMessage('课程基本信息已创建...');
       
       const createResponse = await apiClientWithToken.post(
         `/back/api/study/courses`, 
@@ -530,7 +556,26 @@ const CourseCasesPage: React.FC = () => {
       const createData = createResponse.data;
       
       if (createData.code !== 201) {
-        throw new Error(`创建课程失败: ${createData.message || '未知错误'}`);
+        let errorMessage = `创建课程失败: ${createData.message || '未知错误'}`;
+        if (createData.errors) {
+          if (createData.errors.c_course_name && 
+              createData.errors.c_course_name.some((msg: string) => msg.toLowerCase().includes('unique') || msg.includes('已存在'))) {
+            errorMessage = '创建课程失败: 课程名称不能重复';
+          } else {
+            const allErrors = Object.entries(createData.errors)
+              .map(([field, messages]) => {
+                let fieldName = field;
+                if (field === 'c_course_name') fieldName = '课程名称';
+                else if (field === 'c_category_id') fieldName = '课程分类';
+                else if (field === 'c_description') fieldName = '课程描述';
+                
+                return `${fieldName}: ${(messages as string[]).join(', ')}`;
+              })
+              .join('; ');
+            errorMessage = `创建课程失败: ${allErrors}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       if (!createData.data || !createData.data.c_course_id) {
@@ -542,6 +587,8 @@ const CourseCasesPage: React.FC = () => {
     }
 
     // 2. 验证课程是否存在
+    setProgress(40);
+    setProgressMessage('正在验证课程信息...');
     
     try {
       const verifyResponse = await apiClientWithToken.get(
@@ -557,7 +604,6 @@ const CourseCasesPage: React.FC = () => {
         throw new Error(`课程验证失败: ${verifyData.message || '未知错误'}`);
       }
     } catch (verifyError: any) {
-      
       // 如果是404，说明课程确实不存在
       if (verifyError.response?.status === 404) {
         throw new Error(`课程ID ${finalCourseId} 不存在，无法上传资源`);
@@ -573,12 +619,16 @@ const CourseCasesPage: React.FC = () => {
     let failMessages: string[] = [];
 
     if (newResources.length > 0) {
+      setProgress(50);
+      setProgressMessage(`开始上传资源 (0/${newResources.length})...`);
       
       for (let i = 0; i < newResources.length; i++) {
         const resource = newResources[i];
+        const currentProgress = 50 + Math.floor((i / newResources.length) * 40);
+        setProgress(currentProgress);
+        setProgressMessage(`正在上传资源 "${resource.c_resource_name}" (${i + 1}/${newResources.length})...`);
         
         try {
-          
           const formData = new FormData();
           formData.append('c_course_id', finalCourseId);
           formData.append('file', resource.fileObject!);
@@ -608,19 +658,24 @@ const CourseCasesPage: React.FC = () => {
           const errorMsg = error.response?.data?.message || error.message || '上传失败';
           const detailedError = `新增资源"${resource.c_resource_name}": ${errorMsg}`;
           failMessages.push(detailedError);
-          
         }
         
         // 资源间添加延迟
         if (i < newResources.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
+        
+        // 更新进度
+        const updatedProgress = 50 + Math.floor(((i + 1) / newResources.length) * 40);
+        setProgress(updatedProgress);
       }
+      
+      setProgress(90);
+      setProgressMessage('资源上传完成，正在处理最后步骤...');
     }
 
     // 4. 构建提示信息
     let successMessage = `${operationType}课程成功！`;
-    
     
     if (newResources.length > 0) {
       if (successCount > 0 && failCount === 0) {
@@ -644,16 +699,24 @@ const CourseCasesPage: React.FC = () => {
       }
     }
 
-  if (editingCase && existingResources.length > 0) {
-    successMessage += ` ${existingResources.length}个已有资源保持不变。`;
-  }
+    if (editingCase && existingResources.length > 0) {
+      successMessage += ` ${existingResources.length}个已有资源保持不变。`;
+    }
 
     // 5. 显示结果
     setAlertSeverity('success');
     setErrorMessage(successMessage);
     
+    setProgress(100);
+    setProgressMessage(`${operationType}课程成功！`);
     
-    handleCloseFormModal();
+    // 延迟关闭进度显示和模态框
+    setTimeout(() => {
+      setIsSavingCourse(false);
+      setProgress(0);
+      setProgressMessage('');
+      handleCloseFormModal();
+    }, 1000);
     
     // 刷新课程列表
     setTimeout(async () => {
@@ -661,13 +724,36 @@ const CourseCasesPage: React.FC = () => {
     }, 1000);
 
   } catch (error: any) {
-    
-    setAlertSeverity('error');
-    setErrorMessage(`${editingCase ? '更新' : '创建'}课程失败: ${error.message}`);
-    
-    handleCloseFormModal();
-  } finally {
     setIsSavingCourse(false);
+    setProgress(0);
+    setProgressMessage('');
+    
+    // 检查是否为后端返回的错误
+    if (error.response) {
+      const errorData = error.response.data;
+      if (errorData && errorData.message) {
+        if (errorData.message.toLowerCase().includes('duplicate') || 
+            errorData.message.includes('重复') || 
+            errorData.message.includes('已存在') ||
+            (errorData.errors && errorData.errors.c_course_name && 
+             errorData.errors.c_course_name.some((msg: string) => 
+               msg.toLowerCase().includes('unique') || msg.includes('已存在')))) {
+          setAlertSeverity('error');
+          setErrorMessage('创建课程失败: 课程名称不能重复');
+        } else {
+          setAlertSeverity('error');
+          setErrorMessage(`${editingCase ? '更新' : '创建'}课程失败: ${errorData.message || error.message}`);
+        }
+      } else {
+        setAlertSeverity('error');
+        setErrorMessage(`${editingCase ? '更新' : '创建'}课程失败: ${error.message}`);
+      }
+    } else {
+      setAlertSeverity('error');
+      setErrorMessage(`${editingCase ? '更新' : '创建'}课程失败: ${error.message}`);
+    }
+      
+    handleCloseFormModal();
   }
 };
 
@@ -847,10 +933,37 @@ const CourseCasesPage: React.FC = () => {
       }, 3000);
       
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || '保存类别失败';
-      // 显示红色错误提示
-      setAlertSeverity('error');
-      setErrorMessage(message);
+      // 检查是否为后端返回的错误
+      if (error.response) {
+        // 后端返回了错误响应
+        const errorData = error.response.data;
+        if (errorData && errorData.message) {
+          // 检查是否是类别名称重复的错误
+          if (errorData.message.toLowerCase().includes('duplicate') || 
+              errorData.message.includes('重复') || 
+              errorData.message.includes('已存在') ||
+              errorData.message.includes('already exists') ||
+              (errorData.errors && 
+               (errorData.errors.c_category_name && 
+                errorData.errors.c_category_name.some((msg: string) => 
+                  msg.toLowerCase().includes('unique') || msg.includes('已存在'))))) {
+            setAlertSeverity('error');
+            setErrorMessage('创建类别失败: 类别名称不能重复');
+          } else {
+            // 其他错误情况
+            setAlertSeverity('error');
+            setErrorMessage(`${category.c_category_id ? '更新' : '创建'}类别失败: ${errorData.message || error.message}`);
+          }
+        } else {
+          // 没有错误消息，使用默认消息
+          setAlertSeverity('error');
+          setErrorMessage(`${category.c_category_id ? '更新' : '创建'}类别失败: ${error.message}`);
+        }
+      } else {
+        // 网络错误或其他错误
+        setAlertSeverity('error');
+        setErrorMessage(`${category.c_category_id ? '更新' : '创建'}类别失败: ${error.message}`);
+      }
     }
     handleCloseCategoryModal();
   };
@@ -869,6 +982,7 @@ const CourseCasesPage: React.FC = () => {
         if (data.code === 200) {
           setCategories(prev => prev.filter(cat => cat.c_category_id !== categoryToDelete.c_category_id));
           setCourseCases(prev => prev.filter(course => course.c_category_id !== categoryToDelete.c_category_id));
+          setAlertSeverity('success'); // 设置为成功样式
           setErrorMessage('类别删除成功');
           setTimeout(() => setErrorMessage(''), 3000);
         } else {
@@ -896,31 +1010,68 @@ const CourseCasesPage: React.FC = () => {
   const handleDeleteCourseCase = async () => {
     if (caseToDelete) {
       try {
+        setIsDeletingCourse(true);
+        setProgress(0);
+        setProgressMessage(`正在删除课程 "${caseToDelete.c_course_name}"...`);
+        
         const token = getCookie('_auth');
         if (!token) {
           throw new Error('未登录，请先登录');
         }
+        
+        // 清理资源
+        setProgress(30);
+        setProgressMessage('清理本地资源...');
         caseToDelete.resources.forEach(resource => {
           if (resource.c_resource_path && resource.c_resource_path.startsWith('blob:') && resource.fileObject) {
             URL.revokeObjectURL(resource.c_resource_path);
           }
         });
+        
+        // 发送删除请求
+        setProgress(60);
+        setProgressMessage('正在向服务器发送删除请求...');
+        
         const response = await apiClientWithToken.delete(`/back/api/study/courses/${caseToDelete.c_course_id}`, {
           headers: { Authorization: `${token}` },
         });
+        
+        setProgress(80);
+        setProgressMessage('删除请求已发送，正在处理响应...');
+        
         const data = response.data;
         if (data.code === 200) {
+          setProgress(100);
+          setProgressMessage('课程删除成功！');
+          
+          // 更新本地状态
           setCourseCases(prevCases => prevCases.filter(c => c.c_course_id !== caseToDelete.c_course_id));
+          setAlertSeverity('success');
+          setErrorMessage('课程删除成功');
+          
+          // 延迟重置状态
+          setTimeout(() => {
+            setIsDeletingCourse(false);
+            setProgress(0);
+            setProgressMessage('');
+            setCaseToDelete(null);
+            setIsConfirmDialogOpen(false);
+          }, 1000);
+          
         } else {
           throw new Error(`删除课程失败: ${data.message || '未知错误'}`);
         }
+        
       } catch (error: any) {
+        setIsDeletingCourse(false);
+        setProgress(0);
+        setProgressMessage('');
         const message = error.response?.data?.message || error.message || '删除课程案例失败';
         setErrorMessage(message);
+        setCaseToDelete(null);
+        setIsConfirmDialogOpen(false);
       }
     }
-    setCaseToDelete(null);
-    setIsConfirmDialogOpen(false);
   };
 
   const handleDeleteExperiment = async () => {
@@ -1054,7 +1205,9 @@ const CourseCasesPage: React.FC = () => {
 
     if (resource.c_resource_path && !resource.c_resource_path.startsWith('blob:')) {
       const url = new URL(resource.c_resource_path, window.location.origin);
-      url.searchParams.set('token', token);
+      if (token) {
+        url.searchParams.set('token', token);
+      }
       updatedResource = { ...resource, c_resource_path: url.toString() };
     } else if (!resource.c_resource_path && resource.fileObject) {
       updatedResource = {
@@ -1142,54 +1295,103 @@ const CourseCasesPage: React.FC = () => {
   }
 
   return (
-      <PageWrapper>
-                {errorMessage && (
-            <Alert 
-              severity={alertSeverity}  // 修改这里
-              sx={{ mb: 2 }} 
-              onClose={() => setErrorMessage('')}
+    <PageWrapper>
+        {/* 进度条遮罩层 */}
+        {(isSavingCourse || isDeletingCourse) && (
+            <Box
+                sx={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 9999,
+                }}
             >
-              {errorMessage}
+                <Box
+                    sx={{
+                        backgroundColor: 'white',
+                        padding: 3,
+                        borderRadius: 2,
+                        minWidth: 300,
+                        textAlign: 'center',
+                    }}
+                >
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                        {isSavingCourse ? '保存课程中...' : '删除课程中...'}
+                    </Typography>
+                    
+                    <Box sx={{ width: '100%', mb: 2 }}>
+                        <LinearProgress 
+                            variant="determinate" 
+                            value={progress} 
+                            sx={{ height: 10, borderRadius: 5 }}
+                        />
+                    </Box>
+                    
+                    <Typography variant="body2" color="text.secondary">
+                        {progressMessage}
+                    </Typography>
+                    
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                        {progress}% 完成
+                    </Typography>
+                </Box>
+            </Box>
+        )}
+
+        {errorMessage && (
+            <Alert 
+                severity={alertSeverity}
+                sx={{ mb: 2 }} 
+                onClose={() => setErrorMessage('')}
+            >
+                {errorMessage}
             </Alert>
-          )}
+        )}
+        
         <Box
             sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 4,
-              p: 2,
-              bgcolor: 'background.paper',
-              borderRadius: 2,
-              boxShadow: 1,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 4,
+                p: 2,
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                boxShadow: 1,
             }}
         >
-          <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-              课程案例库
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              随时查看和管理课程案例
-            </Typography>
-          </Box>
-          <Box>
-            <Button
-                variant="contained"
-                color="primary"
-                onClick={() => handleOpenFormModal()}
-                sx={{ fontWeight: 'bold', mr: 2 }}
-            >
-              添加案例
-            </Button>
-            <Button
-                variant="contained"
-                color="secondary"
-                onClick={() => handleOpenCategoryModal()}
-                sx={{ fontWeight: 'bold' }}
-            >
-              添加类别
-            </Button>
-          </Box>
+            <Box>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+                    课程案例库
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
+                    随时查看和管理课程案例
+                </Typography>
+            </Box>
+            <Box>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => handleOpenFormModal()}
+                    sx={{ fontWeight: 'bold', mr: 2 }}
+                >
+                    添加案例
+                </Button>
+                <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={() => handleOpenCategoryModal()}
+                    sx={{ fontWeight: 'bold' }}
+                >
+                    添加类别
+                </Button>
+            </Box>
         </Box>
 
         <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1490,6 +1692,29 @@ const CourseCasesPage: React.FC = () => {
             course={selectedCourse}
             onSaveSuccess={handlePermissionSaveSuccess}
         />
+        <Dialog
+          open={isConfirmDialogOpen}
+          onClose={() => setIsConfirmDialogOpen(false)}
+          aria-labelledby="confirm-dialog-title"
+          aria-describedby="confirm-dialog-description"
+        >
+          <DialogTitle id="confirm-dialog-title">确认删除</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="confirm-dialog-description">
+              {caseToDelete && `确定要删除课程 "${caseToDelete.c_course_name}" 吗？此操作不可撤销。`}
+              {experimentToDelete && `确定要删除实验 "${experimentToDelete.c_experiment_name}" 吗？此操作不可撤销。`}
+              {categoryToDelete && `确定要删除类别 "${categoryToDelete.c_category_name}" 吗？此操作不可撤销。`}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+                <Button onClick={() => setIsConfirmDialogOpen(false)} disabled={isDeletingCourse}>
+                  取消
+                </Button>
+                <Button onClick={handleConfirmDelete} color="error" autoFocus disabled={isDeletingCourse}>
+                  {isDeletingCourse ? '删除中...' : '确定删除'}
+                </Button>
+              </DialogActions>
+        </Dialog>
       </PageWrapper>
   );
 };

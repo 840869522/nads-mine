@@ -80,6 +80,7 @@ const CourseLearningPage: React.FC = () => {
     const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<CourseCase | null>(null);
     const [experimentStatuses, setExperimentStatuses] = useState<{ [key: string]: InstanceStatus }>({});
+    const [isAdmin, setIsAdmin] = useState<boolean>(false); // 标识是否为管理员
 
     useEffect(() => {
         const debouncedFetchData = debounce(async () => {
@@ -91,6 +92,18 @@ const CourseLearningPage: React.FC = () => {
                     setErrorMessage('未登录，请先登录');
                     window.location.href = '/login';
                     return;
+                }
+
+                // 获取当前用户信息来判断角色
+                const userResponse = await apiClientWithToken.get(`/back/api/support/user/me`, {
+                    headers: { Authorization: `${token}` },
+                });
+                const userData = userResponse.data;
+                if (userData.code === 200) {
+                    const userRoles = userData.data?.role || [];
+                    setIsAdmin(userRoles.includes('admin'));
+                } else {
+                    console.warn('获取用户信息失败:', userData.message);
                 }
 
                 // Fetch categories
@@ -120,6 +133,10 @@ const CourseLearningPage: React.FC = () => {
                 });
                 const coursesData = coursesResponse.data;
                 if (coursesData.code === 200 || coursesData.code === 900) {
+                    // 检查是否为管理员
+                    const isAdminUser = coursesData.data.is_admin || false;
+                    setIsAdmin(isAdminUser);
+                    
                     const mappedCourses = await Promise.all(
                         (coursesData.data.courses || []).map(async (course: any) => {
                             let resources: CourseCaseResource[] = [];
@@ -201,9 +218,9 @@ const CourseLearningPage: React.FC = () => {
                     );
                     setCourseCases(mappedCourses);
                     setTotalCases(coursesData.data.total || 0);
-                    const experimentStatuses = mappedCourses.reduce((acc, course) => ({
+                    const experimentStatuses: { [key: string]: InstanceStatus } = mappedCourses.reduce((acc: { [key: string]: InstanceStatus }, course) => ({
                         ...acc,
-                        ...course.experiments.reduce((expAcc, exp) => ({
+                        ...course.experiments.reduce((expAcc: { [key: string]: InstanceStatus }, exp: Experiment) => ({
                             ...expAcc,
                             [exp.c_experiment_id]: exp.status || 'stopped',
                         }), {}),
@@ -430,7 +447,7 @@ const CourseLearningPage: React.FC = () => {
                         课程学习
                     </Typography>
                     <Typography variant="subtitle1" color="text.secondary">
-                        查看您的课程和资源
+                        {isAdmin ? '管理员 - 查看所有课程' : '查看您有权限的课程'}
                     </Typography>
                 </Box>
             </Box>
