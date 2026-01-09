@@ -309,7 +309,7 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
     const numScore = parseInt(score, 10);
     
     if (score === '' || isNaN(numScore)) {
-      return '请输入有效的整数分数';
+      return '请输入有效的整数';
     }
     
     if (!Number.isInteger(numScore)) {

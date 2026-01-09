@@ -3755,6 +3755,19 @@ public function batch_answers_name(Request $request)
         Log::info("试卷ID: " . $paper_id);
         Log::info("批改数据: " . json_encode($batch_data));
 
+        $validated_data = [
+            'batch_data.*.score' => 'required|integer|min:0', // 改为 integer 验证
+        ];
+        
+        $validated_msg = [
+            'batch_data.*.score.required' => "分数不能为空",
+            'batch_data.*.score.integer' => "分数必须是整数", // 添加 integer 验证的错误信息
+            'batch_data.*.score.min' => "分数不能小于0",
+        ];
+        
+        $validatedData = $request->validate($validated_data, $validated_msg);
+
+
         // 获取考生作答数据
         $test_users_mod = new TestUsersModel();
         $answres_list = $test_users_mod->get_answers_list_by_name($test_id, $username, $paper_id);
@@ -3789,7 +3802,7 @@ public function batch_answers_name(Request $request)
         
         foreach ($batch_data as $k => $v) {
             $question_id = trim($v['question_id']);
-            $score = floatval($v['score']);
+            $score = intval($v['score']);
             
             if ($score > $zd_score) {
                 return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, "批改分数大于题目最大分数！");
