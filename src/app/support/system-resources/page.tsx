@@ -700,7 +700,7 @@ const SystemResourcesPage: React.FC<SystemResourcesPageProps> = ({ features }) =
     
       const res = await fetch(url, {
         headers: {
-          // 在 Header 中带上 Token (根据你后端要求，这里可能需要写成 `Bearer ${token}`)
+        
           'Authorization': token 
         }
       });
@@ -709,7 +709,7 @@ const SystemResourcesPage: React.FC<SystemResourcesPageProps> = ({ features }) =
       const result = await res.json();
       if (result.code === 405) {
         setShouldPoll(false);
-        return []; // 不 throw，直接返回空数组或当前结果，随你定义
+        return [];
       }
       return result;
     }, 
@@ -726,12 +726,11 @@ const SystemResourcesPage: React.FC<SystemResourcesPageProps> = ({ features }) =
     
       const res = await fetch(url, {
         headers: {
-          // 在 Header 中带上 Token (根据你后端要求，这里可能需要写成 `Bearer ${token}`)
+          
           'Authorization': token 
         }
       });
       const result = await res.json();
-      console.log(result)
       if (result.code === 405) {
         setShouldPoll(false);
         return []; 
