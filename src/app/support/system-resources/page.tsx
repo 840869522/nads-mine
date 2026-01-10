@@ -35,6 +35,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { getCookie } from '@/utils/cookie';
 
 interface SystemResources {
   cpu: {
@@ -683,12 +684,64 @@ const SystemResourcesPage: React.FC<SystemResourcesPageProps> = ({ features }) =
     refreshInterval: 1000,
   });
 
-  const { data: containerData } = useSWR<RunningInstance[] | { data: RunningInstance[] }>('/back/api/instances', fetcher, {
-    refreshInterval: 10_000,
-  });
-  const { data: vmData } = useSWR<VmInstance[] | { data: VmInstance[] }>('/back/api/vms', fetcher, {
-    refreshInterval: 10_000,
-  });
+  const [shouldPoll, setShouldPoll] = useState(true);
+
+  // const { data: containerData } = useSWR<RunningInstance[] | { data: RunningInstance[] }>('/back/api/instances', fetcher, {
+  //   refreshInterval: 10_000,
+  // });
+  // const { data: vmData } = useSWR<VmInstance[] | { data: VmInstance[] }>('/back/api/vms', fetcher, {
+  //   refreshInterval: 10_000,
+  // });
+
+  const { data: containerData } = useSWR<RunningInstance[] | { data: RunningInstance[] }>(
+    '/back/api/instances', 
+    async (url: string) => {
+      const token = getCookie("_auth") || "";
+    
+      const res = await fetch(url, {
+        headers: {
+          // 在 Header 中带上 Token (根据你后端要求，这里可能需要写成 `Bearer ${token}`)
+          'Authorization': token 
+        }
+      });
+      
+      // 1. 如果是 405，直接关掉轮询开关
+      const result = await res.json();
+      if (result.code === 405) {
+        setShouldPoll(false);
+        return []; // 不 throw，直接返回空数组或当前结果，随你定义
+      }
+      return result;
+    }, 
+    {
+      // 2. 根据开关决定是 10秒 还是 0 (停止)
+      refreshInterval: shouldPoll ? 10_000 : 0,
+    }
+  );
+
+  const { data: vmData } = useSWR<VmInstance[] | { data: VmInstance[] }>(
+    '/back/api/vms', 
+    async (url: string) => {
+      const token = getCookie("_auth") || "";
+    
+      const res = await fetch(url, {
+        headers: {
+          // 在 Header 中带上 Token (根据你后端要求，这里可能需要写成 `Bearer ${token}`)
+          'Authorization': token 
+        }
+      });
+      const result = await res.json();
+      console.log(result)
+      if (result.code === 405) {
+        setShouldPoll(false);
+        return []; 
+      }
+      return result;
+    }, 
+    {
+      refreshInterval: shouldPoll ? 10_000 : 0,
+    }
+  );
 
   const containers: RunningInstance[] = Array.isArray(containerData)
     ? containerData
