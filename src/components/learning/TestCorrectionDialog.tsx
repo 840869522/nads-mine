@@ -20,7 +20,8 @@ import {
   Card,
   CardContent,
   useTheme,
-  InputAdornment
+  InputAdornment,
+  FormHelperText
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -82,6 +83,7 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
   const [success, setSuccess] = useState<string>('');
   const [currentUsername, setCurrentUsername] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [scoreErrors, setScoreErrors] = useState<{[key: string]: string}>({});
 
   // 颜色函数
   const getBackgroundColor = () => isDarkMode ? '#1a1a1a' : '#f5f5f5';
@@ -94,6 +96,62 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
   const getErrorColor = () => theme.palette.error.main;
   const getWarningColor = () => theme.palette.warning.main;
   const getInfoColor = () => theme.palette.info.main;
+
+  // 计算应该显示的星星数量和每颗星代表的价值
+  const calculateStarConfig = (maxScore: number) => {
+    if (maxScore <= 10) {
+      // 满分≤10分：显示满分对应的星星数量，每颗星代表1分
+      return {
+        maxStars: maxScore,  // 显示maxScore颗星
+        starValue: 1,        // 每颗星代表1分
+        totalStars: maxScore // 总共显示这么多星
+      };
+    } else {
+      // 满分>10分：固定显示10颗星，每颗星代表(满分/10)分
+      return {
+        maxStars: 10,                    // 固定显示10颗星
+        starValue: maxScore / 10,        // 每颗星的价值
+        totalStars: 10                   // 总共显示10颗星
+      };
+    }
+  };
+
+  // 将星星数量转换为实际分数
+  const starsToScore = (stars: number, maxScore: number): number => {
+    const config = calculateStarConfig(maxScore);
+    
+    if (maxScore <= 10) {
+      // 满分≤10分：星星数量就是分数
+      return Math.min(stars, config.maxStars);
+    } else {
+      // 满分>10分：星星数量 × 每颗星的价值
+      const score = stars * config.starValue;
+      // 四舍五入到最接近的整数
+      const roundedScore = Math.round(score);
+      // 确保分数在合理范围内，且选择全部星星时得到满分
+      if (stars === config.maxStars) {
+        return maxScore;
+      }
+      return Math.max(0, Math.min(maxScore, roundedScore));
+    }
+  };
+
+  // 将实际分数转换为星星数量
+  const scoreToStars = (score: number, maxScore: number): number => {
+    const config = calculateStarConfig(maxScore);
+    
+    if (maxScore <= 10) {
+      // 满分≤10分：分数就是星星数量
+      return Math.min(score, config.maxStars);
+    } else {
+      // 满分>10分：分数 ÷ 每颗星的价值
+      let stars = score / config.starValue;
+      // 四舍五入到最接近的整数颗星
+      stars = Math.round(stars);
+      // 确保星星数量在0-10之间
+      return Math.max(0, Math.min(config.maxStars, stars));
+    }
+  };
 
   // 从本地存储获取用户名
   useEffect(() => {
@@ -163,12 +221,41 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
     }
   };
 
+  // 获取试卷规则中的主观题分数
+  const fetchPaperRulesForTest = async (testId: string) => {
+    try {
+      const response = await apiClientWithToken.get('/back/api/study/test/getPaperRulesByTestId', {
+        params: { test_id: testId }
+      });
+      
+      if (response.data?.code === 200 && response.data.data) {
+        const ruleData = response.data.data;
+        if (Array.isArray(ruleData.items)) {
+          // 找到主观题的规则项 (type: 4)
+          const subjectiveRule = ruleData.items.find((item: any) => 
+            item.type === 4 || item.c_type === 4
+          );
+          return subjectiveRule?.score || 10; // 返回主观题每题分数，默认10
+        }
+      }
+      return 10; // 默认值
+    } catch (error) {
+      console.error('获取试卷规则失败:', error);
+      return 10; // 默认值
+    }
+  };
+
   // 获取考生作答详情
   const fetchStudentAnswers = async (username: string, paperId: string) => {
     try {
       setLoading(true);
       setError('');
+      setScoreErrors({});
       
+      // 先获取试卷规则中的主观题分数
+      const subjectiveMaxScore = await fetchPaperRulesForTest(testId);
+      
+      // 获取考生作答
       const response = await apiClientWithToken.post('/back/api/study/test/get_answers_name_info', {
         test_id: testId,
         username: username,
@@ -178,7 +265,8 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
       if (response.data.code === 200) {
         const subjectiveQuestions = (response.data.data || []).map((q: any) => ({
           ...q,
-          score: q.score || 0
+          score: q.score || 0,
+          highest_score: subjectiveMaxScore // 使用规则中的最大分数
         }));
         setQuestions(subjectiveQuestions);
       } else {
@@ -216,6 +304,78 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
     return null; // 所有学生都已批改
   };
 
+  // 验证分数输入
+  const validateScore = (score: string, maxScore: number): string => {
+    const numScore = parseInt(score, 10);
+    
+    if (score === '' || isNaN(numScore)) {
+      return '请输入有效的整数';
+    }
+    
+    if (!Number.isInteger(numScore)) {
+      return '分数必须是整数';
+    }
+    
+    if (numScore < 0) {
+      return '分数不能为负数';
+    }
+    
+    if (numScore > maxScore) {
+      return `分数不能超过最大值 ${maxScore}`;
+    }
+    
+    return '';
+  };
+
+  // 更新题目分数
+  const updateQuestionScore = (questionId: string, score: number) => {
+    setQuestions(prev => prev.map(q => 
+      q.question_id === questionId ? { ...q, score } : q
+    ));
+    
+    // 清除该题目的错误信息
+    setScoreErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[questionId];
+      return newErrors;
+    });
+  };
+
+  // 处理星星评分变化
+  const handleStarChange = (questionId: string, stars: number | null) => {
+    if (stars === null) return;
+    
+    const question = questions.find(q => q.question_id === questionId);
+    if (!question) return;
+    
+    // 将星星数量转换为实际分数
+    const actualScore = starsToScore(stars, question.highest_score);
+    updateQuestionScore(questionId, actualScore);
+  };
+
+  // 处理直接输入分数变化
+  const handleScoreInputChange = (questionId: string, value: string) => {
+    const question = questions.find(q => q.question_id === questionId);
+    if (!question) return;
+    
+    // 验证输入
+    const error = validateScore(value, question.highest_score);
+    if (error) {
+      setScoreErrors(prev => ({ ...prev, [questionId]: error }));
+      return;
+    }
+    
+    // 清除错误并更新分数
+    setScoreErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[questionId];
+      return newErrors;
+    });
+    
+    const score = parseInt(value, 10) || 0;
+    updateQuestionScore(questionId, score);
+  };
+
   // 提交批改
   const submitCorrection = async () => {
     if (!selectedStudent) {
@@ -223,9 +383,23 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
       return;
     }
 
+    // 检查是否有未评分的题目
     const ungradedQuestions = questions.filter(q => q.score === 0);
     if (ungradedQuestions.length > 0) {
       setError('请为所有题目评分');
+      return;
+    }
+
+    // 检查是否有分数验证错误
+    if (Object.keys(scoreErrors).length > 0) {
+      setError('请修正分数输入错误');
+      return;
+    }
+
+    // 验证所有分数都是整数
+    const nonIntegerScores = questions.filter(q => !Number.isInteger(q.score));
+    if (nonIntegerScores.length > 0) {
+      setError('所有分数必须是整数');
       return;
     }
 
@@ -235,7 +409,7 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
       
       const batchData = questions.map(q => ({
         question_id: q.question_id.toString().trim(),
-        score: parseFloat(q.score.toString())
+        score: Math.round(q.score) // 确保是整数
       }));
 
       const response = await apiClientWithToken.post('/back/api/study/test/batch_answers_name', {
@@ -273,13 +447,6 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
     }
   };
 
-  // 更新题目分数
-  const updateQuestionScore = (questionId: string, score: number) => {
-    setQuestions(prev => prev.map(q => 
-      q.question_id === questionId ? { ...q, score } : q
-    ));
-  };
-
   // 计算当前主观题总分
   const currentSubjectiveScore = questions.reduce((sum, q) => sum + q.score, 0);
   const totalScore = (selectedStudent?.objective_score || 0) + currentSubjectiveScore;
@@ -293,6 +460,7 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
     setError('');
     setSuccess('');
     setSearchTerm('');
+    setScoreErrors({});
     onClose();
   };
 
@@ -307,6 +475,8 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
       fetchAllStudentsList();
     }
   }, [open, testId, currentUsername]);
+
+ 
 
   return (
     <Dialog
@@ -568,109 +738,148 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
                   </Box>
                 ) : questions.length > 0 ? (
                   <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-                    {questions.map((question, index) => (
-                      <Paper 
-                        key={question.question_id} 
-                        sx={{ 
-                          mb: 3, 
-                          p: 3,
-                          backgroundColor: getSurfaceColor(),
-                          border: `1px solid ${getBorderColor()}`,
-                          borderRadius: 2
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 3 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: getPrimaryColor() }}>
-                            第{index + 1}题
+                    {questions.map((question, index) => {
+                      const config = calculateStarConfig(question.highest_score);
+                      const currentStars = scoreToStars(question.score, question.highest_score);
+                      
+                      return (
+                        <Paper 
+                          key={question.question_id} 
+                          sx={{ 
+                            mb: 3, 
+                            p: 3,
+                            backgroundColor: getSurfaceColor(),
+                            border: `1px solid ${getBorderColor()}`,
+                            borderRadius: 2
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 3 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600, color: getPrimaryColor() }}>
+                              第{index + 1}题
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                              <Chip 
+                                label={`满分: ${question.highest_score}分`}
+                                sx={{ 
+                                  backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                                  color: getPrimaryColor(),
+                                  fontWeight: 'bold'
+                                }}
+                                size="small"
+                              />
+                            </Box>
+                          </Box>
+
+                          <Typography variant="body1" paragraph sx={{ 
+                            fontWeight: 500, 
+                            mb: 3,
+                            color: getTextColor(),
+                            lineHeight: 1.6
+                          }}>
+                            {question.question}
                           </Typography>
-                          <Chip 
-                            label={`满分: ${question.highest_score}分`} 
-                            sx={{ 
-                              backgroundColor: 'rgba(156, 39, 176, 0.1)',
+
+                          <Box sx={{ 
+                            mb: 3, 
+                            p: 3, 
+                            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                            borderRadius: 2, 
+                            border: `1px solid ${getBorderColor()}`
+                          }}>
+                            <Typography variant="subtitle2" sx={{ 
+                              fontWeight: 600, 
+                              mb: 2, 
                               color: getPrimaryColor()
-                            }}
-                            size="small"
-                          />
-                        </Box>
+                            }}>
+                              考生答案:
+                            </Typography>
+                            <Typography variant="body2" sx={{ 
+                              whiteSpace: 'pre-wrap', 
+                              lineHeight: 1.6,
+                              color: getTextColor()
+                            }}>
+                              {question.answer || '（未作答）'}
+                            </Typography>
+                          </Box>
 
-                        <Typography variant="body1" paragraph sx={{ 
-                          fontWeight: 500, 
-                          mb: 3,
-                          color: getTextColor(),
-                          lineHeight: 1.6
-                        }}>
-                          {question.question}
-                        </Typography>
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 3, 
+                            flexWrap: 'wrap',
+                            p: 2,
+                            backgroundColor: 'rgba(25, 118, 210, 0.03)',
+                            borderRadius: 2
+                          }}>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: getTextColor() }}>
+                              评分:
+                            </Typography>
+                            
+                            {/* 星星评分组件 */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <Rating
+                                value={currentStars}
+                                onChange={(event, newValue) => {
+                                  handleStarChange(question.question_id, newValue);
+                                }}
+                                max={config.totalStars} // 动态设置最大星星数量
+                                size="large"
+                                sx={{ color: getPrimaryColor() }}
+                              />
+                              <Typography variant="caption" sx={{ 
+                                mt: 0.5,
+                                color: getSecondaryTextColor()
+                              }}>
+                                {currentStars}星 ({config.maxStars}星满分)
+                              </Typography>
+                            </Box>
 
-                        <Box sx={{ 
-                          mb: 3, 
-                          p: 3, 
-                          backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                          borderRadius: 2, 
-                          border: `1px solid ${getBorderColor()}`
-                        }}>
-                          <Typography variant="subtitle2" sx={{ 
-                            fontWeight: 600, 
-                            mb: 2, 
-                            color: getPrimaryColor()
-                          }}>
-                            考生答案:
-                          </Typography>
-                          <Typography variant="body2" sx={{ 
-                            whiteSpace: 'pre-wrap', 
-                            lineHeight: 1.6,
-                            color: getTextColor()
-                          }}>
-                            {question.answer || '（未作答）'}
-                          </Typography>
-                        </Box>
+                            {/* 直接输入分数 */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={question.score || ''}
+                                onChange={(e) => handleScoreInputChange(question.question_id, e.target.value)}
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (value && !isNaN(parseInt(value, 10))) {
+                                    const score = parseInt(value, 10);
+                                    // 确保是整数且在有效范围内
+                                    const validatedScore = Math.max(0, Math.min(question.highest_score, Math.round(score)));
+                                    updateQuestionScore(question.question_id, validatedScore);
+                                  }
+                                }}
+                                inputProps={{
+                                  min: 0,
+                                  max: question.highest_score,
+                                  step: 1 // 只能输入整数
+                                }}
+                                sx={{ width: 100 }}
+                                label="直接输入分数"
+                                error={!!scoreErrors[question.question_id]}
+                              />
+                              {scoreErrors[question.question_id] ? (
+                                <FormHelperText error sx={{ mt: 0.5, maxWidth: 100 }}>
+                                  {scoreErrors[question.question_id]}
+                                </FormHelperText>
+                              ) : (
+                                <FormHelperText sx={{ mt: 0.5, color: getSecondaryTextColor(), maxWidth: 100 }}>
+                                  请输入0-{question.highest_score}的整数
+                                </FormHelperText>
+                              )}
+                            </Box>
 
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 3, 
-                          flexWrap: 'wrap',
-                          p: 2,
-                          backgroundColor: 'rgba(25, 118, 210, 0.03)',
-                          borderRadius: 2
-                        }}>
-                          <Typography variant="body1" sx={{ fontWeight: 600, color: getTextColor() }}>
-                            评分:
-                          </Typography>
-                          <Rating
-                            value={question.score}
-                            onChange={(event, newValue) => {
-                              updateQuestionScore(question.question_id, newValue || 0);
-                            }}
-                            max={question.highest_score}
-                            size="large"
-                            sx={{ color: getPrimaryColor() }}
-                          />
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={question.score}
-                            onChange={(e) => {
-                              const score = Math.max(0, Math.min(question.highest_score, Number(e.target.value)));
-                              updateQuestionScore(question.question_id, score);
-                            }}
-                            inputProps={{
-                              min: 0,
-                              max: question.highest_score,
-                              step: 0.5
-                            }}
-                            sx={{ width: 80 }}
-                            label="分数"
-                          />
-                          <Typography variant="body1" sx={{ 
-                            fontWeight: 600,
-                            color: question.score > 0 ? getSuccessColor() : getTextColor()
-                          }}>
-                            {question.score} / {question.highest_score}
-                          </Typography>
-                        </Box>
-                      </Paper>
-                    ))}
+                            <Typography variant="body1" sx={{ 
+                              fontWeight: 600,
+                              color: question.score > 0 ? getSuccessColor() : getTextColor()
+                            }}>
+                              {Math.round(question.score)} / {question.highest_score}
+                            </Typography>
+                          </Box>
+                        </Paper>
+                      );
+                    })}
                   </Box>
                 ) : (
                   <Box sx={{ 
@@ -728,7 +937,7 @@ const TestCorrectionDialog: React.FC<TestCorrectionDialogProps> = ({
           <Button
             onClick={submitCorrection}
             variant="contained"
-            disabled={submitting || questions.length === 0 || !selectedStudent}
+            disabled={submitting || questions.length === 0 || !selectedStudent || Object.keys(scoreErrors).length > 0}
             startIcon={submitting ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <SaveIcon />}
           >
             {submitting ? '提交中...' : '提交批改'}

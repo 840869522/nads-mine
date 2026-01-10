@@ -13,8 +13,6 @@ import {
     History as HistoryIcon,
     Article as ArticleIcon
 } from '@mui/icons-material';
-import useSWR, { mutate as globalMutate } from "swr";
-
 import { RunningInstance as OriginalRunningInstance, InstanceStatus } from '@/types';
 
 // 定义扩展的接口
@@ -33,7 +31,7 @@ import { useExecTerminal } from '@/contexts/ExecTerminalContext';
 import { useAuth } from '@/hooks/useAuth';
 import { customFetch } from '@/utils/fetch';
 import { toast } from 'react-toastify';
-import {v4 as uuidv4} from "uuid";
+import { v4 as uuidv4 } from "uuid";
 
 const API_BASE = "/back";
 
@@ -44,6 +42,7 @@ interface ContainerInstancesTabProps {
 const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceId }) => {
     const theme = useTheme();
     const { user } = useAuth();
+    const { openTerminal } = useExecTerminal();
 
     const [instances, setInstances] = useState<RunningInstance[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +56,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
     const [bindsModalId, setBindsModalId] = useState<string | null>(null);
     const [flagSubmissionModalId, setFlagSubmissionModalId] = useState<string | null>(null);
     const [flagHistoryModalOpen, setFlagHistoryModalOpen] = useState(false);
-    const { openTerminal } = useExecTerminal();
     const [columnAnchorEl, setColumnAnchorEl] = useState<null | HTMLElement>(null);
     const [showColumns, setShowColumns] = useState({
         id: false,
@@ -83,6 +81,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             default: return 'info';
         }
     };
+
+    // 计算当前用户是否拥有全局容器终端权限
+    const hasGlobalTerminalRbac = useMemo(() => {
+        if (!user) return false;
+        const username = (user as any).c_username || (user as any).user?.c_username || (user as any).username;
+        const permissions = (user as any).permission || (user as any).user?.permission || [];
+
+        // admin 永远有权限，其他用户检查权限列表
+        return username === 'admin' || permissions.includes('container_terminal');
+    }, [user]);
 
     const fetchInstanceDetails = useCallback(async () => {
         if (!instanceId || !user) {
@@ -119,7 +127,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
             title: `启动实例: ${instance.name}`,
             message: `您确定要启动实例 "${instance.name}" 吗？`,
             onConfirm: async () => {
-                // 运行中应该调用 pause，暂停中调用 unpause，其余状态调用 start
                 const action =
                     instance.status === 'paused'
                         ? 'unpause'
@@ -186,16 +193,16 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
         window.open(url, '_blank');
     }, []);
 
-    // ★ 核心：权限解析函数，包含所有细粒度权限的默认值 ★
     const safeJsonParse = (b64: string | boolean): { [key: string]: boolean } => {
         const defaultPermissions = {
             can_restart: false,
             can_stop: false,
             can_delete: false,
             can_logs: false,
-            can_terminal: false, // 对应旧的 can_operate
+            can_terminal: false,
             can_submit_flag: false,
-            can_flag_history: false
+            can_flag_history: false,
+            can_start: false
         };
 
         if (typeof b64 !== 'string' || b64.trim() === '') {
@@ -237,12 +244,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 const isPaused = instance.status === 'paused';
                 const isTarget = instance.is_target;
 
-                // ★ 获取后端计算好的所有权限 ★
                 const perms = safeJsonParse(instance.can_operate);
+
+                // 核心修改：结合后端返回的权限和前端检测到的全局角色权限
+                const finalCanTerminal = perms.can_terminal && hasGlobalTerminalRbac;
 
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {/* 1. 启动/暂停 */}
                         <Tooltip title={perms.can_start ? (isRunning ? '暂停' : '启动/恢复') : "无权限"}>
                             <Box component="span">
                                 <IconButton
@@ -255,7 +263,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             </Box>
                         </Tooltip>
 
-                        {/* 2. 停止 */}
                         <Tooltip title={perms.can_stop ? "停止" : "无权限"}>
                             <Box component="span">
                                 <IconButton
@@ -268,7 +275,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             </Box>
                         </Tooltip>
 
-                        {/* 3. 删除 */}
                         <Tooltip title={perms.can_delete ? "删除" : "无权限"}>
                             <Box component="span">
                                 <IconButton
@@ -281,10 +287,8 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             </Box>
                         </Tooltip>
 
-                        {/* Flag 相关 (仅当容器是靶机时显示) */}
                         {isTarget && (
                             <>
-                                {/* 4. 提交 Flag */}
                                 <Tooltip title={perms.can_submit_flag ? "提交Flag" : "无提交权限(本队靶机或未运行)"}>
                                     <Box component="span">
                                         <IconButton
@@ -297,7 +301,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                                     </Box>
                                 </Tooltip>
 
-                                {/* 5. Flag 历史 */}
                                 <Tooltip title={perms.can_flag_history ? "Flag历史" : "无查看权限"}>
                                     <Box component="span">
                                         <IconButton
@@ -312,7 +315,6 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             </>
                         )}
 
-                        {/* 6. 日志 */}
                         <Tooltip title={perms.can_logs ? "日志" : "无权限"}>
                             <Box component="span">
                                 <IconButton
@@ -325,13 +327,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                             </Box>
                         </Tooltip>
 
-                        {/* 7. 更多操作 (终端) */}
-                        <Tooltip title={perms.can_terminal ? "更多操作" : "无权限"}>
+                        <Tooltip title={finalCanTerminal ? "更多操作" : "无终端访问权限"}>
                             <Box component="span">
                                 <IconButton
                                     onClick={(e) => setMoreMenuAnchor({ anchor: e.currentTarget, id: instance.id })}
                                     size="small"
-                                    disabled={!perms.can_terminal}
+                                    // 核心修改：使用融合后的权限控制按钮状态
+                                    disabled={!finalCanTerminal}
                                 >
                                     <MoreVertIcon fontSize="small" />
                                 </IconButton>
@@ -341,7 +343,7 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                 );
             }
         }
-    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs]);
+    ], [showColumns, handleStartInstance, handleStopInstance, handlePauseInstance, handleDeleteInstance, handleOpenLogs, hasGlobalTerminalRbac]);
 
     const filteredContainers = useMemo(() => {
         if (!searchTerm.trim()) return instances;
@@ -394,6 +396,13 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                     const instanceId = moreMenuAnchor.id;
                     if (!instanceId) return;
 
+                    // 再次检查权限，双重保险
+                    if (!hasGlobalTerminalRbac) {
+                        toast.error('您没有访问容器终端的权限');
+                        setMoreMenuAnchor({ anchor: null, id: null });
+                        return;
+                    }
+
                     setMoreMenuAnchor({ anchor: null, id: null });
 
                     try {
@@ -416,7 +425,9 @@ const ContainerInstancesTab: React.FC<ContainerInstancesTabProps> = ({ instanceI
                         console.error("Terminal check failed", e);
                         toast.error("权限检查请求失败");
                     }
-                }}>
+                }}
+                          disabled={!hasGlobalTerminalRbac}
+                >
                     打开终端
                 </MenuItem>
             </Menu>

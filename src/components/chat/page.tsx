@@ -132,7 +132,8 @@ const ChatDialog = () => {
             "/chat/achat",
             { "message": userMessage.text },
             (chunk: string) => {
-                // 更新助手消息内容
+                console.log(chunk);
+		// 更新助手消息内容
                 setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
                         ? { ...msg, text: msg.text + chunk }
@@ -287,7 +288,20 @@ const ChatDialog = () => {
                                                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
                                                     {children}
                                                 </td>
-                                            )
+                                            ),
+					    think: ({children}) => (
+						<div style={{
+                                                    fontSize: '0.85em',
+                                                    color: theme.palette.mode === 'dark' ? theme.palette.grey[500] : theme.palette.grey[600],
+                                                    fontStyle: 'italic',
+                                                    display: 'inline-block',
+                                                    padding: '0 2px',
+                                                    margin: '0 1px',
+                                                    borderRadius: '2px'
+                                                }}>
+                                                    {children}
+                                                </div>
+					    )
                                         }}
                                         children={message.text}
                                     />

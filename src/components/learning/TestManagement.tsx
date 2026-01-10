@@ -25,6 +25,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import moment from 'moment';
+import LinearProgress from '@mui/material/LinearProgress';
 import FixedSizeFormDialog from './TestFormDialog';
 import TestUserDrawer from './TestUserDrawer';
 import TestCorrectionDialog from './TestCorrectionDialog';
@@ -160,6 +161,11 @@ const TestManagement = () => {
   const [totalExperimentCount, setTotalExperimentCount] = useState<number>(0);
   const [totalTheoryCount, setTotalTheoryCount] = useState<number>(0);
 
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+  const [showProgressOverlay, setShowProgressOverlay] = useState(false);
+  const [progressTitle, setProgressTitle] = useState('');
+  const [currentOperation, setCurrentOperation] = useState<'save' | 'delete' | null>(null);
   // 关闭提示消息
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
@@ -519,27 +525,71 @@ const handleDeleteTest = async () => {
   if (!testToDelete) return;
 
   try {
+    // 显示进度条
+    setShowProgressOverlay(true);
+    setCurrentOperation('delete');
+    setProgressTitle('删除测试中...');
+    setProgress(0);
+    setProgressMessage('开始删除测试...');
+
     setDeletingTestId(testToDelete);
     const url = activeTab === 'experiment' ? '/back/api/study/test/experiment_del' : '/back/api/study/test/test_del';
+    
+    setProgress(20);
+    setProgressMessage('正在准备删除数据...');
+
+    // 查找要删除的测试信息
+    const testToDeleteObj = tests.find(test => test.c_id === testToDelete);
+    if (testToDeleteObj) {
+      setProgressMessage(`正在删除测试 "${testToDeleteObj.c_name}"...`);
+    }
+
+    setProgress(30);
+    setProgressMessage('正在向服务器发送删除请求...');
+
     const response = await apiClientWithToken.post<ApiResponse>(url, {
       id: testToDelete
     });
 
+    setProgress(60);
+    setProgressMessage('删除请求已发送，正在处理响应...');
+
     if (response.data.code === 200) {
+      setProgress(80);
+      setProgressMessage('测试删除成功，正在更新列表...');
+
       showSnackbar(response.data.message || '删除成功');
       setDeleteConfirmOpen(false);
       setTestToDelete(null);
+      
       // 刷新测试列表
       if (activeTab === 'experiment') {
-  setPageExperiment(1);
-  fetchExperimentTests(searchText, startDate, endDate);  // 保持当前过滤条件
-} else {
-        await fetchTheoryTests(pageTheory);
+        setPageExperiment(1);
+        await fetchExperimentTests(searchText, startDate, endDate);
+      } else {
+        setPageTheory(1);
+        await fetchTheoryTests(1);
       }
+
+      setProgress(100);
+      setProgressMessage('测试删除成功！');
+
+      // 延迟关闭进度条
+      setTimeout(() => {
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
+        setProgress(0);
+        setProgressMessage('');
+      }, 1000);
     } else {
-      showSnackbar(response.data.message || '删除失败', 'error');
+      throw new Error(response.data.message || '删除失败');
     }
   } catch (error: any) {
+    // 错误处理
+    setShowProgressOverlay(false);
+    setCurrentOperation(null);
+    setProgress(0);
+    setProgressMessage('');
     showSnackbar('删除失败: ' + (error.response?.data?.message || error.message), 'error');
   } finally {
     setDeletingTestId(null);
@@ -727,12 +777,23 @@ const handleEndDateChange = (newValue: moment.Moment | null) => {
   // 保存测试（新增或更新）
 const handleSaveTest = async (testData: TestData, files?: File[]) => {
   try {
+    // 显示进度条
+    setShowProgressOverlay(true);
+    setCurrentOperation('save');
+    setProgressTitle(testData.c_id ? '更新测试中...' : '创建测试中...');
+    setProgress(0);
+    setProgressMessage('开始保存测试...');
 
     // 验证必填字段
     if (!testData.c_name || testData.c_name.trim() === '') {
       showSnackbar('测试名称不能为空', 'error');
+      setShowProgressOverlay(false);
+      setCurrentOperation(null);
       return false;
     }
+
+    setProgress(10);
+    setProgressMessage('验证测试信息...');
 
     // 判断是实验还是理论测试
     const isExperiment = testData.c_test_type === '实验';
@@ -741,23 +802,34 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
       // 实验测试的验证
       if (!testData.c_course_id) {
         showSnackbar('课程ID不能为空', 'error');
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
         return false;
       }
       if (!testData.c_scene_config_id) {
         showSnackbar('实验场景配置不能为空', 'error');
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
         return false;
       }
     } else {
       // 理论测试的验证
       if (!testData.c_course_id) {
         showSnackbar('课程ID不能为空', 'error');
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
         return false;
       }
       if (testData.c_type === '考试' && (!testData.c_duration || testData.c_duration <= 0)) {
         showSnackbar('考试类型的测试必须设置有效的时长（分钟）', 'error');
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
         return false;
       }
     }
+
+    setProgress(20);
+    setProgressMessage('正在准备保存数据...');
 
     // 判断是新增还是更新
     const isNew = !testData.c_id;
@@ -776,6 +848,9 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
         c_course_id: testData.c_course_id,
         c_config_id: testData.c_scene_config_id,
       };
+
+      setProgress(30);
+      setProgressMessage('正在保存测试基本信息...');
 
       response = await apiClientWithToken({
         method,
@@ -804,69 +879,147 @@ const handleSaveTest = async (testData: TestData, files?: File[]) => {
         submitData.id = testData.c_id;
       }
 
+      setProgress(30);
+      setProgressMessage('正在保存测试基本信息...');
+
       response = await apiClientWithToken.post(url, submitData);
     }
 
     // 兼容 code: 200 和 201
     if (response.data.code !== 200 && response.data.code !== 201) {
+      setShowProgressOverlay(false);
+      setCurrentOperation(null);
       showSnackbar(response.data.message || '保存测试失败', 'error');
       return false;
     }
+
+    setProgress(50);
+    setProgressMessage('测试基本信息保存成功...');
 
     // 保存成功提示
     let message = isNew ? 
       (isExperiment ? '实验创建成功' : '测试创建成功') : 
       (isExperiment ? '实验更新成功' : '测试更新成功');
 
-    // 处理实验资源上传（仅对实验测试）
+    // 处理文件上传
     if (isExperiment && files && files.length > 0) {
       // 获取实验ID
       const experimentId = isNew ? response.data.data?.c_experiment_id : testData.c_id;
       if (!experimentId) {
         showSnackbar('无法获取实验ID，资源上传失败', 'error');
+        setShowProgressOverlay(false);
+        setCurrentOperation(null);
         return false;
       }
 
       const formData = new FormData();
+      
+      // 检查文件大小并限制
+      const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+      const oversizedFiles: string[] = [];
+      
       files.forEach((file, index) => {
-        formData.append(`files[${index}]`, file);
-      });
-      formData.append('course_id', testData.c_course_id);
-
-      try {
-
-        const uploadResponse = await apiClientWithToken.post(
-          `/back/api/study/experiments/${experimentId}/resources/upload-multiple`,
-          formData,
-          {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }
-        );
-
-        if (uploadResponse.data.code === 200 || uploadResponse.data.code === 201) {
-          message += `，资源批量上传成功，共上传 ${files.length} 个文件`;
+        // 检查文件大小
+        if (file.size > MAX_FILE_SIZE) {
+          oversizedFiles.push(file.name);
         } else {
-          showSnackbar(`资源上传失败: ${uploadResponse.data.message || '未知错误'}`, 'warning');
+          formData.append(`files[${index}]`, file);
         }
-      } catch (error: any) {
-        const errorMsg = error.response?.data?.message || error.message || '批量上传实验资源失败';
-        showSnackbar(`资源上传失败: ${errorMsg}`, 'error');
+      });
+      
+      // 如果有文件超过大小限制，提示用户
+      if (oversizedFiles.length > 0) {
+        showSnackbar(
+          `以下文件超过500MB限制，未上传成功：${oversizedFiles.join(', ')}。请压缩文件或分批上传。`,
+          'warning'
+        );
+      }
+      
+      // 如果没有文件可以上传
+      if (Array.from(formData.entries()).length === 0) {
+        showSnackbar('所有文件都超过大小限制，没有文件被上传', 'warning');
+      } else {
+        formData.append('course_id', testData.c_course_id);
+
+        try {
+          // 分阶段上传文件
+          const fileCount = files.length - oversizedFiles.length;
+          let successCount = 0;
+          
+          if (fileCount > 0) {
+            setProgressMessage(`开始上传文件 (0/${fileCount})...`);
+            
+            // 为文件上传设置更长超时时间
+            const uploadResponse = await apiClientWithToken.post(
+              `/back/api/study/experiments/${experimentId}/resources/upload-multiple`,
+              formData,
+              {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 100000 
+              }
+            );
+
+            if (uploadResponse.data.code === 200 || uploadResponse.data.code === 201) {
+              successCount = uploadResponse.data.data?.count || fileCount;
+              message += `，${successCount}个资源上传成功`;
+              
+              setProgress(80);
+              setProgressMessage(`${successCount}个资源上传成功`);
+            } else {
+              showSnackbar(`资源上传失败: ${uploadResponse.data.message || '上传服务异常'}`, 'error');
+            }
+          }
+        } catch (error: any) {
+          // 友好的错误信息提示
+          let errorMsg = '资源上传失败';
+          
+          // 判断错误类型
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            errorMsg = `上传超时（10分钟），文件过大或网络不稳定`;
+          } else if (error.message?.includes('Network Error')) {
+            errorMsg = '网络连接失败，请检查网络后重试';
+          } else if (error.response?.status === 413) {
+            errorMsg = '服务器限制：文件过大（超过500MB），请联系管理员调整服务器配置';
+          } else if (error.response?.status === 504) {
+            errorMsg = '网关超时，服务器处理时间过长';
+          } else if (error.response?.data?.message) {
+            errorMsg = error.response.data.message;
+          } else if (error.message) {
+            errorMsg = error.message;
+          }
+          
+          showSnackbar(`资源上传失败: ${errorMsg}`, 'error');
+        }
       }
     } else if (isExperiment) {
+      setProgress(70);
+      setProgressMessage('未上传任何文件');
     }
+
+    setProgress(90);
+    setProgressMessage('正在完成最后操作...');
 
     // 显示最终提示
     showSnackbar(message);
 
-      // 关键修改：立即关闭对话框，然后强制刷新第一页数据
-    setIsDialogOpen(false);
+    setProgress(100);
+    setProgressMessage(isNew ? '测试创建成功！' : '测试更新成功！');
 
-    // 使用 setTimeout 确保对话框关闭后再刷新数据
+    // 延迟关闭进度条和对话框
     setTimeout(() => {
-if (isExperiment) {
-  setPageExperiment(1);
-  fetchExperimentTests(searchText, startDate, endDate);  // 保持过滤
-} else {
+      setShowProgressOverlay(false);
+      setCurrentOperation(null);
+      setProgress(0);
+      setProgressMessage('');
+      setIsDialogOpen(false);
+    }, 1000);
+
+    // 关键修改：立即关闭对话框，然后强制刷新第一页数据
+    setTimeout(() => {
+      if (isExperiment) {
+        setPageExperiment(1);
+        fetchExperimentTests(searchText, startDate, endDate);  // 保持过滤
+      } else {
         setPageTheory(1);
         fetchTheoryTests(1);
       }
@@ -874,6 +1027,11 @@ if (isExperiment) {
 
     return true;
   } catch (error: any) {
+    // 错误处理
+    setShowProgressOverlay(false);
+    setCurrentOperation(null);
+    setProgress(0);
+    setProgressMessage('');
     showSnackbar('保存测试失败: ' + (error.response?.data?.message || error.message), 'error');
     return false;
   }
@@ -1245,7 +1403,64 @@ const renderConfirmDialog = () => {
 
 
   return (
-    <Paper sx={{ p: 3, borderRadius: 4, position: 'relative' }}>
+  <Paper sx={{ p: 3, borderRadius: 4, position: 'relative' }}>
+    {/* 进度条遮罩层 */}
+    {showProgressOverlay && (
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+        }}
+      >
+        <Box
+          sx={{
+            backgroundColor: 'white',
+            padding: 3,
+            borderRadius: 2,
+            minWidth: 300,
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: 24,
+          }}
+        >
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+            {progressTitle}
+          </Typography>
+          
+          <Box sx={{ width: '100%', mb: 2 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={progress} 
+              sx={{ 
+                height: 10, 
+                borderRadius: 5,
+                backgroundColor: '#e0e0e0',
+                '& .MuiLinearProgress-bar': {
+                  borderRadius: 5,
+                  backgroundColor: currentOperation === 'delete' ? '#f44336' : '#1976d2',
+                }
+              }}
+            />
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {progressMessage}
+          </Typography>
+          
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {progress}% 完成
+          </Typography>
+        </Box>
+      </Box>
+    )}
       {showPaperManagement && selectedTestId ? (
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>

@@ -58,7 +58,7 @@ use Illuminate\Support\Facades\Storage;
 class TestController extends Controller
 {
 
-    /**
+            /**
      * Notes:增加题库接口
      * User: zhangnan
      * DateTime: 2025/7/10 16:20
@@ -104,18 +104,62 @@ class TestController extends Controller
                 $validated_msg['content.required']='单选、多选选项不能为空';
                 $validated_msg['content.array']='单选、多选选项格式错误';
                 $validated_msg['content.*.key.required']='选项key不能为空';
-                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.key.max']='选项key超限';
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // ============ 添加手动重复性检查 ============
+            if(in_array($type,[1,2]) && is_array($content)){
+                $seenKeys = [];
+                $seenOptions = [];
+                $duplicateKeys = [];
+                $duplicateOptions = [];
+                
+                foreach($content as $index => $item){
+                    // 检查key重复
+                    if(isset($item['key'])){
+                        if(in_array($item['key'], $seenKeys)){
+                            $duplicateKeys[] = $item['key'];
+                        } else {
+                            $seenKeys[] = $item['key'];
+                        }
+                    }
+                    
+                    // 检查option重复
+                    if(isset($item['option'])){
+                        if(in_array($item['option'], $seenOptions)){
+                            $duplicateOptions[] = $item['option'];
+                        } else {
+                            $seenOptions[] = $item['option'];
+                        }
+                    }
+                }
+                
+                // 构建错误消息
+                $errors = [];
+                if(!empty($duplicateKeys)){
+                    $uniqueDuplicates = array_unique($duplicateKeys);
+                    $errors[] = '选项key重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                if(!empty($duplicateOptions)){
+                    $uniqueDuplicates = array_unique($duplicateOptions);
+                    $errors[] = '选项内容重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                
+                if(!empty($errors)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, implode('; ', $errors));
+                }
+            }
+            // ============ 手动重复性检查结束 ============
+            
             if(in_array($type,[1,2])){
                 $QuestionsOptionsMod = new QuestionsOptionsModel();
                 $verify_answer = 0;
+                $dx_cnt = 0;
+                $dx_zong_cnt = 0;
+                
                 foreach($content as $k=>$v){
-                    $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key']);
-                    if(!$verify_options_only){
-                        return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                    }
                     if($type==1){
                         if($v['option']==$c_answer){
                             $verify_answer=1;
@@ -129,7 +173,7 @@ class TestController extends Controller
                     }
                 }
                 if($type==2){
-                    if($dx_zong_cnt==$dx_cnt){
+                    if($dx_cnt > 0 && $dx_zong_cnt == $dx_cnt){
                         $verify_answer=1;
                     }
                 }
@@ -141,7 +185,7 @@ class TestController extends Controller
             $mod = new QuestionsModel();
             $verify = $mod->verify_c_id_only($c_id);
             if(!$verify){
-                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+                return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"ID已存在");
             }
 
             $res = $mod->create_question_info($c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
@@ -151,7 +195,23 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+            // 修复catch部分，避免重复错误
+            $validator = $e->validator;
+            $errorMessages = [];
+            
+            // 使用字段分组的方式避免重复
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                // 只取第一个错误消息，避免重复
+                if (!empty($messages)) {
+                    $errorMessages[] = $messages[0];
+                }
+            }
+            
+            // 去重
+            $uniqueErrors = array_unique($errorMessages);
+            $fullErrorMessage = implode('; ', $uniqueErrors);
+            
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $fullErrorMessage);
         }
     }
 
@@ -304,24 +364,65 @@ class TestController extends Controller
                 $validated_msg['content.required']='单选、多选选项不能为空';
                 $validated_msg['content.array']='单选、多选选项格式错误';
                 $validated_msg['content.*.key.required']='选项key不能为空';
-                $validated_msg['content.*.key.max']='选线key超限';
+                $validated_msg['content.*.key.max']='选项key超限';
                 $validated_msg['content.*.option.required']='选项内容不能为空';
             }
             $validatedData = $request->validate($validated_data, $validated_msg);
+            
+            // ============ 添加手动重复性检查 ============
+            if(in_array($type,[1,2]) && is_array($content)){
+                $seenKeys = [];
+                $seenOptions = [];
+                $duplicateKeys = [];
+                $duplicateOptions = [];
+                
+                foreach($content as $index => $item){
+                    // 检查key重复
+                    if(isset($item['key'])){
+                        if(in_array($item['key'], $seenKeys)){
+                            $duplicateKeys[] = $item['key'];
+                        } else {
+                            $seenKeys[] = $item['key'];
+                        }
+                    }
+                    
+                    // 检查option重复
+                    if(isset($item['option'])){
+                        if(in_array($item['option'], $seenOptions)){
+                            $duplicateOptions[] = $item['option'];
+                        } else {
+                            $seenOptions[] = $item['option'];
+                        }
+                    }
+                }
+                
+                // 构建错误消息
+                $errors = [];
+                if(!empty($duplicateKeys)){
+                    $uniqueDuplicates = array_unique($duplicateKeys);
+                    $errors[] = '选项key重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                if(!empty($duplicateOptions)){
+                    $uniqueDuplicates = array_unique($duplicateOptions);
+                    $errors[] = '选项内容重复: ' . implode(', ', $uniqueDuplicates);
+                }
+                
+                if(!empty($errors)){
+                    return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, implode('; ', $errors));
+                }
+            }
+            // ============ 手动重复性检查结束 ============
+            
             $dx_cnt = 0;
             $dx_zong_cnt = 0;
             if(in_array($type,[1,2])){
                 if(empty($content)){
                     return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"单选、多选选项不能为空");
-                }else{
+                } else {
                     $QuestionsOptionsMod = new QuestionsOptionsModel();
                     $verify_answer = 0;
+                    
                     foreach($content as $k=>$v){
-
-                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['key'],$c_id);
-                        if(!$verify_options_only){
-                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                        }
                         if($type==1){
                             if($v['option']==$c_answer){
                                 $verify_answer=1;
@@ -335,7 +436,7 @@ class TestController extends Controller
                         }
                     }
                     if($type==2){
-                        if($dx_zong_cnt==$dx_cnt){
+                        if($dx_cnt > 0 && $dx_zong_cnt == $dx_cnt){
                             $verify_answer=1;
                         }
                     }
@@ -344,6 +445,7 @@ class TestController extends Controller
                     }
                 }
             }
+            
             $mod = new QuestionsModel();
             $info = $mod->get_question_info_by_c_id($c_id);
             $res = $mod->update_question_info($info,$c_id,$c_course_id,$c_question,$c_answer,$c_tag,$type,$content);
@@ -353,7 +455,23 @@ class TestController extends Controller
             return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE,GlobalResponse::HTTP_STATUS_OK_MES);
 
         } catch (ValidationException $e) {
-            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+            // 修复catch部分，避免重复错误
+            $validator = $e->validator;
+            $errorMessages = [];
+            
+            // 使用字段分组的方式避免重复
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                // 只取第一个错误消息，避免重复
+                if (!empty($messages)) {
+                    $errorMessages[] = $messages[0];
+                }
+            }
+            
+            // 去重
+            $uniqueErrors = array_unique($errorMessages);
+            $fullErrorMessage = implode('; ', $uniqueErrors);
+            
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $fullErrorMessage);
         }
     }
 
@@ -397,10 +515,7 @@ class TestController extends Controller
                     $verify_answer = 0;
 
                     foreach($v['options'] as $k1=>$v1){
-                        $verify_options_only = $QuestionsOptionsMod->verify_c_id_only($v['id'],$v1['c_id']);
-                        if(!$verify_options_only){
-                            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,"选项主键以存在");
-                        }
+                       
                         if($v['type']==1){
                             if($v1['c_content']==$v['answer']){
                                 $verify_answer=1;
@@ -429,7 +544,7 @@ class TestController extends Controller
                 $verify = $mod->verify_c_id_only($v['id']);
                 if(!$verify){
                     Log::info($v);
-                    return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"主键已存在");
+                    return $this->_response(GlobalResponse::$HTTP_DATABASE_ERROR_CODE,"ID已存在");
                 }
             }
 
@@ -526,6 +641,64 @@ class TestController extends Controller
 
         } catch (ValidationException $e) {
             return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE,$e->getMessage());
+        }
+    }
+
+        /**
+     * Notes: 根据题型获取试题标签接口
+     * User: zhangnan
+     * DateTime: 2025/12/29
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function get_tags_by_type(Request $request)
+    {
+        try {
+            // 验证请求参数
+            $validatedData = $request->validate([
+                'type' => 'required|integer|in:1,2,3,4'
+            ], [
+                'type.required' => '题型不能为空',
+                'type.integer' => '题型类型错误',
+                'type.in' => '题型参数错误（1:单选题, 2:多选题, 3:判断题, 4:主观题）'
+            ]);
+            
+            $type = $validatedData['type'];
+            
+            $mod = new QuestionsModel();
+            
+            // 获取该题型下的所有不重复标签
+            $tags = $mod
+                ->where('c_type', $type)
+                ->whereNotNull('c_tag')
+                ->where('c_tag', '!=', '')
+                ->select('c_tag')
+                ->distinct()
+                ->orderBy('c_tag')
+                ->get()
+                ->pluck('c_tag')
+                ->toArray();
+            
+            // 如果没有标签，返回空数组
+            if (empty($tags)) {
+                return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '暂无标签', [
+                    'type' => $type,
+                    'tags' => [],
+                    'count' => 0
+                ]);
+            }
+            
+            // 返回标签数据
+            return $this->_response(GlobalResponse::$HTTP_STATUS_OK_CODE, '获取标签成功', [
+                'type' => $type,
+                'tags' => $tags,
+                'count' => count($tags)
+            ]);
+            
+        } catch (ValidationException $e) {
+            return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, $e->getMessage());
+        } catch (\Exception $e) {
+            return $this->_response(GlobalResponse::$HTTP_SERVER_ERROR_CODE, '服务器错误: ' . $e->getMessage());
         }
     }
 
@@ -3582,6 +3755,19 @@ public function batch_answers_name(Request $request)
         Log::info("试卷ID: " . $paper_id);
         Log::info("批改数据: " . json_encode($batch_data));
 
+        $validated_data = [
+            'batch_data.*.score' => 'required|integer|min:0', // 改为 integer 验证
+        ];
+        
+        $validated_msg = [
+            'batch_data.*.score.required' => "分数不能为空",
+            'batch_data.*.score.integer' => "分数必须是整数", // 添加 integer 验证的错误信息
+            'batch_data.*.score.min' => "分数不能小于0",
+        ];
+        
+        $validatedData = $request->validate($validated_data, $validated_msg);
+
+
         // 获取考生作答数据
         $test_users_mod = new TestUsersModel();
         $answres_list = $test_users_mod->get_answers_list_by_name($test_id, $username, $paper_id);
@@ -3616,7 +3802,7 @@ public function batch_answers_name(Request $request)
         
         foreach ($batch_data as $k => $v) {
             $question_id = trim($v['question_id']);
-            $score = floatval($v['score']);
+            $score = intval($v['score']);
             
             if ($score > $zd_score) {
                 return $this->_response(GlobalResponse::$HTTP_REQUEST_ERROR_CODE, "批改分数大于题目最大分数！");

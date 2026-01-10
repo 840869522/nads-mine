@@ -4,10 +4,11 @@ namespace App\Models\Course;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class CourseLearnModel
 {
-    public static function getAllCourses(int $page = 1, int $pagesize = 10, ?string $keyword = null, ?string $c_category_id = null): array
+    public static function getAllCourses(int $page = 1, int $pagesize = 10, ?string $keyword = null, ?string $c_category_id = null, ?string $username = null, ?array $userRoles = null): array
     {
         try {
             DB::connection()->getPdo();
@@ -21,23 +22,36 @@ class CourseLearnModel
             $offset = ($page - 1) * $pagesize;
             $likeKeyword = $keyword ? '%' . $keyword . '%' : null;
 
+            // 检查是否为管理员角色
+            $isAdmin = $userRoles && in_array('admin', $userRoles);
+            
             $query = DB::table('c_courses as c')
                 ->join('c_course_categories as cat', 'c.c_category_id', '=', 'cat.c_category_id')
-                ->where('c.c_status', 'published')  // 新增：只查询已发布
-                ->select(
-                    'c.c_course_id',
-                    'c.c_course_name',
-                    'c.c_description',
-                    'c.c_status',
-                    'cat.c_category_name',
-                    'c.created_at',
-                    'c.updated_at',
-                    DB::raw('CASE WHEN c.c_course_name LIKE ? THEN 1 ELSE 0 END as name_match_priority')
-                );
+                ->where('c.c_status', 'published');  // 只查询已发布
 
             $countQuery = DB::table('c_courses as c')
                 ->join('c_course_categories as cat', 'c.c_category_id', '=', 'cat.c_category_id')
                 ->where('c.c_status', 'published');
+
+            // 如果不是管理员，需要检查用户课程关联表
+            if (!$isAdmin && $username) {
+                $query->join('c_courses_users as cu', 'c.c_course_id', '=', 'cu.c_course_id')
+                      ->where('cu.c_username', '=', $username);
+                
+                $countQuery->join('c_courses_users as cu', 'c.c_course_id', '=', 'cu.c_course_id')
+                           ->where('cu.c_username', '=', $username);
+            }
+
+            $query->select(
+                'c.c_course_id',
+                'c.c_course_name',
+                'c.c_description',
+                'c.c_status',
+                'cat.c_category_name',
+                'c.created_at',
+                'c.updated_at',
+                DB::raw('CASE WHEN c.c_course_name LIKE ? THEN 1 ELSE 0 END as name_match_priority')
+            );
 
             // 为 CASE 语句绑定参数
             $query->addBinding($likeKeyword ?? '%', 'select');
@@ -80,12 +94,13 @@ class CourseLearnModel
                     'page' => $page,
                     'pageSize' => $pagesize,
                     'keyword' => $keyword, // 返回关键字便于前端高亮
+                    'is_admin' => $isAdmin, // 返回是否为管理员
                 ],
             ];
         } catch (QueryException $e) {
             Log::error('[DATABASE] getAllCourses: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'bindings' => $query->getBindings(),
+                'bindings' => $query->getBindings() ?? [],
             ]);
             return [
                 'code' => 500,

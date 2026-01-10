@@ -18,7 +18,9 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Stack
+  Stack,
+  CircularProgress,
+  Chip,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -37,7 +39,12 @@ interface CourseCaseFormModalProps {
   onSave: (courseCase: CourseCase) => void;
   courseCase: CourseCase | null;
   categories: Category[];
+  isSaving?: boolean;
 }
+
+// 文件大小限制常量
+const MAX_SINGLE_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+const MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
 const getResourceFormat = (fileName: string): CourseCaseResourceFormat => {
   const extension = fileName.split('.').pop()?.toLowerCase();
@@ -60,7 +67,16 @@ const getResourceIcon = (format: CourseCaseResourceFormat) => {
   }
 };
 
-const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose, onSave, courseCase, categories }) => {
+// 添加辅助函数来格式化字节大小
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose, onSave, courseCase, categories,isSaving = false }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [c_course_name, setCourseName] = useState('');
@@ -112,8 +128,43 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newRawFilesArray = Array.from(e.target.files);
-      setSelectedRawFiles(prev => [...prev, ...newRawFilesArray]);
-      const newCourseCaseResources: CourseCaseResource[] = newRawFilesArray.map(rawFile => ({
+      
+      // 计算当前已上传文件的总大小
+      const currentTotalSize = resources.reduce((total, resource) => {
+        if (resource.fileObject) {
+          return total + resource.fileObject.size;
+        }
+        return total;
+      }, 0);
+      
+      // 检查单个文件大小和总大小
+      const validFiles: File[] = [];
+      const oversizedFiles: string[] = [];
+      let totalNewSize = 0;
+      
+      Array.from(e.target.files).forEach(file => {
+        if (file.size > MAX_SINGLE_FILE_SIZE) {
+          oversizedFiles.push(file.name);
+        } else {
+          validFiles.push(file);
+          totalNewSize += file.size;
+        }
+      });
+      
+      // 检查总大小是否超过限制
+      if (currentTotalSize + totalNewSize > MAX_TOTAL_SIZE) {
+        alert(`上传总大小超过2GB限制！\n当前已上传：${formatBytes(currentTotalSize)}\n本次上传：${formatBytes(totalNewSize)}\n请减少文件数量或压缩文件大小。`);
+        e.target.value = '';
+        return;
+      }
+      
+      // 如果有超大文件，提示用户
+      if (oversizedFiles.length > 0) {
+        alert(`以下文件超过200MB限制，将不会被上传：\n${oversizedFiles.join(', ')}\n\n请压缩文件或联系管理员调整服务器限制。`);
+      }
+      
+      // 只添加有效文件
+      const newCourseCaseResources: CourseCaseResource[] = validFiles.map(rawFile => ({
         c_resource_id: `new-${rawFile.name}-${Date.now()}`,
         c_resource_name: rawFile.name,
         c_type: getResourceFormat(rawFile.name),
@@ -121,7 +172,9 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
         c_size: `${(rawFile.size / (1024 * 1024)).toFixed(2)} MB`,
         fileObject: rawFile,
       }));
+      
       setResources(prev => [...prev, ...newCourseCaseResources]);
+      setSelectedRawFiles(prev => [...prev, ...validFiles]);
       e.target.value = '';
     }
   };
@@ -139,6 +192,25 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
     const newErrors: Record<string, string> = {};
     if (!c_course_name.trim()) newErrors.c_course_name = '课程标题不能为空。';
     if (!c_category_id && categories.length > 0) newErrors.c_category_id = '请选择一个课程分类。';
+    
+    // 新增文件大小验证
+    const totalSize = resources.reduce((total, resource) => 
+      total + (resource.fileObject?.size || 0), 0
+    );
+    
+    if (totalSize > MAX_TOTAL_SIZE) {
+      newErrors.resources = `总文件大小超过2GB限制（当前：${(totalSize / (1024 * 1024 * 1024)).toFixed(2)}GB）`;
+    }
+    
+    // 检查是否有超大的单个文件
+    const oversizedFiles = resources.filter(resource => 
+      resource.fileObject && resource.fileObject.size > MAX_SINGLE_FILE_SIZE
+    );
+    
+    if (oversizedFiles.length > 0) {
+      newErrors.resources = `以下文件超过200MB限制：${oversizedFiles.map(f => f.c_resource_name).join(', ')}`;
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -259,54 +331,185 @@ const CourseCaseFormModal: React.FC<CourseCaseFormModalProps> = ({ open, onClose
             <Box mt={1}>
               <Typography variant="subtitle1" gutterBottom color="text.primary">
                 课程资源（可选）
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  单个文件最大200MB，总大小不超过2GB
+                </Typography>
               </Typography>
-              <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<CloudUploadIcon />}
-                  sx={{ mb: 1 }}
-              >
-                选择文件上传
-                <input
-                    type="file"
-                    hidden
-                    multiple
-                    onChange={handleFileChange}
-                    accept={Object.values(SUPPORTED_COURSE_RESOURCE_FORMATS).filter(ext => ext !== '*/*').join(',')}
-                />
-              </Button>
+              
+              <Box sx={{ mb: 2 }}>
+                <Button
+                    variant="outlined"
+                    component="label"
+                    startIcon={<CloudUploadIcon />}
+                    sx={{ mb: 1 }}
+                >
+                  选择文件上传
+                  <input
+                      type="file"
+                      hidden
+                      multiple
+                      onChange={handleFileChange}
+                      accept={Object.values(SUPPORTED_COURSE_RESOURCE_FORMATS).filter(ext => ext !== '*/*').join(',')}
+                  />
+                </Button>
+                
+                {/* 显示当前总大小信息 */}
+                {resources.length > 0 && (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    mb: 1,
+                    p: 1,
+                    backgroundColor: theme.palette.mode === 'dark' 
+                      ? theme.palette.grey[800] 
+                      : theme.palette.grey[50],
+                    borderRadius: '4px'
+                  }}>
+                    <Typography 
+                      variant="body2" 
+                      color={
+                        resources.reduce((total, resource) => 
+                          total + (resource.fileObject?.size || 0), 0) > MAX_TOTAL_SIZE 
+                          ? 'error' 
+                          : 'primary'
+                      }
+                    >
+                      <strong>已选择 {resources.length} 个文件</strong>
+                    </Typography>
+                    <Typography 
+                      variant="body2" 
+                      color={
+                        resources.reduce((total, resource) => 
+                          total + (resource.fileObject?.size || 0), 0) > MAX_TOTAL_SIZE 
+                          ? 'error' 
+                          : 'primary'
+                      }
+                    >
+                      总大小: {
+                        (resources.reduce((total, resource) => 
+                          total + (resource.fileObject?.size || 0), 0) / (1024 * 1024 * 1024)
+                        ).toFixed(2)
+                      } GB
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* 显示剩余空间警告 */}
+                {resources.length > 0 && (
+                  <Typography 
+                    variant="caption" 
+                    color={
+                      resources.reduce((total, resource) => 
+                        total + (resource.fileObject?.size || 0), 0) > MAX_TOTAL_SIZE 
+                        ? 'error' 
+                        : 'text.secondary'
+                    }
+                    sx={{ display: 'block', mb: 1 }}
+                  >
+                    剩余可用空间: {
+                      formatBytes(
+                        Math.max(0, MAX_TOTAL_SIZE - resources.reduce((total, resource) => 
+                          total + (resource.fileObject?.size || 0), 0)
+                        )
+                      )
+                    }
+                    {resources.reduce((total, resource) => 
+                      total + (resource.fileObject?.size || 0), 0) > MAX_TOTAL_SIZE && 
+                      ' (已超出限制，请删除部分文件)'
+                    }
+                  </Typography>
+                )}
+              </Box>
+              
               {resources.length > 0 && (
-                  <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 1 }}>
-                    {resources.map((resource) => (
-                        <ListItem
+                <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 1 }}>
+                  {resources.map((resource) => {
+                    const fileSize = resource.fileObject?.size || 0;
+                    const isOversized = fileSize > MAX_SINGLE_FILE_SIZE;
+                    
+                    return (
+                     <ListItem
                             key={resource.c_resource_id}
                             secondaryAction={
                               <IconButton edge="end" aria-label="delete resource" onClick={() => handleRemoveResource(resource.c_resource_id)} color="error">
                                 <DeleteIcon fontSize="small"/>
                               </IconButton>
                             }
-                            sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
-                        >
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            {getResourceIcon(resource.c_type)}
-                          </ListItemIcon>
-                          <ListItemText
-                              primary={resource.c_resource_name}
-                              primaryTypographyProps={{ variant: 'body2', noWrap: true, maxWidth: 'calc(100% - 50px)' }}
+                            sx={{ 
+                              borderBottom: 1, 
+                              borderColor: 'divider', 
+                              '&:last-child': { borderBottom: 0 },
+                              bgcolor: isOversized ? 'error.lighter' : 'inherit'
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                              {getResourceIcon(resource.c_type)}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Typography 
+                                    component="span" 
+                                    variant="body2" 
+                                    noWrap 
+                                    sx={{ 
+                                      flex: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      color: isOversized ? 'error.main' : 'text.primary'
+                                    }}
+                                  >
+                                    {resource.c_resource_name}
+                                  </Typography>
+                                  {isOversized && (
+                                    <Chip 
+                                      label="超限" 
+                                      size="small" 
+                                      color="error" 
+                                      sx={{ ml: 1, height: 20, fontSize: '0.6rem' }}
+                                    />
+                                  )}
+                                </Box>
+                              }
                               secondary={resource.c_size || '未知大小'}
-                              secondaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                    ))}
-                  </List>
+                              secondaryTypographyProps={{ 
+                                component: 'span',
+                                variant: 'caption',
+                                color: isOversized ? 'error.main' : 'text.secondary'
+                              }}
+                            />
+                          </ListItem>
+                    );
+                  })}
+                </List>
+              )}
+              {errors.resources && (
+                <FormHelperText error sx={{ mt: 1 }}>
+                  {errors.resources}
+                </FormHelperText>
               )}
             </Box>
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={onClose}>取消</Button>
-          <Button type="submit" variant="contained" disabled={categories.length === 0 && !c_category_id}>
-            {courseCase ? '保存更改' : '确认添加'}
+      <DialogActions sx={{ p: 2 }}>
+          <Button 
+            onClick={onClose} 
+            color="inherit"
+            disabled={isSaving} // 保存时禁用取消按钮
+          >
+            取消
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained" 
+            color="primary"
+            disabled={isSaving || !c_course_name.trim() || !c_category_id} // 修改这里：使用 c_course_name 和 c_category_id
+            startIcon={isSaving ? <CircularProgress size={20} /> : null} // 添加加载图标
+          >
+            {isSaving 
+              ? (courseCase ? '更新中...' : '添加中...') 
+              : (courseCase ? '保存更改' : '确认添加')}
           </Button>
         </DialogActions>
       </Dialog>
